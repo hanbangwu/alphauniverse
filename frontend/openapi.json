@@ -1,0 +1,484 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "alphauniverse",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/meta": {
+      "get": {
+        "summary": "Get Meta",
+        "operationId": "get_meta",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artifacts/{role}": {
+      "get": {
+        "summary": "Get Artifact",
+        "operationId": "get_artifact",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxies/{galaxy}/image.png": {
+      "get": {
+        "summary": "Get Image",
+        "operationId": "get_image",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 17369,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxies/{galaxy}/tokens": {
+      "get": {
+        "summary": "Get Tokens",
+        "operationId": "get_tokens",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 17369,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxies/{galaxy}/coverage": {
+      "get": {
+        "summary": "Get Coverage",
+        "operationId": "get_coverage",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 17369,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Survey"
+                  },
+                  "title": "Response Get Coverage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/similarity": {
+      "get": {
+        "summary": "Get Similarity",
+        "operationId": "get_similarity",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 17369,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "p",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "minItems": 1,
+              "maxItems": 576,
+              "title": "P"
+            }
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SearchMethod",
+              "default": "encoded"
+            }
+          },
+          {
+            "name": "weight",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 1,
+              "minimum": 0,
+              "default": 0.5,
+              "title": "Weight"
+            }
+          },
+          {
+            "name": "combine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CombineMode",
+              "default": "and"
+            }
+          },
+          {
+            "name": "neighbours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 64,
+              "minimum": 1,
+              "default": 8,
+              "title": "Neighbours"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CombineMode": {
+        "type": "string",
+        "enum": [
+          "and",
+          "or"
+        ],
+        "title": "CombineMode"
+      },
+      "Detail": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "Detail"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Meta": {
+        "properties": {
+          "author": {
+            "type": "string",
+            "title": "Author"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "revision": {
+            "type": "string",
+            "title": "Revision"
+          },
+          "galaxies": {
+            "type": "integer",
+            "title": "Galaxies"
+          },
+          "grid": {
+            "type": "integer",
+            "title": "Grid"
+          },
+          "embeddings": {
+            "type": "string",
+            "title": "Embeddings"
+          },
+          "mean_points": {
+            "type": "string",
+            "title": "Mean Points"
+          },
+          "full_points": {
+            "type": "string",
+            "title": "Full Points"
+          },
+          "morphologies": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Morphologies"
+          },
+          "unlabelled": {
+            "type": "integer",
+            "title": "Unlabelled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "author",
+          "id",
+          "revision",
+          "galaxies",
+          "grid",
+          "embeddings",
+          "mean_points",
+          "full_points",
+          "morphologies",
+          "unlabelled"
+        ],
+        "title": "Meta"
+      },
+      "SearchMethod": {
+        "type": "string",
+        "enum": [
+          "codebook",
+          "codebook_and_encoded",
+          "encoded"
+        ],
+        "title": "SearchMethod"
+      },
+      "Survey": {
+        "properties": {
+          "survey": {
+            "type": "string",
+            "title": "Survey"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          }
+        },
+        "type": "object",
+        "required": [
+          "survey",
+          "matched"
+        ],
+        "title": "Survey"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

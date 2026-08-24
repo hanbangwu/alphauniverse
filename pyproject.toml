@@ -1,0 +1,28 @@
+[project]
+name = "alphauniverse"
+version = "0.1.0"
+description = "The Embedding-Based Virtual Astronomical Observatory"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "datasets>=5.0.1",
+  "fastapi[standard]>=0.141.1",
+  "modal>=1.5.4",
+  "numpy>=2.5.2",
+  "pillow>=12.3.0",
+  "polymathic-aion>=0.0.2",
+  "pyarrow>=25.0.1",
+  "pydantic>=2.13.4",
+  "scipy>=1.18.1",
+  "torch>=2.13.0",
+  "torchvision>=0.28.0",
+  "tqdm>=4.70.0",
+]
+
+[dependency-groups]
+build = ["umap-learn>=0.5.12", "wandb>=0.28.2"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
