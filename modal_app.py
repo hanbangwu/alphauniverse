@@ -77,10 +77,10 @@ def generate_projections() -> None:
     image=serving_image,
     gpu="L4",
     cpu=8,
-    memory=(16 * 1024, 32 * 1024),
+    memory=(8 * 1024, 32 * 1024),
     timeout=10 * 60,
     volumes={CACHE_PATH: cache_volume},
-    min_containers=1,
+    min_containers=0,
     max_containers=1,
     scaledown_window=5 * 60,
 )
