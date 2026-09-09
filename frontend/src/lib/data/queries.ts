@@ -6,7 +6,7 @@ import type { SimilarityQuery, SimilarityResult } from './similarity'
 import type { DataTag, DefaultError, QueryKey } from '@tanstack/query-core'
 import { type UndefinedInitialDataOptions, queryOptions } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
-import { type Float32, type Table, tableFromIPC } from 'apache-arrow'
+import { type Float32, tableFromIPC } from 'apache-arrow'
 
 export type QueryFor<TData, TKey extends QueryKey> = UndefinedInitialDataOptions<
   TData,
@@ -31,12 +31,6 @@ export type SimilarityResultQuery = QueryFor<
 >
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
-
-function maps(table: Table, name: 'encoded' | 'codebook'): Float32Array {
-  const child = table.getChild(name)?.getChildAt<Float32>(0)
-  if (!child) throw new Error(`no ${name} map`)
-  return child.toArray()
-}
 
 export function tokensQuery(meta: Meta, galaxy: number | null): TokensQuery {
   return queryOptions({
@@ -123,8 +117,10 @@ export function similarityQuery(
       return {
         galaxies: must(table.getChild('galaxy'), 'the similarity galaxy column').toArray(),
         scores: must(table.getChild('score'), 'the similarity score column').toArray(),
-        encoded: maps(table, 'encoded'),
-        codebook: maps(table, 'codebook')
+        map: must(
+          table.getChild('map')?.getChildAt<Float32>(0),
+          'the similarity map column'
+        ).toArray()
       }
     },
     enabled: request !== null,

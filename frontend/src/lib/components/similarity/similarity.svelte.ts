@@ -1,6 +1,6 @@
 import { type RGB, continuous, tokenColors } from '$lib/color'
 import { similarityQuery, tokensQuery } from '$lib/data/queries'
-import { blend, extent, mask, row } from '$lib/data/scores'
+import { extent, mask, row } from '$lib/data/scores'
 import type { Extent, SimilarityResult } from '$lib/data/similarity'
 import { must } from '$lib/invariant'
 import { SIMILARITY } from '$lib/labels'
@@ -20,7 +20,7 @@ export class Similarity {
   readonly #tokenMap: CreateQueryResult<Uint32Array<ArrayBuffer>>
   readonly #result: CreateQueryResult<SimilarityResult>
 
-  readonly blended: Float32Array | null
+  readonly values: Float32Array | null
   readonly galaxies: Int32Array
   readonly domain: Extent | null
   readonly heat: ((value: number) => RGB) | null
@@ -40,15 +40,11 @@ export class Similarity {
 
     const tokens = $derived(this.#tokenMap.data ?? null)
 
-    this.blended = $derived(
-      this.#result.data
-        ? blend(this.#result.data, app.search.method.value, app.search.weight.value)
-        : null
-    )
+    this.values = $derived(this.#result.data?.map ?? null)
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
-    this.domain = $derived(this.blended ? extent(this.blended) : null)
+    this.domain = $derived(this.values ? extent(this.values) : null)
     this.heat = $derived(this.domain ? continuous(this.domain) : null)
-    this.self = $derived(this.blended ? row(this.blended, 0, this.#patchCount) : null)
+    this.self = $derived(this.values ? row(this.values, 0, this.#patchCount) : null)
     this.palette = $derived(
       this.self && this.heat ? this.heat : tokens ? tokenColors(tokens) : null
     )
@@ -80,7 +76,7 @@ export class Similarity {
   }
 
   rowAt(index: number): Float32Array {
-    return row(must(this.blended, 'the blended scores'), index, this.#patchCount)
+    return row(must(this.values, 'the similarity scores'), index, this.#patchCount)
   }
 
   maskOf(values: ArrayLike<number>): Uint8Array | null {

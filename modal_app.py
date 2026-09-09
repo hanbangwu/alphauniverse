@@ -54,6 +54,21 @@ def generate_embeddings() -> None:
 
 @app.function(
     image=build_image,
+    cpu=16,
+    memory=(32 * 1024, 128 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_index() -> None:
+    from app.store import generate_index
+
+    cache_volume.reload()
+    generate_index()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
     gpu="L4",
     cpu=16,
     memory=(32 * 1024, 128 * 1024),
@@ -75,12 +90,10 @@ def generate_projections() -> None:
 
 @app.function(
     image=serving_image,
-    gpu="L4",
     cpu=8,
-    memory=(8 * 1024, 32 * 1024),
+    memory=(8 * 1024, 64 * 1024),
     timeout=10 * 60,
     volumes={CACHE_PATH: cache_volume},
-    min_containers=0,
     max_containers=1,
     scaledown_window=5 * 60,
 )

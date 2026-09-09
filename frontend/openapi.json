@@ -235,48 +235,6 @@
             }
           },
           {
-            "name": "method",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SearchMethod",
-              "default": "encoded"
-            }
-          },
-          {
-            "name": "weight",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "number",
-              "maximum": 1,
-              "minimum": 0,
-              "default": 0.5,
-              "title": "Weight"
-            }
-          },
-          {
-            "name": "combine",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CombineMode",
-              "default": "and"
-            }
-          },
-          {
-            "name": "neighbours",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 64,
-              "minimum": 1,
-              "default": 8,
-              "title": "Neighbours"
-            }
-          },
-          {
             "name": "matches",
             "in": "query",
             "required": false,
@@ -317,14 +275,6 @@
   },
   "components": {
     "schemas": {
-      "CombineMode": {
-        "type": "string",
-        "enum": [
-          "and",
-          "or"
-        ],
-        "title": "CombineMode"
-      },
       "Detail": {
         "properties": {
           "detail": {
@@ -411,15 +361,6 @@
           "unlabelled"
         ],
         "title": "Meta"
-      },
-      "SearchMethod": {
-        "type": "string",
-        "enum": [
-          "codebook",
-          "codebook_and_encoded",
-          "encoded"
-        ],
-        "title": "SearchMethod"
       },
       "Survey": {
         "properties": {

@@ -22,16 +22,12 @@ COSMOS = lsdb.BoxSearch(
 ANCHOR = "hugging-science/mmu_legacysurvey_dr10_south_21"
 
 
-def suffix(repo: str) -> str:
-    return "-" + repo.split("/")[-1]
-
-
 if __name__ == "__main__":
     client = Client(n_workers=4, threads_per_worker=4, memory_limit="auto")
 
     matched = lsdb.open_catalog(f"hf://datasets/{ANCHOR}", search_filter=COSMOS)
 
-    left_suffix = suffix(ANCHOR)
+    left_suffix = "-" + ANCHOR.split("/")[-1]
 
     for repo in (
         "UniverseTBD/mmu_sdss_sdss",
@@ -41,7 +37,7 @@ if __name__ == "__main__":
         "UniverseTBD/mmu_hsc_pdr3_dud_22.5",
     ):
         right = lsdb.open_catalog(f"hf://datasets/{repo}", search_filter=COSMOS)
-        right_suffix = suffix(repo)
+        right_suffix = "-" + repo.split("/")[-1]
         matched = matched.crossmatch(
             right,
             how="left",
@@ -56,7 +52,7 @@ if __name__ == "__main__":
     output_dir = Path(".cache") / "alphauniverse-cosmos"
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True)
 
     output_file = output_dir / "data.parquet"
 

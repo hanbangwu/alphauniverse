@@ -10,17 +10,6 @@
 
   <label
     class="flex items-center gap-2 text-sm font-medium"
-    title="How many of a galaxy's best-scoring patches are averaged into the score that ranks it."
-  >
-    Top-k
-    <FieldSlider field={search.neighbours} />
-    <span class="w-6 text-right font-mono text-xs tabular-nums">
-      {search.neighbours.value}
-    </span>
-  </label>
-
-  <label
-    class="flex items-center gap-2 text-sm font-medium"
     title="How many galaxies the search returns."
   >
     Show top

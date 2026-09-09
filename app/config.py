@@ -68,8 +68,15 @@ RGB_COLUMN = f"rgb{LS}"
 
 N_MORPHOLOGIES = 10
 
+NLIST = 16384
+NPROBE = 64
+PROBE = 2048
+TRAIN_GALAXIES = 2048
+BATCH = 256
+
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
+    "encoded_index": "faiss",
     "codebook": "parquet",
     "tokens": "parquet",
     "mean_points": "parquet",

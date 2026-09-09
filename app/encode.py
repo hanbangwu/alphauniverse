@@ -182,24 +182,16 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
     return groups
 
 
-def inputs(
-    groups: dict[str, dict[str, torch.Tensor]],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    tokens = {key: slot for group in groups.values() for key, slot in group.items()}
-    total = sum(slot.shape[1] for slot in tokens.values())
-    with torch.no_grad():
-        return model().embed_inputs(tokens, num_encoder_tokens=total)
-
-
 def encode(
     groups: dict[str, dict[str, torch.Tensor]],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    enc_tokens, enc_emb, enc_mask, mod_mask = inputs(groups)
-    with (
-        torch.no_grad(),
-        torch.autocast(device_type=device().type, dtype=torch.float16),
-    ):
-        context = model()._encode(enc_tokens, enc_emb, enc_mask)
+    tokens = {key: slot for group in groups.values() for key, slot in group.items()}
+    with torch.no_grad():
+        enc_tokens, enc_emb, enc_mask, mod_mask = model().embed_inputs(
+            tokens, num_encoder_tokens=sum(slot.shape[1] for slot in tokens.values())
+        )
+        with torch.autocast(device_type=device().type, dtype=torch.float16):
+            context = model()._encode(enc_tokens, enc_emb, enc_mask)
 
     return (
         context[0].cpu().numpy(),

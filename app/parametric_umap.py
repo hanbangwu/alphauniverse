@@ -65,7 +65,7 @@ class ParametricUMAP(nn.Module):
     @torch.inference_mode()
     def transform(self, values: np.ndarray) -> np.ndarray:
         fitted = next(self.parameters()).device
-        rows = torch.from_numpy(np.array(values, dtype=np.float32))
+        rows = torch.from_numpy(values)
         projected = [self(chunk.to(fitted)).cpu() for chunk in torch.split(rows, 4096)]
         return torch.cat(projected).numpy()
 
@@ -172,15 +172,15 @@ def _stream(
         )
         for batch in scanner.to_batches():
             offsets, values = vectors(batch.column(survey))
-            yield np.asarray(batch.column("galaxy"), dtype=np.int32), offsets, values
+            yield np.asarray(batch.column("galaxy")), offsets, values
 
 
 def _points(galaxy: np.ndarray, coords: np.ndarray, category: pa.Array) -> pa.Table:
     return pa.table(
         {
-            "galaxy": pa.array(galaxy, type=pa.int32()),
-            "x": pa.array(coords[:, 0].astype(dtype=np.float32)),
-            "y": pa.array(coords[:, 1].astype(dtype=np.float32)),
+            "galaxy": pa.array(galaxy),
+            "x": pa.array(coords[:, 0]),
+            "y": pa.array(coords[:, 1]),
             "category": category,
         },
         schema=POINTS,
@@ -195,9 +195,7 @@ def generate_projections() -> None:
 
     data = dataset(DATASET_ID, DATASET_REVISION)
     raw = np.asarray(data[FLAG_SURVEYS["gz10"]], dtype=np.float64)
-    category = pa.array(
-        np.nan_to_num(raw).astype(dtype=np.uint8), type=pa.uint8(), mask=np.isnan(raw)
-    )
+    category = pa.array(np.nan_to_num(raw).astype(dtype=np.uint8), mask=np.isnan(raw))
     count = len(category)
     galaxy = np.arange(count, dtype=np.int32)
 

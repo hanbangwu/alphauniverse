@@ -1,5 +1,3 @@
-import type { CombineMode, SearchMethod } from '$lib/api'
-
 export interface Label {
   label: string
 }
@@ -8,18 +6,7 @@ export type Labels<T extends string> = Record<T, Label>
 
 export type Choice<T extends string> = Label & { value: T }
 
-export const METHODS: Labels<SearchMethod> = {
-  encoded: { label: 'Encoded' },
-  codebook: { label: 'Codebook' },
-  codebook_and_encoded: { label: 'Codebook + encoded' }
-}
-
 export const SIMILARITY = { label: 'Cosine similarity', short: 'cos' } as const
-
-export const COMBINES: Labels<CombineMode> = {
-  and: { label: 'And' },
-  or: { label: 'Or' }
-}
 
 export const SURVEYS: Labels<string> = {
   ls: { label: 'Legacy Survey DR10' },

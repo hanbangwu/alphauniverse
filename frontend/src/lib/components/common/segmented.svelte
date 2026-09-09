@@ -4,10 +4,9 @@
 
   interface Props {
     field: EnumField<T>
-    disabled?: boolean
   }
 
-  let { field, disabled = false }: Props = $props()
+  let { field }: Props = $props()
 </script>
 
 <div
@@ -19,7 +18,6 @@
       variant={field.value === value ? 'secondary' : 'ghost'}
       size="sm"
       class="px-1.5 text-xs"
-      {disabled}
       onclick={() => (field.value = value)}
     >
       {label}

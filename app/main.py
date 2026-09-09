@@ -10,7 +10,6 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from fastapi import FastAPI, HTTPException, Query
-from fastapi import Path as PathParam
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -32,7 +31,7 @@ from .config import (
 from .dataset import image
 from .search import Query as SearchQuery
 from .search import search
-from .store import matrix, row, source
+from .store import index, row, source
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -42,30 +41,12 @@ if TYPE_CHECKING:
 def labels() -> tuple[int, list[int], int]:
     points = pq.read_table(artifact("mean_points"), columns=["galaxy", "category"])
     category = points["category"]
-    labelled = np.asarray(category.drop_null(), dtype=np.uint8)
+    labelled = np.asarray(category.drop_null())
     return (
         len(category),
         np.bincount(labelled, minlength=N_MORPHOLOGIES).tolist(),
         category.null_count,
     )
-
-
-def tokens(galaxy: int) -> np.ndarray:
-    table = row(source("tokens"), galaxy, [ANCHOR])
-    if not table.num_rows:
-        raise ValueError(f"galaxy {galaxy} is not in tokens")
-    cells = table.column(ANCHOR).combine_chunks()
-    return np.asarray(cells.flatten(), dtype=np.uint32)[:N_PATCHES]
-
-
-def coverage(galaxy: int) -> dict[str, bool]:
-    table = row(source("tokens"), galaxy, [*TOKEN_SURVEYS, *FLAG_SURVEYS])
-    if not table.num_rows:
-        raise ValueError(f"galaxy {galaxy} is not in tokens")
-    return {
-        **{survey: table.column(survey)[0].is_valid for survey in TOKEN_SURVEYS},
-        **{survey: bool(table.column(survey)[0].as_py()) for survey in FLAG_SURVEYS},
-    }
 
 
 class Meta(BaseModel):
@@ -98,8 +79,7 @@ BINARY_OCTET: dict[str, Any] = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    matrix("encoded")
-    matrix("codebook")
+    index()
     source("tokens")
     yield
 
@@ -148,7 +128,7 @@ def get_meta() -> Meta:
     response_class=FileResponse,
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
 )
-def get_artifact(role: Annotated[str, PathParam()]) -> Response:
+def get_artifact(role: str) -> Response:
     if role not in ARTIFACTS:
         raise HTTPException(404, f"no artifact for role {role!r}")
 
@@ -160,12 +140,11 @@ def get_artifact(role: Annotated[str, PathParam()]) -> Response:
         path,
         media_type=mimetypes.guess_type(path)[0] or "application/octet-stream",
         filename=path.name,
-        content_disposition_type="attachment",
     )
 
 
 @app.head("/artifacts/{role}", include_in_schema=False)
-def head_artifact(role: Annotated[str, PathParam()]) -> Response:
+def head_artifact(role: str) -> Response:
     return get_artifact(role)
 
 
@@ -188,14 +167,27 @@ def get_image(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_tokens(galaxy: GalaxyIndex) -> Response:
-    return Response(tokens(galaxy).tobytes(), media_type="application/octet-stream")
+    table = row(source("tokens"), galaxy, [ANCHOR])
+    if not table.num_rows:
+        raise ValueError(f"galaxy {galaxy} is not in tokens")
+    cells = table.column(ANCHOR).combine_chunks()
+    return Response(
+        np.asarray(cells.flatten())[:N_PATCHES].tobytes(),
+        media_type="application/octet-stream",
+    )
 
 
 @app.get("/galaxies/{galaxy}/coverage")
 def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
+    table = row(source("tokens"), galaxy, [*TOKEN_SURVEYS, *FLAG_SURVEYS])
+    if not table.num_rows:
+        raise ValueError(f"galaxy {galaxy} is not in tokens")
     return [
-        Survey(survey=survey, matched=matched)
-        for survey, matched in coverage(galaxy).items()
+        Survey(survey=survey, matched=table.column(survey)[0].is_valid)
+        for survey in TOKEN_SURVEYS
+    ] + [
+        Survey(survey=survey, matched=bool(table.column(survey)[0].as_py()))
+        for survey in FLAG_SURVEYS
     ]
 
 
@@ -213,37 +205,27 @@ def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
     },
 )
 def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, encoded, codebook = search(
-        query, encoded=matrix("encoded"), codebook=matrix("codebook")
-    )
+    galaxies, scores, values = search(query, index=index())
 
-    maps = pa.field("item", pa.float32(), nullable=False)
+    item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
         [
             pa.field("galaxy", pa.int32(), nullable=False),
             pa.field("score", pa.float32(), nullable=False),
-            pa.field("encoded", pa.list_(maps, N_PATCHES), nullable=False),
-            pa.field("codebook", pa.list_(maps, N_PATCHES), nullable=False),
+            pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
         ],
         metadata={
             "revision": DATASET_REVISION,
-            "method": str(query.method),
-            "combine": str(query.combine),
-            "weight": str(query.weight),
             "galaxy": str(query.galaxy),
             "patches": ",".join(map(str, query.patches)),
             "n_patches": str(N_PATCHES),
-            "neighbours": str(query.neighbours),
         },
     )
     batch = pa.record_batch(
         [
             pa.array(galaxies),
             pa.array(scores),
-            pa.FixedSizeListArray.from_arrays(pa.array(encoded.reshape(-1)), N_PATCHES),
-            pa.FixedSizeListArray.from_arrays(
-                pa.array(codebook.reshape(-1)), N_PATCHES
-            ),
+            pa.FixedSizeListArray.from_arrays(pa.array(values.reshape(-1)), N_PATCHES),
         ],
         schema=schema,
     )

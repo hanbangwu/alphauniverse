@@ -5,10 +5,10 @@
     values: ArrayLike<number>
     grid: number
     color: (value: number) => RGB
-    visible?: boolean
+    visible: boolean
   }
 
-  let { values, grid, color, visible = true }: Props = $props()
+  let { values, grid, color, visible }: Props = $props()
 
   let canvas = $state<HTMLCanvasElement | null>(null)
 

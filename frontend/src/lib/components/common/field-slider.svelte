@@ -4,10 +4,9 @@
 
   interface Props {
     field: NumberField
-    class?: string
   }
 
-  let { field, class: className = 'w-32' }: Props = $props()
+  let { field }: Props = $props()
 </script>
 
 <Slider
@@ -17,5 +16,5 @@
   min={field.minimum}
   max={field.maximum}
   step={field.step}
-  class={className}
+  class="w-32"
 />
