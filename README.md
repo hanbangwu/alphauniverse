@@ -33,29 +33,13 @@ Selecting a galaxy opens its detail panel with the Legacy Survey cutout, its mor
 
 Click patches on the grid to build a query. The query embedding is the mean of all the query patches. Every galaxy scores the cosine similarity of each of its patches against the query, and is ranked by its highest-scoring patch. Masking thresholds the scores and is invertible.
 
-## API
-
-- `GET /meta` — dataset, revision, galaxy count, grid size, points files, class counts
-- `GET /artifacts/{role}` — build artifacts
-- `GET /galaxies/{galaxy}/image.png` — centre crop
-- `GET /galaxies/{galaxy}/tokens` — codebook token per patch
-- `GET /galaxies/{galaxy}/coverage` — one flag per survey
-- `GET /similarity` — patch search
-
-## Running it
+## Running
 
 ```sh
 uv run python -m scripts.openapi                    # updates frontend/openapi.json
 cd frontend && bun run check                        # regenerates src/lib/api and type checks
-uv run modal run modal_app.py::generate_embeddings  # build embeddings
-uv run modal run modal_app.py::generate_index       # build the search index
-uv run modal run modal_app.py::generate_projections # build projections
+uv run modal run modal_app.py::generate_embeddings  # generate embeddings
+uv run modal run modal_app.py::generate_index       # generate search index
+uv run modal run modal_app.py::generate_projections # generate projections
 uv run modal deploy modal_app.py                    # serve
 ```
-
-## Wishlist
-
-- Fine-Tuning-as-a-Service
-- Colour by something other than morphology (perhaps redshift)
-- Hover a token in the embedding space and see where it sits in the projection view
-- Cover a larger area of sky

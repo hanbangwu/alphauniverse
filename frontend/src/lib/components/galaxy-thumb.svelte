@@ -29,11 +29,7 @@
   />
 {/if}
 
-{#if failed === galaxy}
-  <p class="absolute inset-0 grid place-content-center px-2 text-center text-xs text-destructive">
-    No cutout for galaxy {galaxy}
-  </p>
-{:else if loaded !== galaxy}
+{#if failed !== galaxy && loaded !== galaxy}
   <div class="absolute inset-0 grid place-content-center">
     <Spinner class="size-6" />
   </div>

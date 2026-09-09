@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 from .config import (
     ANCHOR,
-    ARTIFACTS,
     DATASET_AUTHOR,
     DATASET_NAME,
     DATASET_REVISION,
@@ -129,12 +128,11 @@ def get_meta() -> Meta:
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
 )
 def get_artifact(role: str) -> Response:
-    if role not in ARTIFACTS:
-        raise HTTPException(404, f"no artifact for role {role!r}")
-
-    path = artifact(role)
-    if not path.is_file():
-        raise HTTPException(404, f"artifact {role!r} is not built")
+    try:
+        path = artifact(role)
+        path.stat()
+    except (KeyError, OSError) as exception:
+        raise HTTPException(404, str(exception)) from exception
 
     return FileResponse(
         path,
@@ -168,11 +166,9 @@ def get_image(galaxy: GalaxyIndex) -> Response:
 )
 def get_tokens(galaxy: GalaxyIndex) -> Response:
     table = row(source("tokens"), galaxy, [ANCHOR])
-    if not table.num_rows:
-        raise ValueError(f"galaxy {galaxy} is not in tokens")
-    cells = table.column(ANCHOR).combine_chunks()
+    cell = table.column(ANCHOR).combine_chunks()[0]
     return Response(
-        np.asarray(cells.flatten())[:N_PATCHES].tobytes(),
+        np.asarray(cell.values)[:N_PATCHES].tobytes(),
         media_type="application/octet-stream",
     )
 
@@ -180,8 +176,6 @@ def get_tokens(galaxy: GalaxyIndex) -> Response:
 @app.get("/galaxies/{galaxy}/coverage")
 def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
     table = row(source("tokens"), galaxy, [*TOKEN_SURVEYS, *FLAG_SURVEYS])
-    if not table.num_rows:
-        raise ValueError(f"galaxy {galaxy} is not in tokens")
     return [
         Survey(survey=survey, matched=table.column(survey)[0].is_valid)
         for survey in TOKEN_SURVEYS

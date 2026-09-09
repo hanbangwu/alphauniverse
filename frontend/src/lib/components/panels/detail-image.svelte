@@ -27,16 +27,6 @@
   const palette = $derived(values ? tokenColors(values) : null)
 
   const request = $derived(showTokens ? tokens : null)
-
-  const failed = $derived.by(() => {
-    if (!request?.isError) return null
-    const error: unknown = request.error
-    if (error instanceof Error) return error.message
-    if (typeof error === 'object' && error !== null && 'detail' in error) {
-      return String(error.detail)
-    }
-    return String(error)
-  })
 </script>
 
 <PatchFrame busy={request?.isFetching ?? false}>
@@ -53,8 +43,8 @@
   {/if}
 </PatchFrame>
 
-{#if failed}
+{#if request?.isError}
   <p class="text-xs leading-relaxed text-destructive">
-    {DETAIL_VIEWS[detail].label} failed: {failed}
+    {'detail' in request.error ? request.error.detail : request.error.message}
   </p>
 {/if}
