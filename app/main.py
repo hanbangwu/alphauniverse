@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,8 +30,7 @@ from .config import (
 )
 from .dataset import image
 from .search import Query as SearchQuery
-from .search import search
-from .store import index, row, source
+from .search import index, search, source
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -165,7 +165,9 @@ def get_image(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_tokens(galaxy: GalaxyIndex) -> Response:
-    table = row(source("tokens"), galaxy, [ANCHOR])
+    table = source("tokens").to_table(
+        columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
+    )
     cell = table.column(ANCHOR).combine_chunks()[0]
     return Response(
         np.asarray(cell.values)[:N_PATCHES].tobytes(),
@@ -175,7 +177,9 @@ def get_tokens(galaxy: GalaxyIndex) -> Response:
 
 @app.get("/galaxies/{galaxy}/coverage")
 def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
-    table = row(source("tokens"), galaxy, [*TOKEN_SURVEYS, *FLAG_SURVEYS])
+    table = source("tokens").to_table(
+        columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
+    )
     return [
         Survey(survey=survey, matched=table.column(survey)[0].is_valid)
         for survey in TOKEN_SURVEYS

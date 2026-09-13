@@ -1,15 +1,27 @@
-from __future__ import annotations
+from functools import cache
+from typing import Annotated
 
-from typing import TYPE_CHECKING, Annotated
-
+import faiss
 import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
 from pydantic import BaseModel, ConfigDict, Field
 from sklearn.preprocessing import normalize
 
-from .config import N_PATCHES, PROBE, GalaxyIndex
-
-if TYPE_CHECKING:
-    import faiss
+from .config import (
+    ANCHOR,
+    BATCH,
+    DIM,
+    N_PATCHES,
+    NLIST,
+    NPROBE,
+    PROBE,
+    SEED,
+    TRAIN_GALAXIES,
+    GalaxyIndex,
+    artifact,
+)
 
 
 class Query(BaseModel):
@@ -48,3 +60,40 @@ def search(
     scores = maps.max(axis=1)
     by_score = np.concatenate(([0], 1 + np.argsort(-scores[1:], kind="stable")))
     return order[by_score], scores[by_score], maps[by_score]
+
+
+@cache
+def source(role: str) -> ds.Dataset:
+    return ds.dataset(artifact(role), format="parquet")
+
+
+def patches(cells: pa.Array) -> np.ndarray:
+    return normalize(
+        np.asarray(
+            pc.list_slice(cells, 0, N_PATCHES).flatten().flatten(), dtype=np.float32
+        ).reshape(-1, DIM),
+        copy=False,
+    )
+
+
+@cache
+def index() -> faiss.Index:
+    loaded = faiss.read_index(str(artifact("encoded_index")))
+    loaded.make_direct_map()
+    loaded.nprobe = NPROBE
+    return loaded
+
+
+def generate_index() -> None:
+    dataset = source("encoded")
+    sample = np.random.default_rng(SEED).choice(
+        dataset.count_rows(), TRAIN_GALAXIES, replace=False
+    )
+    built = faiss.index_factory(DIM, f"IVF{NLIST},SQfp16", faiss.METRIC_INNER_PRODUCT)
+    built.train(
+        patches(dataset.take(sample, columns=[ANCHOR]).column(ANCHOR).combine_chunks())
+    )
+    for batch in dataset.to_batches(columns=[ANCHOR], batch_size=BATCH):
+        built.add(patches(batch.column(ANCHOR)))
+
+    faiss.write_index(built, str(artifact("encoded_index")))

@@ -60,7 +60,7 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_index() -> None:
-    from app.store import generate_index
+    from app.search import generate_index
 
     cache_volume.reload()
     generate_index()

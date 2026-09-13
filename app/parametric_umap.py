@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from collections.abc import Iterator
-from functools import cache
 
 import numpy as np
 import pyarrow as pa
@@ -27,7 +24,7 @@ from .config import (
     device,
 )
 from .dataset import dataset
-from .store import source, vectors
+from .search import source
 
 BATCH = 1024
 CHUNK = 128
@@ -150,15 +147,6 @@ def fit_parametric_umap(sampled: np.ndarray) -> None:
     torch.save({"dim": rows.shape[1], "state": model.state_dict()}, weights)
 
 
-@cache
-def load_parametric_umap() -> ParametricUMAP:
-    saved = torch.load(artifact("parametric_umap"), map_location="cpu")
-    model = ParametricUMAP(saved["dim"])
-    model.load_state_dict(saved["state"])
-    model.to(device()).eval()
-    return model
-
-
 def _stream(
     counts: dict[str, int],
 ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
@@ -171,8 +159,15 @@ def _stream(
             filter=ds.field(survey).is_valid(),
         )
         for batch in scanner.to_batches():
-            offsets, values = vectors(batch.column(survey))
-            yield np.asarray(batch.column("galaxy")), offsets, values
+            cells = batch.column(survey)
+            offsets = np.asarray(cells.offsets, dtype=np.intp)
+            yield (
+                np.asarray(batch.column("galaxy")),
+                offsets - offsets[0],
+                np.asarray(cells.flatten().flatten(), dtype=np.float32).reshape(
+                    -1, DIM
+                ),
+            )
 
 
 def _points(galaxy: np.ndarray, coords: np.ndarray, category: pa.Array) -> pa.Table:
@@ -243,8 +238,10 @@ def generate_projections() -> None:
     fit_parametric_umap(sampled)
     del sampled
 
-    load_parametric_umap.cache_clear()
-    model = load_parametric_umap()
+    saved = torch.load(artifact("parametric_umap"), map_location="cpu")
+    model = ParametricUMAP(saved["dim"])
+    model.load_state_dict(saved["state"])
+    model.to(device()).eval()
 
     pq.write_table(
         _points(galaxy, model.transform(mean), category),
