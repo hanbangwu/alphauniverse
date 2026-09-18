@@ -22,6 +22,8 @@ projection of every galaxy, and patch-level similarity search across the survey.
 - `docs/performance.md` — the cost model, measured numbers and known ceilings
 - `docs/testing.md` — running tests and benchmarks
 
+Read **Simplicity** and **Writing** below before adding to any of them.
+
 ## Commands
 
 ```sh
@@ -46,8 +48,8 @@ bun run lint                                        # prettier + eslint
 
 ## Invariants
 
-These are load-bearing and nothing asserts most of them at runtime. Breaking one
-produces wrong results rather than an error.
+Code depends on each of these, and nothing asserts most of them at runtime.
+Breaking one produces wrong results rather than an error.
 
 - **faiss ids encode position**: `id = galaxy * N_PATCHES + patch`. Holds only
   because `generate_index` adds every galaxy's anchor patches in row order,
@@ -60,6 +62,58 @@ produces wrong results rather than an error.
   `DATASET_REVISION` and the files on disk.
 - **`GalaxyIndex` is hardcoded** to the production galaxy count and is *not*
   derived from the artifacts. See the strict xfail in `tests/test_api.py`.
+
+## Simplicity
+
+Code, tests and documentation are held to one standard: as simple and as small
+as the job allows. This is the constraint that governs the others.
+
+- Prefer removing to adding. A change that deletes a concept is usually better
+  than one that adds a flag.
+- Documentation states what the code does now. Not what it used to do, not what
+  it might do, not which alternatives were rejected. Git holds the history.
+- Each fact has one home. If something is documented in two places, one of them
+  is already wrong.
+- When adding to a doc, re-read the whole file first and cut what the addition
+  duplicates. Otherwise they accumulate duplicates.
+- Working notes stay out of the repository. Scratch analysis, session logs and
+  investigation write-ups are thrown away, not committed.
+- Tests assert the behaviour that matters, not every property that happens to
+  be observable.
+
+### Where future work is recorded
+
+No `TODO`, `FIXME`, `HACK` or `XXX` comments anywhere in the codebase. An inline
+marker is tracked by nothing and goes stale without anyone noticing. Known work
+lives in exactly three places:
+
+1. **Performance work** — the ranked list in `docs/performance.md`, ordered by
+   measured cost and re-ordered when a measurement changes it.
+2. **Behaviour known to be wrong** — a test marked `xfail(strict=True)`, so the
+   fix cannot land without someone removing the marker. See `tests/test_api.py`.
+3. **Everything else** — a GitHub issue.
+
+## Writing
+
+Two audiences: humans read `README.md`, `docs/`, docstrings, PR descriptions and
+review replies; agents read this file and anything written to orient a future
+session. The same standard applies to both.
+
+### Say what you mean
+
+Mannered prose substitutes metaphor and flourish for direct statement: "a dial
+worth turning" instead of "a parameter worth varying", "this point earns its
+keep" instead of "this point still matters". The phrases display the writer
+rather than convey the idea, and readers can tell. They are also imprecise: a
+metaphor carries connotations the writer did not choose and cannot control. When a literal phrase is available, use it.
+
+### Formatting
+
+- Use lists and headings when asked for them, or when the content is
+  multifaceted enough that they aid clarity. Not by default.
+- If minimal formatting is requested, use none: no bullets, headings, lists or
+  bold.
+- Keep conversational or personal exchanges in plain prose.
 
 ## Conventions
 

@@ -1,6 +1,6 @@
 # Architecture
 
-Two halves that meet at a set of files.
+The system has two halves, connected only by a set of files on disk.
 
 The **build pipeline** runs offline on Modal, turns a Hugging Face dataset into a
 handful of artifacts, and stops. The **serving app** reads those artifacts and
@@ -76,8 +76,8 @@ the server in charge of which artifact backs which view.
 
 ## Similarity search
 
-The interesting path. A query is some patches of one galaxy; the answer is a
-ranked list of galaxies, each with a full per-patch score map.
+A query is some patches of one galaxy. The answer is a ranked list of
+galaxies, each with a full per-patch score map.
 
 1. Reconstruct the query patches from the index and average them into one
    direction, L2-normalised.
@@ -95,7 +95,7 @@ consequences worth knowing:
 - Step 4 does far more work than step 2 — about 90% of query time. See
   `docs/performance.md`.
 
-Vector ids carry position: `id = galaxy * N_PATCHES + patch`. That is what makes
+Vector ids encode position: `id = galaxy * N_PATCHES + patch`. That is what makes
 steps 1 and 4 possible without a side table, and it holds only because the index
 build adds every galaxy's 576 anchor patches in row order.
 
@@ -142,6 +142,5 @@ The serving function is pinned to `max_containers=1` with `scaledown_window` of
 5 minutes and 16 concurrent inputs, so the whole service is one process that
 disappears after five idle minutes and reloads a 15.5 GB index on the next
 request — a measured 47 seconds, during which SSR is blocked and the page is
-blank. The concurrency setting does less than it looks: the endpoints are
-synchronous and CPU-bound, so 32 parallel cutout requests take as long as 32
-sequential ones. `docs/performance.md` has the measurements.
+blank. The concurrency setting does not help: the endpoints are synchronous and
+CPU-bound, so 32 parallel cutout requests take as long as 32 sequential ones. `docs/performance.md` has the measurements.

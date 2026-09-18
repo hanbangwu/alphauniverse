@@ -80,8 +80,8 @@ nothing; it is what lets a 12-galaxy fixture build. Training uses at most
 
 Fits a parametric UMAP — a 768→256→128→2 MLP trained to reproduce UMAP's
 fuzzy-simplicial-set structure — on a `SAMPLE` of 500k embeddings, then applies
-it to everything. Being a function rather than a fitted table is the point: the
-same model maps both point sets, so they share one space.
+it to everything. Because the projector is a function rather than a fitted
+table, the same model maps both point sets and they share one space.
 
 Two passes over `encoded`:
 

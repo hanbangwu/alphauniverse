@@ -17,7 +17,7 @@ before it is trusted.
 
 ## The cost model
 
-Measured against production, the path a first visitor to an idle site walks:
+Measured against production, what a first visitor to an idle site waits for:
 
 | Step | Cost |
 | ---- | ---- |
@@ -37,8 +37,7 @@ algorithm:
 2. **Work repeated per request that could be done once** — cutouts above all,
    and everything a cache header would have avoided.
 
-The approximate nearest-neighbour search — the part that sounds expensive — is
-3% of a query.
+The approximate nearest-neighbour search is 3% of a query.
 
 ## Production: query latency
 
@@ -95,11 +94,11 @@ Step 4 reconstructs 18,432 vectors at **1.57 µs each**, because
 `reconstruct_batch` walks the IVF direct map one vector at a time: a list lookup
 and a per-vector decode call rather than a contiguous read.
 
-The approximate search — the part that sounds expensive — is 3% of the query.
+The approximate search is 3% of the query.
 
 ## Production: cutouts
 
-This is the worst number in the system.
+This is the largest measured latency in the system.
 
 | Pattern                              | Result                        |
 | ------------------------------------ | ----------------------------- |
@@ -157,7 +156,7 @@ map. **15.5 GB, resident in RAM, on every container.**
 noting: codebook vectors are drawn from a finite codebook, so the same 768-d rows
 repeat and zstd collapses them. Contextualised outputs are all distinct and do
 not compress. Any future work that can use codebook embeddings instead of encoded
-ones gets an order of magnitude on storage for free.
+ones costs an order of magnitude less to store.
 
 **No endpoint sets `Cache-Control`.** Artifacts carry an `etag`, so they at least
 revalidate; `/meta`, `/tokens`, `/coverage`, `/similarity` and `/image.png` carry
@@ -175,7 +174,7 @@ mmap — roughly 330 MB/s off the Modal volume — while `max_containers=1` mean
 there is no warm sibling to answer instead. Because SSR awaits `/meta`, the
 visitor sees nothing at all for those 47 seconds, not even a loading state.
 
-Levers, cheapest first:
+Options, cheapest first:
 
 - **`faiss.IO_FLAG_MMAP`** so pages fault in lazily. A search at `nprobe=64`
   touches ~0.4% of the lists, so time-to-first-response should drop by a large
@@ -279,7 +278,7 @@ Measured recall against brute force over every patch, 16 queries, 31 requested:
 
 What this does establish: the metric is defined and wired up, and the
 "shorter than `matches`" behaviour is real and silent — at `nprobe=1` a third of
-the requested galaxies simply never come back, with nothing in the response
+the requested galaxies never come back, with nothing in the response
 saying so. **Production recall is unknown** and needs measuring against the real
 index before any change to `NPROBE`, `PROBE`, `NLIST` or the quantiser.
 
