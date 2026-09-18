@@ -22,9 +22,9 @@ def _unit(rows: np.ndarray) -> np.ndarray:
 def test_point_sets_share_one_projection(tree, galaxies: int) -> None:
     """`mean_points` and `full_points` must be coordinates in one space.
 
-    Production gets this for free: one trained projector is applied to both. The
-    fixture has to arrange it, and getting it wrong is invisible — the files
-    still load and every other test still passes.
+    Production applies one trained projector to both, so the property holds
+    without being arranged. The fixture has to arrange it, and nothing surfaces
+    a mistake: the files still load and every other test still passes.
 
     Recovers the projection from `full_points`, then checks `mean_points` agrees
     with it, so nothing here is compared against the fixture's own basis.

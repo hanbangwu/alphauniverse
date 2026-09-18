@@ -1,14 +1,14 @@
 """Measures the search path against a synthetic artifact tree.
 
-Reports artifact sizes, index load time, query latency and — the one that stops
-a speed-up from quietly becoming a downgrade — the recall of the approximate
-ranking against brute force over every patch.
+Reports artifact sizes, index load time, query latency, and the recall of the
+approximate ranking against brute force over every patch. Recall is what
+distinguishes a change that made the search faster from one that made it worse.
 
 Results are written as JSON tagged with the commit and the fixture's shape, so
 runs can be compared across sessions. Numbers are only comparable between trees
 built with the same `--galaxies` and `--seed`.
 
-Two caveats worth carrying into any conclusion drawn here:
+Two caveats apply to any conclusion drawn here:
 
 * The fixture is far smaller than production, so its index geometry differs.
   `nlist` and the `nprobe/nlist` ratio are reported for that reason: a
