@@ -87,8 +87,9 @@ No `TODO`, `FIXME`, `HACK` or `XXX` comments anywhere in the codebase. An inline
 marker is tracked by nothing and goes stale without anyone noticing. Known work
 lives in exactly three places:
 
-1. **Performance work** — the ranked list in `docs/performance.md`, ordered by
-   measured cost and re-ordered when a measurement changes it.
+1. **Performance work** — `Candidate work` in `docs/performance.md`, ordered by
+   measured impact and re-ordered when a measurement changes it. Entries are
+   named, not numbered, so references to them survive a re-ordering.
 2. **Behaviour known to be wrong** — a test marked `xfail(strict=True)`, so the
    fix cannot land without someone removing the marker. See `tests/test_api.py`.
 3. **Everything else** — a GitHub issue.

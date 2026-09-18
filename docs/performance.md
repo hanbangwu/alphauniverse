@@ -162,11 +162,86 @@ ones costs an order of magnitude less to store.
 revalidate; `/meta`, `/tokens`, `/coverage`, `/similarity` and `/image.png` carry
 neither.
 
-## Ranked opportunities
+## Candidate work
 
-By measured user-visible latency saved, highest first.
+Nothing in this section is done. Each entry is triaged on three axes, because
+they answer different questions and a change can score well on one and badly on
+another:
 
-### 1. Cold start — 47 s of blank page
+- **Impact** — user-visible latency or compute saved, read off the measurements
+  above rather than off intuition.
+- **Blast radius** — how much code, and how much of the search method, a change
+  disturbs. These come apart: a one-line change that alters how every query
+  touches memory has a small diff and a large blast radius.
+- **Kind** — *implementation* pays off directly, *quality* removes a defect or
+  an obstacle without saving time, *groundwork* only makes a later change
+  possible or provable.
+
+Entries are named rather than numbered. The table is ordered by measured impact
+and gets re-ordered when a measurement changes, so a number would be a
+cross-reference that goes stale; the name is stable.
+
+| Entry | Impact | Blast radius | Kind |
+| ----- | ------ | ------------ | ---- |
+| `index-mmap` | 47 s cold start, if faiss supports it here | Small diff, large behaviour | Implementation |
+| `cutout-artifact` | 11 s off a match list | Medium-large | Implementation |
+| `ssr-unblock` | Turns 47 s of blank page into 47 s of spinner | Medium, frontend | Quality |
+| `dataset-preload` | 11.3 s off the first user per container | Trivial | Implementation |
+| `patch-array` | 7–10× on `/similarity` | Large | Implementation |
+| `cache-headers` | Whole surface on repeat visits; magnitude unmeasured | Small | Implementation |
+| `index-compression` | Cold start, and the RAM ceiling | Large, methodological | Implementation |
+| `tokens-bulk` | ~240 ms per newly selected galaxy | Medium | Implementation |
+| `bulk-offload` | None steady-state, large under load | Infrastructure | Quality |
+| `full-points-view` | Browser memory and time-to-full-view; unmeasured | Small-medium | Implementation |
+| `match-list-virtualise` | Low | Medium, frontend | Quality |
+| `min-containers` | Removes cold start outright | None | Operational, costs money |
+| `production-recall` | None directly | Small | Groundwork |
+| `search-stages` | None | Small | Groundwork |
+| `galaxy-index-derived` | None | Small | Quality |
+| `recall-reported` | None | Small | Quality |
+| `encode-coverage` | None | Small | Groundwork |
+
+### Sequencing
+
+Impact order is not the order to work in, because of four couplings.
+
+**`dataset-preload` must not block startup.** Preloading the Hugging Face
+dataset moves 11.3 s off the first user and onto startup. Startup is currently
+47 s of blank page, so a blocking preload makes the blank page 58 s. Either warm
+it in the background after `lifespan` yields, or block only once `index-mmap`
+has made the index read cheap.
+
+**`index-mmap` needs a spike before it counts as small.** `write_index` stores
+an IVF index's inverted lists in the in-memory array form, and faiss's
+`IO_FLAG_MMAP` may require the on-disk form instead. Even if it loads,
+`make_direct_map()` plus page faults during `reconstruct_batch` could trade 46 s
+of startup for unpredictable per-query latency. The change is one flag; the
+question it raises is whether every query gets slower, and only a measurement
+answers it.
+
+**`patch-array` and `index-compression` are one design, not two changes.**
+`patch-array` adds a 15.4 GB contiguous fp16 array holding the same vectors the
+index already holds, against a 64 GB container. `index-compression` shrinks the
+index at some cost in recall. Done together they separate two jobs the index is
+currently doing at once: a heavily compressed index generates candidates, and
+the flat array scores them exactly. Done separately, the first doubles memory
+and the second loses accuracy for nothing.
+
+**`production-recall` gates both of them, and `search-stages` gates the
+benchmark that would prove them.** Production recall is unknown, for the reasons
+in [Reading fixture numbers](#reading-fixture-numbers), so there is no baseline
+to show a quantiser change did not silently degrade results. And
+`measure_phases` in `scripts/benchmark.py` re-implements `search()` step by step
+to time its stages, which means the benchmark and the code can drift apart
+precisely when they most need to agree.
+
+That gives a working order. `cache-headers`, `cutout-artifact` and a
+non-blocking `dataset-preload` are independent and provable now. `search-stages`
+is the refactor that makes everything after it measurable against the code that
+actually runs. Then the `index-mmap` spike and `production-recall`, which
+between them unlock the `patch-array` + `index-compression` design.
+
+### Cold start — 47 s of blank page
 
 Measured: 400 s idle, then `GET /meta` took **46.97 s**, against 0.47 s warm.
 That is `faiss.read_index` pulling the whole 15.5 GB index into memory with no
@@ -174,84 +249,112 @@ mmap — roughly 330 MB/s off the Modal volume — while `max_containers=1` mean
 there is no warm sibling to answer instead. Because SSR awaits `/meta`, the
 visitor sees nothing at all for those 47 seconds, not even a loading state.
 
+With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more
+than five minutes after the last one pays it in full, so on a low-traffic site
+it is the common experience rather than the rare one.
+
 Options, cheapest first:
 
-- **`faiss.IO_FLAG_MMAP`** so pages fault in lazily. A search at `nprobe=64`
-  touches ~0.4% of the lists, so time-to-first-response should drop by a large
-  factor even though steady-state stays the same.
-- **Preload `dataset()` in `lifespan`**, which already warms the index and token
-  store. Moves the 11.3 s dataset open off the first user.
-- **Don't block SSR on `/meta`** — fetch it client-side so the shell paints
-  immediately and the wait becomes a spinner instead of nothing.
-- **A smaller index** — `SQ8` halves it, PQ far more, both at some recall cost
-  that `scripts/benchmark.py` can quantify first.
-- **`min_containers=1`** removes it entirely, trading money for latency.
+- **`index-mmap`** — `faiss.IO_FLAG_MMAP` so pages fault in lazily. A search at
+  `nprobe=64` touches ~0.4% of the lists, so time-to-first-response should drop
+  by a large factor even though steady-state stays the same.
+- **`dataset-preload`** — warm `dataset()` in `lifespan`, which already warms
+  the index and token store. Moves the 11.3 s dataset open off the first user.
+- **`ssr-unblock`** — fetch `/meta` client-side so the shell paints immediately
+  and the wait becomes a spinner instead of nothing.
+- **`index-compression`** — `SQ8` halves the index, PQ far more, both at some
+  recall cost that `scripts/benchmark.py` can quantify first.
+- **`min-containers`** — `min_containers=1` removes cold start entirely,
+  trading money for latency.
 
-The first three are cheap and compose. Do them before considering the last.
+The first three are cheap and compose. Do them before considering the last two.
 
-### 2. Cutouts re-encoded per request — 11 s to open the match list
+### Cutouts re-encoded per request — 11 s to open the match list
 
 `/galaxies/{g}/image.png` reads the galaxy's image out of the Hugging Face
 dataset, centre-crops it and re-encodes a PNG on every call. Nothing is cached,
 on the server or in the response. At ~350 ms of CPU each and no useful
 concurrency, the 32 thumbnails in a match list take 11 seconds.
 
-Precompute them. Every cutout is a pure function of the revision: 17,369 × ~10.8
-KB is about **190 MB** as a single artifact, roughly 100 minutes of one-off CPU.
-Serving then becomes a range read with no decode at all, and it becomes
-CDN-cacheable, which the current endpoint can never be.
+`cutout-artifact` precomputes them. Every cutout is a pure function of the
+revision: 17,369 × ~10.8 KB is about **190 MB** as a single artifact, roughly
+100 minutes of one-off CPU. Serving then becomes a range read with no decode at
+all, and it becomes CDN-cacheable, which the current endpoint can never be.
 
 This is the largest measured win available and it needs no algorithmic work.
 
-### 3. No cache headers anywhere — nearly free
+### No cache headers anywhere — nearly free
 
 Every response is immutable for a given `DATASET_REVISION`, and not one sets
 `Cache-Control`. Artifacts carry an `etag` so they revalidate; `/meta`,
 `/tokens`, `/coverage`, `/similarity` and `/image.png` carry nothing, so every
 repeat visit re-computes and re-transfers everything.
 
-Putting the revision in the path or a query parameter makes the whole surface
-safely `immutable`, after which repeat visits cost nothing and a CDN can absorb
-the traffic. This is the cheapest change in this document.
+The one design question in `cache-headers` is what makes the immutability safe
+to advertise. A long `max-age` with `immutable` is correct only while the
+revision does not change; a browser that cached under the old revision would
+keep serving it. Putting the revision in the path or a query parameter makes the
+whole surface safely `immutable`, after which repeat visits cost nothing and a
+CDN can absorb the traffic.
 
-### 4. Candidate reconstruction — 100 ms at the default, 325 ms at the maximum
+### Candidate reconstruction — 100 ms at the default, 325 ms at the maximum
 
 90% of a query is `reconstruct_batch` walking the IVF direct map one vector at a
 time, at 4.4–5.3 µs per vector in production. The ANN search is 3%.
 
-Keep the anchor patches as one contiguous memory-mapped fp16 array beside the
-index and slice `galaxy * 576 … (galaxy + 1) * 576` out of it. A 33-galaxy result
-is then 29 MB of sequential reads and one BLAS matmul, which should land under
-15 ms — call it **7–10×** on this endpoint, taking the 128-match case from
-~325 ms to tens of milliseconds.
+`patch-array` keeps the anchor patches as one contiguous memory-mapped fp16
+array beside the index and slices `galaxy * 576 … (galaxy + 1) * 576` out of it.
+A 33-galaxy result is then 29 MB of sequential reads and one BLAS matmul, which
+should land under 15 ms — call it **7–10×** on this endpoint, taking the
+128-match case from ~325 ms to tens of milliseconds.
 
-That array is 15.4 GB, the same data the index already holds, so this trades
-memory for speed unless the index itself is compressed at the same time. Worth
-planning the two together.
+That array is 15.4 GB, the same data the index already holds, so it only makes
+sense alongside `index-compression`. See [Sequencing](#sequencing).
 
-### 5. Bulk artifacts through the app container
+### Bulk artifacts through the app container
 
 `encoded` is **22.97 GB** and is wired to a "Download embeddings" button in the
 left panel. `full_points` is **180 MB** and downloads whenever a user switches to
 the full point set. Both stream through the single serving container, where one
 download can starve every interactive request behind it.
 
-Object storage or a CDN in front is the structural fix. At minimum, a 23 GB
+`bulk-offload` puts object storage or a CDN in front. At minimum, a 23 GB
 download should not be a one-click button on a `max_containers=1` service.
 
-### 6. Frontend
+### Frontend
 
-- **SSR blocks on `/meta`.** A cold backend stalls the document itself, not just
-  a widget. Moving the call client-side would let the shell paint immediately
-  and show a loading state instead of nothing.
-- **`full_points` is materialised**, not scanned: `loadParquet` runs
-  `CREATE TABLE … AS SELECT`, so all 180 MB is decoded into WASM memory.
-- **The match list is not virtualised.** Up to 128 rows × 3 patch grids, each
-  with two canvases. `IsInViewport` gates redraws, which is the only reason this
-  is tolerable, but it caps how far `matches` can usefully go — and at 128 the
-  server is already spending 325 ms plus 128 cutout requests.
+- **`ssr-unblock`** — `+layout.server.ts` awaits `/meta`, so a cold backend
+  stalls the document itself rather than a widget. The cost is that every
+  consumer of `data.meta` must then handle its absence.
+- **`full-points-view`** — `loadParquet` runs `CREATE TABLE … AS SELECT`, so all
+  180 MB is decoded into WASM memory. A view over the parquet would read ranges
+  on demand instead, but whether that is faster depends on how many queries
+  follow and how well DuckDB-WASM caches those ranges. Unmeasured either way.
+- **`match-list-virtualise`** — up to 128 rows × 3 patch grids, each with two
+  canvases. `IsInViewport` gates redraws, which is the only reason this is
+  tolerable, but it caps how far `matches` can usefully go.
 - **No URL state.** The selected galaxy, patches and filters live only in
   memory, so nothing is shareable or survives a reload.
+
+### Smaller items
+
+- **`tokens-bulk`** — `/galaxies/{g}/tokens` returns 2.3 KB and costs a ~240 ms
+  round trip, paid once per galaxy the user selects. The whole `tokens` artifact
+  is 7.0 MB, so shipping it once and querying in-browser could remove every one
+  of those round trips. Whether it pays depends on the anchor column's share of
+  that 7 MB, which is unmeasured, and on how many galaxies a session touches.
+- **`galaxy-index-derived`** — `GalaxyIndex` hardcodes 17,369 instead of reading
+  the artifacts, so any revision with a different galaxy count silently accepts
+  or rejects the wrong indices. Tracked by the strict xfail in
+  `tests/test_api.py`.
+- **`recall-reported`** — `search()` can return fewer than `matches` galaxies
+  when the candidate patches do not cover enough of them, and the response says
+  nothing about it. At `nprobe=1` in the fixture a third of the requested
+  galaxies silently never came back.
+- **`encode-coverage`** — `app/encode.py` has no automated coverage at all, so
+  an import error or a schema drift there is caught only by a full build. It
+  imports torch at module level, so a test needs the stubbed-import approach
+  rather than a real import.
 
 ## Reading fixture numbers
 
