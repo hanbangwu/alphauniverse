@@ -16,29 +16,25 @@ nothing served depends on them, and their absence exercises the 404 path.
     uv run python -m scripts.fixture --galaxies 12 --out .cache/fixture
 """
 
-from __future__ import annotations
-
 import argparse
-import math
 import os
 from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
+from sklearn.preprocessing import normalize
 
 from app.config import (
     ANCHOR,
     DIM,
-    FLAG_SURVEYS,
-    MIN_TRAIN_PER_CENTROID,
     N_MORPHOLOGIES,
     N_PATCHES,
-    NLIST,
     POINTS,
     TOKEN_SURVEYS,
     artifact,
     build_dir,
+    store_schema,
 )
 from app.search import generate_index, source
 
@@ -107,29 +103,21 @@ def _column(entries: list[np.ndarray | None], dim: int | None) -> pa.Array:
 
 
 def _store(
-    role: str, cells: dict[str, list[np.ndarray | None]], galaxies: int, dim: int | None
+    role: str,
+    cells: dict[str, list[np.ndarray | None]],
+    galaxies: int,
+    dim: int | None,
+    flags: dict[str, np.ndarray],
 ) -> None:
-    """Write one parquet store in the schema app/encode.py produces."""
-    cell = pa.list_(pa.uint32()) if dim is None else pa.list_(pa.list_(pa.float16(), dim))
-    schema = pa.schema(
-        [pa.field("galaxy", pa.int32())]
-        + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
-        + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
-    )
+    """Write one parquet store, in the schema app/encode.py writes."""
     pq.write_table(
         pa.table(
             {
                 "galaxy": pa.array(np.arange(galaxies), type=pa.int32()),
                 **{s: _column(cells[s], dim) for s in TOKEN_SURVEYS},
-                **{
-                    survey: pa.array(
-                        [galaxy % (index + 2) != 0 for galaxy in range(galaxies)],
-                        type=pa.bool_(),
-                    )
-                    for index, survey in enumerate(FLAG_SURVEYS)
-                },
+                **{s: pa.array(values, type=pa.bool_()) for s, values in flags.items()},
             },
-            schema=schema,
+            schema=store_schema(role),
         ),
         artifact(role),
         compression="zstd",
@@ -146,15 +134,15 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     real projector is a single function applied to everything: `mean_points` and
     `full_points` have to be coordinates in one shared space.
     """
-    unit = rows / np.maximum(np.linalg.norm(rows, axis=1, keepdims=True), 1e-12)
-    return (unit @ basis).astype(np.float32)
+    return (normalize(rows) @ basis).astype(np.float32)
 
 
 def build(galaxies: int = 12, seed: int = 0, nlist: int | None = None) -> Path:
     """Write a complete fixture tree under `build_dir()`.
 
     Returns the directory written. Requires `ALPHAUNIVERSE_CACHE` to already
-    point where the tree should go.
+    point where the tree should go. `nlist` overrides the index geometry that
+    `generate_index` would otherwise choose for this size.
     """
     target = build_dir()
     target.mkdir(parents=True, exist_ok=True)
@@ -164,12 +152,20 @@ def build(galaxies: int = 12, seed: int = 0, nlist: int | None = None) -> Path:
     centres /= np.linalg.norm(centres, axis=1, keepdims=True)
 
     embeddings, tokens = _cells(rng, centres, galaxies)
-    _store("encoded", embeddings, galaxies, DIM)
-    _store("tokens", tokens, galaxies, None)
 
-    # A tenth of galaxies are unlabelled, so the null path is covered.
+    # A morphology label and a GZ10 crossmatch are one fact in production: the
+    # category is null exactly where the galaxy has no gz10 match. A tenth are
+    # unlabelled, so the null path is covered. PROVABGS is an unrelated
+    # catalogue and varies independently.
+    rows = np.arange(galaxies)
+    labelled = rows % 10 != 0
+    flags = {"gz10": labelled, "provabgs": rows % 3 != 0}
+
+    _store("encoded", embeddings, galaxies, DIM, flags)
+    _store("tokens", tokens, galaxies, None, flags)
+
     raw = rng.integers(0, N_MORPHOLOGIES, size=galaxies).astype(np.uint8)
-    category = pa.array(raw, mask=np.arange(galaxies) % 10 == 0, type=pa.uint8())
+    category = pa.array(raw, mask=~labelled, type=pa.uint8())
 
     anchors = np.stack(
         [np.asarray(cell, dtype=np.float32) for cell in embeddings[ANCHOR]]
@@ -208,14 +204,9 @@ def build(galaxies: int = 12, seed: int = 0, nlist: int | None = None) -> Path:
     )
 
     source.cache_clear()
-    vectors = galaxies * N_PATCHES
-    generate_index(
-        nlist
-        or max(
-            1,
-            min(NLIST, int(4 * math.sqrt(vectors)), vectors // MIN_TRAIN_PER_CENTROID),
-        )
-    )
+    # No nlist by default: generate_index's own cap is what makes a small tree
+    # buildable, and letting it apply is what keeps that path exercised.
+    generate_index(nlist)
     source.cache_clear()
     return target
 

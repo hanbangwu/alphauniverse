@@ -7,8 +7,6 @@ but the module-level ``@cache`` decorators hold artifacts open, so they are
 cleared whenever the tree changes underneath them.
 """
 
-from __future__ import annotations
-
 import os
 from collections.abc import Iterator
 from pathlib import Path

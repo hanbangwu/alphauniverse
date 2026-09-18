@@ -28,16 +28,17 @@ environment = {
     "WANDB_MODE": WANDB_MODE,
 }
 
+# --no-dev: uv's default group holds the test runner, which no image needs.
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .uv_sync()
+    .uv_sync(extra_options="--no-dev")
     .env(environment)
     .add_local_python_source("app")
 )
 
 build_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .uv_sync(groups=["build"])
+    .uv_sync(groups=["build"], extra_options="--no-dev")
     .env(environment)
     .add_local_python_source("app")
 )

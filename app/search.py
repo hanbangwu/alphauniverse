@@ -142,9 +142,11 @@ def generate_index(nlist: int | None = None) -> None:
     )
     if nlist is None:
         nlist = max(1, min(NLIST, len(training) // MIN_TRAIN_PER_CENTROID))
-
     built = faiss.index_factory(DIM, f"IVF{nlist},SQfp16", faiss.METRIC_INNER_PRODUCT)
     built.train(training)
+    # 3.6 GB at production scale; the add loop below needs none of it.
+    del training
+
     for batch in dataset.to_batches(columns=[ANCHOR], batch_size=BATCH):
         built.add(patches(batch.column(ANCHOR)))
 

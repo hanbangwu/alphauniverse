@@ -1,7 +1,5 @@
 """Properties the fixture tree must hold for conclusions drawn from it to mean anything."""
 
-from __future__ import annotations
-
 import numpy as np
 import pyarrow.parquet as pq
 
@@ -46,8 +44,14 @@ def test_point_sets_share_one_projection(tree, galaxies: int) -> None:
     )
 
 
-def test_full_points_row_order_follows_galaxy_order(tree, galaxies: int) -> None:
-    """`full_points` groups every galaxy's rows together, in row order."""
+def test_fixture_groups_full_points_by_galaxy(tree, galaxies: int) -> None:
+    """The fixture writes `full_points` galaxy-major, as the projection test assumes.
+
+    This is a property of the fixture, not a contract of the real artifact.
+    `generate_projections` streams one survey at a time, so production holds
+    every galaxy's anchor rows, then every galaxy's HSC rows, and so on — its
+    galaxy column is not monotonic, and nothing may read it expecting that.
+    """
     owner = np.asarray(pq.read_table(artifact("full_points")).column("galaxy"))
 
     assert np.all(np.diff(owner) >= 0)

@@ -61,14 +61,14 @@ from .config import (
     FLAG_SURVEYS,
     HSC,
     LS,
+    STORES,
     TOKEN_SURVEYS,
     artifact,
     build_dir,
     device,
+    store_schema,
 )
 from .dataset import dataset
-
-STORES = ("encoded", "codebook", "tokens")
 
 LS_SCALARS = (
     (LegacySurveyEBV, f"EBV{LS}"),
@@ -262,16 +262,7 @@ def generate_embeddings() -> None:
         staging[role] = path.with_name(f"{path.name}.partial")
         staging[role].unlink(missing_ok=True)
 
-        cell = (
-            pa.list_(pa.uint32())
-            if role == "tokens"
-            else pa.list_(pa.list_(pa.float16(), DIM))
-        )
-        schemas[role] = pa.schema(
-            [pa.field("galaxy", pa.int32())]
-            + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
-            + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
-        )
+        schemas[role] = store_schema(role)
         writers[role] = pq.ParquetWriter(
             staging[role], schemas[role], compression="zstd"
         )

@@ -114,7 +114,16 @@ every recall number meaningless.
 
 It skips `codebook` and `parametric_umap` (nothing served reads them, and their
 absence exercises the 404 path) and substitutes a fixed random 2-d projection for
-the UMAP, so the test path never needs torch.
+the UMAP, so the test path never needs torch. One basis is drawn per build and
+used for both point sets, because production applies one trained projector to
+both and the two must be coordinates in one space.
+
+It shares `store_schema` and `POINTS` with the real writers rather than
+re-deriving them, and ties the `gz10` flag to the null morphologies, since in
+production a null category and a missing GZ10 crossmatch are one fact.
+
+Index geometry comes from `generate_index`'s own cap unless `--nlist` overrides
+it, so the path that keeps a small tree buildable is the path the tests run.
 
 ```sh
 uv run python -m scripts.fixture --galaxies 12 --out .cache/fixture

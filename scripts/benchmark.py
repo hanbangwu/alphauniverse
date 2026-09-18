@@ -20,8 +20,6 @@ Two caveats worth carrying into any conclusion drawn here:
     uv run python -m scripts.benchmark --galaxies 32 --out bench.json
 """
 
-from __future__ import annotations
-
 import argparse
 import itertools
 import json
@@ -243,26 +241,30 @@ def measure_recall(galaxies: int, count: int, matches: int) -> dict[str, Any]:
     truth = [set(exact_ranking(query, corpus)[0][1:].tolist()) for query in batch]
 
     sweep = {}
-    for nprobe in sorted({1, 4, 16, NPROBE, built.nlist}):
-        if nprobe > built.nlist:
-            continue
-        built.nprobe = nprobe
-        recalls, returned, elapsed = [], [], []
-        for query, expected in zip(batch, truth, strict=True):
-            start = time.perf_counter()
-            found, _, _ = search(query, index=built)
-            elapsed.append((time.perf_counter() - start) * 1000)
-            got = set(found[1:].tolist())
-            returned.append(len(got))
-            recalls.append(len(got & expected) / max(len(expected), 1))
-        sweep[str(nprobe)] = {
-            "recall": round(float(np.mean(recalls)), 4),
-            "returned_mean": round(float(np.mean(returned)), 2),
-            "requested": matches,
-            "p50_ms": round(float(np.percentile(elapsed, 50)), 3),
-        }
+    try:
+        for nprobe in sorted({1, 4, 16, NPROBE, built.nlist}):
+            if nprobe > built.nlist:
+                continue
+            built.nprobe = nprobe
+            recalls, returned, elapsed = [], [], []
+            for query, expected in zip(batch, truth, strict=True):
+                start = time.perf_counter()
+                found, _, _ = search(query, index=built)
+                elapsed.append((time.perf_counter() - start) * 1000)
+                got = set(found[1:].tolist())
+                returned.append(len(got))
+                recalls.append(len(got & expected) / max(len(expected), 1))
+            sweep[str(nprobe)] = {
+                "recall": round(float(np.mean(recalls)), 4),
+                "returned_mean": round(float(np.mean(returned)), 2),
+                "requested": matches,
+                "p50_ms": round(float(np.percentile(elapsed, 50)), 3),
+            }
+    finally:
+        # The index is a process-wide cached singleton, shared with app.main:
+        # leaving it at a swept value would silently mis-measure everything after.
+        built.nprobe = original
 
-    built.nprobe = original
     return {"requested_matches": matches, "queries": count, "by_nprobe": sweep}
 
 
@@ -339,6 +341,8 @@ def main() -> None:
     galaxies = source("encoded").count_rows()
     if galaxies != arguments.galaxies:
         print(f"tree holds {galaxies} galaxies; --galaxies {arguments.galaxies} ignored")
+    if galaxies < 2:
+        raise SystemExit(f"need at least 2 galaxies to measure, tree holds {galaxies}")
 
     report = {
         "commit": commit(),

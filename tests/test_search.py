@@ -1,14 +1,14 @@
 """The search path: index layout, ranking contract and approximation quality."""
 
-from __future__ import annotations
-
 import faiss
 import numpy as np
 import pytest
 
 from app.config import N_PATCHES
+from app import search as search_module
 from app.search import Query, index, patches, search, source
 from scripts.benchmark import exact_ranking
+from scripts.fixture import build
 
 
 @pytest.fixture(scope="module")
@@ -84,4 +84,46 @@ def test_approximate_ranking_agrees_with_exact(
     found, _, _ = search(query, index=built)
     expected, _ = exact_ranking(query)
 
+    # Without this the set comparison below passes vacuously when the candidate
+    # step collapses and returns nothing but the query galaxy.
+    assert len(found) == galaxies
+
     assert set(found[1:].tolist()) == set(expected[1 : len(found)].tolist())
+
+
+def test_ids_stay_contiguous_across_add_batches(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The id layout holds when `generate_index` fills the index in several adds.
+
+    The shared fixture is smaller than `BATCH`, so it is built by a single
+    `add()` and cannot exercise this. Contiguity across batches is the half of
+    the invariant that a reordered or dropped batch would break, and it would
+    break silently: every galaxy id in every `/similarity` response would shift.
+    """
+    monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
+    monkeypatch.setattr(search_module, "BATCH", 3)
+
+    galaxies = 9
+    for cache in (source, index):
+        cache.cache_clear()
+    build(galaxies)
+    for cache in (source, index):
+        cache.cache_clear()
+
+    try:
+        built = index()
+        assert built.ntotal == galaxies * N_PATCHES
+
+        stored = built.reconstruct_batch(
+            np.array([g * N_PATCHES + 7 for g in range(galaxies)])
+        )
+        rows = patches(
+            source("encoded").to_table(columns=["ls"]).column("ls").combine_chunks()
+        )
+        expected = rows[[g * N_PATCHES + 7 for g in range(galaxies)]]
+
+        np.testing.assert_allclose(stored, expected, atol=1e-3)
+    finally:
+        for cache in (source, index):
+            cache.cache_clear()

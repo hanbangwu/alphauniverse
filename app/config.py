@@ -85,6 +85,27 @@ ARTIFACTS: dict[str, str] = {
 }
 
 
+STORES = ("encoded", "codebook", "tokens")
+
+
+def store_schema(role: str) -> pa.Schema:
+    """Schema of one per-galaxy store.
+
+    One nullable list column per token survey — token ids for `tokens`,
+    embeddings for the rest — then one bool per flag survey.
+    """
+    cell = (
+        pa.list_(pa.uint32())
+        if role == "tokens"
+        else pa.list_(pa.list_(pa.float16(), DIM))
+    )
+    return pa.schema(
+        [pa.field("galaxy", pa.int32())]
+        + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
+        + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
+    )
+
+
 POINTS = pa.schema(
     [
         pa.field("galaxy", pa.int32(), nullable=False),

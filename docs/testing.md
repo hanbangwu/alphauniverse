@@ -19,7 +19,10 @@ the app at it by setting `ALPHAUNIVERSE_CACHE`. This works at any time because
   validation, and the 404 paths for both an unknown artifact role and a known
   role with no file.
 - `tests/test_search.py` — the index layout invariant, the ranking contract, and
-  agreement with brute force.
+  agreement with brute force. `test_ids_stay_contiguous_across_add_batches`
+  builds its own small tree with `BATCH` patched down, because the shared
+  fixture is smaller than one batch and so cannot exercise contiguity across
+  several `add()` calls.
 - `tests/test_fixture.py` — properties the fixture itself must hold, chiefly that
   both point sets are coordinates in one projected space, as production's single
   trained projector guarantees and the fixture has to arrange.
@@ -29,7 +32,10 @@ Two things to know when adding tests:
 - **Nothing may touch the network.** `/galaxies/{g}/image.png` reads the Hugging
   Face dataset, so its test stubs `app.main.image`.
 - **The fixture omits `codebook` and `parametric_umap`**, and its `full_points`
-  covers the anchor survey only.
+  covers the anchor survey only — so it is grouped by galaxy, while production
+  streams survey by survey and is not. `test_fixture_groups_full_points_by_galaxy`
+  is scoped to the fixture for that reason; nothing may read the real artifact
+  expecting a monotonic galaxy column.
 
 ### The strict xfail
 
