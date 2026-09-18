@@ -23,6 +23,7 @@ Two caveats worth carrying into any conclusion drawn here:
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import subprocess
@@ -158,13 +159,13 @@ def measure_latency(galaxies: int, runs: int) -> dict[str, Any]:
     for patch_count in (1, 4, 16):
         for matches in (8, 32, 128):
             batch = queries(galaxies, runs, patch_count, matches)
-            counter = iter(range(len(batch)))
+            counter = itertools.count()
 
             def one(batch=batch, counter=counter) -> None:
                 search(batch[next(counter) % len(batch)], index=built)
 
             label = f"patches={patch_count},matches={matches}"
-            results[label] = time_it(label, runs - 1, one).summary()
+            results[label] = time_it(label, runs, one).summary()
     return results
 
 
@@ -298,7 +299,12 @@ def commit() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--galaxies", type=int, default=32)
+    parser.add_argument(
+        "--galaxies",
+        type=int,
+        default=32,
+        help="galaxies to build; ignored when --tree supplies an existing one",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--runs", type=int, default=30)
     parser.add_argument("--recall-queries", type=int, default=16)
@@ -327,24 +333,29 @@ def main() -> None:
     source.cache_clear()
     index.cache_clear()
 
+    # Read the size off the tree rather than trusting the flag: with --tree the
+    # flag describes a build that did not happen, and sampling galaxy ids past
+    # the end of the index would crash the search.
+    galaxies = source("encoded").count_rows()
+    if galaxies != arguments.galaxies:
+        print(f"tree holds {galaxies} galaxies; --galaxies {arguments.galaxies} ignored")
+
     report = {
         "commit": commit(),
         "fixture": {
-            "galaxies": arguments.galaxies,
+            "galaxies": galaxies,
             "seed": arguments.seed,
             "patches_per_galaxy": N_PATCHES,
             "dim": DIM,
         },
-        "sizes": measure_sizes(arguments.galaxies),
+        "sizes": measure_sizes(galaxies),
         "index_load": measure_load(min(arguments.runs, 5)),
-        "search": measure_latency(arguments.galaxies, arguments.runs),
-        "phases": measure_phases(arguments.galaxies, min(arguments.runs, 20)),
+        "search": measure_latency(galaxies, arguments.runs),
+        "phases": measure_phases(galaxies, min(arguments.runs, 20)),
         "recall": measure_recall(
-            arguments.galaxies,
-            arguments.recall_queries,
-            min(32, arguments.galaxies - 1),
+            galaxies, arguments.recall_queries, min(32, galaxies - 1)
         ),
-        "endpoints": measure_endpoints(arguments.galaxies, arguments.runs),
+        "endpoints": measure_endpoints(galaxies, arguments.runs),
     }
 
     print(json.dumps(report, indent=2))

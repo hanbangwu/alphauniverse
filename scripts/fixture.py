@@ -136,13 +136,16 @@ def _store(
     )
 
 
-def _project(rng: np.random.Generator, rows: np.ndarray) -> np.ndarray:
-    """A fixed random 2-d projection.
+def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
+    """Project normalised rows onto `basis`.
 
     Stands in for the trained parametric UMAP, which would pull torch and a
     training run into the test path. Coordinates are structured but arbitrary.
+
+    One basis is drawn per build and reused for both point sets, because the
+    real projector is a single function applied to everything: `mean_points` and
+    `full_points` have to be coordinates in one shared space.
     """
-    basis = rng.standard_normal((rows.shape[1], 2)).astype(np.float32)
     unit = rows / np.maximum(np.linalg.norm(rows, axis=1, keepdims=True), 1e-12)
     return (unit @ basis).astype(np.float32)
 
@@ -171,12 +174,15 @@ def build(galaxies: int = 12, seed: int = 0, nlist: int | None = None) -> Path:
     anchors = np.stack(
         [np.asarray(cell, dtype=np.float32) for cell in embeddings[ANCHOR]]
     )
+    basis = rng.standard_normal((DIM, 2)).astype(np.float32)
+
+    means = _project(basis, anchors.mean(axis=1))
     pq.write_table(
         pa.table(
             {
                 "galaxy": pa.array(np.arange(galaxies), type=pa.int32()),
-                "x": pa.array(_project(rng, anchors.mean(axis=1))[:, 0]),
-                "y": pa.array(_project(rng, anchors.mean(axis=1))[:, 1]),
+                "x": pa.array(means[:, 0]),
+                "y": pa.array(means[:, 1]),
                 "category": category,
             },
             schema=POINTS,
@@ -186,7 +192,7 @@ def build(galaxies: int = 12, seed: int = 0, nlist: int | None = None) -> Path:
     )
 
     owner = np.repeat(np.arange(galaxies, dtype=np.int32), anchors.shape[1])
-    coords = _project(rng, anchors.reshape(-1, DIM))
+    coords = _project(basis, anchors.reshape(-1, DIM))
     pq.write_table(
         pa.table(
             {

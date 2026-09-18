@@ -20,6 +20,9 @@ the app at it by setting `ALPHAUNIVERSE_CACHE`. This works at any time because
   role with no file.
 - `tests/test_search.py` — the index layout invariant, the ranking contract, and
   agreement with brute force.
+- `tests/test_fixture.py` — properties the fixture itself must hold, chiefly that
+  both point sets are coordinates in one projected space, as production's single
+  trained projector guarantees and the fixture has to arrange.
 
 Two things to know when adding tests:
 
@@ -48,9 +51,12 @@ Measures artifact sizes with a linear projection to production scale, index load
 time, query latency across query shapes, a stage-by-stage split of one query, and
 recall against brute force swept over `nprobe`.
 
+The galaxy count is read off the tree, not from `--galaxies`, so `--tree` works
+against a tree of any size and the flag only matters when building one.
+
 Output is JSON tagged with the commit and the fixture shape. **Runs only compare
-when `--galaxies` and `--seed` match** — the index geometry depends on the
-dataset size, so a bigger fixture is a different experiment, not a longer one.
+when `galaxies` and `seed` match** — the index geometry depends on the dataset
+size, so a bigger fixture is a different experiment, not a longer one.
 
 Before and after a change worth measuring:
 
