@@ -36,6 +36,14 @@ bun run check                                       # regenerate client + typech
 bun run lint                                        # prettier + eslint
 ```
 
+## Workflow
+
+- **Never commit or push to `main`.** Work on a branch, always.
+- **Every change lands as a pull request**, with a review requested from Copilot.
+  No direct pushes to `main`, however small the change.
+- `main` deploys to Modal on merge, and CI gates it on tests, lint, typecheck and
+  the OpenAPI drift check. A red PR is not ready.
+
 ## Invariants
 
 These are load-bearing and nothing asserts most of them at runtime. Breaking one
