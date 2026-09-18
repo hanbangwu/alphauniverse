@@ -13,7 +13,7 @@ export type QueryFor<TData, TKey extends QueryKey> = UndefinedInitialDataOptions
   DefaultError,
   TData,
   TKey
-> & { queryKey: DataTag<TKey, TData> }
+> & { queryKey: DataTag<TKey, TData, DefaultError> }
 
 export type TokensQuery = QueryFor<
   Uint32Array<ArrayBuffer>,

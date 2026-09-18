@@ -1,3 +1,9 @@
+"""Constants and paths shared by the build pipeline and the serving app.
+
+Every name here is fixed for a given `DATASET_REVISION`; the revision is part
+of the artifact path, so switching revisions switches artifact trees.
+"""
+
 from __future__ import annotations
 
 import os
@@ -5,6 +11,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
+import pyarrow as pa
 from pydantic import Field
 
 if TYPE_CHECKING:
@@ -13,6 +20,7 @@ if TYPE_CHECKING:
 
 @cache
 def device() -> torch.device:
+    """The accelerator torch reports, or CPU."""
     import torch
 
     return torch.accelerator.current_accelerator(check_available=True) or torch.device(
@@ -25,16 +33,7 @@ DATASET_NAME = "alphauniverse-cosmos"
 DATASET_ID = f"{DATASET_AUTHOR}/{DATASET_NAME}"
 DATASET_REVISION = "e250e43c35e63523ee3940c9543302c29ca56437"
 
-BUILD_DIR = (
-    Path(
-        os.environ.get(
-            "ALPHAUNIVERSE_CACHE", Path(__file__).resolve().parent.parent / ".cache"
-        )
-    )
-    / DATASET_AUTHOR
-    / DATASET_NAME
-    / DATASET_REVISION
-)
+DEFAULT_CACHE = Path(__file__).resolve().parent.parent / ".cache"
 
 CROP_PX = 96
 
@@ -73,6 +72,7 @@ NPROBE = 64
 PROBE = 2048
 TRAIN_GALAXIES = 2048
 BATCH = 256
+MIN_TRAIN_PER_CENTROID = 39
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
@@ -85,8 +85,34 @@ ARTIFACTS: dict[str, str] = {
 }
 
 
+POINTS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32(), nullable=False),
+        pa.field("x", pa.float32(), nullable=False),
+        pa.field("y", pa.float32(), nullable=False),
+        pa.field("category", pa.uint8(), nullable=True),
+    ]
+)
+"""Schema of both projected point sets. `category` is null where unlabelled."""
+
+
+def build_dir() -> Path:
+    """The directory holding this revision's artifacts.
+
+    `ALPHAUNIVERSE_CACHE` is read on every call, so a process can be pointed at
+    a fixture tree (`scripts/fixture.py`) without import-order constraints.
+    """
+    return (
+        Path(os.environ.get("ALPHAUNIVERSE_CACHE", DEFAULT_CACHE))
+        / DATASET_AUTHOR
+        / DATASET_NAME
+        / DATASET_REVISION
+    )
+
+
 def artifact(role: str) -> Path:
-    return BUILD_DIR / f"{role}.{ARTIFACTS[role]}"
+    """Path to the artifact for `role`; raises `KeyError` if unknown."""
+    return build_dir() / f"{role}.{ARTIFACTS[role]}"
 
 
 WANDB_ENTITY = "aistrophysics"

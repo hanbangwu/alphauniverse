@@ -1,3 +1,11 @@
+"""Stage 1 of the build: tokenise every galaxy and run the AION encoder.
+
+Writes three parquet stores keyed by galaxy row, each with one list column per
+survey: `encoded` (contextualised encoder output), `codebook` (the raw
+codebook vector behind each token) and `tokens` (the token ids themselves).
+Within a cell, image or spectrum tokens come first, then the survey's scalars.
+"""
+
 from functools import cache
 from pathlib import Path
 
@@ -46,7 +54,6 @@ from tqdm import tqdm
 
 from .config import (
     ANCHOR,
-    BUILD_DIR,
     CROP_PX,
     DATASET_ID,
     DATASET_REVISION,
@@ -56,6 +63,7 @@ from .config import (
     LS,
     TOKEN_SURVEYS,
     artifact,
+    build_dir,
     device,
 )
 from .dataset import dataset
@@ -96,11 +104,13 @@ HSC_SCALARS = (
 
 @cache
 def codec() -> CodecManager:
+    """The AION codec manager, built once per process."""
     return CodecManager(device=device())
 
 
 @cache
 def model() -> AION:
+    """The pretrained AION encoder in eval mode with gradients off."""
     net = AION.from_pretrained("polymathic-ai/aion-base").to(device()).eval()
     net.requires_grad_(False)
     return net
@@ -109,6 +119,7 @@ def model() -> AION:
 def image(
     modality: type[Image], row: dict[str, list], bands: list[str]
 ) -> torch.Tensor:
+    """Token ids for one image row, centre-cropped to `CROP_PX`."""
     by_band = {
         band.upper(): flux for band, flux in zip(row["band"], row["flux"], strict=True)
     }
@@ -122,6 +133,7 @@ def image(
 
 
 def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
+    """Token ids for one spectrum row."""
     fields = {
         "flux": ("flux", torch.float32),
         "ivar": ("ivar", torch.float32),
@@ -138,6 +150,7 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
 
 
 def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
+    """Token ids for one scalar measurement."""
     return (
         codec()
         .encode(
@@ -150,6 +163,11 @@ def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
 
 
 def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
+    """Token ids for one galaxy, grouped by survey.
+
+    The anchor survey is always present; the others only where the galaxy was
+    crossmatched.
+    """
     groups = {
         ANCHOR: {
             LegacySurveyImage.token_key: image(
@@ -183,6 +201,11 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
 def encode(
     groups: dict[str, dict[str, torch.Tensor]],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Run the encoder over all of a galaxy's tokens at once.
+
+    Returns the contextualised embeddings, the codebook embeddings and the
+    per-token modality ids that `by_survey()` uses to split them back up.
+    """
     tokens = {key: slot for group in groups.values() for key, slot in group.items()}
     with torch.no_grad():
         enc_tokens, enc_emb, enc_mask, mod_mask = model().embed_inputs(
@@ -203,6 +226,7 @@ def by_survey(
     groups: dict[str, dict[str, torch.Tensor]],
     mod_mask: np.ndarray,
 ) -> dict[str, np.ndarray]:
+    """Split per-token rows back into one array per survey, by modality id."""
     return {
         survey: values[
             np.flatnonzero(
@@ -214,7 +238,12 @@ def by_survey(
 
 
 def generate_embeddings() -> None:
-    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    """Encode every galaxy and write the three stores.
+
+    Rows are encoded one galaxy at a time, buffered 1024 at a time and written
+    to `.partial` files that replace the real artifacts only on success.
+    """
+    build_dir().mkdir(parents=True, exist_ok=True)
 
     data = dataset(DATASET_ID, DATASET_REVISION)
     count = len(data)

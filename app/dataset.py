@@ -1,3 +1,5 @@
+"""Access to the source Hugging Face dataset."""
+
 from functools import cache
 from io import BytesIO
 
@@ -9,10 +11,15 @@ from .config import CROP_PX, DATASET_ID, DATASET_REVISION, RGB_COLUMN
 
 @cache
 def dataset(dataset_id: str, dataset_revision: str) -> Dataset:
+    """The dataset's train split, downloaded and memory-mapped once per process."""
     return load_dataset(dataset_id, split="train", revision=dataset_revision)
 
 
 def image(galaxy: int) -> bytes:
+    """The galaxy's anchor cutout, centre-cropped to `CROP_PX` and PNG-encoded.
+
+    Decodes and re-encodes on every call; nothing is cached.
+    """
     data = dataset(DATASET_ID, DATASET_REVISION).select_columns([RGB_COLUMN])
     cutout = Image().decode_example(data[galaxy][RGB_COLUMN])
     crop = ImageOps.crop(cutout, (cutout.width - CROP_PX) // 2).convert("RGB")

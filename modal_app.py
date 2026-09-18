@@ -1,3 +1,10 @@
+"""Modal deployment: three build jobs and one serving app.
+
+The build jobs write artifacts into a shared volume mounted at `CACHE_PATH`;
+the serving app reads them back. They must run in order — embeddings, then
+index, then projections — because each stage consumes the previous one's output.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -45,6 +52,7 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
+    """Stage 1: encode every galaxy into the three parquet stores."""
     from app.encode import generate_embeddings
 
     cache_volume.reload()
@@ -60,6 +68,7 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_index() -> None:
+    """Stage 2: build the patch search index from `encoded`."""
     from app.search import generate_index
 
     cache_volume.reload()
@@ -81,6 +90,7 @@ def generate_index() -> None:
     ),
 )
 def generate_projections() -> None:
+    """Stage 3: fit the projector and write both point sets."""
     from app.parametric_umap import generate_projections
 
     cache_volume.reload()
@@ -100,6 +110,7 @@ def generate_projections() -> None:
 @modal.concurrent(max_inputs=16)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
+    """Serve the read-only API."""
     from app.main import app
 
     return app

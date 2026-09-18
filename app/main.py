@@ -1,3 +1,12 @@
+"""The read-only HTTP API over a built artifact tree.
+
+Every response is a pure function of `DATASET_REVISION` and the artifacts on
+disk, so all of it is safely cacheable by revision. Bulk payloads use binary
+formats the browser can read without parsing JSON: raw `uint32` for token
+maps, Arrow IPC for similarity results, and the parquet artifacts themselves
+for the point sets, which the frontend queries in-browser with DuckDB.
+"""
+
 from __future__ import annotations
 
 import mimetypes
@@ -38,6 +47,7 @@ if TYPE_CHECKING:
 
 @cache
 def labels() -> tuple[int, list[int], int]:
+    """The galaxy count, per-morphology counts and unlabelled count."""
     points = pq.read_table(artifact("mean_points"), columns=["galaxy", "category"])
     category = points["category"]
     labelled = np.asarray(category.drop_null())
@@ -49,6 +59,13 @@ def labels() -> tuple[int, list[int], int]:
 
 
 class Meta(BaseModel):
+    """What the frontend needs before it can render anything.
+
+    `embeddings`, `mean_points` and `full_points` are artifact roles, not
+    URLs: the client passes them back to `/artifacts/{role}`, so the server
+    stays in charge of which artifact backs which view.
+    """
+
     author: str
     id: str
     revision: str
@@ -62,11 +79,15 @@ class Meta(BaseModel):
 
 
 class Survey(BaseModel):
+    """Whether one galaxy was crossmatched into one survey."""
+
     survey: str
     matched: bool
 
 
 class Detail(BaseModel):
+    """An error body."""
+
     detail: str
 
 
@@ -78,6 +99,7 @@ BINARY_OCTET: dict[str, Any] = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Load the index and open the token store before serving traffic."""
     index()
     source("tokens")
     yield
@@ -107,6 +129,7 @@ app.add_middleware(
 
 @app.get("/meta")
 def get_meta() -> Meta:
+    """Dataset identity, size, patch grid, artifact roles and label counts."""
     galaxies, morphologies, unlabelled = labels()
     return Meta(
         author=DATASET_AUTHOR,
@@ -128,6 +151,7 @@ def get_meta() -> Meta:
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
 )
 def get_artifact(role: str) -> Response:
+    """Download a build artifact by role."""
     try:
         path = artifact(role)
         path.stat()
@@ -143,6 +167,7 @@ def get_artifact(role: str) -> Response:
 
 @app.head("/artifacts/{role}", include_in_schema=False)
 def head_artifact(role: str) -> Response:
+    """Artifact headers only, for range-request clients such as DuckDB."""
     return get_artifact(role)
 
 
@@ -156,6 +181,7 @@ def head_artifact(role: str) -> Response:
     },
 )
 def get_image(galaxy: GalaxyIndex) -> Response:
+    """The galaxy's anchor-survey cutout as a PNG."""
     return Response(image(galaxy), media_type="image/png")
 
 
@@ -165,6 +191,10 @@ def get_image(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_tokens(galaxy: GalaxyIndex) -> Response:
+    """The galaxy's anchor image token ids, as raw little-endian uint32.
+
+    One value per image patch, in row-major order: see `grid` in /meta.
+    """
     table = source("tokens").to_table(
         columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
     )
@@ -177,6 +207,7 @@ def get_tokens(galaxy: GalaxyIndex) -> Response:
 
 @app.get("/galaxies/{galaxy}/coverage")
 def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
+    """Which surveys the galaxy was crossmatched into."""
     table = source("tokens").to_table(
         columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
     )
@@ -203,6 +234,13 @@ def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
     },
 )
 def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
+    """Galaxies ranked against the mean of the query patches, as Arrow IPC.
+
+    One record batch of three columns: the galaxy index, its best patch score,
+    and a fixed-size list of one score per patch. Row 0 is always the query
+    galaxy itself. Candidates come from an approximate search, so fewer than
+    `matches` rows can come back.
+    """
     galaxies, scores, values = search(query, index=index())
 
     item = pa.field("item", pa.float32(), nullable=False)
