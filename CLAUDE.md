@@ -68,6 +68,21 @@ produces wrong results rather than an error.
   `src/lib/api/` is generated from `openapi.json` and gitignored.
 - Docstrings describe what the code does now. Leave history to git.
 
+## Performance shape
+
+Measured against production; `docs/performance.md` has the detail. Worth knowing
+before touching anything in the serving path:
+
+- **Cold start is ~47 s** — a 15.5 GB index read with no mmap, one container,
+  five-minute scaledown. SSR blocks on `/meta`, so the page is blank throughout.
+- **Cutouts are re-encoded per request**, ~350 ms each with no useful
+  concurrency, so a 32-row match list takes ~11 s.
+- **`/similarity` costs scale with `matches`, not patch count** — ~100 ms at the
+  default 32, ~325 ms at 128. 90% of that is reconstructing candidate vectors
+  through the IVF direct map; the ANN search itself is 3%.
+- **No endpoint sets `Cache-Control`**, though every response is immutable per
+  revision.
+
 ## Gotchas
 
 - `frontend/openapi.json` is committed but generated. Changing a route, a model

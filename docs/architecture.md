@@ -62,7 +62,8 @@ Six endpoints, all `GET`, all cacheable by revision.
 The one thing recomputed per request that need not be is the cutout: `/image.png`
 decodes the galaxy's image out of the Hugging Face dataset, centre-crops it and
 re-encodes a PNG on every call, with nothing cached and no cache headers on the
-response.
+response. At ~350 ms of CPU each, and with a match list asking for 32 at once,
+this is the slowest thing a user encounters.
 
 Bulk payloads avoid JSON deliberately. Token maps are raw little-endian `uint32`,
 similarity results are a single Arrow record batch, and the point sets stay as
@@ -139,6 +140,8 @@ lint and an OpenAPI drift check. The frontend deploys separately on Vercel.
 
 The serving function is pinned to `max_containers=1` with `scaledown_window` of
 5 minutes and 16 concurrent inputs, so the whole service is one process that
-disappears after five idle minutes and reloads a ~16 GB index on the next
-request. That single fact dominates first-visit latency; `docs/performance.md`
-covers it.
+disappears after five idle minutes and reloads a 15.5 GB index on the next
+request — a measured 47 seconds, during which SSR is blocked and the page is
+blank. The concurrency setting does less than it looks: the endpoints are
+synchronous and CPU-bound, so 32 parallel cutout requests take as long as 32
+sequential ones. `docs/performance.md` has the measurements.
