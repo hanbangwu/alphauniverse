@@ -19,6 +19,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest>=9.0.1",
+  "ruff>=0.16.8",
 ]
 build = [
   "polymathic-aion>=0.0.2",
