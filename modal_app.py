@@ -21,16 +21,17 @@ environment = {
     "WANDB_MODE": WANDB_MODE,
 }
 
+# --no-dev: uv's default group holds the test runner, which no image needs.
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .uv_sync()
+    .uv_sync(extra_options="--no-dev")
     .env(environment)
     .add_local_python_source("app")
 )
 
 build_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .uv_sync(groups=["build"])
+    .uv_sync(groups=["build"], extra_options="--no-dev")
     .env(environment)
     .add_local_python_source("app")
 )
@@ -45,6 +46,7 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
+    """Stage 1: encode every galaxy into the three parquet stores."""
     from app.encode import generate_embeddings
 
     cache_volume.reload()
@@ -60,6 +62,7 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_index() -> None:
+    """Stage 2: build the patch search index from `encoded`."""
     from app.search import generate_index
 
     cache_volume.reload()
@@ -81,6 +84,7 @@ def generate_index() -> None:
     ),
 )
 def generate_projections() -> None:
+    """Stage 3: fit the projector and write both point sets."""
     from app.parametric_umap import generate_projections
 
     cache_volume.reload()
@@ -100,6 +104,7 @@ def generate_projections() -> None:
 @modal.concurrent(max_inputs=16)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
+    """Serve the read-only API."""
     from app.main import app
 
     return app

@@ -1,3 +1,9 @@
+"""Patch-level similarity search over the anchor survey's encoded embeddings.
+
+The index holds one vector per anchor image patch, L2-normalised so that inner
+product is cosine similarity.
+"""
+
 from functools import cache
 from typing import Annotated
 
@@ -13,6 +19,7 @@ from .config import (
     ANCHOR,
     BATCH,
     DIM,
+    MIN_TRAIN_PER_CENTROID,
     N_PATCHES,
     NLIST,
     NPROBE,
@@ -25,6 +32,8 @@ from .config import (
 
 
 class Query(BaseModel):
+    """Some patches of one galaxy, and how many matches to return."""
+
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     galaxy: GalaxyIndex
@@ -38,6 +47,18 @@ class Query(BaseModel):
 def search(
     query: Query, *, index: faiss.Index
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Rank galaxies against the mean of the query patches.
+
+    Returns `(galaxies, scores, maps)`: the galaxy ids, each one's best patch
+    score, and the full per-patch score map. The query galaxy is always row 0;
+    the rest are sorted by descending score.
+
+    Candidates come from one ANN search for the `PROBE` nearest patches, which
+    caps the result at however many distinct galaxies those patches belong to,
+    so fewer than `query.matches` rows can come back. Scores are then computed
+    exactly against every patch of every candidate, so the ordering within the
+    candidate set is exact and only the candidate set itself is approximate.
+    """
     direction = normalize(
         index.reconstruct_batch(
             query.galaxy * N_PATCHES + np.asarray(query.patches)
@@ -64,10 +85,16 @@ def search(
 
 @cache
 def source(role: str) -> ds.Dataset:
+    """The parquet dataset for `role`, opened once per process."""
     return ds.dataset(artifact(role), format="parquet")
 
 
 def patches(cells: pa.Array) -> np.ndarray:
+    """The image patches of each cell as normalised float32 rows.
+
+    Each cell holds a galaxy's image patches followed by its scalar tokens; the
+    slice to `N_PATCHES` keeps only the image patches.
+    """
     return normalize(
         np.asarray(
             pc.list_slice(cells, 0, N_PATCHES).flatten().flatten(), dtype=np.float32
@@ -78,6 +105,10 @@ def patches(cells: pa.Array) -> np.ndarray:
 
 @cache
 def index() -> faiss.Index:
+    """The search index, read into memory once per process.
+
+    `make_direct_map` is what lets `search()` reconstruct vectors by id.
+    """
     loaded = faiss.read_index(str(artifact("encoded_index")))
     loaded.make_direct_map()
     loaded.nprobe = NPROBE
@@ -85,14 +116,26 @@ def index() -> faiss.Index:
 
 
 def generate_index() -> None:
+    """Build the search index from `encoded.parquet` and write it to disk.
+
+    Trains on a sample of galaxies, then adds every galaxy's anchor patches in
+    row order. `nlist` is `NLIST`, capped so training never falls below faiss's
+    `MIN_TRAIN_PER_CENTROID` vectors per centroid; at production scale the cap
+    is inactive, and it is what keeps a small fixture dataset buildable.
+    """
     dataset = source("encoded")
+    galaxies = dataset.count_rows()
     sample = np.random.default_rng(SEED).choice(
-        dataset.count_rows(), TRAIN_GALAXIES, replace=False
+        galaxies, min(TRAIN_GALAXIES, galaxies), replace=False
     )
-    built = faiss.index_factory(DIM, f"IVF{NLIST},SQfp16", faiss.METRIC_INNER_PRODUCT)
-    built.train(
-        patches(dataset.take(sample, columns=[ANCHOR]).column(ANCHOR).combine_chunks())
+    training = patches(
+        dataset.take(sample, columns=[ANCHOR]).column(ANCHOR).combine_chunks()
     )
+    nlist = max(1, min(NLIST, len(training) // MIN_TRAIN_PER_CENTROID))
+    built = faiss.index_factory(DIM, f"IVF{nlist},SQfp16", faiss.METRIC_INNER_PRODUCT)
+    built.train(training)
+    del training  # 3.6 GB at production scale; the add loop below needs none of it.
+
     for batch in dataset.to_batches(columns=[ANCHOR], batch_size=BATCH):
         built.add(patches(batch.column(ANCHOR)))
 

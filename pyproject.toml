@@ -17,6 +17,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+dev = [
+  "pytest>=9.0.1",
+]
 build = [
   "polymathic-aion>=0.0.2",
   "torch>=2.13.0",
@@ -25,6 +28,11 @@ build = [
   "umap-learn>=0.5.12",
   "wandb>=0.28.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
 
 [tool.pyright]
 venvPath = "."

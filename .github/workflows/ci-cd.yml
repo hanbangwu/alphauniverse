@@ -4,8 +4,29 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 jobs:
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Test
+        run: uv run --python 3.12 pytest
+
+  openapi:
+    name: OpenAPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Check frontend/openapi.json is current
+        run: uv run --python 3.12 python -m scripts.openapi && git diff --exit-code --stat frontend/openapi.json \|| { echo "::error::frontend/openapi.json is stale; run 'uv run python -m scripts.openapi' and commit"; exit 1; }
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
@@ -14,19 +35,8 @@ jobs:
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
 
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Modal
-        run: |
-          python -m pip install --upgrade pip
-          pip install modal
-
-      - name: Deploy job
-        run: |
-          modal deploy -m modal_app
+      - name: Deploy
+        run: uv tool run modal deploy -m modal_app
