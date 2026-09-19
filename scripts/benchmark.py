@@ -244,7 +244,7 @@ def measure_recall(galaxies: int, count: int, matches: int) -> dict[str, Any]:
 
 
 def measure_endpoints(galaxies: int, runs: int) -> dict[str, Any]:
-    """Per-request cost of the metadata endpoints, excluding the network."""
+    """Per-request cost of the endpoints that are not `/similarity`."""
     rng = np.random.default_rng(0)
     with TestClient(app) as client:
         results = {}
@@ -252,6 +252,7 @@ def measure_endpoints(galaxies: int, runs: int) -> dict[str, Any]:
             ("meta", "/meta"),
             ("tokens", "/galaxies/{}/tokens"),
             ("coverage", "/galaxies/{}/coverage"),
+            ("image", "/galaxies/{}/image.png"),
         ):
 
             def one() -> None:
