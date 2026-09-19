@@ -20,53 +20,34 @@ uv run python -m scripts.benchmark --galaxies 32    # measure the search path
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
 
 cd frontend
-bun install && bun run dev                          # needs PUBLIC_API_URL, see .env.example
+bun install && bun run dev
 bun run check                                       # regenerate client + typecheck
 bun run lint                                        # prettier + eslint
 ```
 
 ## Workflow
 
-- Always work on a branch and never commit or push to `main`.
-- All changes land as a pull request.
+- Work on a branch and open a pull request; never commit to `main`.
+- Commit messages: short, terse, semicolon-delimited; they need not list every change.
+- Change only what the task requires; do not improvise. Report unrelated changes you notice rather than making them.
+- Never edit `frontend/src/components/ui`.
+- No `TODO`, `FIXME`, `HACK` or `XXX` comments. Future work lives in one of three places: performance work in the ranked list in `docs/performance.md`; known-wrong behaviour as a test marked `xfail(strict=True)` (see `tests/test_api.py`); everything else as a GitHub issue.
+- Working notes (scratch analysis, session logs, write-ups) are not committed.
+- Ask when unsure about anything: a new file or not, leanness versus performance, installing a library.
 
-## Future Work Documentation
+## Code
 
-- Do not add `TODO`, `FIXME`, `HACK` or `XXX` comments anywhere in the codebase. An inline marker is tracked by nothing and goes stale without anyone noticing.
-- Known future work lives in three places:
+- Write the minimum code that is correct and clear.
+- Prefer removing to adding; deleting a concept is better than adding a flag.
+- Use library APIs the way their documentation intends, and read the docs when unsure. Don't hand-roll what a library provides.
+- Leave parameters at their defaults unless there is an explicit, significant reason not to.
+- No no-ops: passing a parameter its default, redeclaring a type a value already has, or guarding a case that cannot happen. Typing constants is fine.
+- One purpose per function, one group of things per file. Add a helper only when a function is too long or the helper is reused.
+- No linter-ignore rules, as comments, config or otherwise.
+- Tests assert the behaviour that matters, not every observable property.
 
-1. Performance work - the ranked list in `docs/performance.md`, ordered by measured cost and re-ordered when a measurement changes it.
-2. Behaviours known to be wrong - a test marked `xfail(strict=True)`, so the fix cannot land without someone removing the marker. See `tests/test_api.py`.
-3. Everything else - a GitHub issue.
+## Comments and docs
 
-## Coding Guidelines
-
-- Prioritize code correctness and clarity over speed and efficiency.
-- Only write comments to explain "why" the code is written in some non-obvious or tricky way. Do not write organizational comments or summaries.
-- Each line in docstrings should have a maximum of 80 characters. If exceeded, it means you are too verbose.
-- Prefer implementing functionality in existing files unless it is a new logical component.
-- Always use library API calls rather than hand-rolling. If a suitable library is not installed, ask the user for permission to install it.
-- Only write helpers when a function becomes too long and/or the helper would be used in multiple locations.
-- Never write no-ops. This includes: passing the default value of a parameter into a parameter, useless declarations (_e.g._ if an array is already in `float32`, don't declare it as `float32` again (unless it's convention)), or useless guards/conversions (_e.g._ if an array is already in `float32`, and you know that it always will be, don't explicitly convert it to `float32`). The exception is typing constants.
-- Never write linter ignore rules as comments, configs, or any other expressions.
-- Use full words for variable names (no abbreviations like "q" for "queue").
-- Avoid writing anti-patterns. Libraries should usually be used the way they are intended to. _e.g._ if the documentation specifies a way to complete a task, then follow documentation examples where possible and deviate from documentation and documentation examples only for necessary functional reasons.
-- Always read the documentation when unsure. Report when your empirical tests (which I don't prefer over documentation nor the other way around) contradict documentation.
-- Always think about why a value is passed into a parameter of a library call. Usually, the default is okay unless you have an explicit, significant reason to use another value.
-- Always change only what the task requires. If you notice an unrelated, potentially desirable change, report it.
-- Always write the minimum amount of code needed without sacrificing behaviour, performance, etc.
-- A function should serve one purpose and should be reasonably short.
-- Keep commit message short and terse. Delimit using semicolons. It's okay to not mention all changes.
-- Prefer removing to adding. A change that deletes a concept is usually better than one that adds a flag.
-- Documentation states what the code does now. Not what it used to do, not what it might do, not which alternatives were rejected cuz no one cares.
-- Each fact has one home. If something is documented in two places, one of them is already wrong.
-- When adding to a doc, re-read the whole file first and cut what the addition duplicates. Otherwise they accumulate duplicates.
-- Working notes stay out of the repository. Scratch analysis, session logs and investigation write-ups are thrown away, not committed.
-- Tests assert the behaviour that matters, not every property that happens to be observable.
-- Mannered prose substitutes metaphor and flourish for direct statement: "a dial worth turning" instead of "a parameter worth varying", "this point earns its keep" instead of "this point still matters". The phrases display the writer rather than convey the idea, and readers can tell. They are also imprecise: a metaphor carries connotations the writer did not choose and cannot control. When a literal phrase is available, use it.
-- I personally think the use of em dashes should be a misdemeanour. I think you know what to do with that information.
-- Use lists and headings when asked for them, or when the content is multifaceted enough that they aid clarity. Not by default.
-- If minimal formatting is requested, use none: no bullets, headings, lists or bold.
-- Finally, always ask when unsure about anything at all.
-
-Specific for this project: don't edit `frontend/src/components/ui`.
+- No comments or docstrings unless the code is unconventional enough to need clarification.
+- Docs are for someone new, concise, and state only what the code does now. Each fact has one home: before adding to a doc, re-read it and cut what the addition duplicates.
+- Prefer literal phrasing to metaphor and flourish: "a parameter worth varying", not "a dial worth turning".

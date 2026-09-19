@@ -39,7 +39,7 @@ bun run lint     # prettier + eslint
 bun run check    # regenerate the client from openapi.json, then svelte-check
 ```
 
-`bun run check` needs `PUBLIC_API_URL` set; copy `.env.example` to `.env`. There is no frontend test suite.
+There is no frontend test suite.
 
 ## CI
 

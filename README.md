@@ -31,7 +31,6 @@ Requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh).
 
 ```sh
 cd frontend
-cp .env.example .env     # point PUBLIC_API_URL at an API
 bun install
 bun run dev
 ```
