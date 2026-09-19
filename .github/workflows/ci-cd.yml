@@ -53,10 +53,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [python, openapi, frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # Gating on three jobs delays this step by however long the slowest takes,
-    # so two merges close together could otherwise deploy out of order and
-    # leave production on the older commit. Queue instead of cancelling: a
-    # half-applied `modal deploy` is worse than a late one.
+    # Queue rather than cancel: a half-applied `modal deploy` is worse than a
+    # late one. This serialises deploys but does not order them, so the step
+    # below also skips a commit that main has already moved past.
     concurrency:
       group: deploy-main
       cancel-in-progress: false
@@ -69,4 +68,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Deploy
-        run: uv tool run modal deploy -m modal_app
+        run: |
+          git fetch --quiet origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "::notice::$GITHUB_SHA superseded on main; skipping deploy"
+            exit 0
+          fi
+          uv tool run modal deploy -m modal_app
