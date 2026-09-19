@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
+from starlette.datastructures import MutableHeaders
 
 from .config import (
     ANCHOR,
@@ -36,6 +37,8 @@ from .search import index, search, source
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 @cache
@@ -99,6 +102,51 @@ app = FastAPI(
     generate_unique_id_function=lambda route: route.name,
 )
 
+# How long a client may keep serving the previous revision after a redeploy.
+# `revision-in-url` in docs/performance.md is what would remove the bound.
+CACHE_SECONDS = 60 * 60
+CACHE_CONTROL = f"public, max-age={CACHE_SECONDS}"
+NO_STORE = "no-store"
+REUSABLE = frozenset({200, 206})
+
+
+class CacheControl:
+    """States how long a response may be reused, and by whom.
+
+    Pure ASGI, so no body passes through it; `/artifacts/{role}` is up to 23 GB.
+    `Vary: Origin` goes on every response because the directive is `public`
+    while the CORS middleware answers only allowed origins, so a shared cache
+    could otherwise hand an origin-less copy to the frontend. What is not
+    reusable gets `no-store` rather than nothing, since 404 and 405 are
+    heuristically cacheable and both are reachable here.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        readable = scope["method"] in ("GET", "HEAD")
+
+        async def tagged(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                message.setdefault("headers", [])
+                headers = MutableHeaders(scope=message)
+                reusable = readable and message["status"] in REUSABLE
+                headers.setdefault(
+                    "cache-control", CACHE_CONTROL if reusable else NO_STORE
+                )
+                varies = headers.get("vary", "").lower().split(",")
+                if "origin" not in (value.strip() for value in varies):
+                    headers.add_vary_header("Origin")
+            await send(message)
+
+        await self.app(scope, receive, tagged)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=(
@@ -113,6 +161,10 @@ app.add_middleware(
     expose_headers=["Content-Length", "Content-Range", "Accept-Ranges"],
     max_age=86400,
 )
+
+# Added last so it runs outermost, where it sees the `Vary` the CORS middleware
+# adds for an allowed origin rather than duplicating it.
+app.add_middleware(CacheControl)
 
 
 @app.get("/meta")

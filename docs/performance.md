@@ -128,7 +128,7 @@ Nothing in this section is done. Each entry is triaged on three axes, because th
 | `ssr-unblock`           | Turns 47 s of blank page into 47 s of spinner        | Medium, frontend            | Quality                  |
 | `dataset-preload`       | 11.3 s off the first user per container              | Trivial                     | Implementation           |
 | `patch-array`           | 7–10× on `/similarity`                               | Large                       | Implementation           |
-| `cache-headers`         | Whole surface on repeat visits; magnitude unmeasured | Small                       | Implementation           |
+| `revision-in-url`       | Repeat visits and CDN offload; magnitude unmeasured  | Medium, API and frontend    | Implementation           |
 | `index-compression`     | Cold start, and the RAM ceiling                      | Large, methodological       | Implementation           |
 | `tokens-bulk`           | ~240 ms per newly selected galaxy                    | Medium                      | Implementation           |
 | `bulk-offload`          | None steady-state, large under load                  | Infrastructure              | Quality                  |
@@ -151,7 +151,7 @@ Impact order is not the order to work in, because of four couplings.
 
 **`production-recall` gates both of them.** Production recall is unknown, for the reasons in [Reading fixture numbers](#reading-fixture-numbers), so there is no baseline to show a quantiser change did not silently degrade results.
 
-That gives a working order. `cache-headers`, `cutout-artifact` and a non-blocking `dataset-preload` are independent and provable now. Then the `index-mmap` measurement and `production-recall`, which between them make the `patch-array` + `index-compression` design possible.
+That gives a working order. `cutout-artifact` and a non-blocking `dataset-preload` are independent and provable now. Then the `index-mmap` measurement and `production-recall`, which between them make the `patch-array` + `index-compression` design possible.
 
 ### Cold start
 
@@ -175,11 +175,13 @@ The first three are cheap and compose. Do them before considering the last two.
 
 This is the largest measured saving available and it needs no change to the search.
 
-### No cache headers anywhere
+### Reusing responses
 
-Every response is immutable for a given `DATASET_REVISION`, and not one sets `Cache-Control`. Artifacts carry an `etag` so they revalidate; `/meta`, `/tokens`, `/coverage`, `/similarity` and `/image.png` carry nothing, so every repeat visit re-computes and re-transfers everything.
+Every reusable `GET` and `HEAD` carries `public, max-age=CACHE_SECONDS`, and everything else carries `no-store`. What that does not buy is `immutable`, which is what would make a repeat visit free and let a CDN serve the traffic instead of the one container.
 
-The one design question in `cache-headers` is what makes the immutability safe to advertise. A long `max-age` with `immutable` is correct only while the revision does not change; a browser that cached under the old revision would keep serving it. Putting the revision in the path or a query parameter makes the whole surface safely `immutable`, after which repeat visits cost nothing and a CDN can serve the traffic.
+`revision-in-url` is the obstacle. Every response is a pure function of `DATASET_REVISION`, but no URL names the revision, so `/galaxies/7/tokens` returns different bytes after a rebuild at the same address, and a client told the answer is permanent would keep serving the old one.
+
+`CACHE_SECONDS` is therefore a bound on how long a client may keep serving the previous revision, not a preference about freshness. Within that window a client can hold `mean_points` from one revision and `/similarity` from the next, and nothing detects it: faiss ids encode `galaxy * N_PATCHES + patch`, so a mismatched point set highlights the wrong galaxies rather than failing.
 
 ### Candidate reconstruction
 

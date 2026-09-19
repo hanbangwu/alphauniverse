@@ -1,6 +1,7 @@
 """The HTTP contract: shapes, encodings, validation and error paths."""
 
 import io
+from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
@@ -8,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import ARTIFACTS, GRID, N_MORPHOLOGIES, N_PATCHES
+from app.main import CACHE_CONTROL
 from scripts.fixture import TOKENS, covered
 
 
@@ -45,6 +47,66 @@ def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:
 def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     """`codebook` is a real role the fixture does not build."""
     assert client.get("/artifacts/codebook").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/meta",
+        "/artifacts/mean_points",
+        "/galaxies/0/tokens",
+        "/galaxies/0/coverage",
+        "/similarity?galaxy=0&p=0",
+    ],
+)
+def test_responses_say_how_long_they_may_be_reused(
+    client: TestClient, path: str
+) -> None:
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == CACHE_CONTROL
+
+
+def test_head_responses_are_cacheable_too(client: TestClient) -> None:
+    response = client.head("/artifacts/mean_points")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == CACHE_CONTROL
+
+
+@pytest.mark.parametrize(
+    ("call", "status"),
+    [
+        (lambda client: client.get("/artifacts/nonsense"), 404),
+        (lambda client: client.post("/meta"), 405),
+        (lambda client: client.get("/galaxies/99999999/tokens"), 422),
+    ],
+)
+def test_errors_say_not_to_store_them(client: TestClient, call, status: int) -> None:
+    """404 and 405 are both heuristically cacheable when no directive is set."""
+    response = call(client)
+
+    assert response.status_code == status
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_every_response_varies_on_origin(client: TestClient) -> None:
+    """`public` without this lets a shared cache serve a copy carrying no CORS."""
+    without = client.get("/meta")
+    with_origin = client.get("/meta", headers={"Origin": "http://localhost:5173"})
+
+    assert "origin" in without.headers["vary"].lower()
+    assert with_origin.headers["vary"].lower().count("origin") == 1
+
+
+def test_range_requests_still_work(client: TestClient, tree: Path) -> None:
+    """DuckDB reads the point sets by range, so 206 must pass through intact."""
+    response = client.get("/artifacts/mean_points", headers={"Range": "bytes=0-15"})
+
+    assert response.status_code == 206
+    assert response.content == (tree / "mean_points.parquet").read_bytes()[:16]
+    assert response.headers["cache-control"] == CACHE_CONTROL
 
 
 def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
