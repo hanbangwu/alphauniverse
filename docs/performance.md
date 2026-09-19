@@ -177,7 +177,7 @@ This is the largest measured saving available and it needs no change to the sear
 
 ### Reusing responses
 
-Every reusable `GET` and `HEAD` carries `public, max-age=CACHE_SECONDS`, and everything else carries `no-store`. What that does not buy is `immutable`, which is what would make a repeat visit free and let a CDN serve the traffic instead of the one container.
+Every reusable `GET` and `HEAD` carries `public, max-age=CACHE_SECONDS`, and everything else carries `no-store`. Within that window a browser or a CDN can serve a hit without reaching the container at all. What it does not buy is `immutable`, which would drop the revalidation that follows expiry and make a repeat visit free for good.
 
 `revision-in-url` is the obstacle. Every response is a pure function of `DATASET_REVISION`, but no URL names the revision, so `/galaxies/7/tokens` returns different bytes after a rebuild at the same address, and a client told the answer is permanent would keep serving the old one.
 
