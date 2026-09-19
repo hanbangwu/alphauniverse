@@ -1,10 +1,3 @@
-"""Modal deployment: three build jobs and one serving app.
-
-The build jobs write artifacts into a shared volume mounted at `CACHE_PATH`;
-the serving app reads them back. They must run in order — embeddings, then
-index, then projections — because each stage consumes the previous one's output.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

@@ -1,9 +1,4 @@
-"""Write the API's OpenAPI schema to frontend/openapi.json.
-
-The frontend generates its typed client and zod schemas from this file, so it
-must be regenerated whenever a route, model or docstring in app/main.py changes.
-CI fails if the committed copy is stale.
-"""
+"""Write the API's OpenAPI schema to frontend/openapi.json."""
 
 import json
 from pathlib import Path

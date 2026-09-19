@@ -1,12 +1,3 @@
-"""Stage 3 of the build: project embeddings to 2-d with a parametric UMAP.
-
-A small MLP is trained to reproduce UMAP's fuzzy-simplicial-set structure on a
-sample of embeddings, then applied to everything. Because the projection is a
-function rather than a fitted table, the same model maps both point sets:
-`mean_points` (one point per galaxy, from its mean embedding) and
-`full_points` (one point per embedding, all modalities in the same space).
-"""
-
 from collections.abc import Iterator
 
 import numpy as np
@@ -32,6 +23,7 @@ from .config import (
     WANDB_PROJECT,
     artifact,
     device,
+    points,
 )
 from .dataset import dataset
 from .search import source
@@ -44,6 +36,7 @@ NEIGHBORS = 16
 MIN_DIST = 0.1
 NEGATIVES = 5
 SAMPLE = 500_000
+
 
 class ParametricUMAP(nn.Module):
     """An MLP mapping a normalised embedding to 2-d."""
@@ -184,19 +177,6 @@ def _stream(
             )
 
 
-def _points(galaxy: np.ndarray, coords: np.ndarray, category: pa.Array) -> pa.Table:
-    """A table of projected points in the `POINTS` schema."""
-    return pa.table(
-        {
-            "galaxy": pa.array(galaxy),
-            "x": pa.array(coords[:, 0]),
-            "y": pa.array(coords[:, 1]),
-            "category": category,
-        },
-        schema=POINTS,
-    )
-
-
 def generate_projections() -> None:
     """Train the projector and write both point sets.
 
@@ -265,7 +245,7 @@ def generate_projections() -> None:
     model.to(device()).eval()
 
     pq.write_table(
-        _points(galaxy, model.transform(mean), category),
+        points(galaxy, model.transform(mean), category),
         artifact("mean_points"),
         compression="zstd",
     )
@@ -276,7 +256,7 @@ def generate_projections() -> None:
         for gids, offsets, values in tqdm(_stream(counts), desc="project"):
             owner = np.repeat(gids, np.diff(offsets))
             writer.write_table(
-                _points(owner, model.transform(values), category.take(owner))
+                points(owner, model.transform(values), category.take(owner))
             )
 
     staging.replace(full_points)

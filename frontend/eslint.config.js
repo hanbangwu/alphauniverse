@@ -23,12 +23,6 @@ export default defineConfig(
     }
   },
   {
-    // Vendored from shadcn-svelte and regenerated wholesale by `bun run shadcn`,
-    // so edits here do not survive. Held to upstream's conventions, not ours.
-    files: ['src/lib/components/ui/**'],
-    rules: { 'svelte/no-navigation-without-resolve': 'off' }
-  },
-  {
     files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
     languageOptions: {
       parserOptions: {

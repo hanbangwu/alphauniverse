@@ -1,13 +1,7 @@
 """Patch-level similarity search over the anchor survey's encoded embeddings.
 
 The index holds one vector per anchor image patch, L2-normalised so that inner
-product is cosine similarity. Vector ids encode position:
-
-    faiss id = galaxy * N_PATCHES + patch
-
-which holds because `generate_index()` adds every galaxy's `N_PATCHES`
-anchor patches in row order, contiguously. Nothing else in the codebase may add
-to or reorder the index without breaking that mapping.
+product is cosine similarity.
 """
 
 from functools import cache
@@ -38,7 +32,7 @@ from .config import (
 
 
 class Query(BaseModel):
-    """A patch-similarity request: some patches of one galaxy, and a result size."""
+    """Some patches of one galaxy, and how many matches to return."""
 
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
@@ -60,7 +54,7 @@ def search(
     the rest are sorted by descending score.
 
     Candidates come from one ANN search for the `PROBE` nearest patches, which
-    caps the result at however many distinct galaxies those patches belong to —
+    caps the result at however many distinct galaxies those patches belong to,
     so fewer than `query.matches` rows can come back. Scores are then computed
     exactly against every patch of every candidate, so the ordering within the
     candidate set is exact and only the candidate set itself is approximate.
@@ -121,16 +115,13 @@ def index() -> faiss.Index:
     return loaded
 
 
-def generate_index(nlist: int | None = None) -> None:
+def generate_index() -> None:
     """Build the search index from `encoded.parquet` and write it to disk.
 
     Trains on a sample of galaxies, then adds every galaxy's anchor patches in
-    row order.
-
-    `nlist` defaults to `NLIST`, capped so training never falls below faiss's
-    `MIN_TRAIN_PER_CENTROID` vectors per centroid. At production scale the cap
-    is inactive; it is what keeps a small fixture dataset buildable. Pass a value
-    to choose the geometry directly.
+    row order. `nlist` is `NLIST`, capped so training never falls below faiss's
+    `MIN_TRAIN_PER_CENTROID` vectors per centroid; at production scale the cap
+    is inactive, and it is what keeps a small fixture dataset buildable.
     """
     dataset = source("encoded")
     galaxies = dataset.count_rows()
@@ -140,12 +131,10 @@ def generate_index(nlist: int | None = None) -> None:
     training = patches(
         dataset.take(sample, columns=[ANCHOR]).column(ANCHOR).combine_chunks()
     )
-    if nlist is None:
-        nlist = max(1, min(NLIST, len(training) // MIN_TRAIN_PER_CENTROID))
+    nlist = max(1, min(NLIST, len(training) // MIN_TRAIN_PER_CENTROID))
     built = faiss.index_factory(DIM, f"IVF{nlist},SQfp16", faiss.METRIC_INNER_PRODUCT)
     built.train(training)
-    # 3.6 GB at production scale; the add loop below needs none of it.
-    del training
+    del training  # 3.6 GB at production scale; the add loop below needs none of it.
 
     for batch in dataset.to_batches(columns=[ANCHOR], batch_size=BATCH):
         built.add(patches(batch.column(ANCHOR)))

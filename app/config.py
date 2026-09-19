@@ -1,9 +1,3 @@
-"""Constants and paths shared by the build pipeline and the serving app.
-
-Every name here is fixed for a given `DATASET_REVISION`; the revision is part
-of the artifact path, so switching revisions switches artifact trees.
-"""
-
 from __future__ import annotations
 
 import os
@@ -11,6 +5,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
+import numpy as np
 import pyarrow as pa
 from pydantic import Field
 
@@ -20,7 +15,6 @@ if TYPE_CHECKING:
 
 @cache
 def device() -> torch.device:
-    """The accelerator torch reports, or CPU."""
     import torch
 
     return torch.accelerator.current_accelerator(check_available=True) or torch.device(
@@ -42,7 +36,8 @@ DIM = 768
 GRID = 24
 N_PATCHES = GRID**2
 
-GalaxyIndex = Annotated[int, Field(ge=0, lt=17369)]
+GALAXIES = 17369
+GalaxyIndex = Annotated[int, Field(ge=0, lt=GALAXIES)]
 
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
@@ -91,8 +86,7 @@ STORES = ("encoded", "codebook", "tokens")
 def store_schema(role: str) -> pa.Schema:
     """Schema of one per-galaxy store.
 
-    One nullable list column per token survey — token ids for `tokens`,
-    embeddings for the rest — then one bool per flag survey.
+    One nullable list column per token survey and boolean for flag survey.
     """
     cell = (
         pa.list_(pa.uint32())
@@ -114,15 +108,23 @@ POINTS = pa.schema(
         pa.field("category", pa.uint8(), nullable=True),
     ]
 )
-"""Schema of both projected point sets. `category` is null where unlabelled."""
+
+
+def points(galaxy: np.ndarray, coordinates: np.ndarray, category: pa.Array) -> pa.Table:
+    """A table of projected points in the `POINTS` schema."""
+    return pa.table(
+        {
+            "galaxy": galaxy,
+            "x": coordinates[:, 0],
+            "y": coordinates[:, 1],
+            "category": category,
+        },
+        schema=POINTS,
+    )
 
 
 def build_dir() -> Path:
-    """The directory holding this revision's artifacts.
-
-    `ALPHAUNIVERSE_CACHE` is read on every call, so a process can be pointed at
-    a fixture tree (`scripts/fixture.py`) without import-order constraints.
-    """
+    """The directory holding this revision's artifacts."""
     return (
         Path(os.environ.get("ALPHAUNIVERSE_CACHE", DEFAULT_CACHE))
         / DATASET_AUTHOR

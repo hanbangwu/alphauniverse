@@ -4,8 +4,8 @@ import faiss
 import numpy as np
 import pytest
 
-from app.config import N_PATCHES
 from app import search as search_module
+from app.config import N_PATCHES
 from app.search import Query, index, patches, search, source
 from scripts.benchmark import exact_ranking
 from scripts.fixture import build
@@ -25,7 +25,7 @@ def test_index_holds_every_anchor_patch(built: faiss.Index, galaxies: int) -> No
 def test_faiss_ids_encode_galaxy_and_patch(
     built: faiss.Index, galaxy: int, patch: int
 ) -> None:
-    """The ``galaxy * N_PATCHES + patch`` id layout that search() relies on."""
+    """The `galaxy * N_PATCHES + patch` id layout that search() relies on."""
     stored = built.reconstruct(galaxy * N_PATCHES + patch)
     cell = source("encoded").to_table(columns=["ls"]).column("ls")
     expected = patches(cell.combine_chunks())[galaxy * N_PATCHES + patch]
@@ -94,7 +94,7 @@ def test_approximate_ranking_agrees_with_exact(
 def test_ids_stay_contiguous_across_add_batches(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The id layout holds when `generate_index` fills the index in several adds.
+    """The id layout holds across several `add()` calls in `generate_index`.
 
     The shared fixture is smaller than `BATCH`, so it is built by a single
     `add()` and cannot exercise this. Contiguity across batches is the half of
@@ -115,13 +115,12 @@ def test_ids_stay_contiguous_across_add_batches(
         built = index()
         assert built.ntotal == galaxies * N_PATCHES
 
-        stored = built.reconstruct_batch(
-            np.array([g * N_PATCHES + 7 for g in range(galaxies)])
-        )
+        ids = np.arange(galaxies) * N_PATCHES + 7
+        stored = built.reconstruct_batch(ids)
         rows = patches(
             source("encoded").to_table(columns=["ls"]).column("ls").combine_chunks()
         )
-        expected = rows[[g * N_PATCHES + 7 for g in range(galaxies)]]
+        expected = rows[ids]
 
         np.testing.assert_allclose(stored, expected, atol=1e-3)
     finally:

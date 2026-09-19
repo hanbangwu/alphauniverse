@@ -368,7 +368,7 @@
           "unlabelled"
         ],
         "title": "Meta",
-        "description": "What the frontend needs before it can render anything.\n\n`embeddings`, `mean_points` and `full_points` are artifact roles, not\nURLs: the client passes them back to `/artifacts/{role}`, so the server\nstays in charge of which artifact backs which view."
+        "description": "What the frontend needs before it can render anything."
       },
       "Survey": {
         "properties": {

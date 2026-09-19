@@ -1,10 +1,8 @@
 """Fixtures backed by a synthetic artifact tree.
 
-The whole suite runs against one tree built once per session by
-``scripts.fixture``. Because :func:`app.config.build_dir` reads the environment
-on every call, pointing the app at the tree is just an environment variable —
-but the module-level ``@cache`` decorators hold artifacts open, so they are
-cleared whenever the tree changes underneath them.
+One tree is built per session by `scripts.fixture` and the app is pointed at
+it through `ALPHAUNIVERSE_CACHE`. The module-level `@cache` handles hold
+artifacts open, so they are cleared whenever the tree changes underneath them.
 """
 
 import os

@@ -1,10 +1,4 @@
-"""Stage 1 of the build: tokenise every galaxy and run the AION encoder.
-
-Writes three parquet stores keyed by galaxy row, each with one list column per
-survey: `encoded` (contextualised encoder output), `codebook` (the raw
-codebook vector behind each token) and `tokens` (the token ids themselves).
-Within a cell, image or spectrum tokens come first, then the survey's scalars.
-"""
+"""Tokenize every galaxy and run the AION encoder."""
 
 from functools import cache
 from pathlib import Path
@@ -163,10 +157,9 @@ def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
 
 
 def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
-    """Token ids for one galaxy, grouped by survey.
+    """Token IDs for one galaxy, grouped by survey.
 
-    The anchor survey is always present; the others only where the galaxy was
-    crossmatched.
+    Legacy Survey always present. Others possibly null.
     """
     groups = {
         ANCHOR: {
@@ -201,11 +194,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
 def encode(
     groups: dict[str, dict[str, torch.Tensor]],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Run the encoder over all of a galaxy's tokens at once.
-
-    Returns the contextualised embeddings, the codebook embeddings and the
-    per-token modality ids that `by_survey()` uses to split them back up.
-    """
+    """Run the encoder over all of a galaxy's tokens at once."""
     tokens = {key: slot for group in groups.values() for key, slot in group.items()}
     with torch.no_grad():
         enc_tokens, enc_emb, enc_mask, mod_mask = model().embed_inputs(
@@ -240,8 +229,7 @@ def by_survey(
 def generate_embeddings() -> None:
     """Encode every galaxy and write the three stores.
 
-    Rows are encoded one galaxy at a time, buffered 1024 at a time and written
-    to `.partial` files that replace the real artifacts only on success.
+    Encoded one at a time. Written to partial in batches of 1024.
     """
     build_dir().mkdir(parents=True, exist_ok=True)
 

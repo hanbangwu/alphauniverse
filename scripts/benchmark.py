@@ -3,21 +3,7 @@
 Reports artifact sizes, index load time, query latency, and the recall of the
 approximate ranking against brute force over every patch. Recall is what
 distinguishes a change that made the search faster from one that made it worse.
-
-Results are written as JSON tagged with the commit and the fixture's shape, so
-runs can be compared across sessions. Numbers are only comparable between trees
-built with the same `--galaxies` and `--seed`.
-
-Two caveats apply to any conclusion drawn here:
-
-* The fixture is far smaller than production, so its index geometry differs.
-  `nlist` and the `nprobe/nlist` ratio are reported for that reason: a
-  fixture that probes 10% of its lists is not measuring what production, which
-  probes 0.4%, does.
-* Load timings run against a warm page cache on a local disk, so they are a
-  lower bound on a Modal container reading a cold network volume.
-
-    uv run python -m scripts.benchmark --galaxies 32 --out bench.json
+`docs/testing.md` says how to run it and `docs/performance.md` how to read it.
 """
 
 import argparse
@@ -26,17 +12,26 @@ import json
 import os
 import subprocess
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+from fastapi.testclient import TestClient
 from sklearn.preprocessing import normalize
 
-from app.config import ANCHOR, DIM, N_PATCHES, NPROBE, PROBE, artifact, build_dir
+from app.config import (
+    ANCHOR,
+    DIM,
+    GALAXIES,
+    N_PATCHES,
+    NPROBE,
+    PROBE,
+    artifact,
+    build_dir,
+)
+from app.main import app
 from app.search import Query, index, patches, search, source
-
-PRODUCTION_GALAXIES = 17369
+from scripts.fixture import build
 
 
 def anchor_patches() -> np.ndarray:
@@ -53,8 +48,8 @@ def exact_ranking(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Brute-force ranking over every patch: the ground truth for recall.
 
-    Mirrors `search()` exactly apart from the candidate step,
-    scoring against the float32 embeddings rather than the index's fp16 copies.
+    Mirrors `search()` apart from the candidate step, scoring against the
+    float32 embeddings rather than the index's fp16 copies.
     """
     rows = anchor_patches() if corpus is None else corpus
     direction = normalize(
@@ -66,39 +61,25 @@ def exact_ranking(
     order = np.argsort(-scores, kind="stable")
     chosen = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
-    ).astype(np.int32)
+    )
     return chosen, scores[chosen]
 
 
-@dataclass
-class Timing:
-    """Latency of one repeated measurement, in milliseconds."""
-
-    label: str
-    samples: list[float] = field(default_factory=list)
-
-    def record(self, seconds: float) -> None:
-        self.samples.append(seconds * 1000)
-
-    def summary(self) -> dict[str, float]:
-        values = np.asarray(self.samples)
-        return {
-            "runs": len(values),
-            "p50_ms": round(float(np.percentile(values, 50)), 3),
-            "p95_ms": round(float(np.percentile(values, 95)), 3),
-            "max_ms": round(float(values.max()), 3),
-        }
-
-
-def time_it(label: str, runs: int, call) -> Timing:
-    """Run `call` `runs` times after one warm-up, recording each duration."""
-    timing = Timing(label)
+def time_it(runs: int, call) -> dict[str, float]:
+    """Time `call` over `runs` runs after one warm-up, in milliseconds."""
     call()
+    samples = []
     for _ in range(runs):
         start = time.perf_counter()
         call()
-        timing.record(time.perf_counter() - start)
-    return timing
+        samples.append((time.perf_counter() - start) * 1000)
+    values = np.asarray(samples)
+    return {
+        "runs": runs,
+        "p50_ms": round(float(np.percentile(values, 50)), 3),
+        "p95_ms": round(float(np.percentile(values, 95)), 3),
+        "max_ms": round(float(values.max()), 3),
+    }
 
 
 def queries(galaxies: int, count: int, patch_count: int, matches: int) -> list[Query]:
@@ -119,7 +100,7 @@ def queries(galaxies: int, count: int, patch_count: int, matches: int) -> list[Q
 
 def measure_sizes(galaxies: int) -> dict[str, Any]:
     """Artifact sizes, with a linear extrapolation to production scale."""
-    scale = PRODUCTION_GALAXIES / galaxies
+    scale = GALAXIES / galaxies
     files = {}
     for path in sorted(build_dir().iterdir()):
         size = path.stat().st_size
@@ -138,10 +119,10 @@ def measure_load(runs: int) -> dict[str, Any]:
         index.cache_clear()
         index()
 
-    timing = time_it("index_load", runs, load)
+    timing = time_it(runs, load)
     built = index()
     return {
-        **timing.summary(),
+        **timing,
         "ntotal": built.ntotal,
         "nlist": built.nlist,
         "nprobe": built.nprobe,
@@ -159,11 +140,10 @@ def measure_latency(galaxies: int, runs: int) -> dict[str, Any]:
             batch = queries(galaxies, runs, patch_count, matches)
             counter = itertools.count()
 
-            def one(batch=batch, counter=counter) -> None:
+            def one() -> None:
                 search(batch[next(counter) % len(batch)], index=built)
 
-            label = f"patches={patch_count},matches={matches}"
-            results[label] = time_it(label, runs, one).summary()
+            results[f"patches={patch_count},matches={matches}"] = time_it(runs, one)
     return results
 
 
@@ -218,7 +198,9 @@ def measure_phases(galaxies: int, runs: int, matches: int = 32) -> dict[str, Any
         "vectors_reconstructed": reconstructed,
         "total_p50_ms": round(total, 3),
         "us_per_reconstructed_vector": round(
-            1000 * float(np.median(samples["reconstruct_maps"])) / max(reconstructed, 1),
+            1000
+            * float(np.median(samples["reconstruct_maps"]))
+            / max(reconstructed, 1),
             3,
         ),
         "stages": {
@@ -232,7 +214,7 @@ def measure_phases(galaxies: int, runs: int, matches: int = 32) -> dict[str, Any
 
 
 def measure_recall(galaxies: int, count: int, matches: int) -> dict[str, Any]:
-    """Recall of the approximate ranking against brute force, swept over nprobe."""
+    """Recall against brute force, swept over `nprobe`."""
     corpus = anchor_patches()
     built = index()
     original = built.nprobe
@@ -270,10 +252,6 @@ def measure_recall(galaxies: int, count: int, matches: int) -> dict[str, Any]:
 
 def measure_endpoints(galaxies: int, runs: int) -> dict[str, Any]:
     """Per-request cost of the metadata endpoints, excluding the network."""
-    from fastapi.testclient import TestClient
-
-    from app.main import app
-
     rng = np.random.default_rng(0)
     with TestClient(app) as client:
         results = {}
@@ -283,10 +261,10 @@ def measure_endpoints(galaxies: int, runs: int) -> dict[str, Any]:
             ("coverage", "/galaxies/{}/coverage"),
         ):
 
-            def one(path=path) -> None:
+            def one() -> None:
                 client.get(path.format(int(rng.integers(galaxies))))
 
-            results[label] = time_it(label, runs, one).summary()
+            results[label] = time_it(runs, one)
     return results
 
 
@@ -319,8 +297,6 @@ def main() -> None:
     )
     arguments = parser.parse_args()
 
-    from scripts.fixture import build
-
     if arguments.tree:
         os.environ["ALPHAUNIVERSE_CACHE"] = str(arguments.tree.resolve())
     else:
@@ -340,7 +316,9 @@ def main() -> None:
     # the end of the index would crash the search.
     galaxies = source("encoded").count_rows()
     if galaxies != arguments.galaxies:
-        print(f"tree holds {galaxies} galaxies; --galaxies {arguments.galaxies} ignored")
+        print(
+            f"tree holds {galaxies} galaxies; --galaxies {arguments.galaxies} ignored"
+        )
     if galaxies < 2:
         raise SystemExit(f"need at least 2 galaxies to measure, tree holds {galaxies}")
 

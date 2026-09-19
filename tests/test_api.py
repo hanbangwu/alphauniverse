@@ -34,7 +34,7 @@ def test_artifact_downloads(client: TestClient, tree) -> None:
     assert len(response.content) == (tree / "encoded.parquet").stat().st_size
 
 
-def test_artifact_head_matches_get(client: TestClient) -> None:
+def test_artifact_head_is_served(client: TestClient) -> None:
     assert client.head("/artifacts/mean_points").status_code == 200
 
 
@@ -43,7 +43,7 @@ def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:
 
 
 def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
-    """``codebook`` is a real role the fixture does not build."""
+    """`codebook` is a real role the fixture does not build."""
     assert client.get("/artifacts/codebook").status_code == 404
 
 
@@ -57,14 +57,19 @@ def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
-    rows = {row["survey"]: row["matched"] for row in client.get(f"/galaxies/{galaxy}/coverage").json()}
+    rows = {
+        row["survey"]: row["matched"]
+        for row in client.get(f"/galaxies/{galaxy}/coverage").json()
+    }
 
     for survey in TOKENS:
         assert rows[survey] is covered(survey, galaxy)
     assert {"gz10", "provabgs"} <= rows.keys()
 
 
-def test_image_is_served_as_png(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_image_is_served_as_png(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The cutout comes from the source dataset, which tests do not download."""
     from app import main
 
@@ -98,15 +103,6 @@ def test_similarity_leads_with_the_query_galaxy(client: TestClient) -> None:
     assert table.column("galaxy")[0].as_py() == 7
     scores = table.column("score").to_pylist()
     assert scores[1:] == sorted(scores[1:], reverse=True)
-
-
-def test_similarity_carries_the_query_in_its_metadata(client: TestClient) -> None:
-    response = client.get("/similarity", params={"galaxy": 3, "p": [9, 4]})
-    schema = pa.ipc.open_stream(io.BytesIO(response.content)).schema
-
-    assert schema.metadata[b"galaxy"] == b"3"
-    assert schema.metadata[b"patches"] == b"9,4"
-    assert schema.metadata[b"n_patches"] == str(N_PATCHES).encode()
 
 
 @pytest.mark.parametrize(

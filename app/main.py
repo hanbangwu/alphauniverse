@@ -1,11 +1,4 @@
-"""The read-only HTTP API over a built artifact tree.
-
-Every response is a pure function of `DATASET_REVISION` and the artifacts on
-disk, so all of it is safely cacheable by revision. Bulk payloads use binary
-formats the browser can read without parsing JSON: raw `uint32` for token
-maps, Arrow IPC for similarity results, and the parquet artifacts themselves
-for the point sets, which the frontend queries in-browser with DuckDB.
-"""
+"""FastAPI stuff"""
 
 from __future__ import annotations
 
@@ -59,12 +52,7 @@ def labels() -> tuple[int, list[int], int]:
 
 
 class Meta(BaseModel):
-    """What the frontend needs before it can render anything.
-
-    `embeddings`, `mean_points` and `full_points` are artifact roles, not
-    URLs: the client passes them back to `/artifacts/{role}`, so the server
-    stays in charge of which artifact backs which view.
-    """
+    """What the frontend needs before it can render anything."""
 
     author: str
     id: str
