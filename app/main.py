@@ -144,7 +144,9 @@ def get_artifact(role: str) -> Response:
         path = artifact(role)
         path.stat()
     except (KeyError, OSError) as exception:
-        raise HTTPException(404, str(exception)) from exception
+        # The role, not the exception: its message carries the volume path and
+        # the revision, and this response goes to anyone who asks.
+        raise HTTPException(404, f"no artifact for role {role!r}") from exception
 
     return FileResponse(
         path,
