@@ -123,11 +123,14 @@ class CacheControl:
     """States how long a response may be reused, and by whom.
 
     Pure ASGI, so no body passes through it; `/artifacts/{role}` is up to 23 GB.
-    `Vary: Origin` goes on every response because the directive is `public`
+    `Vary: Origin` goes on everything it sees, because the directive is `public`
     while the CORS middleware answers only allowed origins, so a shared cache
     could otherwise hand an origin-less copy to the frontend. What is not
     reusable gets `no-store` rather than nothing, since 404 and 405 are
     heuristically cacheable and both are reachable here.
+
+    Starlette's `ServerErrorMiddleware` sits outside this, so an unhandled 500
+    is untagged. 5xx is not heuristically cacheable, so nothing stores it.
     """
 
     def __init__(self, app: ASGIApp) -> None:
