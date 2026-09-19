@@ -47,4 +47,5 @@ bun run check    # regenerate the client from openapi.json, then svelte-check
 
 1. **python**: `uv run pytest`
 2. **openapi**: regenerates `frontend/openapi.json` and fails if it differs from the committed copy
-3. **deploy**: Modal, on pushes to `main` only, and only if the other two pass
+3. **frontend**: `bun run lint` and `bun run check`
+4. **deploy**: Modal, on pushes to `main` only, and only if the other three pass
