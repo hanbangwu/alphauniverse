@@ -49,7 +49,14 @@ TOKENS: dict[str, int] = {
 STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
 
 CLUSTERS = 64
-NOISE = 0.35
+
+# Per component, so the noise vector's norm is NOISE * sqrt(DIM) against a
+# unit-norm centre. At 0.35 that norm is 9.7 and the clusters wash out: mean
+# same-cluster cosine is 0.011 against a cross-cluster spread of 0.036, and a
+# nearest neighbour is same-cluster 3.3% of the time against 1.6% by chance. At
+# 0.05 it is 1.39, same-cluster cosine is 0.342, and every nearest neighbour is
+# same-cluster, while 0.031 of within-cluster spread keeps rankings off ties.
+NOISE = 0.05
 
 
 def covered(survey: str, galaxy: int) -> bool:
