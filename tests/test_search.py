@@ -6,7 +6,18 @@ import pytest
 
 from app import search as search_module
 from app.config import N_PATCHES
-from app.search import Query, index, patches, search, source
+from app.search import (
+    Query,
+    candidates,
+    centroid,
+    index,
+    patches,
+    rank,
+    score_maps,
+    search,
+    source,
+    vectors,
+)
 from scripts.benchmark import exact_ranking
 from scripts.fixture import build
 
@@ -67,6 +78,17 @@ def test_search_is_deterministic(built: faiss.Index) -> None:
     second = search(query, index=built)
 
     for left, right in zip(first, second, strict=True):
+        np.testing.assert_array_equal(left, right)
+
+
+def test_stages_compose_into_search(built: faiss.Index) -> None:
+    """`search` is its stages in order, which is what the benchmark times."""
+    query = Query(galaxy=4, p=(30, 31))
+    direction = centroid(query, index=built)
+    order = candidates(query, direction, index=built)
+    staged = rank(order, score_maps(vectors(order, index=built), direction))
+
+    for left, right in zip(search(query, index=built), staged, strict=True):
         np.testing.assert_array_equal(left, right)
 
 
