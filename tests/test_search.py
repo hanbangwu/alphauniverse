@@ -1,5 +1,7 @@
 """The search path: index layout, ranking contract and approximation quality."""
 
+from pathlib import Path
+
 import faiss
 import numpy as np
 import pytest
@@ -92,7 +94,7 @@ def test_approximate_ranking_agrees_with_exact(
 
 
 def test_ids_stay_contiguous_across_add_batches(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The id layout holds across several `add()` calls in `generate_index`.
 
@@ -107,11 +109,15 @@ def test_ids_stay_contiguous_across_add_batches(
     galaxies = 9
     for cache in (source, index):
         cache.cache_clear()
-    build(galaxies)
-    for cache in (source, index):
-        cache.cache_clear()
 
     try:
+        # Inside the try: build() repopulates the source cache, so a failure
+        # here would otherwise leave a handle on a tree pytest is about to
+        # delete, and every later test would fail at the wrong place.
+        build(galaxies)
+        for cache in (source, index):
+            cache.cache_clear()
+
         built = index()
         assert built.ntotal == galaxies * N_PATCHES
 
