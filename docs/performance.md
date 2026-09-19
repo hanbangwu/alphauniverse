@@ -36,34 +36,36 @@ Two things dominate, and neither is the search algorithm: cold start, and work r
 
 **Cost is set by `matches` and is independent of how many patches are queried.** Each 4× in `matches` costs 3–4× the time (25 → 105 → 328 ms). The patch count changes one averaging step over a handful of vectors; `matches` changes how many galaxies get fully rescored, at 576 vector reconstructions each.
 
-The default of 32 matches costs ~100 ms of server compute; the UI's maximum of 128 costs ~325 ms. That works out to **4.4–5.3 µs per reconstructed vector**, three times the fixture's 1.57 µs, which is what an index 543× larger does to cache locality on the direct-map lookups.
+The default of 32 matches costs ~100 ms of server compute; the UI's maximum of 128 costs ~325 ms. That works out to **4.4–5.3 µs per reconstructed vector**, against about 1 µs for the fixture. The gap is what an index 543× larger does to cache locality on the direct-map lookups, though the fixture figure moves with the host, so the multiple is approximate.
 
 ## Fixture: query latency
 
 p50, 32-galaxy fixture, 30 runs. Useful because the stages can be timed separately; the absolute numbers are optimistic.
 
-| Query shape            | p50     | p95     |
-| ---------------------- | ------- | ------- |
-| 1 patch, 8 matches     | 9.9 ms  | 15.5 ms |
-| 4 patches, 8 matches   | 9.1 ms  | 15.6 ms |
-| 16 patches, 8 matches  | 10.2 ms | 16.8 ms |
-| 1 patch, 32 matches    | 35.2 ms | 46.5 ms |
-| 16 patches, 32 matches | 35.1 ms | 46.9 ms |
-| any, 128 matches       | 32.1 ms | 39.9 ms |
+| Query shape            | p50      | p95        |
+| ---------------------- | -------- | ---------- |
+| 1 patch, 8 matches     | 8.0 ms   | 10.2 ms    |
+| 4 patches, 8 matches   | 8.0 ms   | 16.1 ms    |
+| 16 patches, 8 matches  | 8.0 ms   | 14.1 ms    |
+| 1 patch, 32 matches    | 23.4 ms  | 33.8 ms    |
+| 16 patches, 32 matches | 24.0 ms  | 28.8 ms    |
+| any, 128 matches       | 24-26 ms | 32-43 ms   |
 
 (128 matches ties with 32 here only because the fixture has just 32 galaxies to return. Production, with 17,369 to draw from, separates them cleanly.)
 
-Splitting one query into stages shows why cost tracks `matches`:
+Timing the stages of `search()` shows why cost tracks `matches`:
 
-| Stage                          | p50         | Share      |
-| ------------------------------ | ----------- | ---------- |
-| Reconstruct query direction    | 0.54 ms     | 1.7 %      |
-| ANN search, `PROBE=2048`       | 0.89 ms     | 2.8 %      |
-| Fold patches to galaxies       | 0.18 ms     | 0.6 %      |
-| **Reconstruct candidate maps** | **28.9 ms** | **90.2 %** |
-| Score matmul                   | 1.55 ms     | 4.8 %      |
+| Stage         | p50         | Share      |
+| ------------- | ----------- | ---------- |
+| `centroid`    | 0.32 ms     | 1.3 %      |
+| `candidates`  | 0.69 ms     | 2.7 %      |
+| **`vectors`** | **19.6 ms** | **77.2 %** |
+| `score_maps`  | 4.72 ms     | 18.6 %     |
+| `rank`        | 0.06 ms     | 0.2 %      |
 
-Step 4 reconstructs 18,432 vectors at **1.57 µs each**, because `reconstruct_batch` walks the IVF direct map one vector at a time: a list lookup and a per-vector decode call rather than a contiguous read.
+`vectors` reconstructs 18,432 vectors at **about 1 µs each**, because `reconstruct_batch` walks the IVF direct map one vector at a time: a list lookup and a per-vector decode call rather than a contiguous read.
+
+**Only `vectors` compares across runs.** It is faiss-parallel, and the `score_maps` GEMV contends with that thread pool differently depending on how the process started. Byte-identical work over six fresh processes on one four-core host measured `score_maps` at 0.67, 4.61, 4.89, 5.74, 6.96 and 7.06 ms, against 15.8 to 26.0 ms for `vectors`. So a change to `score_maps` needs the stage isolated before its share means anything. The benchmark reports `environment` rather than pinning threads, since pinning makes `vectors` unrepresentatively slow.
 
 ## Production: cutouts
 
@@ -134,7 +136,6 @@ Nothing in this section is done. Each entry is triaged on three axes, because th
 | `match-list-virtualise` | Low                                                  | Medium, frontend            | Quality                  |
 | `min-containers`        | Removes cold start outright                          | None                        | Operational, costs money |
 | `production-recall`     | None directly                                        | Small                       | Groundwork               |
-| `search-stages`         | None                                                 | Small                       | Groundwork               |
 | `recall-reported`       | None                                                 | Small                       | Quality                  |
 | `encode-coverage`       | None                                                 | Small                       | Groundwork               |
 
@@ -148,9 +149,9 @@ Impact order is not the order to work in, because of four couplings.
 
 **`patch-array` and `index-compression` are one design, not two changes.** `patch-array` adds a 15.4 GB contiguous fp16 array holding the same vectors the index already holds, against a 64 GB container. `index-compression` shrinks the index at some cost in recall. Done together they separate two jobs the index is currently doing at once: a heavily compressed index generates candidates, and the flat array scores them exactly. Done separately, the first doubles memory and the second loses accuracy for nothing.
 
-**`production-recall` gates both of them, and `search-stages` gates the benchmark that would prove them.** Production recall is unknown, for the reasons in [Reading fixture numbers](#reading-fixture-numbers), so there is no baseline to show a quantiser change did not silently degrade results. And `measure_phases` in `scripts/benchmark.py` re-implements `search()` step by step to time its stages, which means the benchmark and the code can drift apart precisely when they most need to agree.
+**`production-recall` gates both of them.** Production recall is unknown, for the reasons in [Reading fixture numbers](#reading-fixture-numbers), so there is no baseline to show a quantiser change did not silently degrade results.
 
-That gives a working order. `cache-headers`, `cutout-artifact` and a non-blocking `dataset-preload` are independent and provable now. `search-stages` is the refactor that makes everything after it measurable against the code that actually runs. Then the `index-mmap` measurement and `production-recall`, which between them make the `patch-array` + `index-compression` design possible.
+That gives a working order. `cache-headers`, `cutout-artifact` and a non-blocking `dataset-preload` are independent and provable now. Then the `index-mmap` measurement and `production-recall`, which between them make the `patch-array` + `index-compression` design possible.
 
 ### Cold start
 

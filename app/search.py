@@ -1,7 +1,9 @@
 """Patch-level similarity search over the anchor survey's encoded embeddings.
 
 The index holds one vector per anchor image patch, L2-normalised so that inner
-product is cosine similarity.
+product is cosine similarity. An id encodes a position, `galaxy * N_PATCHES +
+patch`, which holds because `generate_index` adds every galaxy's patches in row
+order; nothing may add to or reorder the index without breaking it.
 """
 
 from functools import cache
@@ -44,43 +46,67 @@ class Query(BaseModel):
     matches: Annotated[int, Field(ge=1, le=128)] = 32
 
 
+def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
+    """The unit vector the query's patches average to, as one row."""
+    return normalize(
+        index.reconstruct_batch(
+            query.galaxy * N_PATCHES + np.asarray(query.patches)
+        ).mean(axis=0, keepdims=True)
+    )
+
+
+def candidates(
+    query: Query, direction: np.ndarray, *, index: faiss.Index
+) -> np.ndarray:
+    """The galaxies to score, the query galaxy first and the rest by proximity.
+
+    One ANN search over the `PROBE` nearest patches, folded to the galaxies
+    owning them, so this returns fewer than `query.matches` + 1 ids whenever
+    those patches do not cover that many galaxies.
+    """
+    ids = index.search(direction, PROBE)[1][0]
+    found, first = np.unique(ids[ids >= 0] // N_PATCHES, return_index=True)
+    ranked = found[np.argsort(first)]
+    return np.concatenate(
+        ([query.galaxy], ranked[ranked != query.galaxy][: query.matches])
+    ).astype(np.int32)
+
+
+def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:
+    """Every patch of every galaxy in `order`, as `len(order) * N_PATCHES` rows."""
+    return index.reconstruct_batch(
+        (order[:, None] * N_PATCHES + np.arange(N_PATCHES)).reshape(-1)
+    )
+
+
+def score_maps(rows: np.ndarray, direction: np.ndarray) -> np.ndarray:
+    """One cosine score per patch, per galaxy."""
+    return (rows @ direction.T).reshape(-1, N_PATCHES)
+
+
+def rank(
+    order: np.ndarray, scored: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sort by best patch score, holding the query galaxy at row 0."""
+    scores = scored.max(axis=1)
+    by_score = np.concatenate(([0], 1 + np.argsort(-scores[1:], kind="stable")))
+    return order[by_score], scores[by_score], scored[by_score]
+
+
 def search(
     query: Query, *, index: faiss.Index
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rank galaxies against the mean of the query patches.
 
     Returns `(galaxies, scores, maps)`: the galaxy ids, each one's best patch
-    score, and the full per-patch score map. The query galaxy is always row 0;
-    the rest are sorted by descending score.
+    score, and the full per-patch score map.
 
-    Candidates come from one ANN search for the `PROBE` nearest patches, which
-    caps the result at however many distinct galaxies those patches belong to,
-    so fewer than `query.matches` rows can come back. Scores are then computed
-    exactly against every patch of every candidate, so the ordering within the
-    candidate set is exact and only the candidate set itself is approximate.
+    Only the candidate set is approximate. Scores are computed against every
+    patch of every candidate, so the ordering within that set is exact.
     """
-    direction = normalize(
-        index.reconstruct_batch(
-            query.galaxy * N_PATCHES + np.asarray(query.patches)
-        ).mean(axis=0, keepdims=True)
-    )
-
-    ids = index.search(direction, PROBE)[1][0]
-    found, first = np.unique(ids[ids >= 0] // N_PATCHES, return_index=True)
-    ranked = found[np.argsort(first)]
-    order = np.concatenate(
-        ([query.galaxy], ranked[ranked != query.galaxy][: query.matches])
-    ).astype(np.int32)
-
-    maps = (
-        index.reconstruct_batch(
-            (order[:, None] * N_PATCHES + np.arange(N_PATCHES)).reshape(-1)
-        )
-        @ direction.T
-    ).reshape(len(order), N_PATCHES)
-    scores = maps.max(axis=1)
-    by_score = np.concatenate(([0], 1 + np.argsort(-scores[1:], kind="stable")))
-    return order[by_score], scores[by_score], maps[by_score]
+    direction = centroid(query, index=index)
+    order = candidates(query, direction, index=index)
+    return rank(order, score_maps(vectors(order, index=index), direction))
 
 
 @cache
