@@ -94,14 +94,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     The cutout count is checked here rather than in `app/cutouts.py`, which has
     no reason to know about `mean_points`. A short artifact passes the ordering
-    check and then raises `IndexError` for every galaxy past its end.
+    check and then raises `IndexError` for every galaxy past its end. It is
+    checked before the index, so a misconfigured deployment fails in a second
+    rather than after a 15.5 GB read.
     """
-    index()
-    source("tokens")
     galaxies = labels()[0]
     stored = len(cutouts())
     if stored != galaxies:
         raise ValueError(f"{stored} cutouts for {galaxies} galaxies")
+
+    index()
+    source("tokens")
     yield
 
 
@@ -123,11 +126,14 @@ class CacheControl:
     """States how long a response may be reused, and by whom.
 
     Pure ASGI, so no body passes through it; `/artifacts/{role}` is up to 23 GB.
-    `Vary: Origin` goes on every response because the directive is `public`
+    `Vary: Origin` goes on everything it sees, because the directive is `public`
     while the CORS middleware answers only allowed origins, so a shared cache
     could otherwise hand an origin-less copy to the frontend. What is not
     reusable gets `no-store` rather than nothing, since 404 and 405 are
     heuristically cacheable and both are reachable here.
+
+    Starlette's `ServerErrorMiddleware` sits outside this, so an unhandled 500
+    is untagged. 5xx is not heuristically cacheable, so nothing stores it.
     """
 
     def __init__(self, app: ASGIApp) -> None:
