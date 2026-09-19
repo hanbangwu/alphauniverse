@@ -40,7 +40,7 @@ The default of 32 matches costs ~100 ms of server compute; the UI's maximum of 1
 
 ## Fixture: query latency
 
-p50, 32-galaxy fixture, 30 runs. Useful because the stages can be timed separately; the absolute numbers are optimistic.
+p50, 32-galaxy fixture, 30 runs, seed 0, on a four-core host with faiss using four threads. Useful because the stages can be timed separately; the absolute numbers are optimistic. Every table in this section comes from that one run, and a run's `environment` block records the thread configuration, because the next section is why that matters.
 
 | Query shape            | p50      | p95        |
 | ---------------------- | -------- | ---------- |
