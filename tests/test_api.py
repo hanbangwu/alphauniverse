@@ -7,7 +7,14 @@ import pyarrow as pa
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import ARTIFACTS, GRID, N_MORPHOLOGIES, N_PATCHES
+from app.config import (
+    ARTIFACTS,
+    DATASET_REVISION,
+    GRID,
+    N_MORPHOLOGIES,
+    N_PATCHES,
+    build_dir,
+)
 from scripts.fixture import TOKENS, covered
 
 
@@ -44,7 +51,16 @@ def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:
 
 def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     """`codebook` is a real role the fixture does not build."""
-    assert client.get("/artifacts/codebook").status_code == 404
+    response = client.get("/artifacts/codebook")
+
+    assert response.status_code == 404
+
+    # This body goes to anyone who asks, and the `OSError` it used to carry
+    # names the volume path and the revision.
+    detail = response.json()["detail"]
+    assert "codebook" in detail
+    assert DATASET_REVISION not in detail
+    assert str(build_dir()) not in detail
 
 
 def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
