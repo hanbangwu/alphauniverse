@@ -15,6 +15,8 @@
 
 ```sh
 uv run pytest                                       # test suite
+uv run ruff check app scripts tests modal_app.py    # lint
+uv run ruff format app scripts tests modal_app.py   # format
 uv run python -m scripts.fixture --galaxies 12      # build a fixture tree
 uv run python -m scripts.benchmark --galaxies 32    # measure the search path
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
