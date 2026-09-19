@@ -72,6 +72,7 @@ MIN_TRAIN_PER_CENTROID = 39
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
     "encoded_index": "faiss",
+    "cutouts": "parquet",
     "codebook": "parquet",
     "tokens": "parquet",
     "mean_points": "parquet",
@@ -79,6 +80,12 @@ ARTIFACTS: dict[str, str] = {
     "parametric_umap": "pt",
 }
 
+
+# large_binary, not binary: int32 offsets cap a binary column at 2 GiB, only
+# ~10x the current artifact.
+CUTOUTS = pa.schema(
+    [pa.field("galaxy", pa.int32()), pa.field("png", pa.large_binary())]
+)
 
 STORES = ("encoded", "codebook", "tokens")
 

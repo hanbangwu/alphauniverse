@@ -31,7 +31,7 @@ from .config import (
     GalaxyIndex,
     artifact,
 )
-from .dataset import image
+from .cutouts import cutouts, image
 from .search import Query as SearchQuery
 from .search import index, search, source
 
@@ -90,9 +90,18 @@ BINARY_OCTET: dict[str, Any] = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Load the index and open the token store before serving traffic."""
+    """Load everything a request would otherwise load, before serving traffic.
+
+    The cutout count is checked here rather than in `app/cutouts.py`, which has
+    no reason to know about `mean_points`. A short artifact passes the ordering
+    check and then raises `IndexError` for every galaxy past its end.
+    """
     index()
     source("tokens")
+    galaxies = labels()[0]
+    stored = len(cutouts())
+    if stored != galaxies:
+        raise ValueError(f"{stored} cutouts for {galaxies} galaxies")
     yield
 
 

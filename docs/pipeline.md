@@ -1,8 +1,8 @@
 # Build pipeline
 
-Three Modal jobs, run in order; the README has the commands. Each consumes the previous one's output from a shared volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts are written under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
+Four Modal jobs; the README has the commands. Embeddings, index and projections run in that order, each consuming the previous one's output; cutouts read the source dataset directly and can run at any point. All of them share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts are written under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
-Stages 1 and 3 need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
+`generate_embeddings` and `generate_projections` need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
 
 ## The dataset
 
@@ -10,7 +10,7 @@ Stages 1 and 3 need the `build` dependency group (torch, AION, umap-learn, wandb
 
 The script is not part of the deployed pipeline and needs `lsdb`, which is not a project dependency; run it with `uv run --with datasets --with lsdb`.
 
-## Stage 1: `generate_embeddings`
+## `generate_embeddings`
 
 For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
 
@@ -28,11 +28,22 @@ gz10, provabgs:      bool
 
 Within a cell, image or spectrum tokens come first and the survey's scalars follow.
 
-## Stage 2: `generate_index`
+## `generate_index`
 
 Builds `IVF{nlist},SQfp16` over the anchor survey's **image patches only** (the scalars are sliced off), with inner product as the metric and rows L2-normalised first, so inner product is cosine similarity. `app/search.py` states the id layout and how `nlist` is chosen.
 
-## Stage 3: `generate_projections`
+## `generate_cutouts`
+
+Centre-crops every galaxy's anchor image to `CROP_PX` square and PNG-encodes it, in dataset row order:
+
+```
+galaxy: int32
+png:    large_binary
+```
+
+Row `g` is galaxy `g`; `app/cutouts.py` states why that matters and checks it on load. The serving app will not start without this artifact.
+
+## `generate_projections`
 
 Fits a parametric UMAP on a sample of embeddings and applies it to every one; `app/parametric_umap.py` describes the model and the two passes over `encoded`.
 
