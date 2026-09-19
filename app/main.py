@@ -94,14 +94,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     The cutout count is checked here rather than in `app/cutouts.py`, which has
     no reason to know about `mean_points`. A short artifact passes the ordering
-    check and then raises `IndexError` for every galaxy past its end.
+    check and then raises `IndexError` for every galaxy past its end. It is
+    checked before the index, so a misconfigured deployment fails in a second
+    rather than after a 15.5 GB read.
     """
-    index()
-    source("tokens")
     galaxies = labels()[0]
     stored = len(cutouts())
     if stored != galaxies:
         raise ValueError(f"{stored} cutouts for {galaxies} galaxies")
+
+    index()
+    source("tokens")
     yield
 
 
