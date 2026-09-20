@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import faiss
 import numpy as np
 from fastapi.testclient import TestClient
 from sklearn.preprocessing import normalize
@@ -30,7 +31,18 @@ from app.config import (
     build_dir,
 )
 from app.main import app
-from app.search import Query, index, patches, search, source
+from app.search import (
+    Query,
+    candidates,
+    centroid,
+    index,
+    patches,
+    rank,
+    score_maps,
+    search,
+    source,
+    vectors,
+)
 from scripts.fixture import build
 
 
@@ -126,6 +138,7 @@ def measure_load(runs: int) -> dict[str, Any]:
         "ntotal": built.ntotal,
         "nlist": built.nlist,
         "nprobe": built.nprobe,
+        "probe": PROBE,
         "probe_fraction": round(built.nprobe / built.nlist, 4),
         "index_bytes": artifact("encoded_index").stat().st_size,
     }
@@ -148,60 +161,40 @@ def measure_latency(galaxies: int, runs: int) -> dict[str, Any]:
 
 
 def measure_phases(galaxies: int, runs: int, matches: int = 32) -> dict[str, Any]:
-    """Where a query's time goes, split by stage of `search()`.
-
-    Mirrors `search` step by step rather than calling it, so the stages can be
-    timed individually. Keep this in step with `search` when that changes.
-    """
+    """Where a query's time goes, split by stage of `search()`."""
     built = index()
     batch = queries(galaxies, runs, 4, matches)
-    stages = [
-        "query_direction",
-        "ann_search",
-        "dedup",
-        "reconstruct_maps",
-        "score_matmul",
-    ]
+    stages = ["centroid", "candidates", "vectors", "score_maps", "rank"]
     samples: dict[str, list[float]] = {stage: [] for stage in stages}
-    reconstructed = 0
+    widths: list[int] = []
 
     for query in batch:
         marks = [time.perf_counter()]
-        direction = normalize(
-            built.reconstruct_batch(
-                query.galaxy * N_PATCHES + np.asarray(query.patches)
-            ).mean(axis=0, keepdims=True)
-        )
+        direction = centroid(query, index=built)
         marks.append(time.perf_counter())
-        ids = built.search(direction, PROBE)[1][0]
+        order = candidates(query, direction, index=built)
         marks.append(time.perf_counter())
-        found, first = np.unique(ids[ids >= 0] // N_PATCHES, return_index=True)
-        ranked = found[np.argsort(first)]
-        order = np.concatenate(
-            ([query.galaxy], ranked[ranked != query.galaxy][: query.matches])
-        ).astype(np.int32)
+        rows = vectors(order, index=built)
         marks.append(time.perf_counter())
-        rows = built.reconstruct_batch(
-            (order[:, None] * N_PATCHES + np.arange(N_PATCHES)).reshape(-1)
-        )
+        scored = score_maps(rows, direction)
         marks.append(time.perf_counter())
-        (rows @ direction.T).reshape(len(order), N_PATCHES)
+        rank(order, scored)
         marks.append(time.perf_counter())
 
-        reconstructed = rows.shape[0]
+        widths.append(rows.shape[0])
         for stage, start, end in zip(stages, marks[:-1], marks[1:], strict=True):
             samples[stage].append((end - start) * 1000)
 
     total = sum(float(np.median(values)) for values in samples.values())
+    # The median, not the last query's: `candidates` returns fewer galaxies when
+    # the probe pool collapses, which would scale the per-vector figure wrongly.
+    reconstructed = int(np.median(widths))
     return {
         "matches": matches,
         "vectors_reconstructed": reconstructed,
         "total_p50_ms": round(total, 3),
         "us_per_reconstructed_vector": round(
-            1000
-            * float(np.median(samples["reconstruct_maps"]))
-            / max(reconstructed, 1),
-            3,
+            1000 * float(np.median(samples["vectors"])) / reconstructed, 3
         ),
         "stages": {
             stage: {
@@ -268,6 +261,19 @@ def measure_endpoints(galaxies: int, runs: int) -> dict[str, Any]:
     return results
 
 
+def environment() -> dict[str, Any]:
+    """Thread configuration, which the stage shares depend on.
+
+    `vectors` is faiss-parallel and the `score_maps` GEMV contends with that
+    pool, so two runs only compare when these agree.
+    """
+    return {
+        "cpu_count": os.cpu_count(),
+        "faiss_threads": faiss.omp_get_max_threads(),
+        "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
+    }
+
+
 def commit() -> str:
     try:
         return subprocess.check_output(
@@ -324,6 +330,7 @@ def main() -> None:
 
     report = {
         "commit": commit(),
+        "environment": environment(),
         "fixture": {
             "galaxies": galaxies,
             "seed": arguments.seed,
