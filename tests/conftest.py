@@ -17,11 +17,12 @@ GALAXIES = 12
 
 def _forget() -> None:
     """Drop every cached handle onto the artifact tree."""
-    from app import main, search
+    from app import cutouts, main, search
 
     search.source.cache_clear()
     search.index.cache_clear()
     main.labels.cache_clear()
+    cutouts.cutouts.cache_clear()
 
 
 @pytest.fixture(scope="session")

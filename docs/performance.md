@@ -11,15 +11,14 @@ Anything labelled **unmeasured** is read off the code and needs a real number be
 
 Measured against production, what a first visitor to an idle site waits for:
 
-| Step                                                    | Cost                  |
-| ------------------------------------------------------- | --------------------- |
-| Container start + 15.5 GB index load, blocking `/meta`  | **47.0 s**            |
-| First cutout, which also opens the Hugging Face dataset | **11.3 s**            |
-| Everything warm after that                              | 0.5–0.7 s per request |
+| Step                                                   | Cost                  |
+| ------------------------------------------------------ | --------------------- |
+| Container start + 15.5 GB index load, blocking `/meta` | **47.0 s**            |
+| Everything warm after that                             | 0.5–0.7 s per request |
 
 **A cold visit is ~47 seconds of blank page**, because `+layout.server.ts` awaits `/meta` during SSR and nothing renders until it returns.
 
-Two things dominate, and neither is the search algorithm: cold start, and work repeated per request that could be done once. The approximate nearest-neighbour search is 3% of a query.
+Cold start dominates, and it is not the search algorithm: the approximate nearest-neighbour search is 3% of a query.
 
 ## Production: query latency
 
@@ -67,31 +66,24 @@ Timing the stages of `search()` shows why cost tracks `matches`:
 
 **Only `vectors` compares across runs.** It is faiss-parallel, and the `score_maps` GEMV contends with that thread pool differently depending on how the process started. Byte-identical work over six fresh processes on one four-core host measured `score_maps` at 0.67, 4.61, 4.89, 5.74, 6.96 and 7.06 ms, against 15.8 to 26.0 ms for `vectors`. So a change to `score_maps` needs the stage isolated before its share means anything. The benchmark reports `environment` rather than pinning threads, since pinning makes `vectors` unrepresentatively slow.
 
-## Production: cutouts
+## Cutouts
 
-This is the largest measured latency in the system.
+`cutouts.parquet` holds one PNG per galaxy, read into memory at startup, so serving one is an array lookup: **0.68 ms p50** against the fixture, not yet re-measured against production.
 
-| Pattern                             | Result                        |
-| ----------------------------------- | ----------------------------- |
-| First request after container start | **11.3 s**                    |
-| Subsequent, sequential              | 0.43–0.66 s each              |
-| **32 in parallel**                  | **11.4 s wall, 7.8 s median** |
+Decoding on demand instead costs 0.43–0.66 s per request against production, 11.3 s on the first request per container, and 11.4 s of wall clock for a 32-row match list, because the work is CPU-bound in one process and `@modal.concurrent` only queues it. That is what the artifact buys, and why no fallback to the old path exists: a fallback would keep the source dataset in the serving image and hide a missing artifact behind an 11-second page.
 
-Opening the patch-similarity dialog renders up to 32 match rows, each with an `<img>`. Those 32 requests take **11 seconds** before the last thumbnail appears.
-
-The 32-way burst takes the same wall clock as running the 32 sequentially would, so `@modal.concurrent(max_inputs=16)` has no effect here: the work is CPU-bound PIL decode, crop and re-encode inside one Python process, and the concurrency setting just queues it. Throughput is ~2.8 requests/second either way.
-
-The 11.3 s first request is separate and reproducible across container starts. `dataset()` is lazily cached, so the first cutout after a container start also opens the Hugging Face dataset. `lifespan` preloads the index and the token store but not this, so the first user waits for it instead of startup.
+At a measured ~10.8 KB per production cutout, 17,369 of them are about **190 MB**, and startup grows by that read: under a second at the Modal volume's 330 MB/s, against the index's 47. The build cost is **unmeasured**. PNG encoding is 3.4 ms per cutout, a minute for the corpus, so the job is dominated by decoding the source images, which has not been timed on its own.
 
 ## Fixture: metadata endpoints
 
 In-process, no network.
 
-| Endpoint                 | p50    | Note                                   |
-| ------------------------ | ------ | -------------------------------------- |
-| `/meta`                  | 1.1 ms | cached in-process after the first call |
-| `/galaxies/{g}/tokens`   | 2.4 ms | filtered parquet read                  |
-| `/galaxies/{g}/coverage` | 2.8 ms | filtered parquet read                  |
+| Endpoint                  | p50     | Note                                   |
+| ------------------------- | ------- | -------------------------------------- |
+| `/meta`                   | 0.68 ms | cached in-process after the first call |
+| `/galaxies/{g}/image.png` | 0.68 ms | array lookup into `cutouts.parquet`    |
+| `/galaxies/{g}/tokens`    | 1.67 ms | filtered parquet read                  |
+| `/galaxies/{g}/coverage`  | 2.20 ms | filtered parquet read                  |
 
 Against production these sit at the ~240 ms network floor, so their compute is negligible either way.
 
@@ -124,9 +116,7 @@ Nothing in this section is done. Each entry is triaged on three axes, because th
 | Entry                   | Impact                                               | Blast radius                | Kind                     |
 | ----------------------- | ---------------------------------------------------- | --------------------------- | ------------------------ |
 | `index-mmap`            | 47 s cold start, if faiss supports it here           | Small diff, large behaviour | Implementation           |
-| `cutout-artifact`       | 11 s off a match list                                | Medium-large                | Implementation           |
 | `ssr-unblock`           | Turns 47 s of blank page into 47 s of spinner        | Medium, frontend            | Quality                  |
-| `dataset-preload`       | 11.3 s off the first user per container              | Trivial                     | Implementation           |
 | `patch-array`           | 7–10× on `/similarity`                               | Large                       | Implementation           |
 | `cache-headers`         | Whole surface on repeat visits; magnitude unmeasured | Small                       | Implementation           |
 | `index-compression`     | Cold start, and the RAM ceiling                      | Large, methodological       | Implementation           |
@@ -141,9 +131,7 @@ Nothing in this section is done. Each entry is triaged on three axes, because th
 
 ### Sequencing
 
-Impact order is not the order to work in, because of four couplings.
-
-**`dataset-preload` must not block startup.** A blocking preload in `lifespan` adds the 11.3 s dataset open to the 47 s of blank page. Either warm it in the background after `lifespan` yields, or block only once `index-mmap` has made the index read cheap.
+Impact order is not the order to work in, because of three couplings.
 
 **`index-mmap` needs measuring before it counts as small.** `write_index` stores an IVF index's inverted lists in the in-memory array form, and faiss's `IO_FLAG_MMAP` may require the on-disk form instead. Even if it loads, `make_direct_map()` plus page faults during `reconstruct_batch` could trade 46s of startup for unpredictable per-query latency. The change is one flag; the question it raises is whether every query gets slower, and only a measurement answers it.
 
@@ -151,7 +139,7 @@ Impact order is not the order to work in, because of four couplings.
 
 **`production-recall` gates both of them.** Production recall is unknown, for the reasons in [Reading fixture numbers](#reading-fixture-numbers), so there is no baseline to show a quantiser change did not silently degrade results.
 
-That gives a working order. `cache-headers`, `cutout-artifact` and a non-blocking `dataset-preload` are independent and provable now. Then the `index-mmap` measurement and `production-recall`, which between them make the `patch-array` + `index-compression` design possible.
+That gives a working order. `cache-headers` is independent and provable now. Then the `index-mmap` measurement and `production-recall`, which between them make the `patch-array` + `index-compression` design possible.
 
 ### Cold start
 
@@ -162,18 +150,11 @@ With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more 
 Options, cheapest first:
 
 - **`index-mmap`**: `faiss.IO_FLAG_MMAP` so pages fault in lazily. A search at `nprobe=64` touches ~0.4% of the lists, so time-to-first-response should drop by a large factor even though steady-state stays the same.
-- **`dataset-preload`**: warm `dataset()` in `lifespan`, which already warms the index and token store. Moves the 11.3 s dataset open off the first user.
 - **`ssr-unblock`**: fetch `/meta` client-side so the shell paints immediately and the wait becomes a spinner instead of nothing. The cost is that every consumer of `data.meta` must then handle its absence.
 - **`index-compression`**: `SQ8` halves the index, PQ far more, both at some recall cost that `scripts/benchmark.py` can quantify first.
 - **`min-containers`**: `min_containers=1` removes cold start entirely, at the price of one container running continuously.
 
-The first three are cheap and compose. Do them before considering the last two.
-
-### Cutouts re-encoded per request
-
-`cutout-artifact` precomputes the cutouts that [Production: cutouts](#production-cutouts) measures. Every cutout is a pure function of the revision: 17,369 × ~10.8 KB is about **190 MB** as a single artifact, roughly 100 minutes of one-off CPU. Serving then becomes a range read with no decode at all, and it becomes CDN-cacheable, which the current endpoint can never be.
-
-This is the largest measured saving available and it needs no change to the search.
+The first two are cheap and compose. Do them before considering the last two.
 
 ### No cache headers anywhere
 
@@ -235,7 +216,7 @@ Current design targets COSMOS scale. Where it stops:
 | Index in RAM                 | 15.5 GB              | ~4×, the container's 64 GB limit. 100× needs PQ or sharding.            |
 | Cold start                   | 47 s                 | ~2× before it exceeds common proxy and browser timeouts                 |
 | `full_points` in the browser | 180 MB               | ~10×; DuckDB-WASM has a few GB to work with.                            |
-| Cutout precompute            | 190 MB, ~100 min CPU | linear; fine to ~100×, then needs tiling                                |
+| Cutout precompute            | 190 MB               | linear; fine to ~100×, then needs tiling                                |
 | Exact-search reference       | whole corpus in RAM  | already fixture-only; `anchor_patches()` cannot run at production scale |
 | Serving capacity             | one container        | any concurrency at all; `max_containers=1` is a hard cap                |
 
