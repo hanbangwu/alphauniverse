@@ -42,14 +42,14 @@ The default of 32 matches costs ~100 ms of server compute; the UI's maximum of 1
 
 p50, 32-galaxy fixture, 30 runs, seed 0, on a four-core host with faiss using four threads. Useful because the stages can be timed separately; the absolute numbers are optimistic. Every table in this section comes from that one run, and a run's `environment` block records the thread configuration, because the next section is why that matters.
 
-| Query shape            | p50      | p95        |
-| ---------------------- | -------- | ---------- |
-| 1 patch, 8 matches     | 8.0 ms   | 10.2 ms    |
-| 4 patches, 8 matches   | 8.0 ms   | 16.1 ms    |
-| 16 patches, 8 matches  | 8.0 ms   | 14.1 ms    |
-| 1 patch, 32 matches    | 23.4 ms  | 33.8 ms    |
-| 16 patches, 32 matches | 24.0 ms  | 28.8 ms    |
-| any, 128 matches       | 24-26 ms | 32-43 ms   |
+| Query shape            | p50      | p95      |
+| ---------------------- | -------- | -------- |
+| 1 patch, 8 matches     | 8.0 ms   | 10.2 ms  |
+| 4 patches, 8 matches   | 8.0 ms   | 16.1 ms  |
+| 16 patches, 8 matches  | 8.0 ms   | 14.1 ms  |
+| 1 patch, 32 matches    | 23.4 ms  | 33.8 ms  |
+| 16 patches, 32 matches | 24.0 ms  | 28.8 ms  |
+| any, 128 matches       | 24-26 ms | 32-43 ms |
 
 (128 matches ties with 32 here only because the fixture has just 32 galaxies to return. Production, with 17,369 to draw from, separates them cleanly.)
 
