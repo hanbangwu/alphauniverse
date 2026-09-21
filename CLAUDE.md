@@ -33,6 +33,7 @@ bun run lint                                        # prettier + eslint
 - One functional change per branch per pull request. The unit is the logical function, not the line count: a documentation pass can run to thousands of lines and still be one change, while two unrelated fixes in one diff are two and make the pull request hard to review.
 - Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
 - Commit messages: short, terse, semicolon-delimited; they need not list every change.
+- All commit authors are human beings. Even if Claude did substantial and/or autonomous work, the commit author remains the person who owns that agent. However, do add a `Co-Authored-By` trailer.
 - Change only what the task requires; do not improvise. Report unrelated changes you notice rather than making them.
 - Never edit `frontend/src/lib/components/ui`.
 - No `TODO`, `FIXME`, `HACK` or `XXX` comments. Future work lives in one of three places: performance work in the ranked list in `docs/performance.md`; known-wrong behaviour as a test marked `xfail(strict=True)` (see `tests/test_api.py`); everything else as a GitHub issue.
