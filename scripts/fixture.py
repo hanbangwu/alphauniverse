@@ -51,7 +51,7 @@ TOKENS: dict[str, int] = {
 STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
 
 CLUSTERS = 64
-NOISE = 0.35
+NOISE = 0.05
 SOURCE_PX = CROP_PX + 32
 PIXEL_NOISE = 4
 
