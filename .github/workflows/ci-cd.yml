@@ -14,6 +14,11 @@ jobs:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v6
 
+      - name: Lint
+        run: |
+          uv run --python 3.12 ruff check app scripts tests modal_app.py
+          uv run --python 3.12 ruff format --check app scripts tests modal_app.py
+
       - name: Test
         run: uv run --python 3.12 pytest
 
@@ -25,7 +30,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Check frontend/openapi.json is current
-        run: uv run --python 3.12 python -m scripts.openapi && git diff --exit-code --stat frontend/openapi.json || { echo "::error::frontend/openapi.json is stale; run 'uv run python -m scripts.openapi' and commit"; exit 1; }
+        run: |
+          uv run --python 3.12 python -m scripts.openapi
+          git diff --exit-code --stat frontend/openapi.json || { echo "::error::frontend/openapi.json is stale; run 'uv run python -m scripts.openapi' and commit"; exit 1; }
 
   frontend:
     name: Frontend

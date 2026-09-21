@@ -153,7 +153,7 @@ def measure_latency(galaxies: int, runs: int) -> dict[str, Any]:
             batch = queries(galaxies, runs, patch_count, matches)
             counter = itertools.count()
 
-            def one() -> None:
+            def one(batch=batch, counter=counter) -> None:
                 search(batch[next(counter) % len(batch)], index=built)
 
             results[f"patches={patch_count},matches={matches}"] = time_it(runs, one)
@@ -254,7 +254,7 @@ def measure_endpoints(galaxies: int, runs: int) -> dict[str, Any]:
             ("coverage", "/galaxies/{}/coverage"),
         ):
 
-            def one() -> None:
+            def one(path=path) -> None:
                 client.get(path.format(int(rng.integers(galaxies))))
 
             results[label] = time_it(runs, one)
