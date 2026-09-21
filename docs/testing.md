@@ -9,7 +9,8 @@ uv run pytest
 uv run pytest -k search  # one area
 ```
 
-`tests/conftest.py` builds the tree once per session.
+`tests/conftest.py` builds the tree once per session. CI runs the same two ruff
+commands, the second as `--check`.
 
 ## Benchmarks
 
@@ -45,6 +46,7 @@ There is no frontend test suite.
 
 `.github/workflows/ci-cd.yml` runs on pull requests and on pushes to `main`:
 
-1. **python**: `uv run pytest`
+1. **python**: `ruff check`, `ruff format --check`, then `uv run pytest`
 2. **openapi**: regenerates `frontend/openapi.json` and fails if it differs from the committed copy
-3. **deploy**: Modal, on pushes to `main` only, and only if the other two pass
+3. **frontend**: `bun run lint` and `bun run check`
+4. **deploy**: Modal, on pushes to `main` only, and only if the other three pass

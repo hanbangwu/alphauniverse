@@ -1,5 +1,7 @@
 """The search path: index layout, ranking contract and approximation quality."""
 
+from pathlib import Path
+
 import faiss
 import numpy as np
 import pytest
@@ -41,7 +43,6 @@ def test_faiss_ids_encode_galaxy_and_patch(
     cell = source("encoded").to_table(columns=["ls"]).column("ls")
     expected = patches(cell.combine_chunks())[galaxy * N_PATCHES + patch]
 
-    # SQfp16 quantisation, so equality is to float16 precision, not exact.
     np.testing.assert_allclose(stored, expected, atol=1e-3)
 
 
@@ -106,15 +107,13 @@ def test_approximate_ranking_agrees_with_exact(
     found, _, _ = search(query, index=built)
     expected, _ = exact_ranking(query)
 
-    # Without this the set comparison below passes vacuously when the candidate
-    # step collapses and returns nothing but the query galaxy.
     assert len(found) == galaxies
 
     assert set(found[1:].tolist()) == set(expected[1 : len(found)].tolist())
 
 
 def test_ids_stay_contiguous_across_add_batches(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The id layout holds across several `add()` calls in `generate_index`.
 
@@ -129,11 +128,12 @@ def test_ids_stay_contiguous_across_add_batches(
     galaxies = 9
     for cache in (source, index):
         cache.cache_clear()
-    build(galaxies)
-    for cache in (source, index):
-        cache.cache_clear()
 
     try:
+        build(galaxies)
+        for cache in (source, index):
+            cache.cache_clear()
+
         built = index()
         assert built.ntotal == galaxies * N_PATCHES
 

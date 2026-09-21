@@ -6,26 +6,29 @@ The build pipeline runs on Modal, generating artifacts. The app reads those arti
 
 ```
  hanbangwu/alphauniverse-cosmos (Hugging Face)
-              │
-              │  generate_embeddings   GPU, ~3h
-              ▼
-   encoded · codebook · tokens  ──────────────┐
-              │                               │
-              │  generate_index   CPU          │  generate_projections   GPU
-              ▼                               ▼
-      encoded_index.faiss            parametric_umap · mean_points · full_points
-              │                               │
-              └───────────┬───────────────────┘
-                          ▼
-                  app/main.py  (FastAPI, one Modal container)
-                          │
-              ┌───────────┴────────────┐
-              │ JSON + PNG + Arrow     │ parquet artifacts
-              ▼                        ▼
-     TanStack Query cache      DuckDB-WASM in the browser
-              └───────────┬────────────┘
-                          ▼
-                 SvelteKit single page
+              │                                  │
+              │  generate_embeddings  GPU, ~3h   │  generate_cutouts  CPU
+              ▼                                  ▼
+   encoded · codebook · tokens ─────┐         cutouts
+              │                     │            │
+              │  generate_index     │  generate_projections  GPU
+              │    CPU              │            │
+              ▼                     ▼            │
+      encoded_index.faiss   parametric_umap ·    │
+                            mean_points ·        │
+                            full_points          │
+              │                     │            │
+              └──────────┬──────────┴────────────┘
+                         ▼
+                 app/main.py  (FastAPI, one Modal container)
+                         │
+             ┌───────────┴────────────┐
+             │ JSON + PNG + Arrow     │ parquet artifacts
+             ▼                        ▼
+    TanStack Query cache      DuckDB-WASM in the browser
+             └───────────┬────────────┘
+                         ▼
+                SvelteKit single page
 ```
 
 ## The artifacts
@@ -36,6 +39,7 @@ The build pipeline runs on Modal, generating artifacts. The app reads those arti
 | `codebook`        | same, raw codebook vectors                | nothing at serve time               |
 | `tokens`          | same, token ids                           | `/galaxies/{g}/tokens`, `/coverage` |
 | `encoded_index`   | faiss IVF over anchor image patches       | `/similarity`                       |
+| `cutouts`         | one PNG per galaxy, in galaxy order       | `/galaxies/{g}/image.png`           |
 | `mean_points`     | one 2-d point per galaxy                  | `/meta`, the projection view        |
 | `full_points`     | one 2-d point per embedding               | the projection view                 |
 | `parametric_umap` | the trained projector's weights           | nothing at serve time               |
@@ -50,12 +54,10 @@ Six endpoints, all `GET`.
 | ------------------------- | ------------ | ------------------------------------- |
 | `/meta`                   | JSON         | cached after the first call           |
 | `/artifacts/{role}`       | the file     | disk read, streamed; up to tens of GB |
-| `/galaxies/{g}/image.png` | PNG          | decode + crop + re-encode, every time |
+| `/galaxies/{g}/image.png` | PNG          | array lookup into `cutouts`           |
 | `/galaxies/{g}/tokens`    | raw `uint32` | one filtered parquet read             |
 | `/galaxies/{g}/coverage`  | JSON         | one filtered parquet read             |
 | `/similarity`             | Arrow IPC    | one ANN search + candidate rescoring  |
-
-The one thing recomputed per request that need not be is the cutout, which `docs/performance.md` measures.
 
 ## Similarity search
 

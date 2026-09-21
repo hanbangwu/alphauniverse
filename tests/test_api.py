@@ -129,18 +129,12 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
     assert {"gz10", "provabgs"} <= rows.keys()
 
 
-def test_image_is_served_as_png(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The cutout comes from the source dataset, which tests do not download."""
-    from app import main
-
-    monkeypatch.setattr(main, "image", lambda galaxy: b"\x89PNG-stub")
+def test_image_is_served_as_png(client: TestClient) -> None:
     response = client.get("/galaxies/0/image.png")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
-    assert response.content == b"\x89PNG-stub"
+    assert response.content.startswith(b"\x89PNG")
 
 
 def _similarity(client: TestClient, **query) -> pa.RecordBatch:

@@ -72,6 +72,7 @@ MIN_TRAIN_PER_CENTROID = 39
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
     "encoded_index": "faiss",
+    "cutouts": "parquet",
     "codebook": "parquet",
     "tokens": "parquet",
     "mean_points": "parquet",
@@ -79,6 +80,10 @@ ARTIFACTS: dict[str, str] = {
     "parametric_umap": "pt",
 }
 
+
+CUTOUTS = pa.schema(
+    [pa.field("galaxy", pa.int32()), pa.field("png", pa.large_binary())]
+)
 
 STORES = ("encoded", "codebook", "tokens")
 

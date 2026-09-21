@@ -21,7 +21,6 @@ environment = {
     "WANDB_MODE": WANDB_MODE,
 }
 
-# --no-dev: uv's default group holds the test runner, which no image needs.
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")
@@ -46,7 +45,7 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
-    """Stage 1: encode every galaxy into the three parquet stores."""
+    """Encode every galaxy into the three parquet stores."""
     from app.encode import generate_embeddings
 
     cache_volume.reload()
@@ -62,11 +61,27 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_index() -> None:
-    """Stage 2: build the patch search index from `encoded`."""
+    """Build the patch search index from `encoded`."""
     from app.search import generate_index
 
     cache_volume.reload()
     generate_index()
+    cache_volume.commit()
+
+
+@app.function(
+    image=serving_image,
+    cpu=1,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_cutouts() -> None:
+    """Crop and PNG-encode every galaxy's image, so serving never decodes."""
+    from app.cutouts import generate_cutouts
+
+    cache_volume.reload()
+    generate_cutouts()
     cache_volume.commit()
 
 
@@ -84,7 +99,7 @@ def generate_index() -> None:
     ),
 )
 def generate_projections() -> None:
-    """Stage 3: fit the projector and write both point sets."""
+    """Fit the projector and write both point sets."""
     from app.parametric_umap import generate_projections
 
     cache_volume.reload()
