@@ -21,7 +21,6 @@ environment = {
     "WANDB_MODE": WANDB_MODE,
 }
 
-# --no-dev: uv's default group holds the test runner, which no image needs.
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")
@@ -71,10 +70,7 @@ def generate_index() -> None:
 
 
 @app.function(
-    # The only build job that needs no `build` group: PIL, datasets and pyarrow
-    # are all default dependencies. Moving any of them would break this.
     image=serving_image,
-    # One PIL loop over every galaxy, so a second CPU would sit idle.
     cpu=1,
     memory=(8 * 1024, 32 * 1024),
     timeout=3 * 60 * 60,

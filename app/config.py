@@ -81,8 +81,6 @@ ARTIFACTS: dict[str, str] = {
 }
 
 
-# large_binary, not binary: int32 offsets cap a binary column at 2 GiB, only
-# ~10x the current artifact.
 CUTOUTS = pa.schema(
     [pa.field("galaxy", pa.int32()), pa.field("png", pa.large_binary())]
 )

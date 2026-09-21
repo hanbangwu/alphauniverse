@@ -1,13 +1,4 @@
-"""Precomputed anchor-survey cutouts.
-
-Every cutout is a pure function of `DATASET_REVISION`, so they are built once by
-`generate_cutouts` and served as stored bytes; `docs/performance.md` measures
-what that saves.
-
-Rows are in galaxy order, so row `g` holds galaxy `g`. `cutouts()` checks that
-on load, because a violation would serve the wrong galaxy's image rather than
-fail.
-"""
+"""Precomputed anchor-survey cutouts."""
 
 from functools import cache
 from io import BytesIO
@@ -29,13 +20,7 @@ from .config import (
 
 
 def encode(cutout: Cutout) -> bytes:
-    """Centre-crop to `CROP_PX` square and encode as PNG.
-
-    An explicit box rather than a border, so a source that is not square, or is
-    an odd number of pixels wider than `CROP_PX`, still gives `CROP_PX` square.
-    The result goes into an immutable artifact, where a wrong size would survive
-    until the next rebuild.
-    """
+    """Centre-crop to `CROP_PX` square and encode as PNG."""
     left = (cutout.width - CROP_PX) // 2
     top = (cutout.height - CROP_PX) // 2
     crop = cutout.crop((left, top, left + CROP_PX, top + CROP_PX)).convert("RGB")
@@ -61,11 +46,7 @@ def write_cutouts(pngs: list[bytes]) -> None:
 
 
 def generate_cutouts() -> None:
-    """Build stage: crop and encode every galaxy, in row order.
-
-    Reads the same source rows `generate_embeddings` reads, so row order here is
-    the galaxy order every other artifact uses.
-    """
+    """Build stage: crop and encode every galaxy, in row order."""
     from datasets import Image
 
     from .dataset import dataset

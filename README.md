@@ -37,7 +37,7 @@ bun run dev
 
 ### Backend
 
-The API serves artifacts built by four Modal jobs. Embeddings, index and projections run in that order; cutouts read the source dataset directly and can run at any point, but the app will not start without them.
+The API serves artifacts built by four Modal jobs. Embeddings, index and projections run in that order; cutouts read the source dataset directly and can run at any point.
 
 ```sh
 uv run modal run modal_app.py::generate_embeddings   # encode dataset

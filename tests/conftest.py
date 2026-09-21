@@ -1,9 +1,4 @@
-"""Fixtures backed by a synthetic artifact tree.
-
-One tree is built per session by `scripts.fixture` and the app is pointed at
-it through `ALPHAUNIVERSE_CACHE`. The module-level `@cache` handles hold
-artifacts open, so they are cleared whenever the tree changes underneath them.
-"""
+"""Fixtures backed by a synthetic artifact tree."""
 
 import os
 from collections.abc import Iterator

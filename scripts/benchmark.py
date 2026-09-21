@@ -186,8 +186,6 @@ def measure_phases(galaxies: int, runs: int, matches: int = 32) -> dict[str, Any
             samples[stage].append((end - start) * 1000)
 
     total = sum(float(np.median(values)) for values in samples.values())
-    # The median, not the last query's: `candidates` returns fewer galaxies when
-    # the probe pool collapses, which would scale the per-vector figure wrongly.
     reconstructed = int(np.median(widths))
     return {
         "matches": matches,
@@ -236,8 +234,6 @@ def measure_recall(galaxies: int, count: int, matches: int) -> dict[str, Any]:
                 "p50_ms": round(float(np.percentile(elapsed, 50)), 3),
             }
     finally:
-        # The index is a process-wide cached singleton, shared with app.main:
-        # leaving it at a swept value would silently mis-measure everything after.
         built.nprobe = original
 
     return {"requested_matches": matches, "queries": count, "by_nprobe": sweep}
@@ -318,9 +314,6 @@ def main() -> None:
     source.cache_clear()
     index.cache_clear()
 
-    # Read the size off the tree rather than trusting the flag: with --tree the
-    # flag describes a build that did not happen, and sampling galaxy ids past
-    # the end of the index would crash the search.
     galaxies = source("encoded").count_rows()
     if galaxies != arguments.galaxies:
         print(

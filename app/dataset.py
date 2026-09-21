@@ -1,8 +1,4 @@
-"""Access to the source Hugging Face dataset.
-
-Build-time only. Nothing served imports this: cutouts are precomputed by
-`app/cutouts.py` and embeddings by `app/encode.py`.
-"""
+"""Access to the source Hugging Face dataset."""
 
 from functools import cache
 
