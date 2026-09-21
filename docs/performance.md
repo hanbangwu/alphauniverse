@@ -220,8 +220,8 @@ Measured recall against brute force over every patch, 16 queries, 31 requested:
 
 | `nprobe` | Recall | Galaxies returned |
 | -------- | ------ | ----------------- |
-| 1        | 0.68   | 21.1 / 31         |
-| 4        | 1.00   | 30.9 / 31         |
+| 1        | 0.70   | 21.6 / 31         |
+| 4        | 0.99   | 30.6 / 31         |
 | 16 – 472 | 1.00   | 31.0 / 31         |
 
 What this does establish: the metric is defined and wired up, and the "shorter than `matches`" behaviour is real and silent: at `nprobe=1` a third of the requested galaxies never come back, with nothing in the response saying so. **Production recall is unknown** and needs measuring against the real index before any change to `NPROBE`, `PROBE`, `NLIST` or the quantiser.
