@@ -37,7 +37,6 @@ from app.config import (
 )
 from app.search import generate_index, source
 
-# Per-survey token counts, matching what app/encode.py writes.
 TOKENS: dict[str, int] = {
     ANCHOR: N_PATCHES + 12,
     "hsc": N_PATCHES + 13,
@@ -45,17 +44,9 @@ TOKENS: dict[str, int] = {
     "sdss": 273,
 }
 
-# Strided so coverage is predictable in tests.
 STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
 
 CLUSTERS = 64
-
-# Per component, so the noise vector's norm is NOISE * sqrt(DIM) against a
-# unit-norm centre. At 0.35 that norm is 9.7 and the clusters wash out: mean
-# same-cluster cosine is 0.011 against a cross-cluster spread of 0.036, and a
-# nearest neighbour is same-cluster 3.3% of the time against 1.6% by chance. At
-# 0.05 it is 1.39, same-cluster cosine is 0.342, and every nearest neighbour is
-# same-cluster, while 0.031 of within-cluster spread keeps rankings off ties.
 NOISE = 0.05
 
 
@@ -84,8 +75,6 @@ def _cells(
             assigned = rng.integers(len(centres), size=count)
             rows = centres[assigned] + NOISE * rng.standard_normal((count, DIM))
             embeddings[survey].append(rows.astype(np.float16))
-            # Token ids track the cluster, mirroring the real store where a
-            # token id and its codebook vector are two views of one thing.
             tokens[survey].append(assigned.astype(np.uint32))
 
     return embeddings, tokens
@@ -141,10 +130,6 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
     embeddings, tokens = _cells(rng, centres, galaxies)
 
-    # A morphology label and a GZ10 crossmatch are one fact in production: the
-    # category is null exactly where the galaxy has no gz10 match. A tenth are
-    # unlabelled, so the null path is covered. PROVABGS is an unrelated
-    # catalogue and varies independently.
     rows = np.arange(galaxies)
     labelled = rows % 10 != 0
     flags = {"gz10": labelled, "provabgs": rows % 3 != 0}
