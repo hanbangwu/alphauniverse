@@ -280,6 +280,15 @@ def commit() -> str:
         return "unknown"
 
 
+def write_report(report: dict[str, Any], out: Path | None) -> None:
+    """Stage then replace, so a write that dies partway keeps the last report."""
+    if out is None:
+        return
+    staging = out.with_name(f"{out.name}.partial")
+    staging.write_text(json.dumps(report, indent=2) + "\n")
+    staging.replace(out)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -322,7 +331,7 @@ def main() -> None:
     if galaxies < 2:
         raise SystemExit(f"need at least 2 galaxies to measure, tree holds {galaxies}")
 
-    report = {
+    report: dict[str, Any] = {
         "commit": commit(),
         "environment": environment(),
         "fixture": {
@@ -331,20 +340,28 @@ def main() -> None:
             "patches_per_galaxy": N_PATCHES,
             "dim": DIM,
         },
-        "sizes": measure_sizes(galaxies),
-        "index_load": measure_load(min(arguments.runs, 5)),
-        "search": measure_latency(galaxies, arguments.runs),
-        "phases": measure_phases(galaxies, min(arguments.runs, 20)),
-        "recall": measure_recall(
-            galaxies, arguments.recall_queries, min(32, galaxies - 1)
-        ),
-        "endpoints": measure_endpoints(galaxies, arguments.runs),
     }
 
-    print(json.dumps(report, indent=2))
+    def record(stage: str, measured: Any) -> None:
+        report[stage] = measured
+        write_report(report, arguments.out)
+
+    write_report(report, arguments.out)
     if arguments.out:
-        arguments.out.write_text(json.dumps(report, indent=2) + "\n")
-        print(f"\nwritten to {arguments.out}")
+        print(f"writing to {arguments.out}")
+
+    try:
+        record("sizes", measure_sizes(galaxies))
+        record("index_load", measure_load(min(arguments.runs, 5)))
+        record("search", measure_latency(galaxies, arguments.runs))
+        record("phases", measure_phases(galaxies, min(arguments.runs, 20)))
+        record(
+            "recall",
+            measure_recall(galaxies, arguments.recall_queries, min(32, galaxies - 1)),
+        )
+        record("endpoints", measure_endpoints(galaxies, arguments.runs))
+    finally:
+        print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ uv run python -m scripts.benchmark --galaxies 32 --out bench.json
 uv run python -m scripts.benchmark --tree .cache/fixture   # reuse a tree
 ```
 
-Output is JSON tagged with the commit and the fixture shape. **Runs only compare when `galaxies` and `seed` match**: the index geometry depends on the dataset size, so a bigger fixture is a different experiment, not a longer one. Load timings run against a warm page cache on a local disk, so they are a lower bound on a Modal container reading a cold network volume.
+Output is JSON tagged with the commit and the fixture shape. `--out` is rewritten as the run proceeds, so a run that dies partway leaves the stages it reached; a report without `endpoints` did not finish and is not one to compare against. **Runs only compare when `galaxies` and `seed` match**: the index geometry depends on the dataset size, so a bigger fixture is a different experiment, not a longer one. Load timings run against a warm page cache on a local disk, so they are a lower bound on a Modal container reading a cold network volume.
 
 Before and after a change worth measuring:
 
