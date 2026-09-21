@@ -1,9 +1,4 @@
-"""Fixtures backed by a synthetic artifact tree.
-
-One tree is built per session by `scripts.fixture` and the app is pointed at
-it through `ALPHAUNIVERSE_CACHE`. The module-level `@cache` handles hold
-artifacts open, so they are cleared whenever the tree changes underneath them.
-"""
+"""Fixtures backed by a synthetic artifact tree."""
 
 import os
 from collections.abc import Iterator
@@ -17,11 +12,12 @@ GALAXIES = 12
 
 def _forget() -> None:
     """Drop every cached handle onto the artifact tree."""
-    from app import main, search
+    from app import cutouts, main, search
 
     search.source.cache_clear()
     search.index.cache_clear()
     main.labels.cache_clear()
+    cutouts.cutouts.cache_clear()
 
 
 @pytest.fixture(scope="session")

@@ -17,15 +17,18 @@ nothing served depends on them, and their absence exercises the 404 path.
 
 import argparse
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
+from PIL.Image import fromarray
 from sklearn.preprocessing import normalize
 
 from app.config import (
     ANCHOR,
+    CROP_PX,
     DIM,
     N_MORPHOLOGIES,
     N_PATCHES,
@@ -35,6 +38,7 @@ from app.config import (
     points,
     store_schema,
 )
+from app.cutouts import encode, write_cutouts
 from app.search import generate_index, source
 
 TOKENS: dict[str, int] = {
@@ -47,7 +51,20 @@ TOKENS: dict[str, int] = {
 STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
 
 CLUSTERS = 64
-NOISE = 0.05
+NOISE = 0.35
+SOURCE_PX = CROP_PX + 32
+PIXEL_NOISE = 4
+
+
+def _frames(seed: int, galaxies: int) -> Iterator[np.ndarray]:
+    """One distinguishable source image per galaxy, compressible like a photo."""
+    rng = np.random.default_rng(seed + 1)
+    ramp = np.linspace(0, 255, SOURCE_PX, dtype=np.float32)
+    base = (ramp[:, None, None] + ramp[None, :, None]) / 2
+    for _ in range(galaxies):
+        offset = rng.integers(0, 256)
+        noise = rng.integers(0, PIXEL_NOISE, (SOURCE_PX, SOURCE_PX, 3))
+        yield ((base + offset + noise) % 256).astype(np.uint8)
 
 
 def covered(survey: str, galaxy: int) -> bool:
@@ -136,6 +153,8 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
     _store("encoded", embeddings, galaxies, flags)
     _store("tokens", tokens, galaxies, flags)
+
+    write_cutouts([encode(fromarray(frame)) for frame in _frames(seed, galaxies)])
 
     category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labelled)
 
