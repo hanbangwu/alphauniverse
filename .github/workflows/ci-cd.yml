@@ -30,7 +30,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Check frontend/openapi.json is current
-        run: uv run --python 3.12 python -m scripts.openapi && git diff --exit-code --stat frontend/openapi.json || { echo "::error::frontend/openapi.json is stale; run 'uv run python -m scripts.openapi' and commit"; exit 1; }
+        run: |
+          uv run --python 3.12 python -m scripts.openapi
+          git diff --exit-code --stat frontend/openapi.json || { echo "::error::frontend/openapi.json is stale; run 'uv run python -m scripts.openapi' and commit"; exit 1; }
 
   frontend:
     name: Frontend

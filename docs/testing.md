@@ -7,8 +7,6 @@ Both run against a synthetic artifact tree built by `scripts/fixture.py`; neithe
 ```sh
 uv run pytest
 uv run pytest -k search  # one area
-uv run ruff check app scripts tests modal_app.py
-uv run ruff format app scripts tests modal_app.py
 ```
 
 `tests/conftest.py` builds the tree once per session. CI runs the same two ruff
