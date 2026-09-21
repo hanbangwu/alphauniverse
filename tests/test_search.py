@@ -32,7 +32,6 @@ def test_faiss_ids_encode_galaxy_and_patch(
     cell = source("encoded").to_table(columns=["ls"]).column("ls")
     expected = patches(cell.combine_chunks())[galaxy * N_PATCHES + patch]
 
-    # SQfp16 quantisation, so equality is to float16 precision, not exact.
     np.testing.assert_allclose(stored, expected, atol=1e-3)
 
 
@@ -86,8 +85,6 @@ def test_approximate_ranking_agrees_with_exact(
     found, _, _ = search(query, index=built)
     expected, _ = exact_ranking(query)
 
-    # Without this the set comparison below passes vacuously when the candidate
-    # step collapses and returns nothing but the query galaxy.
     assert len(found) == galaxies
 
     assert set(found[1:].tolist()) == set(expected[1 : len(found)].tolist())
@@ -111,9 +108,6 @@ def test_ids_stay_contiguous_across_add_batches(
         cache.cache_clear()
 
     try:
-        # Inside the try: build() repopulates the source cache, so a failure
-        # here would otherwise leave a handle on a tree pytest is about to
-        # delete, and every later test would fail at the wrong place.
         build(galaxies)
         for cache in (source, index):
             cache.cache_clear()
