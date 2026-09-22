@@ -1,6 +1,6 @@
 # Build pipeline
 
-Four Modal jobs; the README has the commands. Embeddings, index and projections run in that order, each consuming the previous one's output; cutouts read the source dataset directly and can run at any point. All of them share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts are written under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
+Five Modal jobs; the README has the commands. Embeddings first, then the index and the projections, which read `encoded`; cutouts and spectra read the source dataset directly and can run at any point. All of them share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts are written under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
 `generate_embeddings` and `generate_projections` need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
 
@@ -26,11 +26,11 @@ gz10, provabgs:      bool
 - **`codebook`**: the raw codebook vector behind each token, uncontextualised.
 - **`tokens`**: the token ids, `list<uint32>` instead of embeddings.
 
-Within a cell, image or spectrum tokens come first and the survey's scalars follow.
+Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 272 tokens whatever survey it came from.
 
 ## `generate_index`
 
-Builds `IVF{nlist},SQfp16` over the anchor survey's **image patches only** (the scalars are sliced off), with inner product as the metric and rows L2-normalised first, so inner product is cosine similarity. `app/search.py` states the id layout and how `nlist` is chosen.
+Builds `IVF{nlist},SQfp16` over one block per galaxy: the anchor survey's **image patches** (the scalars are sliced off), then the spectral tokens of the galaxy's first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. `app/search.py` states the id layout the result depends on.
 
 ## `generate_cutouts`
 
@@ -42,6 +42,17 @@ png:    large_binary
 ```
 
 Row `g` is galaxy `g`; `app/cutouts.py` states why that matters and checks it on load. The serving app will not start without this artifact.
+
+## `generate_spectra`
+
+Copies every galaxy's DESI and SDSS spectra out of the dataset, in row order:
+
+```
+galaxy:     int32
+desi, sdss: struct<wavelength: list<float32>, flux: list<float32>>   -- null where unmatched
+```
+
+Wavelength is in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux. Row order is checked on load as for cutouts, and the serving app will not start without this artifact either.
 
 ## `generate_projections`
 

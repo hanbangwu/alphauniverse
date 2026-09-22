@@ -1,8 +1,9 @@
-import { getCoverage, getSimilarity, getTokens } from '$lib/api'
+import { getCoverage, getSimilarity, getSpectrum, getSpectrumTokens, getTokens } from '$lib/api'
 import type { Meta, Survey } from '$lib/api'
 import { must } from '$lib/invariant'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
+import type { Spectrum, SpectrumSurvey } from './spectra'
 import type { DataTag, DefaultError, QueryKey } from '@tanstack/query-core'
 import { type UndefinedInitialDataOptions, queryOptions } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
@@ -20,6 +21,14 @@ export type TokensQuery = QueryFor<
   readonly ['tokens', string, number | null]
 >
 export type CoverageQuery = QueryFor<Survey[], readonly ['coverage', string, number | null]>
+export type SpectrumQuery = QueryFor<
+  Spectrum,
+  readonly ['spectrum', string, number | null, SpectrumSurvey | null]
+>
+export type SpectrumTokensQuery = QueryFor<
+  Uint32Array<ArrayBuffer>,
+  readonly ['spectrum', string, number | null, SpectrumSurvey | null, 'tokens']
+>
 export type PointsQuery = QueryFor<string, readonly ['points', string, string]>
 export type MorphologyQuery = QueryFor<
   number | null,
@@ -58,6 +67,56 @@ export function coverageQuery(meta: Meta, galaxy: number | null): CoverageQuery 
       return data
     },
     enabled: galaxy !== null,
+    ...FOREVER
+  })
+}
+
+export function spectrumQuery(
+  meta: Meta,
+  galaxy: number | null,
+  survey: SpectrumSurvey | null
+): SpectrumQuery {
+  return queryOptions({
+    queryKey: ['spectrum', meta.revision, galaxy, survey] as const,
+    queryFn: async () => {
+      const { data } = await getSpectrum({
+        path: {
+          galaxy: must(galaxy, 'the galaxy to fetch a spectrum for'),
+          survey: must(survey, 'the survey to fetch a spectrum from')
+        },
+        throwOnError: true
+      })
+      const table = tableFromIPC<{ wavelength: Float32; flux: Float32 }>(
+        new Uint8Array(await data.arrayBuffer())
+      )
+      return {
+        wavelength: must(table.getChild('wavelength'), 'the wavelength column').toArray(),
+        flux: must(table.getChild('flux'), 'the flux column').toArray()
+      }
+    },
+    enabled: galaxy !== null && survey !== null,
+    ...FOREVER
+  })
+}
+
+export function spectrumTokensQuery(
+  meta: Meta,
+  galaxy: number | null,
+  survey: SpectrumSurvey | null
+): SpectrumTokensQuery {
+  return queryOptions({
+    queryKey: ['spectrum', meta.revision, galaxy, survey, 'tokens'] as const,
+    queryFn: async () => {
+      const { data } = await getSpectrumTokens({
+        path: {
+          galaxy: must(galaxy, 'the galaxy to fetch spectrum tokens for'),
+          survey: must(survey, 'the survey to fetch spectrum tokens from')
+        },
+        throwOnError: true
+      })
+      return new Uint32Array(await data.arrayBuffer())
+    },
+    enabled: galaxy !== null && survey !== null,
     ...FOREVER
   })
 }

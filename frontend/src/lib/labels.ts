@@ -24,7 +24,8 @@ export const POINT_SETS = {
 
 export const DETAIL_VIEWS = {
   image: { label: 'Image' },
-  tokens: { label: 'Tokens' }
+  tokens: { label: 'Tokens' },
+  spectrum: { label: 'Spectrum' }
 } satisfies Labels<string>
 
 export type PointSet = keyof typeof POINT_SETS

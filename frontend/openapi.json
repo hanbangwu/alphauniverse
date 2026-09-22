@@ -121,7 +121,7 @@
     "/galaxies/{galaxy}/tokens": {
       "get": {
         "summary": "Get Tokens",
-        "description": "The galaxy's anchor image token ids, as raw little-endian uint32.\n\nOne value per image patch, in row-major order: see `grid` in /meta.",
+        "description": "The galaxy's anchor image token ids, as raw little-endian uint32.",
         "operationId": "get_tokens",
         "parameters": [
           {
@@ -147,6 +147,138 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxies/{galaxy}/spectra/{survey}": {
+      "get": {
+        "summary": "Get Spectrum",
+        "description": "The galaxy's spectrum from one survey, as Arrow IPC.",
+        "operationId": "get_spectrum",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 17369,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxies/{galaxy}/spectra/{survey}/tokens": {
+      "get": {
+        "summary": "Get Spectrum Tokens",
+        "description": "The galaxy's spectrum token ids from one survey, as raw uint32.",
+        "operationId": "get_spectrum_tokens",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMaximum": 17369,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -210,7 +342,7 @@
     "/similarity": {
       "get": {
         "summary": "Get Similarity",
-        "description": "Galaxies ranked against the mean of the query patches, as Arrow IPC.\n\nOne record batch of three columns: the galaxy index, its best patch score,\nand a fixed-size list of one score per patch. Row 0 is always the query\ngalaxy itself. Candidates come from an approximate search, so fewer than\n`matches` rows can come back.",
+        "description": "Galaxies ranked against the mean of the query tokens, as Arrow IPC.\n\nOne record batch of four columns: the galaxy index, its best token score,\na fixed-size list of one score per image patch, and one per spectral span\nor null for a galaxy without a spectrum. Row 0 is always the query galaxy\nitself.",
         "operationId": "get_similarity",
         "parameters": [
           {
@@ -227,7 +359,7 @@
           {
             "name": "p",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "array",
               "items": {
@@ -235,9 +367,25 @@
                 "minimum": 0,
                 "exclusiveMaximum": 576
               },
-              "minItems": 1,
               "maxItems": 576,
+              "default": [],
               "title": "P"
+            }
+          },
+          {
+            "name": "s",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "S"
             }
           },
           {
@@ -330,6 +478,9 @@
             "type": "integer",
             "title": "Grid"
           },
+          "spectrum": {
+            "$ref": "#/components/schemas/SpectrumGrid"
+          },
           "embeddings": {
             "type": "string",
             "title": "Embeddings"
@@ -361,6 +512,7 @@
           "revision",
           "galaxies",
           "grid",
+          "spectrum",
           "embeddings",
           "mean_points",
           "full_points",
@@ -369,6 +521,25 @@
         ],
         "title": "Meta",
         "description": "What the frontend needs before it can render anything."
+      },
+      "SpectrumGrid": {
+        "properties": {
+          "origin": {
+            "type": "number",
+            "title": "Origin"
+          },
+          "width": {
+            "type": "number",
+            "title": "Width"
+          }
+        },
+        "type": "object",
+        "required": [
+          "origin",
+          "width"
+        ],
+        "title": "SpectrumGrid",
+        "description": "Where spectral token `i` sits, in \u00c5ngstr\u00f6m.\n\nFrom `origin + i * width` to `origin + (i + 1) * width`."
       },
       "Survey": {
         "properties": {

@@ -7,7 +7,7 @@ import pyarrow as pa
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import ARTIFACTS, GRID, N_MORPHOLOGIES, N_PATCHES
+from app.config import ARTIFACTS, GRID, N_MORPHOLOGIES, N_PATCHES, N_SPANS
 from scripts.fixture import TOKENS, covered
 
 
@@ -87,8 +87,20 @@ def test_similarity_returns_one_arrow_batch(client: TestClient) -> None:
 
     # Upper bound alone would pass on a response holding only the query galaxy.
     assert 1 < table.num_rows <= 6
-    assert table.column_names == ["galaxy", "score", "map"]
+    assert table.column_names == ["galaxy", "score", "map", "spectrum"]
     assert len(table.column("map")[0]) == N_PATCHES
+
+
+def test_similarity_spectrum_column_is_null_without_a_spectrum(
+    client: TestClient,
+) -> None:
+    table = _similarity(client, galaxy=0, s=[10, 11], matches=11)
+    by_galaxy = dict(zip(table.column("galaxy").to_pylist(), table.column("spectrum")))
+
+    for galaxy, cell in by_galaxy.items():
+        assert cell.is_valid == any(covered(s, galaxy) for s in ("desi", "sdss"))
+        if cell.is_valid:
+            assert len(cell) == N_SPANS
 
 
 def test_similarity_leads_with_the_query_galaxy(client: TestClient) -> None:
@@ -105,6 +117,8 @@ def test_similarity_leads_with_the_query_galaxy(client: TestClient) -> None:
         {"galaxy": 0},
         {"galaxy": 0, "p": [N_PATCHES]},
         {"galaxy": 0, "p": [-1]},
+        {"galaxy": 0, "s": [N_SPANS]},
+        {"galaxy": 1, "s": [0]},
         {"galaxy": -1, "p": [0]},
         {"galaxy": 0, "p": [0], "matches": 0},
         {"galaxy": 0, "p": [0], "matches": 129},

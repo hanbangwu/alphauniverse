@@ -17,6 +17,7 @@ from typing import Any
 
 import faiss
 import numpy as np
+import pyarrow.compute as pc
 from fastapi.testclient import TestClient
 from sklearn.preprocessing import normalize
 
@@ -25,8 +26,10 @@ from app.config import (
     DIM,
     GALAXIES,
     N_PATCHES,
+    N_SPANS,
     NPROBE,
     PROBE,
+    SPECTRUM_SURVEYS,
     artifact,
     build_dir,
 )
@@ -41,35 +44,51 @@ from app.search import (
     score_maps,
     search,
     source,
+    span_maps,
+    spectral,
+    spectrum_cells,
+    starts,
     vectors,
+    with_spectrum,
 )
 from scripts.fixture import build
 
+CACHES = (source, index, with_spectrum, starts)
 
-def anchor_patches() -> np.ndarray:
-    """Every galaxy's anchor patches, normalised: the exact search's corpus.
+
+def corpus() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Every anchor patch, every spectral token and the galaxy owning each token.
 
     Holds the whole corpus in memory, which is only viable at fixture scale.
     """
-    cell = source("encoded").to_table(columns=[ANCHOR]).column(ANCHOR).combine_chunks()
-    return patches(cell)
+    cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
+    spectra = spectrum_cells(cells)
+    owners = np.flatnonzero(pc.is_valid(spectra).to_numpy(zero_copy_only=False))
+    return (
+        patches(cells.column(ANCHOR).combine_chunks()),
+        spectral(spectra.drop_null()),
+        np.repeat(owners, N_SPANS),
+    )
 
 
 def exact_ranking(
-    query: Query, corpus: np.ndarray | None = None
+    query: Query, rows: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Brute-force ranking over every patch: the ground truth for recall.
+    """Brute-force ranking over every token: the ground truth for recall.
 
     Mirrors `search()` apart from the candidate step, scoring against the
     float32 embeddings rather than the index's fp16 copies.
     """
-    rows = anchor_patches() if corpus is None else corpus
-    direction = normalize(
-        rows[query.galaxy * N_PATCHES + np.asarray(query.patches)].mean(
-            axis=0, keepdims=True
-        )
-    )
-    scores = (rows @ direction.T).reshape(-1, N_PATCHES).max(axis=1)
+    patch_rows, span_rows, owners = corpus() if rows is None else rows
+    chosen = []
+    if query.patches:
+        chosen.append(patch_rows[query.galaxy * N_PATCHES + np.asarray(query.patches)])
+    if query.spans:
+        own = owners == query.galaxy
+        chosen.append(span_rows[own][np.asarray(query.spans)])
+    direction = normalize(np.concatenate(chosen).mean(axis=0, keepdims=True))
+    scores = (patch_rows @ direction.T).reshape(-1, N_PATCHES).max(axis=1)
+    np.maximum.at(scores, owners, (span_rows @ direction.T).reshape(-1))
     order = np.argsort(-scores, kind="stable")
     chosen = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
@@ -164,7 +183,7 @@ def measure_phases(galaxies: int, runs: int, matches: int = 32) -> dict[str, Any
     """Where a query's time goes, split by stage of `search()`."""
     built = index()
     batch = queries(galaxies, runs, 4, matches)
-    stages = ["centroid", "candidates", "vectors", "score_maps", "rank"]
+    stages = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
     samples: dict[str, list[float]] = {stage: [] for stage in stages}
     widths: list[int] = []
 
@@ -176,9 +195,11 @@ def measure_phases(galaxies: int, runs: int, matches: int = 32) -> dict[str, Any
         marks.append(time.perf_counter())
         rows = vectors(order, index=built)
         marks.append(time.perf_counter())
-        scored = score_maps(rows, direction)
+        scored = score_maps(rows, direction, width=N_PATCHES)
         marks.append(time.perf_counter())
-        rank(order, scored)
+        spectral_scores = span_maps(order, direction, index=built)
+        marks.append(time.perf_counter())
+        rank(order, scored, spectral_scores)
         marks.append(time.perf_counter())
 
         widths.append(rows.shape[0])
@@ -206,12 +227,12 @@ def measure_phases(galaxies: int, runs: int, matches: int = 32) -> dict[str, Any
 
 def measure_recall(galaxies: int, count: int, matches: int) -> dict[str, Any]:
     """Recall against brute force, swept over `nprobe`."""
-    corpus = anchor_patches()
+    rows = corpus()
     built = index()
     original = built.nprobe
 
     batch = queries(galaxies, count, 4, matches)
-    truth = [set(exact_ranking(query, corpus)[0][1:].tolist()) for query in batch]
+    truth = [set(exact_ranking(query, rows)[0][1:].tolist()) for query in batch]
 
     sweep = {}
     try:
@@ -222,7 +243,7 @@ def measure_recall(galaxies: int, count: int, matches: int) -> dict[str, Any]:
             recalls, returned, elapsed = [], [], []
             for query, expected in zip(batch, truth, strict=True):
                 start = time.perf_counter()
-                found, _, _ = search(query, index=built)
+                found, _, _, _ = search(query, index=built)
                 elapsed.append((time.perf_counter() - start) * 1000)
                 got = set(found[1:].tolist())
                 returned.append(len(got))
@@ -305,14 +326,14 @@ def main() -> None:
     else:
         root = Path(".cache") / "benchmark"
         os.environ["ALPHAUNIVERSE_CACHE"] = str(root.resolve())
-        source.cache_clear()
-        index.cache_clear()
+        for cached in CACHES:
+            cached.cache_clear()
         started = time.perf_counter()
         build(arguments.galaxies, arguments.seed)
         print(f"built fixture in {time.perf_counter() - started:.1f}s")
 
-    source.cache_clear()
-    index.cache_clear()
+    for cached in CACHES:
+        cached.cache_clear()
 
     galaxies = source("encoded").count_rows()
     if galaxies != arguments.galaxies:

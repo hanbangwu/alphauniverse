@@ -9,6 +9,7 @@ export class ViewState {
   readonly galaxy = new Field<number | null>(null)
   readonly detail: EnumField<DetailView>
   readonly patches = new IndexListField()
+  readonly spans = new IndexListField()
   readonly explorer = new Field(false)
 
   constructor(private readonly meta: Meta) {
@@ -24,8 +25,15 @@ export class ViewState {
     return this.full ? this.meta.full_points : this.meta.mean_points
   }
 
+  get querying(): boolean {
+    return this.patches.value.length + this.spans.value.length > 0
+  }
+
   select(galaxy: number | null): void {
-    if (galaxy !== this.galaxy.value) this.patches.reset()
+    if (galaxy !== this.galaxy.value) {
+      this.patches.reset()
+      this.spans.reset()
+    }
     this.galaxy.value = galaxy
   }
 }

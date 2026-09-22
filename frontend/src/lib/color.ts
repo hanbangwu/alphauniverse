@@ -44,3 +44,18 @@ export function tokenColors(values: ArrayLike<number>): (value: number) => RGB {
 export function morphologyColors(classes: number, scheme: Scheme): string[] {
   return [...defaultCategoryColors(classes), { light: '#52525b', dark: '#d4d4d8' }[scheme]]
 }
+
+export const SELECTED = 'oklch(0.637 0.237 25.331)'
+
+export interface Ink {
+  text: string
+  muted: string
+  rule: string
+}
+
+export function chartInk(scheme: Scheme): Ink {
+  return {
+    light: { text: 'oklch(0.145 0 0)', muted: 'oklch(0.556 0 0)', rule: 'oklch(0.922 0 0)' },
+    dark: { text: 'oklch(0.985 0 0)', muted: 'oklch(0.708 0 0)', rule: 'oklch(1 0 0 / 10%)' }
+  }[scheme]
+}
