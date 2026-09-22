@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { SELECTED } from '$lib/color'
+
   interface Props {
     grid: number
     size: number
@@ -39,7 +41,7 @@
       )
     }
 
-    for (const index of chosen) outline(index, 'oklch(0.637 0.237 25.331)', 2)
+    for (const index of chosen) outline(index, SELECTED, 2)
     if (hovered !== null && !chosen.has(hovered)) outline(hovered, 'oklch(1 0 0)', 1)
   })
 </script>

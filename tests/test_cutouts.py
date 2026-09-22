@@ -90,7 +90,7 @@ def test_a_short_artifact_stops_startup(
 
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
     build_dir().mkdir(parents=True, exist_ok=True)
-    for role in ("mean_points", "tokens", "encoded", "encoded_index"):
+    for role in ("mean_points", "tokens", "encoded", "encoded_index", "spectra"):
         shutil.copy(tree / artifact(role).name, artifact(role))
     pq.write_table(full.slice(0, full.num_rows - 1), artifact("cutouts"))
 

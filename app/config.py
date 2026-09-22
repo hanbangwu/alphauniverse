@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import numpy as np
 import pyarrow as pa
@@ -36,6 +36,10 @@ DIM = 768
 GRID = 24
 N_PATCHES = GRID**2
 
+SPECTRUM_ORIGIN = 3500.0
+SPECTRUM_TOKEN_WIDTH = 32 * 0.8
+N_SPANS = 8704 // 32
+
 GALAXIES = 17369
 GalaxyIndex = Annotated[int, Field(ge=0, lt=GALAXIES)]
 
@@ -48,11 +52,15 @@ GZ10 = "-mmu_gz10"
 PROVABGS = "-mmu_desi_provabgs"
 
 
+SpectrumSurvey = Literal["desi", "sdss"]
+SPECTRUM_SURVEYS: dict[SpectrumSurvey, str] = {
+    "desi": f"spectrum{DESI}",
+    "sdss": f"spectrum{SDSS}",
+}
 TOKEN_SURVEYS: dict[str, str] = {
     ANCHOR: f"image{LS}",
     "hsc": f"image{HSC}",
-    "desi": f"spectrum{DESI}",
-    "sdss": f"spectrum{SDSS}",
+    **SPECTRUM_SURVEYS,
 }
 FLAG_SURVEYS: dict[str, str] = {
     "gz10": f"gz10_label{GZ10}",
@@ -73,6 +81,7 @@ ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
     "encoded_index": "faiss",
     "cutouts": "parquet",
+    "spectra": "parquet",
     "codebook": "parquet",
     "tokens": "parquet",
     "mean_points": "parquet",
@@ -83,6 +92,17 @@ ARTIFACTS: dict[str, str] = {
 
 CUTOUTS = pa.schema(
     [pa.field("galaxy", pa.int32()), pa.field("png", pa.large_binary())]
+)
+
+SPECTRUM = pa.struct(
+    [
+        pa.field("wavelength", pa.list_(pa.float32())),
+        pa.field("flux", pa.list_(pa.float32())),
+    ]
+)
+SPECTRA = pa.schema(
+    [pa.field("galaxy", pa.int32())]
+    + [pa.field(survey, SPECTRUM) for survey in SPECTRUM_SURVEYS]
 )
 
 STORES = ("encoded", "codebook", "tokens")

@@ -8,6 +8,7 @@
   import { getApp } from '$lib/state/app.svelte'
   import CoverageTable from './coverage-table.svelte'
   import DetailImage from './detail-image.svelte'
+  import DetailSpectrum from './detail-spectrum.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
   const app = getApp()
@@ -31,10 +32,14 @@
       {@const galaxy = view.galaxy.value}
       <Segmented field={view.detail} />
 
-      <DetailImage {galaxy} />
+      {#if view.detail.value === 'spectrum'}
+        <DetailSpectrum {galaxy} />
+      {:else}
+        <DetailImage {galaxy} />
+      {/if}
 
       <Button variant="secondary" size="sm" onclick={() => (view.explorer.value = true)}>
-        Patch similarity
+        Token similarity
       </Button>
 
       <div class="flex items-baseline justify-between text-sm">

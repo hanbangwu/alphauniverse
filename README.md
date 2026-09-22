@@ -7,8 +7,8 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 ## What you can do with it
 
 - **Explore the embedding space** - Every galaxy appears as a point in a parametric UMAP projection. There are two views: **mean**, one point per galaxy from its average embedding; and **full**, one point per embedding (all modalities share one map).
-- **Inspect a galaxy** - Selecting a point opens its Legacy Survey cutout, its morphology label, which surveys it was crossmatched into, and the codebook token behind each of its 576 image patches.
-- **Search by patch** - Click patches on the grid to find similar patches and galaxies by cosine similarity. Thresholding also gives zero-shot segmentation.
+- **Inspect a galaxy** - Selecting a point opens its Legacy Survey cutout, its DESI or SDSS spectrum, its morphology label, which surveys it was crossmatched into, and the codebook token behind each of its 576 image patches.
+- **Search by token** - Click image patches, spectrum spans, or both to find similar galaxies by cosine similarity: the selected embeddings are averaged into one query and scored against every image patch and spectral token in the dataset. The image heatmaps show the patch scores; the span scores come back but are not drawn yet. Thresholding also gives zero-shot segmentation.
 
 ## Data
 
@@ -37,19 +37,16 @@ bun run dev
 
 ### Backend
 
-The API serves artifacts built by four Modal jobs. Embeddings, index and projections run in that order; cutouts read the source dataset directly and can run at any point.
-
 ```sh
 uv run modal run modal_app.py::generate_embeddings   # encode dataset
 uv run modal run modal_app.py::generate_index        # build the search index
 uv run modal run modal_app.py::generate_cutouts      # crop and encode the images
+uv run modal run modal_app.py::generate_spectra      # extract the spectra
 uv run modal run modal_app.py::generate_projections  # fit and apply the projection
 uv run modal deploy modal_app.py                     # serve
 ```
 
-Pushes to `main` deploy automatically once CI passes.
-
-### Working on it locally
+### Local Build
 
 ```sh
 uv run pytest

@@ -86,6 +86,22 @@ def generate_cutouts() -> None:
 
 
 @app.function(
+    image=serving_image,
+    cpu=1,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_spectra() -> None:
+    """Extract every galaxy's spectra, so serving never opens the dataset."""
+    from app.spectra import generate_spectra
+
+    cache_volume.reload()
+    generate_spectra()
+    cache_volume.commit()
+
+
+@app.function(
     image=build_image,
     gpu="L4",
     cpu=16,

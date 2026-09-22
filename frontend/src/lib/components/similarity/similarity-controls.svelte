@@ -5,7 +5,7 @@
   const view = getView()
   const display = getMask()
 
-  const idle = $derived(view.patches.value.length === 0)
+  const idle = $derived(!view.querying)
 </script>
 
 <label class="flex items-center gap-2 text-sm font-medium">

@@ -32,6 +32,7 @@ from app.config import (
     DIM,
     N_MORPHOLOGIES,
     N_PATCHES,
+    SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
     build_dir,
@@ -39,7 +40,8 @@ from app.config import (
     store_schema,
 )
 from app.cutouts import encode, write_cutouts
-from app.search import generate_index, source
+from app.search import generate_index, source, starts, with_spectrum
+from app.spectra import write_spectra
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_PATCHES + 12,
@@ -54,6 +56,8 @@ CLUSTERS = 64
 NOISE = 0.35
 SOURCE_PX = CROP_PX + 32
 PIXEL_NOISE = 4
+SAMPLES = 512
+MASKED = 4
 
 
 def _frames(seed: int, galaxies: int) -> Iterator[np.ndarray]:
@@ -70,6 +74,24 @@ def _frames(seed: int, galaxies: int) -> Iterator[np.ndarray]:
 def covered(survey: str, galaxy: int) -> bool:
     """Whether `survey` has a crossmatch for this galaxy."""
     return galaxy % STRIDE[survey] == 0
+
+
+def _spectra(seed: int, galaxies: int) -> dict[str, list[dict[str, np.ndarray] | None]]:
+    """Per-survey spectrum cells: noise with a few masked samples, or `None`."""
+    rng = np.random.default_rng(seed + 2)
+    wavelength = np.linspace(3600, 9800, SAMPLES, dtype=np.float32)
+    cells: dict[str, list[dict[str, np.ndarray] | None]] = {
+        survey: [] for survey in SPECTRUM_SURVEYS
+    }
+    for galaxy in range(galaxies):
+        for survey in SPECTRUM_SURVEYS:
+            if not covered(survey, galaxy):
+                cells[survey].append(None)
+                continue
+            flux = rng.standard_normal(SAMPLES).astype(np.float32)
+            flux[rng.choice(SAMPLES, MASKED, replace=False)] = np.nan
+            cells[survey].append({"wavelength": wavelength, "flux": flux})
+    return cells
 
 
 def _cells(
@@ -155,6 +177,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     _store("tokens", tokens, galaxies, flags)
 
     write_cutouts([encode(fromarray(frame)) for frame in _frames(seed, galaxies)])
+    write_spectra(_spectra(seed, galaxies))
 
     category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labelled)
 
@@ -176,9 +199,11 @@ def build(galaxies: int, seed: int = 0) -> Path:
         compression="zstd",
     )
 
-    source.cache_clear()
+    for cached in (source, with_spectrum, starts):
+        cached.cache_clear()
     generate_index()
-    source.cache_clear()
+    for cached in (source, with_spectrum, starts):
+        cached.cache_clear()
     return target
 
 

@@ -26,13 +26,18 @@ from .config import (
     GRID,
     N_MORPHOLOGIES,
     N_PATCHES,
+    N_SPANS,
+    SPECTRUM_ORIGIN,
+    SPECTRUM_TOKEN_WIDTH,
     TOKEN_SURVEYS,
     GalaxyIndex,
+    SpectrumSurvey,
     artifact,
 )
 from .cutouts import cutouts, image
 from .search import Query as SearchQuery
-from .search import index, search, source
+from .search import index, search, source, with_spectrum
+from .spectra import spectra, spectrum
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -51,6 +56,16 @@ def labels() -> tuple[int, list[int], int]:
     )
 
 
+class SpectrumGrid(BaseModel):
+    """Where spectral token `i` sits, in Ångström.
+
+    From `origin + i * width` to `origin + (i + 1) * width`.
+    """
+
+    origin: float
+    width: float
+
+
 class Meta(BaseModel):
     """What the frontend needs before it can render anything."""
 
@@ -59,6 +74,7 @@ class Meta(BaseModel):
     revision: str
     galaxies: int
     grid: int
+    spectrum: SpectrumGrid
     embeddings: str
     mean_points: str
     full_points: str
@@ -83,18 +99,32 @@ NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"model": Detail}}
 BINARY_OCTET: dict[str, Any] = {
     "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
 }
+ARROW_STREAM: dict[str, Any] = {
+    "application/vnd.apache.arrow.stream": {
+        "schema": {"type": "string", "format": "binary"}
+    }
+}
+
+
+def arrow(data: pa.RecordBatch | pa.Table) -> Response:
+    """`data` as one Arrow IPC stream."""
+    sink = BytesIO()
+    with pa.ipc.new_stream(sink, data.schema) as writer:
+        writer.write(data)
+    return Response(sink.getvalue(), media_type="application/vnd.apache.arrow.stream")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Load everything a request would otherwise load, before serving traffic."""
     galaxies = labels()[0]
-    stored = len(cutouts())
-    if stored != galaxies:
-        raise ValueError(f"{stored} cutouts for {galaxies} galaxies")
+    for role, load in (("cutouts", cutouts), ("spectra", spectra)):
+        stored = len(load())
+        if stored != galaxies:
+            raise ValueError(f"{stored} {role} for {galaxies} galaxies")
 
     index()
-    source("tokens")
+    with_spectrum()
     yield
 
 
@@ -130,6 +160,7 @@ def get_meta() -> Meta:
         revision=DATASET_REVISION,
         galaxies=galaxies,
         grid=GRID,
+        spectrum=SpectrumGrid(origin=SPECTRUM_ORIGIN, width=SPECTRUM_TOKEN_WIDTH),
         embeddings="encoded",
         mean_points="mean_points",
         full_points="full_points",
@@ -184,10 +215,7 @@ def get_image(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_tokens(galaxy: GalaxyIndex) -> Response:
-    """The galaxy's anchor image token ids, as raw little-endian uint32.
-
-    One value per image patch, in row-major order: see `grid` in /meta.
-    """
+    """The galaxy's anchor image token ids, as raw little-endian uint32."""
     table = source("tokens").to_table(
         columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
     )
@@ -195,6 +223,37 @@ def get_tokens(galaxy: GalaxyIndex) -> Response:
     return Response(
         np.asarray(cell.values)[:N_PATCHES].tobytes(),
         media_type="application/octet-stream",
+    )
+
+
+@app.get(
+    "/galaxies/{galaxy}/spectra/{survey}",
+    response_class=Response,
+    responses={200: {"content": ARROW_STREAM}, **NOT_FOUND},
+)
+def get_spectrum(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    """The galaxy's spectrum from one survey, as Arrow IPC."""
+    table = spectrum(galaxy, survey)
+    if table is None:
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
+    return arrow(table)
+
+
+@app.get(
+    "/galaxies/{galaxy}/spectra/{survey}/tokens",
+    response_class=Response,
+    responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
+)
+def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    """The galaxy's spectrum token ids from one survey, as raw uint32."""
+    table = source("tokens").to_table(
+        columns=[survey], filter=ds.field("galaxy") == galaxy
+    )
+    cell = table.column(survey)[0]
+    if not cell.is_valid:
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
+    return Response(
+        np.asarray(cell.values)[1:].tobytes(), media_type="application/octet-stream"
     )
 
 
@@ -216,25 +275,19 @@ def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
 @app.get(
     "/similarity",
     response_class=Response,
-    responses={
-        200: {
-            "content": {
-                "application/vnd.apache.arrow.stream": {
-                    "schema": {"type": "string", "format": "binary"}
-                }
-            }
-        }
-    },
+    responses={200: {"content": ARROW_STREAM}},
 )
 def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
-    """Galaxies ranked against the mean of the query patches, as Arrow IPC.
+    """Galaxies ranked against the mean of the query tokens, as Arrow IPC.
 
-    One record batch of three columns: the galaxy index, its best patch score,
-    and a fixed-size list of one score per patch. Row 0 is always the query
-    galaxy itself. Candidates come from an approximate search, so fewer than
-    `matches` rows can come back.
+    One record batch of four columns: the galaxy index, its best token score,
+    a fixed-size list of one score per image patch, and one per spectral span
+    or null for a galaxy without a spectrum. Row 0 is always the query galaxy
+    itself.
     """
-    galaxies, scores, values = search(query, index=index())
+    if query.spans and not with_spectrum()[query.galaxy]:
+        raise HTTPException(422, f"galaxy {query.galaxy} has no spectrum")
+    galaxies, scores, values, spans = search(query, index=index())
 
     item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
@@ -242,12 +295,15 @@ def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
             pa.field("galaxy", pa.int32(), nullable=False),
             pa.field("score", pa.float32(), nullable=False),
             pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
+            pa.field("spectrum", pa.list_(item, N_SPANS)),
         ],
         metadata={
             "revision": DATASET_REVISION,
             "galaxy": str(query.galaxy),
             "patches": ",".join(map(str, query.patches)),
+            "spans": ",".join(map(str, query.spans)),
             "n_patches": str(N_PATCHES),
+            "n_spans": str(N_SPANS),
         },
     )
     batch = pa.record_batch(
@@ -255,11 +311,13 @@ def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
             pa.array(galaxies),
             pa.array(scores),
             pa.FixedSizeListArray.from_arrays(pa.array(values.reshape(-1)), N_PATCHES),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(spans.reshape(-1)),
+                N_SPANS,
+                mask=pa.array(np.isnan(spans[:, 0])),
+            ),
         ],
         schema=schema,
     )
 
-    sink = BytesIO()
-    with pa.ipc.new_stream(sink, schema) as writer:
-        writer.write_batch(batch)
-    return Response(sink.getvalue(), media_type="application/vnd.apache.arrow.stream")
+    return arrow(batch)

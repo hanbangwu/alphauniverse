@@ -22,7 +22,7 @@ Cold start dominates, and it is not the search algorithm: the approximate neares
 
 ## Production: query latency
 
-`/similarity` against the real index, best of 3 per shape, with the 240 ms network baseline subtracted.
+`/similarity` against the real index, best of 3 per shape, with the 240 ms network baseline subtracted. These predate the spectral tokens joining the index: a query now also reconstructs 272 spans for each candidate with a spectrum, unmeasured.
 
 | Query shape             | Compute |
 | ----------------------- | ------- |
@@ -211,13 +211,13 @@ What this does establish: the metric is defined and wired up, and the "shorter t
 
 Current design targets COSMOS scale. Where it stops:
 
-| Ceiling                      | Now                 | Breaks at                                                               |
-| ---------------------------- | ------------------- | ----------------------------------------------------------------------- |
-| Index in RAM                 | 15.5 GB             | ~4×, the container's 64 GB limit. 100× needs PQ or sharding.            |
-| Cold start                   | 47 s                | ~2× before it exceeds common proxy and browser timeouts                 |
-| `full_points` in the browser | 180 MB              | ~10×; DuckDB-WASM has a few GB to work with.                            |
-| Cutout precompute            | 190 MB              | linear; fine to ~100×, then needs tiling                                |
-| Exact-search reference       | whole corpus in RAM | already fixture-only; `anchor_patches()` cannot run at production scale |
-| Serving capacity             | one container       | any concurrency at all; `max_containers=1` is a hard cap                |
+| Ceiling                      | Now                 | Breaks at                                                       |
+| ---------------------------- | ------------------- | --------------------------------------------------------------- |
+| Index in RAM                 | 15.5 GB             | ~4×, the container's 64 GB limit. 100× needs PQ or sharding.    |
+| Cold start                   | 47 s                | ~2× before it exceeds common proxy and browser timeouts         |
+| `full_points` in the browser | 180 MB              | ~10×; DuckDB-WASM has a few GB to work with.                    |
+| Cutout precompute            | 190 MB              | linear; fine to ~100×, then needs tiling                        |
+| Exact-search reference       | whole corpus in RAM | already fixture-only; `corpus()` cannot run at production scale |
+| Serving capacity             | one container       | any concurrency at all; `max_containers=1` is a hard cap        |
 
 None of these need solving now. All of them should be checked before a change assumes they are not there.

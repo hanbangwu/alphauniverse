@@ -6,6 +6,7 @@
   import PatchMask from './patch-mask.svelte'
   import PatchPanel from './patch-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
+  import SpectrumPanel from './spectrum-panel.svelte'
 
   const similarity = getSimilarity()
   const view = getView()
@@ -27,7 +28,7 @@
     title={similarity.caption}
     selected={view.patches.value}
     onselect={(indices) => (view.patches.value = indices)}
-    busy={similarity.cells === null || (view.patches.value.length > 0 && similarity.fetching)}
+    busy={similarity.cells === null || (view.querying && similarity.fetching)}
   >
     {#snippet footer()}
       {#if similarity.domain}
@@ -35,4 +36,6 @@
       {/if}
     {/snippet}
   </PatchPanel>
+
+  <SpectrumPanel />
 </div>
