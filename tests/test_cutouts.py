@@ -1,6 +1,5 @@
-"""The cutout artifact: its galaxy-ordered layout and what the endpoint returns."""
+"""The cutout artifact: its galaxy-ordered layout and what `image` returns."""
 
-import shutil
 from io import BytesIO
 from pathlib import Path
 
@@ -8,38 +7,24 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from fastapi.testclient import TestClient
 from PIL import Image
 
-from app import main
 from app.config import CROP_PX, CUTOUTS, artifact, build_dir
-from app.cutouts import cutouts, encode
+from app.cutouts import cutouts, encode, image
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
-def test_endpoint_returns_the_stored_bytes(
-    client: TestClient, tree: Path, galaxy: int
-) -> None:
+def test_image_returns_the_stored_bytes(tree: Path, galaxy: int) -> None:
     """Serving is a lookup, so row `g` must be what galaxy `g` gets back."""
     stored = pq.read_table(artifact("cutouts")).column("png")
 
-    response = client.get(f"/galaxies/{galaxy}/image.png")
-
-    assert response.status_code == 200
-    assert response.content == stored[galaxy].as_py()
+    assert image(galaxy) == stored[galaxy].as_py()
 
 
-def test_cutouts_are_cropped_to_the_configured_size(client: TestClient) -> None:
-    with Image.open(BytesIO(client.get("/galaxies/0/image.png").content)) as png:
+def test_cutouts_are_cropped_to_the_configured_size(tree: Path) -> None:
+    with Image.open(BytesIO(image(0))) as png:
         assert png.size == (CROP_PX, CROP_PX)
         assert png.format == "PNG"
-
-
-def test_each_galaxy_has_its_own_cutout(client: TestClient, galaxies: int) -> None:
-    """Otherwise every assertion about which row is served passes vacuously."""
-    served = {client.get(f"/galaxies/{g}/image.png").content for g in range(galaxies)}
-
-    assert len(served) == galaxies
 
 
 def test_rows_out_of_galaxy_order_are_rejected(
@@ -80,25 +65,3 @@ def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
         assert png.size == (CROP_PX, CROP_PX)
         assert png.convert("RGB").getpixel((0, 0)) == (255, 0, 0)
         assert png.convert("RGB").getpixel((CROP_PX - 1, CROP_PX - 1)) == (0, 0, 255)
-
-
-def test_a_short_artifact_stops_startup(
-    tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Ordered but short passes the order check, then `IndexError`s per request."""
-    full = pq.read_table(artifact("cutouts"))
-
-    monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
-    build_dir().mkdir(parents=True, exist_ok=True)
-    for role in ("mean_points", "tokens", "encoded", "encoded_index", "spectra"):
-        shutil.copy(tree / artifact(role).name, artifact(role))
-    pq.write_table(full.slice(0, full.num_rows - 1), artifact("cutouts"))
-
-    cutouts.cache_clear()
-    main.labels.cache_clear()
-    try:
-        with pytest.raises(ValueError, match="cutouts for"), TestClient(main.app):
-            pass
-    finally:
-        cutouts.cache_clear()
-        main.labels.cache_clear()

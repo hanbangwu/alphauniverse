@@ -5,11 +5,12 @@ from pathlib import Path
 import faiss
 import numpy as np
 import pyarrow.compute as pc
+import pyarrow.parquet as pq
 import pytest
 from sklearn.preprocessing import normalize
 
 from app import search as search_module
-from app.config import ANCHOR, N_PATCHES, N_SPANS, SPECTRUM_SURVEYS
+from app.config import ANCHOR, N_PATCHES, N_SPANS, SPECTRUM_SURVEYS, artifact
 from app.search import (
     Query,
     candidates,
@@ -27,7 +28,7 @@ from app.search import (
     vectors,
     with_spectrum,
 )
-from scripts.fixture import build, covered
+from scripts.fixture import build
 
 CACHES = (source, index, with_spectrum, starts)
 
@@ -69,7 +70,10 @@ def exact_ranking(query: Query) -> tuple[np.ndarray, np.ndarray]:
 def test_index_holds_every_patch_and_every_span(
     built: faiss.Index, galaxies: int
 ) -> None:
-    spectra = sum(any(covered(s, g) for s in SPECTRUM_SURVEYS) for g in range(galaxies))
+    stored = pq.read_table(artifact("encoded"), columns=list(SPECTRUM_SURVEYS))
+    spectra = np.logical_or.reduce(
+        [cell.is_valid().to_numpy() for cell in stored]
+    ).sum()
 
     assert with_spectrum().sum() == spectra
     assert built.ntotal == galaxies * N_PATCHES + spectra * N_SPANS

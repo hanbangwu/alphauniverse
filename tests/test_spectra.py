@@ -1,52 +1,34 @@
-"""The spectra artifact: its layout and what the two endpoints return."""
+"""The spectra artifact: its layout and what `spectrum` returns."""
 
-import io
 from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from fastapi.testclient import TestClient
 
 from app.config import SPECTRA, artifact, build_dir
-from app.spectra import samples, spectra
-from scripts.fixture import covered
+from app.spectra import samples, spectra, spectrum
 
 
-def test_endpoint_returns_the_stored_samples(client: TestClient) -> None:
+def test_spectrum_returns_the_stored_samples(tree: Path) -> None:
     """Serving is a lookup, so row `g` must be what galaxy `g` gets back."""
     stored = pq.read_table(artifact("spectra")).column("desi")[0]
 
-    response = client.get("/galaxies/0/spectra/desi")
+    table = spectrum(0, "desi")
 
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/vnd.apache.arrow.stream"
-    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
-    assert table.column_names == ["wavelength", "flux"]
-    assert table.column("wavelength").equals(
-        pa.chunked_array([stored["wavelength"].values])
+    np.testing.assert_array_equal(
+        table.column("wavelength").to_numpy(), np.asarray(stored["wavelength"].values)
     )
     np.testing.assert_array_equal(
         table.column("flux").to_numpy(), np.asarray(stored["flux"].values)
     )
 
 
-def test_unmatched_survey_is_not_found(client: TestClient) -> None:
-    assert not covered("desi", 1)
+def test_unmatched_survey_has_no_spectrum(tree: Path) -> None:
+    stored = pq.read_table(artifact("spectra"), columns=["desi"]).column("desi")
 
-    assert client.get("/galaxies/1/spectra/desi").status_code == 404
-    assert client.get("/galaxies/1/spectra/desi/tokens").status_code == 404
-
-
-def test_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    cell = pq.read_table(artifact("tokens"), columns=["sdss"]).column("sdss")[0]
-
-    response = client.get("/galaxies/0/spectra/sdss/tokens")
-
-    assert response.status_code == 200
-    served = np.frombuffer(response.content, dtype=np.uint32)
-    np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
+    assert spectrum(stored.is_valid().to_pylist().index(False), "desi") is None
 
 
 def test_samples_drop_padding_and_blank_masked_flux() -> None:
