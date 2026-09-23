@@ -35,7 +35,6 @@ bun run lint                                        # prettier + eslint
 - Commit messages: short, terse, semicolon-delimited; they need not list every change.
 - All commit authors are human beings. Even if Claude did substantial and/or autonomous work, the commit author remains the person who owns that agent. However, do add a `Co-Authored-By` trailer.
 - Change only what the task requires; do not improvise. Report unrelated changes you notice rather than making them.
-- Never edit `frontend/src/lib/components/ui`.
 - No `TODO`, `FIXME`, `HACK` or `XXX` comments. Future work lives in one of three places: performance work in the ranked list in `docs/performance.md`; known-wrong behaviour as a test marked `xfail(strict=True)` (see `tests/test_api.py`); everything else as a GitHub issue.
 - Working notes (scratch analysis, session logs, write-ups) are not committed.
 - Ask when unsure about anything: a new file or not, leanness versus performance, installing a library.
