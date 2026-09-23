@@ -51,9 +51,7 @@ bun run lint                                        # prettier + eslint
 - No linter-ignore rules, as comments, config or otherwise.
 - A measurement records what produced it. Benchmark figures do not compare across machines or thread layouts, so a table that mixes runs is wrong even when every figure in it is real.
 
-## Comments and docs
+## Others
 
-- No comments or docstrings unless the code is unconventional enough to need clarification.
-- Docs are for someone new, concise, and state only what the code does now. Each fact has one home: before adding to a doc, re-read it and cut what the addition duplicates.
-- Prefer literal phrasing to metaphor and flourish: "a parameter worth varying", not "a dial worth turning".
+- Never add comments or docstrings
 - No em dashes.
