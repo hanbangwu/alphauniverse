@@ -58,14 +58,7 @@ Wavelength is in Ångström. Samples the survey pads with (wavelength at or belo
 
 Fits a parametric UMAP on a sample of embeddings and applies it to every one; `app/parametric_umap.py` describes the model and the two passes over `encoded`.
 
-The trained projector is saved first, as **`parametric_umap`**, a `torch.save` of:
-
-```
-dim:   int         -- input width, DIM
-state: state_dict  -- ParametricUMAP weights
-```
-
-Nothing reads it at serve time; the job reloads it to project. Then two point sets, both in the `POINTS` schema (`app/config.py`):
+Two outputs, both in the `POINTS` schema (`app/config.py`):
 
 ```
 galaxy: int32 not null
