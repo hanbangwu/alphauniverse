@@ -49,7 +49,7 @@ bun run lint                                        # prettier + eslint
 - No no-ops: passing a parameter its default, redeclaring a type a value already has, or guarding a case that cannot happen. Typing constants is fine.
 - One purpose per function, one group of things per file. Add a helper only when a function is too long or the helper is reused.
 - No linter-ignore rules, as comments, config or otherwise.
-- Tests assert the behaviour that matters, not every observable property.
+- Test conventions live in `.claude/rules/tests.md`, which loads when Claude reads a test.
 - A measurement records what produced it. Benchmark figures do not compare across machines or thread layouts, so a table that mixes runs is wrong even when every figure in it is real.
 
 ## Comments and docs
