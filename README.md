@@ -44,13 +44,13 @@ uv run modal run modal_app.py::generate_cutouts      # crop and encode the image
 uv run modal run modal_app.py::generate_spectra      # extract the spectra
 uv run modal run modal_app.py::generate_projections  # fit and apply the projection
 uv run modal deploy modal_app.py                     # serve
+uv run modal run -m scripts.benchmark                # measure the serving path
 ```
 
 ### Local Build
 
 ```sh
 uv run pytest
-uv run python -m scripts.benchmark --galaxies 32
 ```
 
 After changing a route or model in `app/main.py`, regenerate the API schema the frontend's client is built from:

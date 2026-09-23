@@ -4,10 +4,12 @@ from pathlib import Path
 
 import faiss
 import numpy as np
+import pyarrow.compute as pc
 import pytest
+from sklearn.preprocessing import normalize
 
 from app import search as search_module
-from app.config import N_PATCHES, N_SPANS, SPECTRUM_SURVEYS
+from app.config import ANCHOR, N_PATCHES, N_SPANS, SPECTRUM_SURVEYS
 from app.search import (
     Query,
     candidates,
@@ -25,7 +27,6 @@ from app.search import (
     vectors,
     with_spectrum,
 )
-from scripts.benchmark import exact_ranking
 from scripts.fixture import build, covered
 
 CACHES = (source, index, with_spectrum, starts)
@@ -34,6 +35,35 @@ CACHES = (source, index, with_spectrum, starts)
 @pytest.fixture(scope="module")
 def built(tree) -> faiss.Index:
     return index()
+
+
+def exact_ranking(query: Query) -> tuple[np.ndarray, np.ndarray]:
+    """Brute-force ranking over every token: the ground truth for recall.
+
+    Mirrors `search()` apart from the candidate step, scoring against the
+    float32 embeddings rather than the index's fp16 copies. Holds the whole
+    corpus in memory, which is only viable at fixture scale.
+    """
+    cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
+    spectra = spectrum_cells(cells)
+    owners = np.repeat(
+        np.flatnonzero(pc.is_valid(spectra).to_numpy(zero_copy_only=False)), N_SPANS
+    )
+    patch_rows = patches(cells.column(ANCHOR).combine_chunks())
+    span_rows = spectral(spectra.drop_null())
+    chosen = []
+    if query.patches:
+        chosen.append(patch_rows[query.galaxy * N_PATCHES + np.asarray(query.patches)])
+    if query.spans:
+        chosen.append(span_rows[owners == query.galaxy][np.asarray(query.spans)])
+    direction = normalize(np.concatenate(chosen).mean(axis=0, keepdims=True))
+    scores = (patch_rows @ direction.T).reshape(-1, N_PATCHES).max(axis=1)
+    np.maximum.at(scores, owners, (span_rows @ direction.T).reshape(-1))
+    order = np.argsort(-scores, kind="stable")
+    chosen = np.concatenate(
+        ([query.galaxy], order[order != query.galaxy][: query.matches])
+    )
+    return chosen, scores[chosen]
 
 
 def test_index_holds_every_patch_and_every_span(
@@ -145,8 +175,7 @@ def test_approximate_ranking_agrees_with_exact(
     """Recall against brute force over every token.
 
     The fixture is small enough that the ANN candidate pool covers it, so the
-    two rankings should agree exactly. On production-sized data they will not;
-    scripts/benchmark.py measures the gap that remains.
+    two rankings should agree exactly. On production-sized data they will not.
     """
     query = query.model_copy(update={"matches": galaxies - 1})
     found, _, _, _ = search(query, index=built)

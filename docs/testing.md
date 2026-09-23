@@ -1,6 +1,6 @@
 # Testing and benchmarking
 
-Both run against a synthetic artifact tree built by `scripts/fixture.py`; neither needs Modal or a GPU, and nothing in either may touch the network.
+Tests run against a synthetic artifact tree built by `scripts/fixture.py`; they need neither Modal nor a GPU, and nothing in them may touch the network.
 
 ## Tests
 
@@ -15,21 +15,15 @@ commands, the second as `--check`.
 ## Benchmarks
 
 ```sh
-uv run python -m scripts.benchmark --galaxies 32 --out bench.json
-uv run python -m scripts.benchmark --tree .cache/fixture   # reuse a tree
+uv run modal run -m scripts.benchmark
+uv run modal run -m scripts.benchmark --runs 50
 ```
 
-Output is JSON tagged with the commit and the fixture shape. **Runs only compare when `galaxies` and `seed` match**: the index geometry depends on the dataset size, so a bigger fixture is a different experiment, not a longer one. Load timings run against a warm page cache on a local disk, so they are a lower bound on a Modal container reading a cold network volume.
+The benchmark measures the production artifacts on the Modal volume, never the fixture. `modal run` starts an ephemeral copy of `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A client in a separate container times one cold `/meta`, then each endpoint warm, and a container with the server's spec times the stages of `search()`. Latency includes Modal's ingress but not the network of whoever started the run.
 
-Before and after a change worth measuring:
+Output is JSON recording the commit, dataset revision, date, the Modal spec of server and client, and the thread configuration. Run it only when asked; it never runs in CI. If the code under test needs artifacts the volume does not hold yet, build them first.
 
-```sh
-uv run python -m scripts.benchmark --galaxies 32 --out before.json
-# ... change something ...
-uv run python -m scripts.benchmark --galaxies 32 --out after.json
-```
-
-Read `docs/performance.md` before drawing a conclusion from a benchmark run, particularly the section on why fixture recall numbers do not transfer to production.
+Read `docs/performance.md` before drawing a conclusion from a benchmark run.
 
 ## Frontend
 

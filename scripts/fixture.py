@@ -3,7 +3,7 @@
 Real artifacts come from the Modal build jobs: a GPU, the AION encoder and tens
 of gigabytes of embeddings. This writes artifacts with the production schemas
 at a size that fits in a runner. Everything downstream of the artifacts (the API,
-the search path, the benchmarks) then exercises real code against real files.
+the search path) then exercises real code against real files.
 
 Embeddings are drawn from a fixed set of random cluster centres rather than
 uniform noise. In 768 dimensions uniform random vectors are all near-orthogonal,
