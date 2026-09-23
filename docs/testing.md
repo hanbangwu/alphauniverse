@@ -1,16 +1,17 @@
 # Testing and benchmarking
 
-Tests run against a synthetic artifact tree built by `scripts/fixture.py`; they need neither Modal nor a GPU, and nothing in them may touch the network.
+Tests run against a synthetic artifact tree built by `scripts/fixture.py`; they need neither Modal, a GPU nor the network.
 
 ## Tests
 
 ```sh
 uv run pytest
 uv run pytest -k search  # one area
+uv run ruff check app scripts tests modal_app.py
+uv run ruff format app scripts tests modal_app.py
 ```
 
-`tests/conftest.py` builds the tree once per session. CI runs the same two ruff
-commands, the second as `--check`.
+`tests/conftest.py` builds the tree once per session.
 
 ## Benchmarks
 
@@ -19,9 +20,9 @@ uv run modal run -m scripts.benchmark
 uv run modal run -m scripts.benchmark --runs 50
 ```
 
-The benchmark measures the production artifacts on the Modal volume, never the fixture. `modal run` starts an ephemeral copy of `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A client in a separate container times one cold `/meta`, then each endpoint warm, and a container with the server's spec times the stages of `search()`. Latency includes Modal's ingress but not the network of whoever started the run.
+The benchmark measures the production artifacts on the Modal volume, never the fixture. `modal run` starts an ephemeral copy of `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A client in a separate container times one cold `/meta`, then each endpoint warm, and a container with the server's spec times the stages of `search()`.
 
-Output is JSON recording the commit, dataset revision, date, the Modal spec of server and client, and the thread configuration. Run it only when asked; it never runs in CI. If the code under test needs artifacts the volume does not hold yet, build them first.
+Output is JSON recording the commit, dataset revision, date, the Modal spec of server and client, and the thread configuration. It never runs in CI.
 
 Read `docs/performance.md` before drawing a conclusion from a benchmark run.
 

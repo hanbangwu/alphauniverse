@@ -8,11 +8,11 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 - **Explore the embedding space** - Every galaxy appears as a point in a parametric UMAP projection. There are two views: **mean**, one point per galaxy from its average embedding; and **full**, one point per embedding (all modalities share one map).
 - **Inspect a galaxy** - Selecting a point opens its Legacy Survey cutout, its DESI or SDSS spectrum, its morphology label, which surveys it was crossmatched into, and the codebook token behind each of its 576 image patches.
-- **Search by token** - Click image patches, spectrum spans, or both to find similar galaxies by cosine similarity: the selected embeddings are averaged into one query and scored against every image patch and spectral token in the dataset. The image heatmaps show the patch scores; the span scores come back but are not drawn yet. Thresholding also gives zero-shot segmentation.
+- **Search by token** - Click image patches, spectrum spans, or both to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and thresholding the heatmap gives zero-shot segmentation.
 
 ## Data
 
-`hanbangwu/alphauniverse-cosmos` is Legacy Survey DR10 south over COSMOS crossmatched with Legacy Survey as anchor against four othe rcatalogues:
+`hanbangwu/alphauniverse-cosmos` is Legacy Survey DR10 south over COSMOS, crossmatched against HSC, DESI, SDSS, Galaxy Zoo 10 and PROVABGS. The image and spectrum surveys are tokenised:
 
 | Survey             | Modality | Tokens per galaxy |
 | ------------------ | -------- | ----------------- |
@@ -43,15 +43,9 @@ uv run modal run modal_app.py::generate_index        # build the search index
 uv run modal run modal_app.py::generate_cutouts      # crop and encode the images
 uv run modal run modal_app.py::generate_spectra      # extract the spectra
 uv run modal run modal_app.py::generate_projections  # fit and apply the projection
-uv run modal deploy modal_app.py                     # serve
-uv run modal run -m scripts.benchmark                # measure the serving path
 ```
 
-### Local Build
-
-```sh
-uv run pytest
-```
+### API
 
 After changing a route or model in `app/main.py`, regenerate the API schema the frontend's client is built from:
 
