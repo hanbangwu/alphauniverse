@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import mimetypes
 from contextlib import asynccontextmanager
 from functools import cache
 from io import BytesIO
@@ -36,7 +35,7 @@ from .config import (
 )
 from .cutouts import cutouts, image
 from .search import Query as SearchQuery
-from .search import index, search, source, with_spectrum
+from .search import index, search, source, starts, with_spectrum
 from .spectra import spectra, spectrum
 
 if TYPE_CHECKING:
@@ -124,7 +123,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raise ValueError(f"{stored} {role} for {galaxies} galaxies")
 
     index()
-    with_spectrum()
+    starts()
     yield
 
 
@@ -184,7 +183,7 @@ def get_artifact(role: str) -> Response:
 
     return FileResponse(
         path,
-        media_type=mimetypes.guess_type(path)[0] or "application/octet-stream",
+        media_type="application/octet-stream",
         filename=path.name,
     )
 
