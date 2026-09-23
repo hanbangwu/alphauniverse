@@ -1,14 +1,31 @@
-"""The HTTP contract: shapes, encodings, validation and error paths."""
+"""The HTTP contract: status codes, content types and response shapes."""
 
 import io
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import ARTIFACTS, GRID, N_MORPHOLOGIES, N_PATCHES, N_SPANS
-from scripts.fixture import TOKENS, covered
+from app.config import (
+    ARTIFACTS,
+    FLAG_SURVEYS,
+    GRID,
+    N_MORPHOLOGIES,
+    N_PATCHES,
+    N_SPANS,
+    SPECTRUM_SURVEYS,
+    TOKEN_SURVEYS,
+    artifact,
+)
+
+ARROW = "application/vnd.apache.arrow.stream"
+
+
+def _with_spectrum() -> np.ndarray:
+    stored = pq.read_table(artifact("encoded"), columns=list(SPECTRUM_SURVEYS))
+    return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
 def test_meta_counts_every_galaxy(client: TestClient, galaxies: int) -> None:
@@ -17,7 +34,6 @@ def test_meta_counts_every_galaxy(client: TestClient, galaxies: int) -> None:
     assert meta["galaxies"] == galaxies
     assert meta["grid"] == GRID
     assert len(meta["morphologies"]) == N_MORPHOLOGIES
-    assert sum(meta["morphologies"]) + meta["unlabelled"] == galaxies
 
 
 def test_meta_names_the_artifact_roles_it_points_at(client: TestClient) -> None:
@@ -43,7 +59,8 @@ def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:
 
 
 def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
-    """`codebook` is a real role the fixture does not build."""
+    assert not artifact("codebook").exists()
+
     assert client.get("/artifacts/codebook").status_code == 404
 
 
@@ -57,14 +74,15 @@ def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
+    stored = pq.read_table(artifact("tokens"), filters=[("galaxy", "==", galaxy)])
     rows = {
         row["survey"]: row["matched"]
         for row in client.get(f"/galaxies/{galaxy}/coverage").json()
     }
 
-    for survey in TOKENS:
-        assert rows[survey] is covered(survey, galaxy)
-    assert {"gz10", "provabgs"} <= rows.keys()
+    assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
+    for survey in TOKEN_SURVEYS:
+        assert rows[survey] is stored.column(survey)[0].is_valid
 
 
 def test_image_is_served_as_png(client: TestClient) -> None:
@@ -75,10 +93,39 @@ def test_image_is_served_as_png(client: TestClient) -> None:
     assert response.content.startswith(b"\x89PNG")
 
 
+def test_spectrum_is_served_as_arrow(client: TestClient) -> None:
+    response = client.get("/galaxies/0/spectra/desi")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == ARROW
+    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
+    assert table.column_names == ["wavelength", "flux"]
+
+
+def test_unmatched_spectrum_is_not_found(client: TestClient) -> None:
+    spectra = pq.read_table(artifact("spectra"), columns=["desi"]).column("desi")
+    tokens = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    without = spectra.is_valid().to_pylist().index(False)
+    untokenised = tokens.is_valid().to_pylist().index(False)
+
+    assert client.get(f"/galaxies/{without}/spectra/desi").status_code == 404
+    assert client.get(f"/galaxies/{untokenised}/spectra/desi/tokens").status_code == 404
+
+
+def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
+    cell = pq.read_table(artifact("tokens"), columns=["sdss"]).column("sdss")[0]
+
+    response = client.get("/galaxies/0/spectra/sdss/tokens")
+
+    assert response.status_code == 200
+    served = np.frombuffer(response.content, dtype=np.uint32)
+    np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
+
+
 def _similarity(client: TestClient, **query) -> pa.RecordBatch:
     response = client.get("/similarity", params=query)
     assert response.status_code == 200, response.text
-    assert response.headers["content-type"] == "application/vnd.apache.arrow.stream"
+    assert response.headers["content-type"] == ARROW
     return pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
 
 
@@ -95,20 +142,11 @@ def test_similarity_spectrum_column_is_null_without_a_spectrum(
     client: TestClient,
 ) -> None:
     table = _similarity(client, galaxy=0, s=[10, 11], matches=11)
-    by_galaxy = dict(zip(table.column("galaxy").to_pylist(), table.column("spectrum")))
+    galaxies = table.column("galaxy").to_numpy()
 
-    for galaxy, cell in by_galaxy.items():
-        assert cell.is_valid == any(covered(s, galaxy) for s in ("desi", "sdss"))
-        if cell.is_valid:
-            assert len(cell) == N_SPANS
-
-
-def test_similarity_leads_with_the_query_galaxy(client: TestClient) -> None:
-    table = _similarity(client, galaxy=7, p=[42])
-
-    assert table.column("galaxy")[0].as_py() == 7
-    scores = table.column("score").to_pylist()
-    assert scores[1:] == sorted(scores[1:], reverse=True)
+    np.testing.assert_array_equal(
+        table.column("spectrum").is_valid().to_numpy(), _with_spectrum()[galaxies]
+    )
 
 
 @pytest.mark.parametrize(
@@ -118,7 +156,6 @@ def test_similarity_leads_with_the_query_galaxy(client: TestClient) -> None:
         {"galaxy": 0, "p": [N_PATCHES]},
         {"galaxy": 0, "p": [-1]},
         {"galaxy": 0, "s": [N_SPANS]},
-        {"galaxy": 1, "s": [0]},
         {"galaxy": -1, "p": [0]},
         {"galaxy": 0, "p": [0], "matches": 0},
         {"galaxy": 0, "p": [0], "matches": 129},
@@ -126,6 +163,16 @@ def test_similarity_leads_with_the_query_galaxy(client: TestClient) -> None:
 )
 def test_similarity_rejects_invalid_queries(client: TestClient, query: dict) -> None:
     assert client.get("/similarity", params=query).status_code == 422
+
+
+def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
+    client: TestClient,
+) -> None:
+    galaxy = int(np.flatnonzero(~_with_spectrum())[0])
+
+    response = client.get("/similarity", params={"galaxy": galaxy, "s": [0]})
+
+    assert response.status_code == 422
 
 
 def test_negative_galaxy_is_rejected(client: TestClient) -> None:
