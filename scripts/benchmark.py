@@ -6,6 +6,7 @@ import subprocess
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from itertools import pairwise
 from typing import Any
 
 import faiss
@@ -14,6 +15,8 @@ import modal
 import numpy as np
 
 from app.config import ARTIFACTS, DATASET_REVISION, GALAXIES, N_PATCHES
+from app.cutouts import cutouts
+from app.main import labels
 from app.search import (
     Query,
     candidates,
@@ -21,25 +24,31 @@ from app.search import (
     index,
     rank,
     score_maps,
-    search,
     span_maps,
+    starts,
     vectors,
 )
+from app.spectra import spectra
 from modal_app import app, fastapi_app, serving_image
 
 image = serving_image.add_local_python_source("modal_app")
 
-SHAPES = [(patches, matches) for patches in (1, 4, 16) for matches in (8, 32, 128)]
+PATCHES = 4
+MATCHES = (8, 32, 128)
+STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
+
+
+def elapsed(call: Callable[[], Any]) -> float:
+    """How long one call of `call` takes, in milliseconds."""
+    start = time.perf_counter()
+    call()
+    return (time.perf_counter() - start) * 1000
 
 
 def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
     """Time `call` over `runs` runs after one warm-up, in milliseconds."""
     call()
-    samples = []
-    for _ in range(runs):
-        start = time.perf_counter()
-        call()
-        samples.append((time.perf_counter() - start) * 1000)
+    samples = [elapsed(call) for _ in range(runs)]
     return {
         "runs": runs,
         "p50_ms": round(float(np.percentile(samples, 50)), 3),
@@ -72,11 +81,7 @@ def spec(function: modal.Function) -> dict[str, Any]:
 
 
 def environment() -> dict[str, Any]:
-    """Thread configuration, which the stage shares depend on.
-
-    `vectors` is faiss-parallel and the `score_maps` GEMV contends with that
-    pool, so two runs only compare when these agree.
-    """
+    """Thread configuration, which the stage shares depend on."""
     return {
         "cpu_count": os.cpu_count(),
         "faiss_threads": faiss.omp_get_max_threads(),
@@ -100,9 +105,16 @@ def client(url: str, runs: int) -> dict[str, Any]:
             response = session.head(f"/artifacts/{role}").raise_for_status()
             return int(response.headers["content-length"])
 
-        start = time.perf_counter()
-        get("/meta")
-        cold = round((time.perf_counter() - start) * 1000, 3)
+        def similarity(matches: int) -> None:
+            get(
+                "/similarity",
+                galaxy=galaxy(),
+                p=rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                matches=matches,
+            )
+
+        cold_meta = round(elapsed(lambda: get("/meta")), 3)
+        cold_similarity = round(elapsed(lambda: similarity(32)), 3)
 
         calls = {
             "meta": lambda: get("/meta"),
@@ -110,21 +122,36 @@ def client(url: str, runs: int) -> dict[str, Any]:
             "tokens": lambda: get(f"/galaxies/{galaxy()}/tokens"),
             "coverage": lambda: get(f"/galaxies/{galaxy()}/coverage"),
         } | {
-            f"similarity patches={patches},matches={matches}": (
-                lambda patches=patches, matches=matches: get(
-                    "/similarity",
-                    galaxy=galaxy(),
-                    p=rng.choice(N_PATCHES, patches, replace=False).tolist(),
-                    matches=matches,
-                )
+            f"similarity matches={matches}": (
+                lambda matches=matches: similarity(matches)
             )
-            for patches, matches in SHAPES
+            for matches in MATCHES
         }
         return {
-            "cold_meta_ms": cold,
+            "cold_meta_ms": cold_meta,
+            "cold_similarity_ms": cold_similarity,
             "warm": {label: time_it(runs, call) for label, call in calls.items()},
             "artifact_bytes": {role: size(role) for role in ARTIFACTS},
         }
+
+
+def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
+    """How long each stage of `search()` takes on `query`, and how many rows it scores."""
+    marks = [time.perf_counter()]
+    direction = centroid(query, index=built)
+    marks.append(time.perf_counter())
+    order = candidates(query, direction, index=built)
+    marks.append(time.perf_counter())
+    rows = vectors(order, index=built)
+    marks.append(time.perf_counter())
+    scored = score_maps(rows, direction, width=N_PATCHES)
+    marks.append(time.perf_counter())
+    spectral_scores = span_maps(order, direction, index=built)
+    marks.append(time.perf_counter())
+    rank(order, scored, spectral_scores)
+    marks.append(time.perf_counter())
+    times = [(end - begin) * 1000 for begin, end in pairwise(marks)]
+    return times, len(rows)
 
 
 @app.function(
@@ -135,44 +162,36 @@ def client(url: str, runs: int) -> dict[str, Any]:
     timeout=60 * 60,
 )
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
-    """Where a query's time goes, split by stage of `search()`."""
-    start = time.perf_counter()
+    """What startup loads, and where a query's time goes by stage of `search()`."""
+    loads = {
+        load.__name__: round(elapsed(load), 3)
+        for load in (labels, cutouts, spectra, index, starts)
+    }
     built = index()
-    load = round(time.perf_counter() - start, 3)
 
-    batch = queries(runs + 1, 4, matches)
-    search(batch[0], index=built)
-    names = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
-    samples: dict[str, list[float]] = {name: [] for name in names}
+    batch = queries(runs + 1, PATCHES, matches)
+    cold = stage_times(batch[0], built)[0]
+    samples: dict[str, list[float]] = {name: [] for name in STAGES}
     widths: list[int] = []
 
     for query in batch[1:]:
-        marks = [time.perf_counter()]
-        direction = centroid(query, index=built)
-        marks.append(time.perf_counter())
-        order = candidates(query, direction, index=built)
-        marks.append(time.perf_counter())
-        rows = vectors(order, index=built)
-        marks.append(time.perf_counter())
-        scored = score_maps(rows, direction, width=N_PATCHES)
-        marks.append(time.perf_counter())
-        spectral_scores = span_maps(order, direction, index=built)
-        marks.append(time.perf_counter())
-        rank(order, scored, spectral_scores)
-        marks.append(time.perf_counter())
-
-        widths.append(rows.shape[0])
-        for name, begin, end in zip(names, marks[:-1], marks[1:], strict=True):
-            samples[name].append((end - begin) * 1000)
+        times, width = stage_times(query, built)
+        widths.append(width)
+        for name, milliseconds in zip(STAGES, times, strict=True):
+            samples[name].append(milliseconds)
 
     total = sum(float(np.median(values)) for values in samples.values())
     reconstructed = int(np.median(widths))
     return {
         "environment": environment(),
-        "index_load_s": load,
+        "load_ms": loads,
         "runs": runs,
         "matches": matches,
         "vectors_reconstructed": reconstructed,
+        "cold_stages_ms": {
+            name: round(milliseconds, 3)
+            for name, milliseconds in zip(STAGES, cold, strict=True)
+        },
         "total_p50_ms": round(total, 3),
         "us_per_reconstructed_vector": round(
             1000 * float(np.median(samples["vectors"])) / reconstructed, 3
