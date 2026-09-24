@@ -4,12 +4,13 @@ Every figure here comes from one run of `scripts/benchmark.py`:
 
 | Run              |                                                             |
 | ---------------- | ----------------------------------------------------------- |
-| Date             | 2026-09-23                                                  |
-| Commit           | `b152dd9`                                                   |
+| Date             | 2026-09-24                                                  |
+| Commit           | `1d1d4b8`                                                   |
 | Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                  |
 | Server           | `fastapi_app`: 8 CPU, 8 GiB requested, 64 GiB limit         |
 | Client           | 1 CPU, separate container                                   |
 | Stage container  | server spec; 24 CPUs visible, faiss and OpenMP at 8 threads |
+| Cold runs        | one request, or one query, per figure                       |
 | Warm runs        | 30 per figure, after one discarded warm-up                  |
 
 Latency is measured by the client, so it includes Modal's ingress but no one's home network. Anything labelled **unmeasured** is read off the code and needs a real number before it is trusted.
@@ -18,49 +19,46 @@ Latency is measured by the client, so it includes Modal's ingress but no one's h
 
 What a first visitor to an idle site waits for:
 
-| Step                                           | Cost                        |
-| ---------------------------------------------- | --------------------------- |
-| Container start + index load, blocking `/meta` | **44.9 s**                  |
-| Index load: `read_index` plus the direct map   | 40.7 s                      |
-| Everything warm after that                     | 0.30–0.64 s p50 per request |
+| Step                                              | Cost                        |
+| ------------------------------------------------- | --------------------------- |
+| Container start + startup loads, blocking `/meta` | **19.5 s**                  |
+| Startup loads, of which the index is 6.0 s        | 7.9 s                       |
+| First `/similarity` after that                    | 0.64 s                      |
+| Everything warm after that                        | 0.15–0.49 s p50 per request |
 
-**A cold visit is ~45 seconds of blank page**, because `+layout.server.ts` awaits `/meta` during SSR and nothing renders until it returns.
+**A cold visit is ~20 seconds of blank page**, because `+layout.server.ts` awaits `/meta` during SSR and nothing renders until it returns.
 
-Cold start dominates, and it is not the search algorithm: the approximate nearest-neighbour search is 14% of a query.
+Cold start dominates, and it is not the search algorithm: the approximate nearest-neighbour search is 22% of `search()`, which is itself 51 ms of a request.
 
 ## Query latency
 
-`/similarity`, warm:
+`/similarity` with 4 patches, warm:
 
-| Query shape             | p50    | p95    |
-| ----------------------- | ------ | ------ |
-| 1 patch, 8 matches      | 340 ms | 351 ms |
-| 4 patches, 8 matches    | 336 ms | 342 ms |
-| 16 patches, 8 matches   | 339 ms | 351 ms |
-| 1 patch, 32 matches     | 415 ms | 439 ms |
-| 4 patches, 32 matches   | 397 ms | 416 ms |
-| 16 patches, 32 matches  | 404 ms | 422 ms |
-| 1 patch, 128 matches    | 645 ms | 750 ms |
-| 4 patches, 128 matches  | 612 ms | 661 ms |
-| 16 patches, 128 matches | 633 ms | 663 ms |
+| Matches | p50    | p95    |
+| ------- | ------ | ------ |
+| 8       | 204 ms | 231 ms |
+| 32      | 263 ms | 269 ms |
+| 128     | 489 ms | 761 ms |
 
-**Cost is set by `matches` and is independent of how many patches are queried.** The patch count changes one averaging step over a handful of vectors; `matches` changes how many galaxies get fully rescored, at 576 vector reconstructions each. Every request pays the ~305 ms floor `/meta` shows in [Other endpoints](#other-endpoints), so the default of 32 matches adds about 100 ms to it and the UI's maximum of 128 about 320 ms.
+**Cost is set by `matches`.** It sets how many galaxies get fully rescored, at 576 vector reconstructions each, while the patch count only changes one averaging step over a handful of vectors, so the run holds patches at 4. Every request pays the ~148 ms floor `/meta` shows in [Other endpoints](#other-endpoints), so the default of 32 matches adds about 115 ms to it and the UI's maximum of 128 about 341 ms.
+
+The first `/similarity` to a freshly started container takes **0.64 s**. `search()` is 72 ms of a first query in the stage container, so most of the rest is outside it, in a split that is **unmeasured**.
 
 ## Stages of `search()`
 
-p50 over 30 queries of 4 patches and 32 matches:
+Queries of 4 patches and 32 matches. The first query runs right after the index loads; warm is the p50 over the 30 that follow it:
 
-| Stage         | p50         | Share      |
-| ------------- | ----------- | ---------- |
-| `centroid`    | 0.90 ms     | 1.0 %      |
-| `candidates`  | 12.8 ms     | 13.9 %     |
-| **`vectors`** | **76.8 ms** | **83.2 %** |
-| `score_maps`  | 1.50 ms     | 1.6 %      |
-| `span_maps`   | 0.09 ms     | 0.1 %      |
-| `rank`        | 0.22 ms     | 0.2 %      |
-| Total         | 92.3 ms     |            |
+| Stage         | First query | Warm p50    | Warm share |
+| ------------- | ----------- | ----------- | ---------- |
+| `centroid`    | 9.80 ms     | 0.65 ms     | 1.3 %      |
+| `candidates`  | 11.1 ms     | 11.4 ms     | 22.2 %     |
+| **`vectors`** | 42.8 ms     | **38.2 ms** | **74.7 %** |
+| `score_maps`  | 1.39 ms     | 0.73 ms     | 1.4 %      |
+| `span_maps`   | 6.40 ms     | 0.06 ms     | 0.1 %      |
+| `rank`        | 0.19 ms     | 0.16 ms     | 0.3 %      |
+| Total         | 71.8 ms     | 51.1 ms     |            |
 
-`vectors` reconstructs 19,008 vectors at **4.0 µs each**, because `reconstruct_batch` walks the IVF direct map one vector at a time: a list lookup and a per-vector decode call rather than a contiguous read.
+`vectors` reconstructs 19,008 vectors at **2.0 µs each**, because `reconstruct_batch` walks the IVF direct map one vector at a time: a list lookup and a per-vector decode call rather than a contiguous read.
 
 Shares depend on the thread configuration: `vectors` is faiss-parallel and the `score_maps` GEMV contends with that pool, so stage figures only compare between runs whose thread configuration agrees.
 
@@ -70,10 +68,10 @@ Warm, same client:
 
 | Endpoint                  | p50    | p95    |
 | ------------------------- | ------ | ------ |
-| `/meta`                   | 305 ms | 313 ms |
-| `/galaxies/{g}/image.png` | 303 ms | 310 ms |
-| `/galaxies/{g}/tokens`    | 312 ms | 320 ms |
-| `/galaxies/{g}/coverage`  | 313 ms | 326 ms |
+| `/meta`                   | 148 ms | 153 ms |
+| `/galaxies/{g}/image.png` | 148 ms | 157 ms |
+| `/galaxies/{g}/tokens`    | 158 ms | 169 ms |
+| `/galaxies/{g}/coverage`  | 163 ms | 237 ms |
 
 `/meta` is cached in-process and the image is an array lookup into `cutouts.parquet`, so these sit at the request floor and their compute is negligible next to it. What the floor itself is made of is **unmeasured**.
 
@@ -84,7 +82,7 @@ Warm, same client:
 | Artifact          | Size         | Notes                                   |
 | ----------------- | ------------ | --------------------------------------- |
 | `encoded`         | **22.97 GB** | wired to a "Download embeddings" button |
-| `encoded_index`   | **17.19 GB** | read into RAM on every container start  |
+| `encoded_index`   | **17.19 GB** | memory-mapped on every container start  |
 | `codebook`        | **2.70 GB**  | same shape as `encoded`, 8.5× smaller   |
 | `cutouts`         | **215 MB**   | read into memory at startup             |
 | `full_points`     | **180 MB**   | downloaded into the browser on "Full"   |
@@ -93,7 +91,7 @@ Warm, same client:
 | `parametric_umap` | **923 KB**   | not read at serve time                  |
 | `mean_points`     | **259 KB**   | downloaded on first paint               |
 
-Loading the 17.19 GB index takes 40.7 s. How that splits between `read_index` and `make_direct_map()` is **unmeasured**.
+Loading the 17.19 GB index takes 6.0 s. `read_index` memory-maps its inverted lists and `make_direct_map()` reads every list's ids.
 
 `codebook` is 8.5× smaller than `encoded` despite an identical schema because codebook vectors are drawn from a finite codebook, so the same 768-d rows repeat and zstd compresses them well. Contextualised outputs are all distinct and do not compress.
 
@@ -105,48 +103,56 @@ Nothing in this section is done. Each entry is triaged on three axes, because th
 - **Blast radius**: how much code, and how much of the search method, a change disturbs. The two are independent: a one-line change that alters how every query touches memory has a small diff and a large blast radius.
 - **Kind**: _implementation_ pays off directly, _quality_ removes a defect or an obstacle without saving time, _groundwork_ only makes a later change possible or provable.
 
-| Entry                   | Impact                                               | Blast radius                | Kind                     |
-| ----------------------- | ---------------------------------------------------- | --------------------------- | ------------------------ |
-| `index-mmap`            | 45 s cold start, if faiss supports it here           | Small diff, large behaviour | Implementation           |
-| `ssr-unblock`           | Turns 45 s of blank page into 45 s of spinner        | Medium, frontend            | Quality                  |
-| `patch-array`           | `vectors`, 83% of a query; magnitude unmeasured      | Large                       | Implementation           |
-| `cache-headers`         | Whole surface on repeat visits; magnitude unmeasured | Small                       | Implementation           |
-| `index-compression`     | Cold start, and the RAM ceiling                      | Large, methodological       | Implementation           |
-| `tokens-bulk`           | ~312 ms per newly selected galaxy                    | Medium                      | Implementation           |
-| `bulk-offload`          | None steady-state, large under load                  | Infrastructure              | Quality                  |
-| `full-points-view`      | Browser memory and time-to-full-view; unmeasured     | Small-medium                | Implementation           |
-| `match-list-virtualise` | Low                                                  | Medium, frontend            | Quality                  |
-| `min-containers`        | Removes cold start outright                          | None                        | Operational, costs money |
-| `production-recall`     | None directly                                        | Small                       | Groundwork               |
-| `recall-reported`       | None                                                 | Small                       | Quality                  |
-| `encode-coverage`       | None                                                 | Small                       | Groundwork               |
+| Entry                   | Impact                                               | Blast radius          | Kind                     |
+| ----------------------- | ---------------------------------------------------- | --------------------- | ------------------------ |
+| `ssr-unblock`           | Turns the cold start's blank page into a spinner     | Medium, frontend      | Quality                  |
+| `patch-array`           | `vectors`, 75% of a query; magnitude unmeasured      | Large                 | Implementation           |
+| `cache-headers`         | Whole surface on repeat visits; magnitude unmeasured | Small                 | Implementation           |
+| `index-compression`     | Cold start, and the RAM ceiling                      | Large, methodological | Implementation           |
+| `tokens-bulk`           | ~158 ms per newly selected galaxy                    | Medium                | Implementation           |
+| `bulk-offload`          | None steady-state, large under load                  | Infrastructure        | Quality                  |
+| `full-points-view`      | Browser memory and time-to-full-view; unmeasured     | Small-medium          | Implementation           |
+| `match-list-virtualise` | Low                                                  | Medium, frontend      | Quality                  |
+| `min-containers`        | Removes cold start outright                          | None                  | Operational, costs money |
+| `production-recall`     | None directly                                        | Small                 | Groundwork               |
+| `recall-reported`       | None                                                 | Small                 | Quality                  |
+| `encode-coverage`       | None                                                 | Small                 | Groundwork               |
 
 ### Sequencing
 
-Impact order is not the order to work in, because of three couplings.
-
-**`index-mmap` needs measuring before it counts as small.** `write_index` stores an IVF index's inverted lists in the in-memory array form, and faiss's `IO_FLAG_MMAP` may require the on-disk form instead. Even if it loads, `make_direct_map()` plus page faults during `reconstruct_batch` could trade 41 s of startup for unpredictable per-query latency. The change is one flag; the question it raises is whether every query gets slower, and only a measurement answers it.
+Impact order is not the order to work in, because of two couplings.
 
 **`patch-array` and `index-compression` are one design, not two changes.** `patch-array` adds a contiguous fp16 array holding the same patch vectors the index already holds, against a 64 GB container. `index-compression` shrinks the index at some cost in recall. Done together they separate two jobs the index is currently doing at once: a heavily compressed index generates candidates, and the flat array scores them exactly. Done separately, the first doubles memory and the second loses accuracy for nothing.
 
 **`production-recall` gates both of them.** Production recall is **unmeasured**: the brute-force reference in `tests/test_search.py` holds the whole corpus in memory, which only works at fixture scale. There is no baseline to show a quantiser change did not silently degrade results.
 
-That gives a working order. `cache-headers` is independent and provable now. Then the `index-mmap` measurement and `production-recall`, which between them make the `patch-array` + `index-compression` design possible.
+That gives a working order. `cache-headers` is independent and provable now. Then `production-recall`, which makes the `patch-array` + `index-compression` design possible.
 
 ### Cold start
 
-A request to a freshly started container took **44.9 s**, against 0.30 s warm. Loading the index is 40.7 s of it: `faiss.read_index` reads the whole 17.19 GB into memory with no mmap, then `make_direct_map()` builds the id lookup, in a split that is unmeasured, while `max_containers=1` means there is no second container to answer instead.
+A request to a freshly started container took **19.5 s**, against 0.15 s warm. `max_containers=1` means there is no second container to answer instead.
 
-With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more than five minutes after the last one waits the full 45 s, so on a low-traffic site it is the usual case.
+The startup loads, timed in a separate container of the same spec, add up to 7.9 s:
+
+| Load      | Time   |
+| --------- | ------ |
+| `index`   | 6.01 s |
+| `cutouts` | 1.37 s |
+| `spectra` | 0.44 s |
+| `starts`  | 0.03 s |
+| `labels`  | 0.01 s |
+
+`faiss.read_index` memory-maps the 17.19 GB with `IO_FLAG_MMAP`, so pages fault in as queries touch them, and `make_direct_map()` reads every id. What the other 11.6 s of a cold request is made of is **unmeasured**.
+
+With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more than five minutes after the last one waits the full 20 s, so on a low-traffic site it is the usual case.
 
 Options, cheapest first:
 
-- **`index-mmap`**: `faiss.IO_FLAG_MMAP` so pages fault in lazily. A search at `nprobe=64` of `nlist=16384` touches 0.4% of the lists, so time-to-first-response should drop by a large factor even though steady-state stays the same.
 - **`ssr-unblock`**: fetch `/meta` client-side so the shell paints immediately and the wait becomes a spinner instead of nothing. The cost is that every consumer of `data.meta` must then handle its absence.
 - **`index-compression`**: `SQ8` halves the index, PQ far more, both at a recall cost that is unmeasured until `production-recall` exists.
 - **`min-containers`**: `min_containers=1` removes cold start entirely, at the price of one container running continuously.
 
-The first two are cheap and compose. Do them before considering the last two.
+`ssr-unblock` is cheap. Do it before considering the other two.
 
 ### No cache headers anywhere
 
@@ -173,7 +179,7 @@ See [Sequencing](#sequencing) for why it only makes sense alongside `index-compr
 
 ### Smaller items
 
-- **`tokens-bulk`**: `/galaxies/{g}/tokens` returns 576 uint32 ids and costs 312 ms p50, paid once per galaxy the user selects. The whole `tokens` artifact is 7.0 MB, so shipping it once and querying in-browser could remove every one of those requests. Whether it helps depends on the anchor column's share of that 7 MB, which is unmeasured, and on how many galaxies a session touches.
+- **`tokens-bulk`**: `/galaxies/{g}/tokens` returns 576 uint32 ids and costs 158 ms p50, paid once per galaxy the user selects. The whole `tokens` artifact is 7.0 MB, so shipping it once and querying in-browser could remove every one of those requests. Whether it helps depends on the anchor column's share of that 7 MB, which is unmeasured, and on how many galaxies a session touches.
 - **`recall-reported`**: `search()` can return fewer than `matches` galaxies when the candidate patches do not cover enough of them, and the response says nothing about it.
 - **`encode-coverage`**: `app/encode.py` has no automated coverage at all, so an import error or a schema drift there is caught only by a full build. It imports torch at module level, so a test needs the stubbed-import approach rather than a real import.
 
@@ -181,13 +187,13 @@ See [Sequencing](#sequencing) for why it only makes sense alongside `index-compr
 
 Current design targets COSMOS scale. Where it stops:
 
-| Ceiling                      | Now                 | Breaks at                                                      |
-| ---------------------------- | ------------------- | -------------------------------------------------------------- |
-| Index in RAM                 | 17.19 GB            | ~3.7×, the container's 64 GB limit. 100× needs PQ or sharding. |
-| Cold start                   | 44.9 s              | ~2× before it exceeds common proxy and browser timeouts        |
-| `full_points` in the browser | 180 MB              | ~10×; DuckDB-WASM has a few GB to work with.                   |
-| Cutouts in memory            | 215 MB              | linear; fine to ~100×, then needs tiling                       |
-| Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured          |
-| Serving capacity             | one container       | any concurrency at all; `max_containers=1` is a hard cap       |
+| Ceiling                      | Now                 | Breaks at                                                                                     |
+| ---------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
+| Index size                   | 17.19 GB            | ~3.7×, when the pages queries touch outgrow the container's 64 GB. 100× needs PQ or sharding. |
+| Cold start                   | 19.5 s              | ~4× before it exceeds common proxy and browser timeouts                                       |
+| `full_points` in the browser | 180 MB              | ~10×; DuckDB-WASM has a few GB to work with.                                                  |
+| Cutouts in memory            | 215 MB              | linear; fine to ~100×, then needs tiling                                                      |
+| Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                         |
+| Serving capacity             | one container       | any concurrency at all; `max_containers=1` is a hard cap                                      |
 
 None of these need solving now. All of them should be checked before a change assumes they are not there.
