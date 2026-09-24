@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { SIMILARITY } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import PatchMask from './patch-mask.svelte'
@@ -19,15 +18,15 @@
   {/if}
 
   <PatchPanel
-    label={similarity.imageMap ? SIMILARITY.label : 'Tokens'}
+    label="Cutout tokens"
     describe="Click a patch to query it"
-    values={similarity.cells}
+    values={similarity.tokens}
     grid={similarity.grid}
     color={similarity.palette}
     title={similarity.caption}
     selected={view.patches.value}
     onselect={(indices) => (view.patches.value = indices)}
-    busy={similarity.cells === null || (view.querying && similarity.fetching)}
+    busy={similarity.tokens === null || (view.querying && similarity.fetching)}
   />
 
   <SpectrumPanel

@@ -28,8 +28,8 @@ export class Similarity {
   readonly spectrumMaps: Float32Array | null
   readonly spectrumHeat: ((value: number) => RGB) | null
   readonly spectrumMap: Float32Array | null
+  readonly tokens: Uint32Array | null
   readonly palette: ((value: number) => RGB) | null
-  readonly cells: ArrayLike<number> | null
 
   constructor(galaxy: number) {
     const app = this.#app
@@ -44,8 +44,6 @@ export class Similarity {
       )
     )
 
-    const tokens = $derived(this.#tokenMap.data ?? null)
-
     this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
     this.imageDomain = $derived(this.imageMaps ? extent(this.imageMaps) : null)
@@ -58,10 +56,8 @@ export class Similarity {
       return low <= high ? continuous([low, high]) : null
     })
     this.spectrumMap = $derived(this.spectrumMaps ? this.spectrumMapAt(0) : null)
-    this.palette = $derived(
-      this.imageMap && this.imageHeat ? this.imageHeat : tokens ? tokenColors(tokens) : null
-    )
-    this.cells = $derived(this.imageMap ?? tokens)
+    this.tokens = $derived(this.#tokenMap.data ?? null)
+    this.palette = $derived(this.tokens ? tokenColors(this.tokens) : null)
   }
 
   get fetching(): boolean {
@@ -77,7 +73,7 @@ export class Similarity {
 
   readonly score = (value: number): string => `${SIMILARITY.short} ${value.toFixed(DECIMALS)}`
 
-  readonly caption: Caption = (value) => (this.imageMap ? this.score(value) : `token ${value}`)
+  readonly caption: Caption = (value) => `token ${value}`
 
   readonly maskColor = (value: number): RGB => (value ? [255, 255, 255] : [0, 0, 0])
 

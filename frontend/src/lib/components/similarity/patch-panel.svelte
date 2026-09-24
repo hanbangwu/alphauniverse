@@ -9,7 +9,6 @@
     grid: number
     color: ((value: number) => RGB) | null
     title?: (value: number, index: number) => string
-    badge?: string
     describe?: string
     selected?: number[]
     onselect?: (indices: number[]) => void
@@ -22,7 +21,6 @@
     grid,
     color,
     title,
-    badge,
     describe,
     selected,
     onselect,
@@ -31,12 +29,7 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <div class="flex items-baseline justify-between">
-    <span class="text-sm font-medium">{label}</span>
-    {#if badge}
-      <span class="font-mono text-xs text-muted-foreground tabular-nums">{badge}</span>
-    {/if}
-  </div>
+  <span class="text-sm font-medium">{label}</span>
 
   <PatchFrame {busy}>
     {#if values && color}
