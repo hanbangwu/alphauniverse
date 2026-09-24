@@ -136,7 +136,7 @@
           axisPointer: { lineStyle: { color: ink.muted } }
         }
       : undefined,
-    dataZoom: interactive ? [{ type: 'inside' }] : undefined,
+    dataZoom: [{ type: 'inside' }],
     series: [
       {
         type: 'line',
