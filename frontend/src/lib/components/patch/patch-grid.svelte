@@ -28,7 +28,7 @@
     values: ArrayLike<number>
     grid: number
     color: (value: number) => RGB
-    opacity?: number
+    opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
     onselect?: (indices: number[]) => void
@@ -40,7 +40,7 @@
     values,
     grid,
     color,
-    opacity = 1,
+    opacity = () => 1,
     title,
     selected = [],
     onselect,
@@ -67,7 +67,7 @@
       type: 'rect',
       shape: { x, y, width, height },
       style: {
-        fill: `rgba(${r}, ${g}, ${b}, ${opacity})`,
+        fill: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
         stroke: picked ? SELECTED : undefined,
         lineWidth: 2
       },

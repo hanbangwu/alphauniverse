@@ -24,7 +24,6 @@ export const POINT_SETS = {
 
 export const DETAIL_VIEWS = {
   image: { label: 'Image' },
-  tokens: { label: 'Tokens' },
   spectrum: { label: 'Spectrum' }
 } satisfies Labels<string>
 

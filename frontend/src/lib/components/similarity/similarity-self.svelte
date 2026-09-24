@@ -18,11 +18,12 @@
   {/if}
 
   <PatchPanel
-    label="Cutout tokens"
+    label="Cutout Tokens"
     describe="Click a patch to query it"
     values={similarity.tokens}
     grid={similarity.grid}
     color={similarity.palette}
+    galaxy={similarity.galaxy}
     title={similarity.caption}
     selected={view.patches.value}
     onselect={(indices) => (view.patches.value = indices)}

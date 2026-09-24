@@ -33,7 +33,7 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <span class="text-sm font-medium">Spectrum</span>
+  <span class="text-sm font-medium">{map ? 'Spectrum' : 'Spectrum Tokens'}</span>
 
   <PatchFrame busy={coverage.isPending || spectrum.isFetching || tokens.isFetching} class="bg-card">
     {#if spectrum.data && cells && palette}

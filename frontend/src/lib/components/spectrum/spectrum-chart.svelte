@@ -29,7 +29,7 @@
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED, chartInk } from '$lib/color'
+  import { type RGB, SELECTED, chartInk, tokenAlpha } from '$lib/color'
   import { type Spectrum, spanAt, spanOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
@@ -81,7 +81,7 @@
         {
           xAxis: low,
           itemStyle: {
-            color: `rgba(${r}, ${g}, ${b}, ${picked ? 0.6 : 0.3})`,
+            color: `rgba(${r}, ${g}, ${b}, ${tokenAlpha(picked)})`,
             borderColor: SELECTED,
             borderWidth: picked ? 1 : 0
           }
@@ -148,7 +148,7 @@
         showSymbol: false,
         lineStyle: { width: 1, color: ink.text },
         emphasis: { disabled: true },
-        markArea: { silent: true, data: areas }
+        markArea: { silent: true, z: 3, data: areas }
       }
     ]
   })
