@@ -196,8 +196,8 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 
 @cache
 def index() -> faiss.Index:
-    """The search index, read into memory once per process."""
-    loaded = faiss.read_index(str(artifact("encoded_index")))
+    """The search index, memory-mapped once per process."""
+    loaded = faiss.read_index(str(artifact("encoded_index")), faiss.IO_FLAG_MMAP)
     loaded.make_direct_map()
     loaded.nprobe = NPROBE
     return loaded
