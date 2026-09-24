@@ -19,6 +19,6 @@
   badge={`${SIMILARITY.short} ${best.toFixed(DECIMALS)}`}
   {values}
   grid={similarity.grid}
-  color={similarity.heat}
+  color={similarity.imageHeat}
   title={similarity.score}
 />

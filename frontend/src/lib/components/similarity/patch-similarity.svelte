@@ -28,8 +28,8 @@
 
     <div class="flex flex-wrap items-center gap-4">
       <SimilarityControls />
-      {#if display.on.value && similarity.domain}
-        <MaskControls domain={similarity.domain} />
+      {#if display.on.value && similarity.imageDomain}
+        <MaskControls domain={similarity.imageDomain} />
       {/if}
     </div>
 

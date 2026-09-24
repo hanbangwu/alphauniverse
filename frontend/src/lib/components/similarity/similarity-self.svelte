@@ -15,12 +15,12 @@
 <div class="flex flex-col gap-5 md:flex-row">
   <GalaxyTile galaxy={similarity.galaxy} />
 
-  {#if similarity.self}
-    <PatchMask values={similarity.self} />
+  {#if similarity.imageMap}
+    <PatchMask values={similarity.imageMap} />
   {/if}
 
   <PatchPanel
-    label={similarity.self ? SIMILARITY.label : 'Tokens'}
+    label={similarity.imageMap ? SIMILARITY.label : 'Tokens'}
     describe="Click a patch to query it"
     values={similarity.cells}
     grid={similarity.grid}
@@ -31,11 +31,16 @@
     busy={similarity.cells === null || (view.querying && similarity.fetching)}
   >
     {#snippet footer()}
-      {#if similarity.domain}
-        <Colorbar domain={similarity.domain} label={SIMILARITY.label} />
+      {#if similarity.imageDomain}
+        <Colorbar domain={similarity.imageDomain} label={SIMILARITY.label} />
       {/if}
     {/snippet}
   </PatchPanel>
 
-  <SpectrumPanel />
+  <SpectrumPanel
+    galaxy={similarity.galaxy}
+    map={similarity.spectrumMap}
+    selected={view.spans.value}
+    onselect={(indices) => (view.spans.value = indices)}
+  />
 </div>

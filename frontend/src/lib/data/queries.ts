@@ -176,9 +176,13 @@ export function similarityQuery(
       return {
         galaxies: must(table.getChild('galaxy'), 'the similarity galaxy column').toArray(),
         scores: must(table.getChild('score'), 'the similarity score column').toArray(),
-        map: must(
+        imageMaps: must(
           table.getChild('map')?.getChildAt<Float32>(0),
-          'the similarity map column'
+          'the similarity image map column'
+        ).toArray(),
+        spectrumMaps: must(
+          table.getChild('spectrum')?.getChildAt<Float32>(0),
+          'the similarity spectrum map column'
         ).toArray()
       }
     },

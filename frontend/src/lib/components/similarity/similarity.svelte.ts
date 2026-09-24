@@ -20,11 +20,14 @@ export class Similarity {
   readonly #tokenMap: CreateQueryResult<Uint32Array<ArrayBuffer>>
   readonly #result: CreateQueryResult<SimilarityResult>
 
-  readonly values: Float32Array | null
+  readonly imageMaps: Float32Array | null
   readonly galaxies: Int32Array
-  readonly domain: Extent | null
-  readonly heat: ((value: number) => RGB) | null
-  readonly self: Float32Array | null
+  readonly imageDomain: Extent | null
+  readonly imageHeat: ((value: number) => RGB) | null
+  readonly imageMap: Float32Array | null
+  readonly spectrumMaps: Float32Array | null
+  readonly spectrumHeat: ((value: number) => RGB) | null
+  readonly spectrumMap: Float32Array | null
   readonly palette: ((value: number) => RGB) | null
   readonly cells: ArrayLike<number> | null
 
@@ -43,15 +46,22 @@ export class Similarity {
 
     const tokens = $derived(this.#tokenMap.data ?? null)
 
-    this.values = $derived(this.#result.data?.map ?? null)
+    this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
-    this.domain = $derived(this.values ? extent(this.values) : null)
-    this.heat = $derived(this.domain ? continuous(this.domain) : null)
-    this.self = $derived(this.values ? row(this.values, 0, this.#patchCount) : null)
+    this.imageDomain = $derived(this.imageMaps ? extent(this.imageMaps) : null)
+    this.imageHeat = $derived(this.imageDomain ? continuous(this.imageDomain) : null)
+    this.imageMap = $derived(this.imageMaps ? row(this.imageMaps, 0, this.#patchCount) : null)
+    this.spectrumMaps = $derived(this.#result.data?.spectrumMaps ?? null)
+    this.spectrumHeat = $derived.by(() => {
+      if (!this.spectrumMaps) return null
+      const [low, high] = extent(this.spectrumMaps)
+      return low <= high ? continuous([low, high]) : null
+    })
+    this.spectrumMap = $derived(this.spectrumMaps ? this.spectrumMapAt(0) : null)
     this.palette = $derived(
-      this.self && this.heat ? this.heat : tokens ? tokenColors(tokens) : null
+      this.imageMap && this.imageHeat ? this.imageHeat : tokens ? tokenColors(tokens) : null
     )
-    this.cells = $derived(this.self ?? tokens)
+    this.cells = $derived(this.imageMap ?? tokens)
   }
 
   get fetching(): boolean {
@@ -68,7 +78,7 @@ export class Similarity {
   readonly score: Caption = (value) => `${SIMILARITY.short} ${value.toFixed(DECIMALS)}`
 
   readonly caption: Caption = (value, index) =>
-    this.self ? this.score(value, index) : `token ${value}`
+    this.imageMap ? this.score(value, index) : `token ${value}`
 
   readonly maskColor = (value: number): RGB => (value ? [255, 255, 255] : [0, 0, 0])
 
@@ -78,14 +88,20 @@ export class Similarity {
     return this.#result.data?.scores[index] ?? 0
   }
 
-  rowAt(index: number): Float32Array {
-    return row(must(this.values, 'the similarity scores'), index, this.#patchCount)
+  imageMapAt(index: number): Float32Array {
+    return row(must(this.imageMaps, 'the image maps'), index, this.#patchCount)
+  }
+
+  spectrumMapAt(index: number): Float32Array | null {
+    const maps = must(this.spectrumMaps, 'the spectrum maps')
+    const map = row(maps, index, maps.length / this.galaxies.length)
+    return Number.isNaN(map[0]) ? null : map
   }
 
   maskOf(values: ArrayLike<number>): Uint8Array | null {
     const display = this.#app.mask
-    if (!display.on.value || !this.domain) return null
-    return mask(values, display.at(this.domain), display.invert.value)
+    if (!display.on.value || !this.imageDomain) return null
+    return mask(values, display.at(this.imageDomain), display.invert.value)
   }
 }
 

@@ -9,7 +9,7 @@
 
 <RankingControls />
 
-{#if !similarity.values}
+{#if !similarity.imageMaps}
   <div class="grid h-24 place-content-center">
     <Spinner class="size-6" />
   </div>

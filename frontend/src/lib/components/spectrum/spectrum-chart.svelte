@@ -38,8 +38,9 @@
 
   interface Props {
     spectrum: Spectrum
-    tokens?: Uint32Array
+    values?: ArrayLike<number>
     color?: (value: number) => RGB
+    title?: (value: number, index: number) => string
     selected?: number[]
     onselect?: (indices: number[]) => void
     class?: string
@@ -48,8 +49,9 @@
 
   let {
     spectrum,
-    tokens,
+    values,
     color,
+    title,
     selected = [],
     onselect,
     class: className,
@@ -69,11 +71,11 @@
   )
 
   const areas = $derived.by((): Areas => {
-    if (!tokens || !color) return []
+    if (!values || !color) return []
     const chosen = new Set(selected)
-    return Array.from(tokens, (token, index): Areas[number] => {
+    return Array.from(values, (value, index): Areas[number] => {
       const [low, high] = spanOf(grid, index)
-      const [r, g, b] = color(token)
+      const [r, g, b] = color(value)
       const picked = chosen.has(index)
       return [
         {
@@ -94,11 +96,12 @@
       number,
       number
     ]
-    const token = tokens?.[spanAt(grid, wavelength)]
+    const index = spanAt(grid, wavelength)
+    const value = values?.[index]
     return [
       `${wavelength.toFixed(1)} Å`,
       Number.isNaN(flux) ? 'masked' : flux.toFixed(2),
-      ...(token === undefined ? [] : [`token ${token}`])
+      ...(value === undefined || !title ? [] : [title(value, index)])
     ].join(' · ')
   }
 
@@ -165,11 +168,11 @@
   })
 
   function pick(event: ElementEvent): void {
-    if (!chart || !tokens) return
+    if (!chart || !values) return
     const point = [event.offsetX, event.offsetY]
     if (!chart.containPixel('grid', point)) return
     const index = spanAt(grid, chart.convertFromPixel('grid', point)[0])
-    if (index < 0 || index >= tokens.length) return
+    if (index < 0 || index >= values.length) return
     onselect?.(
       selected.includes(index) ? selected.filter((value) => value !== index) : [...selected, index]
     )
