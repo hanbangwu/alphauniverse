@@ -2,7 +2,6 @@
   import type { RGB } from '$lib/color'
   import PatchFrame from '$lib/components/common/patch-frame.svelte'
   import PatchGrid from '$lib/components/patch/patch-grid.svelte'
-  import type { Snippet } from 'svelte'
 
   interface Props {
     label: string
@@ -15,7 +14,6 @@
     selected?: number[]
     onselect?: (indices: number[]) => void
     busy?: boolean
-    footer?: Snippet
   }
 
   let {
@@ -28,8 +26,7 @@
     describe,
     selected,
     onselect,
-    busy = false,
-    footer
+    busy = false
   }: Props = $props()
 </script>
 
@@ -55,6 +52,4 @@
       />
     {/if}
   </PatchFrame>
-
-  {@render footer?.()}
 </div>

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Colorbar from '$lib/components/colorbar.svelte'
   import { SIMILARITY } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
@@ -29,13 +28,7 @@
     selected={view.patches.value}
     onselect={(indices) => (view.patches.value = indices)}
     busy={similarity.cells === null || (view.querying && similarity.fetching)}
-  >
-    {#snippet footer()}
-      {#if similarity.imageDomain}
-        <Colorbar domain={similarity.imageDomain} label={SIMILARITY.label} />
-      {/if}
-    {/snippet}
-  </PatchPanel>
+  />
 
   <SpectrumPanel
     galaxy={similarity.galaxy}
