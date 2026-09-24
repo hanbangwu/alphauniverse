@@ -105,15 +105,16 @@
     ].join(' · ')
   }
 
-  // Every selection change re-sets the option, so animating thousands of
-  // points would cost a frame each time for nothing visible.
   const option = $derived<Option>({
     animation: false,
-    grid: { left: 8, right: 12, top: 8, bottom: 8, containLabel: true },
+    grid: { left: 8, right: 12, top: 8, bottom: 8 },
     xAxis: {
       type: 'value',
       min: 'dataMin',
       max: 'dataMax',
+      name: 'Wavelength (Å)',
+      nameLocation: 'middle',
+      nameTextStyle: { color: ink.muted },
       axisLabel: { color: ink.muted },
       axisLine: { lineStyle: { color: ink.rule } },
       axisTick: { show: false }
@@ -121,6 +122,9 @@
     yAxis: {
       type: 'value',
       scale: true,
+      name: 'Flux (10^-17 erg/s/cm^2/Å)',
+      nameLocation: 'middle',
+      nameTextStyle: { color: ink.muted },
       axisLabel: { color: ink.muted },
       splitLine: { lineStyle: { color: ink.rule } }
     },
