@@ -175,7 +175,7 @@ See [Sequencing](#sequencing) for why it only makes sense alongside `index-compr
 ### Frontend
 
 - **`full-points-view`**: `loadParquet` runs `CREATE TABLE … AS SELECT`, so all 180 MB is decoded into WASM memory. A view over the parquet would read ranges on demand instead, but whether that is faster depends on how many queries follow and how well DuckDB-WASM caches those ranges. Unmeasured either way.
-- **`match-list-virtualise`**: up to 128 rows × 3 patch grids, each with two canvases. `IsInViewport` gates redraws, which is the only reason this is tolerable, but it caps how far `matches` can usefully go.
+- **`match-list-virtualise`**: up to 128 rows × 3 ECharts instances (two patch grids and a spectrum), all initialised and rendered whether on screen or not, which caps how far `matches` can usefully go.
 
 ### Smaller items
 

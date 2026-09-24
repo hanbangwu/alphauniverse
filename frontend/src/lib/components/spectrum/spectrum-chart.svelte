@@ -81,7 +81,7 @@
         {
           xAxis: low,
           itemStyle: {
-            color: `rgba(${r}, ${g}, ${b}, ${picked ? 0.6 : 0.2})`,
+            color: `rgba(${r}, ${g}, ${b}, ${picked ? 0.6 : 0.3})`,
             borderColor: SELECTED,
             borderWidth: picked ? 1 : 0
           }

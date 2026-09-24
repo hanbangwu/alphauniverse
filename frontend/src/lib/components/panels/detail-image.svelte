@@ -36,6 +36,7 @@
       {values}
       grid={meta.grid}
       color={palette}
+      opacity={0.3}
       title={(value) => `token ${value}`}
       label={`${DETAIL_VIEWS[detail].label} for galaxy ${galaxy}`}
       class="absolute inset-0"
