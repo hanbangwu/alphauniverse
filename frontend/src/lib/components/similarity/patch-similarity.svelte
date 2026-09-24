@@ -23,7 +23,7 @@
 <Dialog.Root open={view.explorer.value} onOpenChange={(open) => (view.explorer.value = open)}>
   <Dialog.Content class="z-100 max-h-11/12 w-full overflow-y-auto sm:max-w-6xl">
     <Dialog.Header>
-      <Dialog.Title>Token similarity</Dialog.Title>
+      <Dialog.Title>Search</Dialog.Title>
     </Dialog.Header>
 
     <div class="flex flex-wrap items-center gap-4">

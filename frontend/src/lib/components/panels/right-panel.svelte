@@ -39,7 +39,7 @@
       {/if}
 
       <Button variant="secondary" size="sm" onclick={() => (view.explorer.value = true)}>
-        Token similarity
+        Search
       </Button>
 
       <div class="flex items-baseline justify-between text-sm">

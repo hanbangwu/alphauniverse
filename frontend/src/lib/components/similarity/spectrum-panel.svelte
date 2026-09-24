@@ -4,7 +4,6 @@
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
   import { spectrumSurvey } from '$lib/data/spectra'
-  import { SURVEYS } from '$lib/labels'
   import { getMeta } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
@@ -34,12 +33,7 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <div class="flex items-baseline justify-between">
-    <span class="text-sm font-medium">Spectrum</span>
-    {#if survey}
-      <span class="text-xs text-muted-foreground">{SURVEYS[survey]?.label ?? survey}</span>
-    {/if}
-  </div>
+  <span class="text-sm font-medium">Spectrum</span>
 
   <PatchFrame busy={coverage.isPending || spectrum.isFetching || tokens.isFetching} class="bg-card">
     {#if spectrum.data && cells && palette}

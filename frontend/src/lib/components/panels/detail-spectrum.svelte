@@ -27,9 +27,6 @@
       label={`${SURVEYS[survey]?.label ?? survey} spectrum of galaxy ${galaxy}`}
       class="absolute inset-0"
     />
-    <span class="absolute top-1 right-2 text-[10px] text-muted-foreground">
-      {SURVEYS[survey]?.label ?? survey}
-    </span>
   {:else if coverage.data && !survey}
     <p class="absolute inset-0 grid place-content-center text-xs text-muted-foreground">
       No spectrum
