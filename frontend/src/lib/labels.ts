@@ -6,7 +6,7 @@ export type Labels<T extends string> = Record<T, Label>
 
 export type Choice<T extends string> = Label & { value: T }
 
-export const SIMILARITY = { label: 'Cosine similarity', short: 'cos' } as const
+export const SIMILARITY = { label: 'Cosine similarity', short: 'cos sim' } as const
 
 export const SURVEYS: Labels<string> = {
   ls: { label: 'Legacy Survey DR10' },

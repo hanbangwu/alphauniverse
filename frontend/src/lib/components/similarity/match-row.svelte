@@ -17,8 +17,8 @@
 </script>
 
 <div class="flex flex-col gap-5 pt-6 md:flex-row">
-  <GalaxyTile {galaxy} />
+  <GalaxyTile {galaxy} score={similarity.scoreAt(index)} />
   <PatchMask {values} />
-  <PatchMap {values} best={similarity.scoreAt(index)} />
+  <PatchMap {values} />
   <SpectrumPanel {galaxy} map={similarity.spectrumMapAt(index)} />
 </div>

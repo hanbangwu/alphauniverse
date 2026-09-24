@@ -75,10 +75,9 @@ export class Similarity {
     }))
   }
 
-  readonly score: Caption = (value) => `${SIMILARITY.short} ${value.toFixed(DECIMALS)}`
+  readonly score = (value: number): string => `${SIMILARITY.short} ${value.toFixed(DECIMALS)}`
 
-  readonly caption: Caption = (value, index) =>
-    this.imageMap ? this.score(value, index) : `token ${value}`
+  readonly caption: Caption = (value) => (this.imageMap ? this.score(value) : `token ${value}`)
 
   readonly maskColor = (value: number): RGB => (value ? [255, 255, 255] : [0, 0, 0])
 

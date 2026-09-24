@@ -1,22 +1,21 @@
 <script lang="ts">
+  import { extent } from '$lib/data/scores'
   import { SIMILARITY } from '$lib/labels'
-  import { DECIMALS } from '$lib/state/mask.svelte'
   import PatchPanel from './patch-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   interface Props {
     values: Float32Array
-    best: number
   }
 
-  let { values, best }: Props = $props()
+  let { values }: Props = $props()
 
   const similarity = getSimilarity()
 </script>
 
 <PatchPanel
   label={SIMILARITY.label}
-  badge={`${SIMILARITY.short} ${best.toFixed(DECIMALS)}`}
+  badge={similarity.score(extent(values)[1])}
   {values}
   grid={similarity.grid}
   color={similarity.imageHeat}

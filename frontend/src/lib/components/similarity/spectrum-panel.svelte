@@ -3,6 +3,7 @@
   import PatchFrame from '$lib/components/common/patch-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
+  import { extent } from '$lib/data/scores'
   import { spectrumSurvey } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
@@ -33,7 +34,14 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <span class="text-sm font-medium">Spectrum</span>
+  <div class="flex items-baseline justify-between">
+    <span class="text-sm font-medium">Spectrum</span>
+    {#if map}
+      <span class="font-mono text-xs text-muted-foreground tabular-nums">
+        {similarity.score(extent(map)[1])}
+      </span>
+    {/if}
+  </div>
 
   <PatchFrame busy={coverage.isPending || spectrum.isFetching || tokens.isFetching} class="bg-card">
     {#if spectrum.data && cells && palette}
