@@ -60,7 +60,14 @@ Eight endpoints, all `GET`; `/artifacts/{role}` also answers `HEAD` for range-re
 
 ## Similarity search
 
-A query is one or more image patches and spectral spans of one galaxy, averaged into one direction. The answer is a ranked list of galaxies, each with a per-patch score map and, where it has a spectrum, a per-span score map; the frontend draws both. `app/search.py` states the method and the index layout it depends on.
+A query is one or more image patches and spectral spans of one galaxy. The answer is the query galaxy followed by up to `matches` other galaxies, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map; the frontend draws both.
+
+The search reads vectors back from the index by id, using the layout in `docs/pipeline.md`:
+
+1. The query's vectors are averaged and normalised into one direction.
+2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`.
+3. Every patch and span of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
+4. A galaxy's score is its best token score over both maps. The candidates are sorted by it, after the query galaxy.
 
 ## The frontend
 
