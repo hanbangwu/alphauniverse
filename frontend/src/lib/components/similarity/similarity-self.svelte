@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenAlpha } from '$lib/color'
   import { getView } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import PatchMask from './patch-mask.svelte'
@@ -18,13 +19,14 @@
   {/if}
 
   <PatchPanel
-    label="Image Tokens"
+    label={similarity.imageMap ? 'Image' : 'Image Tokens'}
     describe="Click a patch to query it"
-    values={similarity.tokens}
+    values={similarity.imageMap ?? similarity.tokens}
     grid={similarity.grid}
-    color={similarity.palette}
+    color={similarity.imageMap ? similarity.imageHeat : similarity.palette}
+    opacity={similarity.imageMap ? undefined : tokenAlpha}
     galaxy={similarity.galaxy}
-    title={similarity.caption}
+    title={similarity.imageMap ? similarity.score : similarity.caption}
     selected={view.patches.value}
     onselect={(indices) => (view.patches.value = indices)}
     busy={similarity.tokens === null || (view.querying && similarity.fetching)}

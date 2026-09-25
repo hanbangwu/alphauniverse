@@ -29,7 +29,7 @@
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED, chartInk, tokenAlpha } from '$lib/color'
+  import { type RGB, SELECTED, chartInk } from '$lib/color'
   import { type Spectrum, spanAt, spanOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
@@ -40,6 +40,7 @@
     spectrum: Spectrum
     values?: ArrayLike<number>
     color?: (value: number) => RGB
+    opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
     onselect?: (indices: number[]) => void
@@ -51,6 +52,7 @@
     spectrum,
     values,
     color,
+    opacity = () => 1,
     title,
     selected = [],
     onselect,
@@ -81,7 +83,7 @@
         {
           xAxis: low,
           itemStyle: {
-            color: `rgba(${r}, ${g}, ${b}, ${tokenAlpha(picked)})`,
+            color: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
             borderColor: SELECTED,
             borderWidth: picked ? 1 : 0
           }
@@ -148,7 +150,7 @@
         showSymbol: false,
         lineStyle: { width: 1, color: ink.text },
         emphasis: { disabled: true },
-        markArea: { silent: true, z: 3, data: areas }
+        markArea: { silent: true, data: areas }
       }
     ]
   })

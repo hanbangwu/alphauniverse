@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tokenColors } from '$lib/color'
+  import { tokenAlpha, tokenColors } from '$lib/color'
   import PatchFrame from '$lib/components/common/patch-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
@@ -41,6 +41,7 @@
         spectrum={spectrum.data}
         values={cells}
         color={palette}
+        opacity={map ? undefined : tokenAlpha}
         title={caption}
         {selected}
         {onselect}

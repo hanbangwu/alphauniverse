@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type RGB, tokenAlpha } from '$lib/color'
+  import type { RGB } from '$lib/color'
   import PatchFrame from '$lib/components/common/patch-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import PatchGrid from '$lib/components/patch/patch-grid.svelte'
@@ -9,6 +9,7 @@
     values: ArrayLike<number> | null
     grid: number
     color: ((value: number) => RGB) | null
+    opacity?: (picked: boolean) => number
     galaxy?: number
     title?: (value: number, index: number) => string
     describe?: string
@@ -22,6 +23,7 @@
     values,
     grid,
     color,
+    opacity,
     galaxy,
     title,
     describe,
@@ -35,21 +37,23 @@
   <span class="text-sm font-medium">{label}</span>
 
   <PatchFrame {busy}>
-    {#if galaxy !== undefined}
-      <GalaxyThumb {galaxy} />
-    {/if}
     {#if values && color}
       <PatchGrid
         {values}
         {grid}
         {color}
-        opacity={galaxy === undefined ? undefined : tokenAlpha}
+        {opacity}
         {title}
         {selected}
         {onselect}
         label={describe ?? label}
         class={onselect ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
       />
+    {/if}
+    {#if galaxy !== undefined}
+      <div class="pointer-events-none absolute inset-0 mix-blend-screen">
+        <GalaxyThumb {galaxy} />
+      </div>
     {/if}
   </PatchFrame>
 </div>
