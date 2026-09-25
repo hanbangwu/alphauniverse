@@ -8,7 +8,6 @@ paths:
 # Benchmarks
 
 - A benchmark measures only the production artifacts (on Modal).
-- Always measure and never estimate figures.
 - If the code under test needs artifacts the volume does not hold yet, name the `generate_*` jobs that build them, in order, and wait for a maintainer to ask for that build: they write to the volume the deployed app serves from.
 - A benchmark measures the code as it is now. Do not add "before/after". No one cares about the "before".
 - Benchmarks run only when the user asks, directly or through Claude. Never in CI or on a schedule.
