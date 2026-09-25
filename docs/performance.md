@@ -95,40 +95,7 @@ Loading the 17.19 GB index takes 6.0 s. `read_index` memory-maps its inverted li
 
 `codebook` is 8.5× smaller than `encoded` despite an identical schema because each of its rows depends only on the token id and modality, so the same 768-d rows repeat and zstd compresses them well. Contextualised outputs are all distinct and do not compress.
 
-## Candidate work
-
-Nothing in this section is done. Each entry is triaged on three axes, because they answer different questions and a change can score well on one and badly on another:
-
-- **Impact**: user-visible latency or compute saved, read off the measurements above rather than off intuition.
-- **Blast radius**: how much code, and how much of the search method, a change disturbs. The two are independent: a one-line change that alters how every query touches memory has a small diff and a large blast radius.
-- **Kind**: _implementation_ pays off directly, _quality_ removes a defect or an obstacle without saving time, _groundwork_ only makes a later change possible or provable.
-
-| Entry                   | Impact                                               | Blast radius          | Kind                     |
-| ----------------------- | ---------------------------------------------------- | --------------------- | ------------------------ |
-| `ssr-unblock`           | Turns the cold start's blank page into a spinner     | Medium, frontend      | Quality                  |
-| `patch-array`           | `vectors`, 75% of a query; magnitude unmeasured      | Large                 | Implementation           |
-| `cache-headers`         | Whole surface on repeat visits; magnitude unmeasured | Small                 | Implementation           |
-| `index-compression`     | Cold start, and the RAM ceiling                      | Large, methodological | Implementation           |
-| `tokens-bulk`           | ~158 ms per newly selected galaxy                    | Medium                | Implementation           |
-| `bulk-offload`          | None steady-state, large under load                  | Infrastructure        | Quality                  |
-| `full-points-view`      | Browser memory and time-to-full-view; unmeasured     | Small-medium          | Implementation           |
-| `match-list-virtualise` | Low                                                  | Medium, frontend      | Quality                  |
-| `min-containers`        | Removes cold start outright                          | None                  | Operational, costs money |
-| `production-recall`     | None directly                                        | Small                 | Groundwork               |
-| `recall-reported`       | None                                                 | Small                 | Quality                  |
-| `encode-coverage`       | None                                                 | Small                 | Groundwork               |
-
-### Sequencing
-
-Impact order is not the order to work in, because of two couplings.
-
-**`patch-array` and `index-compression` are one design, not two changes.** `patch-array` adds a contiguous fp16 array holding the same patch vectors the index already holds, against a 64 GB container. `index-compression` shrinks the index at some cost in recall. Done together they separate two jobs the index is currently doing at once: a heavily compressed index generates candidates, and the flat array scores them exactly. Done separately, the first doubles memory and the second loses accuracy for nothing.
-
-**`production-recall` gates both of them.** Production recall is **unmeasured**: the brute-force reference in `tests/test_search.py` holds the whole corpus in memory, which only works at fixture scale. There is no baseline to show a quantiser change did not silently degrade results.
-
-That gives a working order. `cache-headers` is independent and provable now. Then `production-recall`, which makes the `patch-array` + `index-compression` design possible.
-
-### Cold start
+## Cold start
 
 A request to a freshly started container took **19.5 s**, against 0.15 s warm. `max_containers=1` means there is no second container to answer instead.
 
@@ -145,43 +112,6 @@ The startup loads, timed in a separate container of the same spec, add up to 7.9
 `faiss.read_index` memory-maps the 17.19 GB with `IO_FLAG_MMAP`, so pages fault in as queries touch them, and `make_direct_map()` reads every id. What the other 11.6 s of a cold request is made of is **unmeasured**.
 
 With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more than five minutes after the last one waits the full 20 s, so on a low-traffic site it is the usual case.
-
-Options, cheapest first:
-
-- **`ssr-unblock`**: fetch `/meta` client-side so the shell paints immediately and the wait becomes a spinner instead of nothing. The cost is that every consumer of `data.meta` must then handle its absence.
-- **`index-compression`**: `SQ8` halves the index, PQ far more, both at a recall cost that is unmeasured until `production-recall` exists.
-- **`min-containers`**: `min_containers=1` removes cold start entirely, at the price of one container running continuously.
-
-`ssr-unblock` is cheap. Do it before considering the other two.
-
-### No cache headers anywhere
-
-Every response is immutable for a given `DATASET_REVISION`, and not one sets `Cache-Control`. Artifacts carry an `etag` so they revalidate; `/meta`, `/tokens`, `/coverage`, `/similarity` and `/image.png` carry nothing, so every repeat visit re-computes and re-transfers everything.
-
-The one design question in `cache-headers` is what makes the immutability safe to advertise. A long `max-age` with `immutable` is correct only while the revision does not change; a browser that cached under the old revision would keep serving it. Putting the revision in the path or a query parameter makes the whole surface safely `immutable`, after which repeat visits cost nothing and a CDN can serve the traffic.
-
-### Candidate reconstruction
-
-`patch-array` keeps the anchor patches as one contiguous memory-mapped fp16 array beside the index and slices `galaxy * 576 … (galaxy + 1) * 576` out of it. A 33-galaxy result is then one sequential read and one BLAS matmul instead of 19,008 direct-map lookups. The speedup is unmeasured.
-
-See [Sequencing](#sequencing) for why it only makes sense alongside `index-compression`.
-
-### Bulk artifacts through the app container
-
-`encoded` and `full_points` both stream through the single serving container, where one download can block every interactive request behind it.
-
-`bulk-offload` puts object storage or a CDN in front. At minimum, a 23 GB download should not be a one-click button on a `max_containers=1` service.
-
-### Frontend
-
-- **`full-points-view`**: `loadParquet` runs `CREATE TABLE … AS SELECT`, so all 180 MB is decoded into WASM memory. A view over the parquet would read ranges on demand instead, but whether that is faster depends on how many queries follow and how well DuckDB-WASM caches those ranges. Unmeasured either way.
-- **`match-list-virtualise`**: up to 128 rows × 3 ECharts instances (two patch grids and a spectrum), all initialised and rendered whether on screen or not, which caps how far `matches` can usefully go.
-
-### Smaller items
-
-- **`tokens-bulk`**: `/galaxies/{g}/tokens` returns 576 uint32 ids and costs 158 ms p50, paid once per galaxy the user selects. The whole `tokens` artifact is 7.0 MB, so shipping it once and querying in-browser could remove every one of those requests. Whether it helps depends on the anchor column's share of that 7 MB, which is unmeasured, and on how many galaxies a session touches.
-- **`recall-reported`**: `search()` can return fewer than `matches` galaxies when the candidate patches do not cover enough of them, and the response says nothing about it.
-- **`encode-coverage`**: `app/encode.py` has no automated coverage at all, so an import error or a schema drift there is caught only by a full build. It imports torch at module level, so a test needs the stubbed-import approach rather than a real import.
 
 ## Scaling ceilings
 
