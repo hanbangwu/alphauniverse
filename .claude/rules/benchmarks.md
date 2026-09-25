@@ -9,7 +9,7 @@ paths:
 
 - A benchmark measures only the production artifacts (on Modal).
 - Always measure and never estimate figures.
-- If the code under test needs artifacts the volume does not hold yet, build them (on Modal) first.
+- If the code under test needs artifacts the volume does not hold yet, name the `generate_*` jobs that build them, in order, and wait for a maintainer to ask for that build: they write to the volume the deployed app serves from.
 - A benchmark measures the code as it is now. Do not add "before/after". No one cares about the "before".
 - Benchmarks run only when the user asks, directly or through Claude. Never in CI or on a schedule.
 - The pattern follows Modal's own benchmarking tool, [`stopwatch`](https://github.com/modal-labs/stopwatch): `modal run` starts an ephemeral copy of the serving function from the checked-out source, and a client in a separate Modal container sends it requests. The server takes its image, CPU, memory and concurrency from `fastapi_app`'s own definition, so the two cannot drift.

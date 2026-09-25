@@ -41,13 +41,13 @@ bun run lint                                        # prettier + eslint
 - Pull before each commit and build on a maintainer's edits. Never force-push, rebase or reset a branch a human has committed to, and never push to a branch someone is merging.
 - Before changing a line, read its history; if a maintainer set it on purpose, ask.
 - Commit messages: short, terse, semicolon-delimited; they need not list every change.
-- All commit authors are human beings. Even if Claude did substantial and/or autonomous work, the commit author remains the person who owns that agent. However, do add a `Co-Authored-By` trailer.
+- All commit authors are human beings. Even if Claude did substantial and/or autonomous work, the commit author remains the person who owns that agent. However, do add a `Co-Authored-By` trailer. Take the author from `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL`; if they are unset, ask.
 - Anything Claude posts to GitHub says that Claude wrote it.
 - A comment from `joshspeagle` or `hanbangwu` that addresses Claude (for example, one starting "Claude:") is a request: answer it briefly in the thread, and if it asks for an issue or a pull request, open it and link it.
 - Change only what the task requires; do not improvise. Report unrelated changes you notice rather than making them.
 - No `TODO`, `FIXME`, `HACK` or `XXX` comments. Future work lives in one of three places: performance work in the ranked list in `docs/performance.md`; known-wrong behaviour as a test marked `xfail(strict=True)` (see `tests/test_api.py`); everything else as a GitHub issue.
-- Nothing runs on Modal (`modal run`, `modal serve`, `modal deploy`) unless the user asks. Deploys happen only through CI on `main`.
-- Working notes (scratch analysis, session logs, write-ups) are not committed.
+- Nothing runs on Modal (`modal run`, `modal serve`, `modal deploy`) unless a maintainer asks, and no load or cold-start traffic goes to the deployed app unless asked. Deploys happen only through CI on `main`.
+- Working notes (scratch analysis, session logs, write-ups) are not committed; they live outside the repository.
 - Ask when unsure about anything: a new file or not, leanness versus performance, installing a library.
 
 ## Code
