@@ -34,10 +34,13 @@ bun run lint                                        # prettier + eslint
 - A pull request is a series of commits, each one small nominal goal. Before writing code, list the goals and the decisions they need, each with options and a recommendation, in the pull request's issue, and wait for agreement.
 - Implement the agreed goals one commit each, then stop before the pull request leaves draft. List choices made while carrying out a goal under "Decisions" in the pull request.
 - Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
+- A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
 - A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. The other maintainer then reviews it before it merges.
 - Once a pull request is ready for review, push to it only when a maintainer asks, or to fix a failing check that Claude's own changes caused. Leave a check broken by anyone else's change as it is unless a maintainer asks. Post review findings and later findings of your own as a comment with the proposed fix, and wait. An emergency is production down or a secret exposed; even then, comment first and put the fix in a new pull request.
 - Commit messages: short, terse, semicolon-delimited; they need not list every change.
 - All commit authors are human beings. Even if Claude did substantial and/or autonomous work, the commit author remains the person who owns that agent. However, do add a `Co-Authored-By` trailer.
+- Anything Claude posts to GitHub says that Claude wrote it.
+- A comment from `joshspeagle` or `hanbangwu` that addresses Claude (for example, one starting "Claude:") is a request: answer it briefly in the thread, and if it asks for an issue or a pull request, open it and link it.
 - Change only what the task requires; do not improvise. Report unrelated changes you notice rather than making them.
 - No `TODO`, `FIXME`, `HACK` or `XXX` comments. Future work lives in one of three places: performance work in the ranked list in `docs/performance.md`; known-wrong behaviour as a test marked `xfail(strict=True)` (see `tests/test_api.py`); everything else as a GitHub issue.
 - Nothing runs on Modal (`modal run`, `modal serve`, `modal deploy`) unless the user asks. Deploys happen only through CI on `main`.
