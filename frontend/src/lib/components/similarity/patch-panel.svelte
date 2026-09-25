@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { RGB } from '$lib/color'
+  import { type RGB, tokenAlpha } from '$lib/color'
   import PatchFrame from '$lib/components/common/patch-frame.svelte'
+  import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import PatchGrid from '$lib/components/patch/patch-grid.svelte'
 
   interface Props {
@@ -8,6 +9,7 @@
     values: ArrayLike<number> | null
     grid: number
     color: ((value: number) => RGB) | null
+    galaxy?: number
     title?: (value: number, index: number) => string
     describe?: string
     selected?: number[]
@@ -20,6 +22,7 @@
     values,
     grid,
     color,
+    galaxy,
     title,
     describe,
     selected,
@@ -32,11 +35,15 @@
   <span class="text-sm font-medium">{label}</span>
 
   <PatchFrame {busy}>
+    {#if galaxy !== undefined}
+      <GalaxyThumb {galaxy} />
+    {/if}
     {#if values && color}
       <PatchGrid
         {values}
         {grid}
         {color}
+        opacity={galaxy === undefined ? undefined : tokenAlpha}
         {title}
         {selected}
         {onselect}

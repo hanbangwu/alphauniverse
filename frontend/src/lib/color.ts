@@ -47,6 +47,10 @@ export function morphologyColors(classes: number, scheme: Scheme): string[] {
 
 export const SELECTED = 'oklch(0.637 0.237 25.331)'
 
+export function tokenAlpha(picked: boolean): number {
+  return picked ? 0.8 : 0.3
+}
+
 export interface Ink {
   text: string
   muted: string
