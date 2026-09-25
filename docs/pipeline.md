@@ -14,7 +14,7 @@ The script is not part of the deployed pipeline and needs `lsdb`, which is not a
 
 For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
 
-Three stores are written, all with the same schema:
+Three stores are written, with the same columns:
 
 ```
 galaxy: int32
@@ -23,10 +23,10 @@ gz10, provabgs:      bool
 ```
 
 - **`encoded`**: the encoder's contextualised output. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
-- **`codebook`**: the raw codebook vector behind each token, uncontextualised.
-- **`tokens`**: the token ids, `list<uint32>` instead of embeddings.
+- **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
+- **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings.
 
-Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 272 tokens whatever survey it came from.
+Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spans.
 
 ## `generate_index`
 

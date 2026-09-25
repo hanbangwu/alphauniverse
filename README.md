@@ -21,7 +21,7 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 | DESI EDR SV3       | spectrum | 273               |
 | SDSS               | spectrum | 273               |
 
-Every token carries a 768-d embedding, in two flavours: **encoded**, the encoder's contextualised output, and **codebook**, the raw vector behind the token.
+Every token carries a 768-d embedding, in two flavours: **encoded**, the encoder's contextualised output, and **codebook**, the encoder's input embedding of the token id, before any context.
 
 ## Running
 

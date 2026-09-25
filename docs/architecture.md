@@ -29,17 +29,17 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 ## The artifacts
 
-| Role              | Shape                                      | Who reads it                          |
-| ----------------- | ------------------------------------------ | ------------------------------------- |
-| `encoded`         | one row per galaxy, embeddings per survey  | index build, projections, download    |
-| `codebook`        | same, raw codebook vectors                 | nothing at serve time                 |
-| `tokens`          | same, token ids                            | the `tokens` and `coverage` endpoints |
-| `encoded_index`   | faiss IVF over patches and spectral tokens | `/similarity`                         |
-| `cutouts`         | one PNG per galaxy, in galaxy order        | `/galaxies/{g}/image.png`             |
-| `spectra`         | one spectrum per matched survey, same      | `/galaxies/{g}/spectra/{s}`           |
-| `mean_points`     | one 2-d point per galaxy                   | `/meta`, the projection view          |
-| `full_points`     | one 2-d point per embedding                | the projection view                   |
-| `parametric_umap` | the trained projector's weights            | nothing at serve time                 |
+| Role              | Shape                                      | Who reads it                                             |
+| ----------------- | ------------------------------------------ | -------------------------------------------------------- |
+| `encoded`         | one row per galaxy, embeddings per survey  | index build, projections, download                       |
+| `codebook`        | same, the encoder's input embeddings       | nothing at serve time                                    |
+| `tokens`          | same, token ids                            | startup, `/similarity`, the token and coverage endpoints |
+| `encoded_index`   | faiss IVF over patches and spectral tokens | `/similarity`                                            |
+| `cutouts`         | one PNG per galaxy, in galaxy order        | `/galaxies/{g}/image.png`                                |
+| `spectra`         | one spectrum per matched survey, same      | `/galaxies/{g}/spectra/{s}`                              |
+| `mean_points`     | one 2-d point per galaxy                   | `/meta`, the projection view                             |
+| `full_points`     | one 2-d point per embedding                | the projection view                                      |
+| `parametric_umap` | the trained projector's weights            | nothing at serve time                                    |
 
 `docs/pipeline.md` has the schemas.
 

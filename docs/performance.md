@@ -93,7 +93,7 @@ Warm, same client:
 
 Loading the 17.19 GB index takes 6.0 s. `read_index` memory-maps its inverted lists and `make_direct_map()` reads every list's ids.
 
-`codebook` is 8.5× smaller than `encoded` despite an identical schema because codebook vectors are drawn from a finite codebook, so the same 768-d rows repeat and zstd compresses them well. Contextualised outputs are all distinct and do not compress.
+`codebook` is 8.5× smaller than `encoded` despite an identical schema because each of its rows depends only on the token id and modality, so the same 768-d rows repeat and zstd compresses them well. Contextualised outputs are all distinct and do not compress.
 
 ## Candidate work
 
