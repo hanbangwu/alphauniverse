@@ -31,7 +31,11 @@ bun run lint                                        # prettier + eslint
 
 - Work on a branch and open a pull request; never commit to `main`.
 - One functional change per branch per pull request. The unit is the logical function, not the line count: a documentation pass can run to thousands of lines and still be one change, while two unrelated fixes in one diff are two and make the pull request hard to review.
+- A pull request is a series of commits, each one small nominal goal. Before writing code, list the goals and the decisions they need, each with options and a recommendation, in the pull request's issue, and wait for agreement.
+- Implement the agreed goals one commit each, then stop before the pull request leaves draft. List choices made while carrying out a goal under "Decisions" in the pull request.
 - Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
+- A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. The other maintainer then reviews it before it merges.
+- Once a pull request is ready for review, push to it only when a maintainer asks, or to fix a failing check that Claude's own changes caused. Leave a check broken by anyone else's change as it is unless a maintainer asks. Post review findings and later findings of your own as a comment with the proposed fix, and wait. An emergency is production down or a secret exposed; even then, comment first and put the fix in a new pull request.
 - Commit messages: short, terse, semicolon-delimited; they need not list every change.
 - All commit authors are human beings. Even if Claude did substantial and/or autonomous work, the commit author remains the person who owns that agent. However, do add a `Co-Authored-By` trailer.
 - Change only what the task requires; do not improvise. Report unrelated changes you notice rather than making them.
