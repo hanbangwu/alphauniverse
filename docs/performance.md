@@ -194,6 +194,6 @@ Current design targets COSMOS scale. Where it stops:
 | `full_points` in the browser | 180 MB              | ~10×; DuckDB-WASM has a few GB to work with.                                                  |
 | Cutouts in memory            | 215 MB              | linear; fine to ~100×, then needs tiling                                                      |
 | Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                         |
-| Serving capacity             | one container       | any concurrency at all; `max_containers=1` is a hard cap                                      |
+| Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap     |
 
 None of these need solving now. All of them should be checked before a change assumes they are not there.
