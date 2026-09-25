@@ -27,6 +27,17 @@ Every token carries a 768-d embedding, in two flavours: **encoded**, the encoder
 
 Requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh).
 
+### Local API
+
+Serves the API from a small synthetic artifact tree in the production schemas:
+
+```sh
+uv run python -m scripts.fixture                                   # writes .cache/fixture
+ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py  # serves 127.0.0.1:8000
+```
+
+The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it.
+
 ### Frontend
 
 ```sh
@@ -34,6 +45,8 @@ cd frontend
 bun install
 bun run dev
 ```
+
+The dev build calls the API at `http://127.0.0.1:8000`, so start the local API first.
 
 ### Backend
 
@@ -45,7 +58,7 @@ uv run modal run modal_app.py::generate_spectra      # extract the spectra
 uv run modal run modal_app.py::generate_projections  # fit and apply the projection
 ```
 
-### API
+### API schema
 
 After changing a route or model in `app/main.py`, regenerate the API schema the frontend's client is built from:
 
