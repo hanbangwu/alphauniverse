@@ -1,4 +1,4 @@
-"""The cutout artifact: its galaxy-ordered layout and what `image` returns."""
+"""The cutout artifact: its galaxy-ordered layout and what `cutout` returns."""
 
 from io import BytesIO
 from pathlib import Path
@@ -10,19 +10,19 @@ import pytest
 from PIL import Image
 
 from app.config import CROP_PX, CUTOUTS, artifact, build_dir
-from app.cutouts import cutouts, encode, image
+from app.cutouts import cutout, cutouts, encode
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
-def test_image_returns_the_stored_bytes(tree: Path, galaxy: int) -> None:
+def test_cutout_returns_the_stored_bytes(tree: Path, galaxy: int) -> None:
     """Serving is a lookup, so row `g` must be what galaxy `g` gets back."""
     stored = pq.read_table(artifact("cutouts")).column("png")
 
-    assert image(galaxy) == stored[galaxy].as_py()
+    assert cutout(galaxy) == stored[galaxy].as_py()
 
 
 def test_cutouts_are_cropped_to_the_configured_size(tree: Path) -> None:
-    with Image.open(BytesIO(image(0))) as png:
+    with Image.open(BytesIO(cutout(0))) as png:
         assert png.size == (CROP_PX, CROP_PX)
         assert png.format == "PNG"
 

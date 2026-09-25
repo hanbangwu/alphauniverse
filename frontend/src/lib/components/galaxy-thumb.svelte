@@ -20,7 +20,7 @@
 {#if failed !== galaxy}
   <img
     {src}
-    alt="Legacy Survey cutout of galaxy {galaxy}"
+    alt="Legacy Survey image of galaxy {galaxy}"
     loading="lazy"
     onload={() => (loaded = galaxy)}
     onerror={() => (failed = galaxy)}

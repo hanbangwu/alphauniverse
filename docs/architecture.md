@@ -70,7 +70,7 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
 +page.svelte
 ├── LeftPanel        point set toggle, morphology filter, download
 ├── ProjectionView   embedding-atlas over a DuckDB-WASM table
-└── RightPanel       selected galaxy: cutout, tokens, spectrum, coverage
+└── RightPanel       selected galaxy: image, tokens, spectrum, coverage
     └── PatchSimilarity   dialog: query patches, spectrum spans, ranked matches
 ```
 
@@ -81,7 +81,7 @@ App-wide state lives in plain classes under `src/lib/state/`, held in a `runed` 
 - **Row-level data** (tokens, coverage, spectra, similarity) goes through the generated client into TanStack Query. It is cached forever, except similarity, which goes stale after 5 minutes.
 - **The point sets** skip the JSON endpoints. DuckDB-WASM reads the parquet artifact from `/artifacts/{role}` into a table, and Mosaic pushes the morphology filter into SQL so filtering the projection never round-trips to the server.
 
-Patch grids are Apache ECharts custom series, one rect per patch on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. The cutout token grid in the similarity dialog sits over the cutout at `tokenAlpha` opacity, 0.3 or 0.8 when selected, and the spectrum's token areas sit over the line at the same opacity. Each grid is its own ECharts instance, and a match list is 32 rows of two grids and a spectrum each by default and up to 128.
+Patch grids are Apache ECharts custom series, one rect per patch on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. The image token grid in the similarity dialog sits over the image at `tokenAlpha` opacity, 0.3 or 0.8 when selected, and the spectrum's token areas sit over the line at the same opacity. Each grid is its own ECharts instance, and a match list is 32 rows of two grids and a spectrum each by default and up to 128.
 
 Spectra are Apache ECharts line charts. A galaxy's spectrum comes from the first of its matched spectrum surveys, DESI before SDSS. The interactive chart in the similarity dialog shades one area per spectrum token, laid out from `spectrum` in `/meta` and coloured like the token grid, and holds the selected spans in `view.spans`, which join the selected patches in the query; it zooms on the wheel and pans on drag because 272 spans do not fit a panel a few hundred pixels wide.
 

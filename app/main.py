@@ -33,7 +33,7 @@ from .config import (
     SpectrumSurvey,
     artifact,
 )
-from .cutouts import cutouts, image
+from .cutouts import cutout, cutouts
 from .search import Query as SearchQuery
 from .search import index, search, source, starts, with_spectrum
 from .spectra import spectra, spectrum
@@ -205,7 +205,7 @@ def head_artifact(role: str) -> Response:
 )
 def get_image(galaxy: GalaxyIndex) -> Response:
     """The galaxy's anchor-survey cutout as a PNG."""
-    return Response(image(galaxy), media_type="image/png")
+    return Response(cutout(galaxy), media_type="image/png")
 
 
 @app.get(

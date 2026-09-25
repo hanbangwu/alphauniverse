@@ -18,7 +18,7 @@
   {/if}
 
   <PatchPanel
-    label="Cutout Tokens"
+    label="Image Tokens"
     describe="Click a patch to query it"
     values={similarity.tokens}
     grid={similarity.grid}

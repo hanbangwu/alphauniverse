@@ -65,5 +65,5 @@ def cutouts() -> pa.ChunkedArray:
     return table.column("png")
 
 
-def image(galaxy: int) -> bytes:
+def cutout(galaxy: int) -> bytes:
     return cutouts()[galaxy].as_py()
