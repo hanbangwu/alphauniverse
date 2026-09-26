@@ -42,8 +42,9 @@ STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/latest.json")
 ENTRY = (
-    "import json, sys; from scripts.benchmark import stages; "
-    "print(json.dumps(stages.local(int(sys.argv[1]))))"
+    "import json, sys; from app.config import DATASET_REVISION; "
+    "from scripts.benchmark import stages; "
+    "print(json.dumps(stages.local(int(sys.argv[1])) | {'revision': DATASET_REVISION}))"
 )
 
 
@@ -87,12 +88,16 @@ def spec(function: modal.Function) -> dict[str, Any]:
 
 
 def environment() -> dict[str, Any]:
+    processor = Path("/proc/cpuinfo").read_text().split("\n\n")[0]
+    fields = {
+        key.strip(): value.strip()
+        for key, _, value in (line.partition(":") for line in processor.splitlines())
+    }
     return {
-        "cpu_model": next(
-            line.split(":", 1)[1].strip()
-            for line in Path("/proc/cpuinfo").read_text().splitlines()
-            if line.startswith("model name")
-        ),
+        "cpu": {
+            key: fields.get(key)
+            for key in ("vendor_id", "cpu family", "model", "model name")
+        },
         "cpu_count": os.cpu_count(),
         "faiss_threads": faiss.omp_get_max_threads(),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
@@ -164,13 +169,7 @@ def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
     return times, len(rows)
 
 
-@app.function(
-    image=image,
-    cpu=fastapi_app.spec.cpu,
-    memory=fastapi_app.spec.memory,
-    volumes=fastapi_app.spec.volumes,
-    timeout=60 * 60,
-)
+@app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = {
         load.__name__: round(elapsed(load), 3)
@@ -223,30 +222,32 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     timeout=6 * 60 * 60,
 )
 def paired(sources: dict[str, bytes], order: list[str], runs: int) -> dict[str, Any]:
+    report = {"environment": environment(), "order": order}
     root = Path(tempfile.mkdtemp())
     for name, source in sources.items():
         with tarfile.open(fileobj=io.BytesIO(source)) as bundle:
             bundle.extractall(root / name, filter="data")
 
     rounds: dict[str, list[dict[str, Any]]] = {name: [] for name in sources}
-    for name in order:
+    for position, name in enumerate(order):
         try:
             completed = subprocess.run(
                 [sys.executable, "-c", ENTRY, str(runs)],
                 cwd=root / name,
-                env=os.environ | {"PYTHONPATH": str(root / name)},
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=60 * 60,
             )
-            rounds[name].append(json.loads(completed.stdout.splitlines()[-1]))
+            result = json.loads(completed.stdout.splitlines()[-1])
         except subprocess.CalledProcessError as failure:
-            rounds[name].append({"error": failure.stderr[-2000:]})
-    return {"environment": environment(), "order": order, "rounds": rounds}
-
-
-def archive(commit: str) -> bytes:
-    return subprocess.check_output(["git", "archive", "--format=tar", commit, *SOURCES])
+            result = {"error": f"exit {failure.returncode}: {failure.stderr[-2000:]}"}
+        except subprocess.TimeoutExpired:
+            result = {"error": "no result within an hour"}
+        except (ValueError, IndexError):
+            result = {"error": f"no report on stdout: {completed.stdout[-2000:]}"}
+        rounds[name].append(result | {"position": position})
+    return report | {"rounds": rounds}
 
 
 def git(*arguments: str) -> str:
@@ -255,27 +256,44 @@ def git(*arguments: str) -> str:
 
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
+    if git("status", "--porcelain"):
+        raise SystemExit("Commit every change first: the benchmark times commits.")
+    git("fetch", "origin", "main")
     commits = {
+        "after": git("rev-parse", "HEAD"),
         "before": git("rev-parse", "origin/main"),
-        "after": git("stash", "create") or git("rev-parse", "HEAD"),
     }
+    code = {
+        git("rev-parse", *(f"{commit}:{source}" for source in SOURCES))
+        for commit in commits.values()
+    }
+    notes = []
     stored = json.loads(REPORT.read_text()).get("best") if REPORT.exists() else None
-    if stored and stored["commit"] not in commits.values():
-        commits["best"] = stored["commit"]
+    if stored:
+        try:
+            stored_code = git(
+                "rev-parse", *(f"{stored['commit']}:{source}" for source in SOURCES)
+            )
+        except subprocess.CalledProcessError:
+            notes.append(f"best {stored['commit']} is not in this clone")
+        else:
+            if stored_code not in code:
+                commits["best"] = stored["commit"]
     names = list(commits)
+    sources = {
+        name: subprocess.check_output(["git", "archive", commit, *SOURCES])
+        for name, commit in commits.items()
+    }
     report = {
-        "commit": git("describe", "--always", "--dirty"),
+        "commit": git("describe", "--always"),
         "commits": commits,
+        "notes": notes,
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "server": spec(fastapi_app),
         "client": spec(client),
         "requests": client.remote(fastapi_app.get_web_url(), runs),
-        "stages": paired.remote(
-            {name: archive(commit) for name, commit in commits.items()},
-            names + names[::-1],
-            runs,
-        )
+        "stages": paired.remote(sources, names + names[::-1], runs)
         | {"locked_dependencies": "after"},
     }
     means = {
@@ -290,6 +308,6 @@ def main(runs: int = 30) -> None:
             "commit": commits[best],
             "total_p50_ms": round(means[best], 3),
         }
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
+    REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
     print(f"wrote {REPORT}")
