@@ -40,6 +40,7 @@ PATCHES = 4
 MATCHES = (8, 32, 128)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
 SOURCES = ["app", "scripts", "modal_app.py"]
+REPORT = Path("docs/benchmarks/latest.json")
 ENTRY = (
     "import json, sys; from scripts.benchmark import stages; "
     "print(json.dumps(stages.local(int(sys.argv[1]))))"
@@ -274,4 +275,18 @@ def main(runs: int = 30) -> None:
         )
         | {"locked_dependencies": "after"},
     }
-    print(json.dumps(report, indent=2))
+    means = {
+        name: float(np.mean([entry["total_p50_ms"] for entry in rounds]))
+        for name, rounds in report["stages"]["rounds"].items()
+        if all("error" not in entry for entry in rounds)
+    }
+    if means:
+        best = min(means, key=means.__getitem__)
+        report["best"] = {
+            "name": best,
+            "commit": commits[best],
+            "total_p50_ms": round(means[best], 3),
+        }
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
+    REPORT.write_text(json.dumps(report, indent=2) + "\n")
+    print(f"wrote {REPORT}")
