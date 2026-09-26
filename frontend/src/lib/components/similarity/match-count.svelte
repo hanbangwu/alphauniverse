@@ -3,6 +3,7 @@
   import { getSearch } from '$lib/state/app.svelte'
 
   const search = getSearch()
+  const error = $props.id()
 
   const invalid = $derived(search.count === null)
 </script>
@@ -19,11 +20,12 @@
     value={search.matches.value}
     oninput={(event) => (search.matches.value = event.currentTarget.value)}
     aria-invalid={invalid}
+    aria-describedby={invalid ? error : undefined}
     class="w-20"
   />
 </label>
 {#if invalid}
-  <span class="text-xs text-destructive">
+  <span id={error} role="alert" class="text-xs text-destructive">
     Enter a whole number from {search.range.minimum} to {search.range.maximum}.
   </span>
 {/if}
