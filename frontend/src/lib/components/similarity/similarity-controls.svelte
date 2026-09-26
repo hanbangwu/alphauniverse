@@ -1,11 +1,12 @@
 <script lang="ts">
   import { Switch } from '$lib/components/ui/switch'
-  import { getMask, getView } from '$lib/state/app.svelte'
+  import { getMask } from '$lib/state/app.svelte'
+  import { getSimilarity } from './similarity.svelte'
 
-  const view = getView()
+  const similarity = getSimilarity()
   const display = getMask()
 
-  const idle = $derived(!view.querying)
+  const idle = $derived(!similarity.searched)
 </script>
 
 <label class="flex items-center gap-2 text-sm font-medium">

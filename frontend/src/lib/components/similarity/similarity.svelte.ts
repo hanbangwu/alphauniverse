@@ -1,7 +1,7 @@
 import { type RGB, continuous, tokenColors } from '$lib/color'
 import { similarityQuery, tokensQuery } from '$lib/data/queries'
 import { extent, mask, row } from '$lib/data/scores'
-import type { Extent, SimilarityResult } from '$lib/data/similarity'
+import type { Extent, SimilarityQuery, SimilarityResult } from '$lib/data/similarity'
 import { must } from '$lib/invariant'
 import { SIMILARITY } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
@@ -19,6 +19,9 @@ export class Similarity {
   readonly #patchCount: number = this.#app.meta.grid ** 2
   readonly #tokenMap: CreateQueryResult<Uint32Array<ArrayBuffer>>
   readonly #result: CreateQueryResult<SimilarityResult>
+  #submitted: SimilarityQuery | null = $state(null)
+
+  readonly draft: SimilarityQuery | null
 
   readonly imageMaps: Float32Array | null
   readonly galaxies: Int32Array
@@ -37,12 +40,8 @@ export class Similarity {
     this.grid = app.meta.grid
 
     this.#tokenMap = createQuery(() => tokensQuery(app.meta, galaxy))
-    this.#result = createQuery(() =>
-      similarityQuery(
-        app.meta,
-        app.search.request(galaxy, app.view.patches.value, app.view.spans.value)
-      )
-    )
+    this.draft = $derived(app.search.request(galaxy, app.view.patches.value, app.view.spans.value))
+    this.#result = createQuery(() => similarityQuery(app.meta, this.#submitted))
 
     this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
@@ -62,6 +61,14 @@ export class Similarity {
 
   get fetching(): boolean {
     return this.#result.isFetching
+  }
+
+  get searched(): boolean {
+    return this.#submitted !== null
+  }
+
+  submit(): void {
+    this.#submitted = this.draft
   }
 
   get matches(): { galaxy: number; index: number }[] {

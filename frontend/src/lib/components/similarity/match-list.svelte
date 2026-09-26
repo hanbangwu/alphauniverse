@@ -1,13 +1,12 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
   import MatchRow from './match-row.svelte'
-  import RankingControls from './ranking-controls.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   const similarity = getSimilarity()
 </script>
 
-<RankingControls />
+<span class="text-sm font-medium">Whole dataset</span>
 
 {#if !similarity.imageMaps}
   <div class="grid h-24 place-content-center">

@@ -25,10 +25,6 @@ export class ViewState {
     return this.full ? this.meta.full_points : this.meta.mean_points
   }
 
-  get querying(): boolean {
-    return this.patches.value.length + this.spans.value.length > 0
-  }
-
   select(galaxy: number | null): void {
     if (galaxy !== this.galaxy.value) {
       this.patches.reset()

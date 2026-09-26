@@ -29,7 +29,7 @@
     title={similarity.imageMap ? similarity.score : similarity.caption}
     selected={view.patches.value}
     onselect={(indices) => (view.patches.value = indices)}
-    busy={similarity.tokens === null || (view.querying && similarity.fetching)}
+    busy={similarity.tokens === null || similarity.fetching}
   />
 
   <SpectrumPanel

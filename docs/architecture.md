@@ -78,10 +78,10 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
 ├── LeftPanel        point set toggle, morphology filter, download
 ├── ProjectionView   embedding-atlas over a DuckDB-WASM table
 └── RightPanel       selected galaxy: image or spectrum, morphology, crossmatches
-    └── PatchSimilarity   dialog: query patches, spectrum spans, ranked matches
+    └── PatchSimilarity   dialog: query patches and spans, match count, Search, ranked matches
 ```
 
-App-wide state lives in plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`; the similarity dialog keeps its own state beside its components in `similarity.svelte.ts`. `Field<T>` and its subclasses wrap a `$state` value with normalisation (sorting and deduping index lists), so the components never validate anything themselves. The match count is kept as the text typed into its number box, and `SearchState` checks it against bounds that are not typed by hand: `state/schema.ts` reads them out of the generated zod schema, so they come from the API contract.
+App-wide state lives in plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`; the similarity dialog keeps its own state beside its components in `similarity.svelte.ts`, including the last search submitted. The selected patches and spans and the match count are a draft: `/similarity` runs only when Search, or Enter in the count box, submits them, and a newly selected galaxy starts with no results. `Field<T>` and its subclasses wrap a `$state` value with normalisation (sorting and deduping index lists), so the components never validate anything themselves. The match count is kept as the text typed into its number box, and `SearchState` checks it against bounds that are not typed by hand: `state/schema.ts` reads them out of the generated zod schema, so they come from the API contract.
 
 `+layout.server.ts` fetches `/meta` during SSR. After that, two data paths, deliberately separate:
 
