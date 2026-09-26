@@ -1,3 +1,4 @@
+import importlib
 from collections.abc import Iterator
 
 import pyarrow as pa
@@ -9,8 +10,8 @@ from app import search as search_module
 from app.config import FLAG_SURVEYS, POINTS, artifact
 from scripts.fixture import build
 
-torch = pytest.importorskip("torch")
-umap_module = pytest.importorskip("app.parametric_umap")
+pytest.importorskip("torch")
+umap_module = importlib.import_module("app.parametric_umap")
 
 LABELS = [1, None, 3, 0]
 CACHES = (
@@ -28,6 +29,7 @@ def runs(
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path_factory.mktemp("umap")))
         patch.setattr(umap_module, "WANDB_MODE", "disabled")
+        patch.setattr(umap_module, "EPOCHS", 1)
         patch.setattr(
             umap_module,
             "dataset",

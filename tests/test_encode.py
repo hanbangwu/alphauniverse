@@ -1,3 +1,4 @@
+import importlib
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -18,15 +19,14 @@ from app.config import (
     STORES,
     TOKEN_SURVEYS,
     artifact,
+    device,
     store_schema,
 )
-from app.search import blocks, source, with_spectrum
+from app.search import blocks, source
+from scripts.fixture import TOKENS
 
 torch = pytest.importorskip("torch")
-aion = pytest.importorskip("aion")
-aion_codecs = pytest.importorskip("aion.codecs")
-aion_modalities = pytest.importorskip("aion.modalities")
-encode_module = pytest.importorskip("app.encode")
+encode_module = importlib.import_module("app.encode")
 
 CONFIGS = Path(__file__).parent / "aion"
 CACHES = (
@@ -76,44 +76,43 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
 @pytest.fixture(scope="module", autouse=True)
 def random_weights() -> Iterator[None]:
     def load(codec_class: type, modality: type) -> object:
+        torch.manual_seed(0)
         path = CONFIGS / "codecs" / modality.name / "config.json"
         return codec_class(**json.loads(path.read_text())).eval()
 
     torch.manual_seed(0)
     config = json.loads((CONFIGS / "config.json").read_text())
-    network = aion.AION(config | {"encoder_depth": 1, "decoder_depth": 1}).eval()
+    network = encode_module.AION(config | {"encoder_depth": 1, "decoder_depth": 1})
+    network = network.to(device()).eval()
     network.requires_grad_(False)
+    encode_module.codec.cache_clear()
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(
-            aion_codecs.CodecManager, "_load_codec_from_hf", staticmethod(load)
+            encode_module.CodecManager, "_load_codec_from_hf", staticmethod(load)
         )
         patch.setattr(encode_module, "model", lambda: network)
         yield
+    encode_module.codec.cache_clear()
 
 
-def test_each_survey_tokenizes_to_its_count() -> None:
+def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
     groups = encode_module.tokenize(galaxy(0, hsc=True, desi=True, sdss=True))
-    counts = {
+
+    assert {
         survey: sum(slot.shape[1] for slot in group.values())
         for survey, group in groups.items()
-    }
-
-    assert counts == {
-        ANCHOR: N_PATCHES + 12,
-        "hsc": N_PATCHES + 13,
-        "desi": 273,
-        "sdss": 273,
-    }
+    } == TOKENS
 
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="trailing lambda = -1 padding zeroes the SDSS codec input (#50)",
 )
 def test_padded_sdss_spectra_keep_their_flux() -> None:
     first, second = (
         encode_module.spectrum(
-            aion_modalities.SDSSSpectrum,
+            encode_module.SDSSSpectrum,
             spectrum(np.random.default_rng(seed), 3800, 200),
         )
         for seed in (1, 2)
@@ -122,26 +121,31 @@ def test_padded_sdss_spectra_keep_their_flux() -> None:
     assert not torch.equal(first, second)
 
 
-def test_each_survey_lands_in_its_own_cell() -> None:
+def test_each_survey_lands_in_its_own_cell_images_first() -> None:
     groups = encode_module.tokenize(galaxy(0, hsc=True, desi=True, sdss=True))
-    context, _, modality_mask = encode_module.encode(groups)
-    cells = encode_module.by_survey(context, groups, modality_mask)
-
-    index_of = {row.tobytes(): position for position, row in enumerate(context)}
-    positions = {
-        survey: [index_of[row.tobytes()] for row in cell]
-        for survey, cell in cells.items()
+    _, _, modality_mask = encode_module.encode(groups)
+    positions = encode_module.by_survey(
+        np.arange(len(modality_mask)), groups, modality_mask
+    )
+    identifiers = {
+        key: info["id"] for key, info in encode_module.model().modality_info.items()
     }
 
-    assert {survey: len(found) for survey, found in positions.items()} == {
-        survey: sum(slot.shape[1] for slot in group.values())
-        for survey, group in groups.items()
-    }
-    assert all(np.all(np.diff(found) > 0) for found in positions.values())
-    assert sorted(np.concatenate(list(positions.values()))) == list(range(len(context)))
+    for survey, group in groups.items():
+        owned = {identifiers[key] for key in group}
+        assert set(modality_mask[positions[survey]]) == owned
+    for survey, image_key in (
+        (ANCHOR, encode_module.LegacySurveyImage.token_key),
+        ("hsc", encode_module.HSCImage.token_key),
+    ):
+        first = modality_mask[positions[survey][:N_PATCHES]]
+        assert np.all(first == identifiers[image_key])
+    assert sorted(np.concatenate(list(positions.values()))) == list(
+        range(len(modality_mask))
+    )
 
 
-def test_generated_stores_load_and_feed_the_index(
+def test_generated_stores_have_their_schemas_and_the_index_layout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = [
@@ -149,6 +153,10 @@ def test_generated_stores_load_and_feed_the_index(
         galaxy(1, hsc=False, desi=False, sdss=False),
         galaxy(2, hsc=False, desi=False, sdss=True),
     ]
+    spectra = sum(
+        any(row[TOKEN_SURVEYS[survey]] is not None for survey in SPECTRUM_SURVEYS)
+        for row in rows
+    )
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
     monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
     for cache in CACHES:
@@ -163,7 +171,7 @@ def test_generated_stores_load_and_feed_the_index(
             assert pq.read_schema(artifact(role)).equals(store_schema(role))
         table = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
         assert blocks(table).shape == (
-            len(rows) * N_PATCHES + with_spectrum().sum() * N_SPANS,
+            len(rows) * N_PATCHES + spectra * N_SPANS,
             DIM,
         )
     finally:

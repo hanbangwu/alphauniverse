@@ -8,6 +8,9 @@ on:
       - app/config.py
       - app/dataset.py
       - app/search.py
+      - app/cutouts.py
+      - app/spectra.py
+      - scripts/fixture.py
       - pyproject.toml
       - uv.lock
       - tests/test_encode.py

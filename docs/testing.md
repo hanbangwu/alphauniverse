@@ -1,11 +1,11 @@
 # Testing and benchmarking
 
-Tests run against a synthetic artifact tree built by `scripts/fixture.py`; they need neither Modal, a GPU nor the network.
+Tests run against a synthetic artifact tree built by `scripts/fixture.py`; they need neither Modal, a GPU nor the network. The torch tests, described below, also build small trees of their own.
 
 The tree has the production schemas at a size that fits in a CI runner, so the API and the search path run real code against real files:
 
 - Embeddings are drawn around a fixed set of random cluster centres, not as uniform noise. In 768 dimensions uniform random vectors are all nearly orthogonal, which would make every ranking arbitrary and every recall figure meaningless.
-- The 2-d points come from a fixed random projection, standing in for the trained parametric UMAP, which would pull torch and a training run into the tests. One projection serves both point sets, as one trained projector does in production.
+- The 2-d points come from a fixed random projection, standing in for the trained parametric UMAP, so the default suite runs without torch. One projection serves both point sets, as one trained projector does in production.
 - The tree leaves out `codebook` and `parametric_umap`: nothing served reads them, and their absence exercises the 404 path.
 
 ## Tests
@@ -30,7 +30,7 @@ The torch modules have their own tests, which skip unless the `build` group is i
 uv run --group build pytest tests/test_encode.py tests/test_parametric_umap.py
 ```
 
-They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base` at the revision in `tests/aion/REVISION`, so no test downloads weights. `test_padded_sdss_spectra_keep_their_flux` is marked `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input, and once that is fixed the test passes and the mark has to go.
+They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base` at the revision in `tests/aion/REVISION`, so no test downloads weights. `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, to check that the result is deterministic. `test_padded_sdss_spectra_keep_their_flux` is marked `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input, and once that is fixed the test passes and the mark has to go.
 
 ## Benchmarks
 
@@ -69,6 +69,6 @@ Every uv command in the workflow runs with `UV_LOCKED=1`, so a `pyproject.toml` 
 
 Lint fails on a comment that starts with `TODO`, `FIXME`, `HACK` or `XXX`, in any case: ruff's `FIX` rules check Python comments, and eslint's `no-warning-comments` checks JavaScript, TypeScript and Svelte `<script>` comments, after any leading `*`. Comments in other files and in Svelte markup or styles are not checked.
 
-`.github/workflows/build.yml` installs the `build` group and runs the torch tests on pull requests that change `app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`, `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or the workflow itself.
+`.github/workflows/build.yml` installs the `build` group and runs the torch tests on pull requests that change the torch modules or what they import (`app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`), what the tests build their trees with (`app/cutouts.py`, `app/spectra.py`, `scripts/fixture.py`), `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or the workflow itself.
 
 `.github/workflows/rules.yml` runs on pull requests. Its Rules job fails on a commit in the pull request authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot, and on one committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.
