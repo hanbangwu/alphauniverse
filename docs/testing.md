@@ -50,7 +50,7 @@ There is no frontend test suite.
 
 ## CI
 
-`.github/workflows/ci-cd.yml` runs on pull requests and on pushes to `main`:
+`.github/workflows/ci-cd.yml` runs on pull requests and on pushes to `main`, except a push that changes only `CLAUDE.md`, `.claude/rules/`, `README.md` or `docs/`, whose pull request already ran the checks:
 
 1. **python**: `ruff check`, `ruff format --check`, then `uv run pytest`
 2. **openapi**: regenerates `frontend/openapi.json` and fails if it differs from the committed copy
