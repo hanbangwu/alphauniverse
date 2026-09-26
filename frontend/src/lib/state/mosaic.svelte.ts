@@ -32,14 +32,14 @@ export class MosaicState {
   }
 
   async #read(role: string): Promise<string> {
-    const db = this.connect()
-    await db.exec(
+    const database = this.connect()
+    await database.exec(
       loadParquet(role, artifactUrl(role), {
         replace: true,
         select: ['* EXCLUDE (category)', `coalesce(category, ${UNLABELLED})::UTINYINT AS category`]
       })
     )
-    db.clear({ clients: false, cache: true })
+    database.clear({ clients: false, cache: true })
     return role
   }
 

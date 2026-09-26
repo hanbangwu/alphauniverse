@@ -48,7 +48,7 @@ from tqdm import tqdm
 
 from .config import (
     ANCHOR,
-    CROP_PX,
+    CROP_PIXELS,
     DATASET_ID,
     DATASET_REVISION,
     DIM,
@@ -105,20 +105,20 @@ def codec() -> CodecManager:
 @cache
 def model() -> AION:
     """The pretrained AION encoder in eval mode with gradients off."""
-    net = AION.from_pretrained("polymathic-ai/aion-base").to(device()).eval()
-    net.requires_grad_(False)
-    return net
+    network = AION.from_pretrained("polymathic-ai/aion-base").to(device()).eval()
+    network.requires_grad_(False)
+    return network
 
 
 def image(
     modality: type[Image], row: dict[str, list], bands: list[str]
 ) -> torch.Tensor:
-    """Token ids for one image row, centre-cropped to `CROP_PX`."""
+    """Token ids for one image row, centre-cropped to `CROP_PIXELS`."""
     by_band = {
         band.upper(): flux for band, flux in zip(row["band"], row["flux"], strict=True)
     }
     flux = np.asarray([[by_band[band] for band in bands]], dtype=np.float32)
-    crop = F.center_crop(torch.from_numpy(flux), output_size=[CROP_PX, CROP_PX])
+    crop = F.center_crop(torch.from_numpy(flux), output_size=[CROP_PIXELS, CROP_PIXELS])
     return (
         codec()
         .encode(modality(flux=crop.to(device()), bands=bands))[modality.token_key]
@@ -168,7 +168,10 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
                 row[TOKEN_SURVEYS[ANCHOR]],
                 ["DES-G", "DES-R", "DES-I", "DES-Z"],
             ),
-            **{m.token_key: scalar(m, row[column]) for m, column in LS_SCALARS},
+            **{
+                modality.token_key: scalar(modality, row[column])
+                for modality, column in LS_SCALARS
+            },
         }
     }
     if row[TOKEN_SURVEYS["hsc"]] is not None:
@@ -178,7 +181,10 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
                 row[TOKEN_SURVEYS["hsc"]],
                 ["HSC-G", "HSC-R", "HSC-I", "HSC-Z", "HSC-Y"],
             ),
-            **{m.token_key: scalar(m, row[column]) for m, column in HSC_SCALARS},
+            **{
+                modality.token_key: scalar(modality, row[column])
+                for modality, column in HSC_SCALARS
+            },
         }
     if row[TOKEN_SURVEYS["desi"]] is not None:
         groups["desi"] = {
@@ -197,29 +203,34 @@ def encode(
     """Run the encoder over all of a galaxy's tokens at once."""
     tokens = {key: slot for group in groups.values() for key, slot in group.items()}
     with torch.no_grad():
-        enc_tokens, enc_emb, enc_mask, mod_mask = model().embed_inputs(
-            tokens, num_encoder_tokens=sum(slot.shape[1] for slot in tokens.values())
+        encoder_tokens, encoder_embeddings, encoder_mask, modality_mask = (
+            model().embed_inputs(
+                tokens,
+                num_encoder_tokens=sum(slot.shape[1] for slot in tokens.values()),
+            )
         )
         with torch.autocast(device_type=device().type, dtype=torch.float16):
-            context = model()._encode(enc_tokens, enc_emb, enc_mask)
+            context = model()._encode(encoder_tokens, encoder_embeddings, encoder_mask)
 
     return (
         context[0].cpu().numpy(),
-        enc_tokens[0].cpu().numpy(),
-        mod_mask[0].cpu().numpy(),
+        encoder_tokens[0].cpu().numpy(),
+        modality_mask[0].cpu().numpy(),
     )
 
 
 def by_survey(
     values: np.ndarray,
     groups: dict[str, dict[str, torch.Tensor]],
-    mod_mask: np.ndarray,
+    modality_mask: np.ndarray,
 ) -> dict[str, np.ndarray]:
     """Split per-token rows back into one array per survey, by modality id."""
     return {
         survey: values[
             np.flatnonzero(
-                np.isin(mod_mask, [model().modality_info[key]["id"] for key in group])
+                np.isin(
+                    modality_mask, [model().modality_info[key]["id"] for key in group]
+                )
             )
         ]
         for survey, group in groups.items()
@@ -255,13 +266,13 @@ def generate_embeddings() -> None:
             staging[role], schemas[role], compression="zstd"
         )
 
-    for i in tqdm(range(count), desc="encode"):
-        row = data[i]
+    for galaxy in tqdm(range(count), desc="encode"):
+        row = data[galaxy]
         groups = tokenize(row)
-        context, codebook, mod_mask = encode(groups)
+        context, codebook, modality_mask = encode(groups)
         cells = {
-            "encoded": by_survey(context, groups, mod_mask),
-            "codebook": by_survey(codebook, groups, mod_mask),
+            "encoded": by_survey(context, groups, modality_mask),
+            "codebook": by_survey(codebook, groups, modality_mask),
             "tokens": {
                 survey: np.concatenate(
                     [
@@ -277,15 +288,15 @@ def generate_embeddings() -> None:
         }
         for role in STORES:
             batch = batches[role]
-            batch["galaxy"].append(i)
+            batch["galaxy"].append(galaxy)
             for survey in TOKEN_SURVEYS:
                 batch[survey].append(cells[role].get(survey))
             for survey in FLAG_SURVEYS:
                 batch[survey].append(flags[survey])
-            if len(batch["galaxy"]) < 1024 and i < count - 1:
+            if len(batch["galaxy"]) < 1024 and galaxy < count - 1:
                 continue
 
-            dtype, dim = (np.uint32, None) if role == "tokens" else (np.float16, DIM)
+            dtype, width = (np.uint32, None) if role == "tokens" else (np.float16, DIM)
             columns: dict[str, pa.Array] = {}
             for survey in TOKEN_SURVEYS:
                 entries = batch[survey]
@@ -303,8 +314,8 @@ def generate_embeddings() -> None:
                 columns[survey] = pa.ListArray.from_arrays(
                     offsets,
                     values
-                    if dim is None
-                    else pa.FixedSizeListArray.from_arrays(values, dim),
+                    if width is None
+                    else pa.FixedSizeListArray.from_arrays(values, width),
                 )
 
             writers[role].write_table(
