@@ -1,5 +1,3 @@
-"""Tokenize every galaxy and run the AION encoder."""
-
 from functools import cache
 from pathlib import Path
 
@@ -98,13 +96,11 @@ HSC_SCALARS = (
 
 @cache
 def codec() -> CodecManager:
-    """The AION codec manager, built once per process."""
     return CodecManager(device=device())
 
 
 @cache
 def model() -> AION:
-    """The pretrained AION encoder in eval mode with gradients off."""
     network = AION.from_pretrained("polymathic-ai/aion-base").to(device()).eval()
     network.requires_grad_(False)
     return network
@@ -113,7 +109,6 @@ def model() -> AION:
 def image(
     modality: type[Image], row: dict[str, list], bands: list[str]
 ) -> torch.Tensor:
-    """Token ids for one image row, centre-cropped to `CROP_PIXELS`."""
     by_band = {
         band.upper(): flux for band, flux in zip(row["band"], row["flux"], strict=True)
     }
@@ -127,7 +122,6 @@ def image(
 
 
 def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
-    """Token ids for one spectrum row."""
     fields = {
         "flux": ("flux", torch.float32),
         "ivar": ("ivar", torch.float32),
@@ -144,7 +138,6 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
 
 
 def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
-    """Token ids for one scalar measurement."""
     return (
         codec()
         .encode(
@@ -157,10 +150,6 @@ def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
 
 
 def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
-    """Token IDs for one galaxy, grouped by survey.
-
-    Legacy Survey always present. Others possibly null.
-    """
     groups = {
         ANCHOR: {
             LegacySurveyImage.token_key: image(
@@ -200,7 +189,6 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
 def encode(
     groups: dict[str, dict[str, torch.Tensor]],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Run the encoder over all of a galaxy's tokens at once."""
     tokens = {key: slot for group in groups.values() for key, slot in group.items()}
     with torch.no_grad():
         encoder_tokens, encoder_embeddings, encoder_mask, modality_mask = (
@@ -224,7 +212,6 @@ def by_survey(
     groups: dict[str, dict[str, torch.Tensor]],
     modality_mask: np.ndarray,
 ) -> dict[str, np.ndarray]:
-    """Split per-token rows back into one array per survey, by modality id."""
     return {
         survey: values[
             np.flatnonzero(
@@ -238,10 +225,6 @@ def by_survey(
 
 
 def generate_embeddings() -> None:
-    """Encode every galaxy and write the three stores.
-
-    Encoded one at a time. Written to partial in batches of 1024.
-    """
     build_dir().mkdir(parents=True, exist_ok=True)
 
     data = dataset(DATASET_ID, DATASET_REVISION)

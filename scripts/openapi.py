@@ -1,5 +1,3 @@
-"""Write the API's OpenAPI schema to frontend/openapi.json."""
-
 import json
 from pathlib import Path
 

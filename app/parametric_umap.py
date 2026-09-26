@@ -39,8 +39,6 @@ SAMPLE = 500_000
 
 
 class ParametricUMAP(nn.Module):
-    """An MLP mapping a normalised embedding to 2-d."""
-
     def __init__(self, input_dim: int) -> None:
         super().__init__()
         self.encoder = nn.Sequential(
@@ -56,7 +54,6 @@ class ParametricUMAP(nn.Module):
 
     @torch.inference_mode()
     def transform(self, values: np.ndarray) -> np.ndarray:
-        """Project rows to 2-d in chunks, returning coordinates on the CPU."""
         fitted = next(self.parameters()).device
         rows = torch.from_numpy(values)
         projected = [self(chunk.to(fitted)).cpu() for chunk in torch.split(rows, 4096)]
@@ -64,12 +61,6 @@ class ParametricUMAP(nn.Module):
 
 
 def fit_parametric_umap(sampled: np.ndarray) -> None:
-    """Train the projector on sampled embeddings and save its weights.
-
-    Edges come from UMAP's fuzzy simplicial set over `sampled`; each step
-    samples edges by strength and pulls their endpoints together while pushing
-    `NEGATIVES` random rows apart.
-    """
     import wandb
 
     strengths, _, _ = fuzzy_simplicial_set(
@@ -152,11 +143,6 @@ def fit_parametric_umap(sampled: np.ndarray) -> None:
 def _stream(
     counts: dict[str, int],
 ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    """Stream `encoded` survey by survey, skipping galaxies with no match.
-
-    Yields `(galaxies, offsets, values)` per batch, where `offsets` bound
-    each galaxy's slice of `values`.
-    """
     for survey in TOKEN_SURVEYS:
         if not counts[survey]:
             continue
@@ -178,12 +164,6 @@ def _stream(
 
 
 def generate_projections() -> None:
-    """Train the projector and write both point sets.
-
-    Streams `encoded` once to accumulate per-galaxy embedding means and draw a
-    `SAMPLE`-sized training set, then streams it again to project every
-    embedding into `full_points`.
-    """
     for role in ("parametric_umap", "mean_points", "full_points"):
         path = artifact(role)
         path.unlink(missing_ok=True)

@@ -1,5 +1,3 @@
-"""The spectra artifact: its layout and what `spectrum` returns."""
-
 from pathlib import Path
 
 import numpy as np
@@ -12,7 +10,6 @@ from app.spectra import samples, spectra, spectrum
 
 
 def test_spectrum_returns_the_stored_samples(tree: Path) -> None:
-    """Serving is a lookup, so row `g` must be what galaxy `g` gets back."""
     stored = pq.read_table(artifact("spectra")).column("desi")[0]
 
     table = spectrum(0, "desi")

@@ -1,20 +1,3 @@
-"""Builds a small artifact tree in the schemas that app/ serves.
-
-Real artifacts come from the Modal build jobs: a GPU, the AION encoder and tens
-of gigabytes of embeddings. This writes artifacts with the production schemas
-at a size that fits in a runner. Everything downstream of the artifacts (the API,
-the search path) then exercises real code against real files.
-
-Embeddings are drawn from a fixed set of random cluster centres rather than
-uniform noise. In 768 dimensions uniform random vectors are all near-orthogonal,
-which would make every ranking arbitrary and every recall number meaningless.
-
-The tree deliberately omits the `codebook` and `parametric_umap` artifacts:
-nothing served depends on them, and their absence exercises the 404 path.
-
-    uv run python -m scripts.fixture --galaxies 12 --out .cache/fixture
-"""
-
 import argparse
 import os
 from collections.abc import Iterator
@@ -61,7 +44,6 @@ MASKED = 4
 
 
 def _frames(seed: int, galaxies: int) -> Iterator[np.ndarray]:
-    """One distinguishable source image per galaxy, compressible like a photo."""
     rng = np.random.default_rng(seed + 1)
     ramp = np.linspace(0, 255, SOURCE_PIXELS, dtype=np.float32)
     base = (ramp[:, None, None] + ramp[None, :, None]) / 2
@@ -72,12 +54,10 @@ def _frames(seed: int, galaxies: int) -> Iterator[np.ndarray]:
 
 
 def covered(survey: str, galaxy: int) -> bool:
-    """Whether `survey` has a crossmatch for this galaxy."""
     return galaxy % STRIDE[survey] == 0
 
 
 def _spectra(seed: int, galaxies: int) -> dict[str, list[dict[str, np.ndarray] | None]]:
-    """Per-survey spectrum cells: noise with a few masked samples, or `None`."""
     rng = np.random.default_rng(seed + 2)
     wavelength = np.linspace(3600, 9800, SAMPLES, dtype=np.float32)
     cells: dict[str, list[dict[str, np.ndarray] | None]] = {
@@ -97,7 +77,6 @@ def _spectra(seed: int, galaxies: int) -> dict[str, list[dict[str, np.ndarray] |
 def _cells(
     rng: np.random.Generator, centres: np.ndarray, galaxies: int
 ) -> tuple[dict[str, list[np.ndarray | None]], dict[str, list[np.ndarray | None]]]:
-    """Per-survey embedding and token-id cells, with `None` where uncovered."""
     embeddings: dict[str, list[np.ndarray | None]] = {
         survey: [] for survey in TOKEN_SURVEYS
     }
@@ -125,7 +104,6 @@ def _store(
     galaxies: int,
     flags: dict[str, np.ndarray],
 ) -> None:
-    """Write one parquet store, in the schema app/encode.py writes."""
     pq.write_table(
         pa.table(
             {
@@ -146,21 +124,10 @@ def _store(
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
-    """Project normalised rows onto `basis`.
-
-    Stands in for the trained parametric UMAP, which would pull torch and a
-    training run into the test path. One basis serves both point sets because
-    one trained projector does in production.
-    """
     return normalize(rows) @ basis
 
 
 def build(galaxies: int, seed: int = 0) -> Path:
-    """Write a complete fixture tree under `build_dir()`.
-
-    Returns the directory written. Requires `ALPHAUNIVERSE_CACHE` to already
-    point where the tree should go.
-    """
     target = build_dir()
     target.mkdir(parents=True, exist_ok=True)
 
@@ -208,7 +175,9 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="Builds a small artifact tree in the schemas that app/ serves."
+    )
     parser.add_argument("--galaxies", type=int, default=12)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=Path(".cache") / "fixture")

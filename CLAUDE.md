@@ -70,6 +70,6 @@ bun run lint                                        # prettier + eslint
 
 ## Others
 
-- No code comments or docstrings. Explanations of a change (why it was made, what it replaced, what was tried) go in the issue, the pull request and their comments; how the code works now goes in `docs/`. A route's API description goes in its decorator's `description=` argument.
+- No code comments or docstrings, except in generated, vendored or scaffold files, which stay as generated. Explanations of a change (why it was made, what it replaced, what was tried) go in the issue, the pull request and their comments; how the code works now goes in `docs/`. User-facing descriptions go in the library's own argument for them: a route's in its decorator's `description=`, a response model's in `json_schema_extra`, and a script's `--help` in `ArgumentParser(description=)`.
 - No em dashes, in files, commit messages, pull requests, issues or comments. An en dash in a numeric range is fine.
 - Prefer literal phrasing to metaphor and flourish: "a parameter worth varying", not "a dial worth turning".

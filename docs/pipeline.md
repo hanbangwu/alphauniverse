@@ -14,6 +14,8 @@ The script is not part of the deployed pipeline and needs `lsdb`, which is not a
 
 For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
 
+The job deletes the existing stores when it starts. Galaxies are encoded one at a time and written in batches of 1024 rows to a `.partial` file per store, which replaces the store when the job finishes.
+
 Three stores are written, with the same columns:
 
 ```

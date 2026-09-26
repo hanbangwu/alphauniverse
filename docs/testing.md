@@ -2,6 +2,12 @@
 
 Tests run against a synthetic artifact tree built by `scripts/fixture.py`; they need neither Modal, a GPU nor the network.
 
+The tree has the production schemas at a size that fits in a CI runner, so the API and the search path run real code against real files:
+
+- Embeddings are drawn around a fixed set of random cluster centres, not as uniform noise. In 768 dimensions uniform random vectors are all nearly orthogonal, which would make every ranking arbitrary and every recall figure meaningless.
+- The 2-d points come from a fixed random projection, standing in for the trained parametric UMAP, which would pull torch and a training run into the tests. One projection serves both point sets, as one trained projector does in production.
+- The tree leaves out `codebook` and `parametric_umap`: nothing served reads them, and their absence exercises the 404 path.
+
 ## Tests
 
 ```sh
@@ -12,6 +18,11 @@ uv run ruff format app scripts tests modal_app.py
 ```
 
 `tests/conftest.py` builds the tree once per session.
+
+Two tests in `tests/test_search.py` check what the shared tree cannot show on its own:
+
+- `test_approximate_ranking_agrees_with_exact` compares `search()` with a brute-force ranking over every token. The brute force follows `search()` except for the candidate step, scores the float32 embeddings rather than the index's fp16 copies, and holds the whole corpus in memory, so it only runs at fixture scale. The fixture is small enough that the candidate pool covers it, so the two rankings agree exactly; on production data they would not.
+- `test_ids_stay_contiguous_across_add_batches` builds its own index with one galaxy per `add()` call, including galaxies without a spectrum, because the shared tree is smaller than `BATCH` and goes in with a single call. A reordered or dropped batch would shift every galaxy id in every `/similarity` response without an error.
 
 ## Benchmarks
 

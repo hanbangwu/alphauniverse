@@ -45,7 +45,6 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
-    """Encode every galaxy into the three parquet stores."""
     from app.encode import generate_embeddings
 
     cache_volume.reload()
@@ -61,7 +60,6 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_index() -> None:
-    """Build the patch search index from `encoded`."""
     from app.search import generate_index
 
     cache_volume.reload()
@@ -77,7 +75,6 @@ def generate_index() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_cutouts() -> None:
-    """Crop and PNG-encode every galaxy's image, so serving never decodes."""
     from app.cutouts import generate_cutouts
 
     cache_volume.reload()
@@ -93,7 +90,6 @@ def generate_cutouts() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_spectra() -> None:
-    """Extract every galaxy's spectra, so serving never opens the dataset."""
     from app.spectra import generate_spectra
 
     cache_volume.reload()
@@ -115,7 +111,6 @@ def generate_spectra() -> None:
     ),
 )
 def generate_projections() -> None:
-    """Fit the projector and write both point sets."""
     from app.parametric_umap import generate_projections
 
     cache_volume.reload()
@@ -135,7 +130,6 @@ def generate_projections() -> None:
 @modal.concurrent(max_inputs=16)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
-    """Serve the read-only API."""
     from app.main import app
 
     return app
