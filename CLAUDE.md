@@ -35,9 +35,11 @@ bun run lint                                        # prettier + eslint
 - A pull request is a series of commits, each one small nominal goal. Before writing code, list the goals and the decisions they need, each with options and a recommendation, in the pull request's issue, and wait for agreement.
 - Implement the agreed goals one commit each, then stop before the pull request leaves draft. List choices made while carrying out a goal under "Decisions" in the pull request.
 - Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
+- Before opening a pull request that changes code, check `README.md` and `docs/` for anything it makes stale and update them in the same pull request.
 - A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
 - A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. The other maintainer then reviews it before it merges.
-- A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/code-review`, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
+- A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/code-review`, Copilot review, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
+- Claude monitors every pull request it opens, light path included, until it merges or closes: CI, comments and merge conflicts, with a check-in about an hour out.
 - Once a pull request is ready for review, push to it only when a maintainer asks, or to fix a failing check that Claude's own changes caused. Leave a check broken by anyone else's change as it is unless a maintainer asks. Post review findings and later findings of your own as a comment with the proposed fix, and wait. An emergency is production down or a secret exposed; even then, comment first and put the fix in a new pull request.
 - Pull before each commit and build on a maintainer's edits. Never force-push, rebase or reset a branch a human has committed to, and never push to a branch someone is merging.
 - Before changing a line, read its history; if a maintainer set it on purpose, ask.
@@ -57,14 +59,17 @@ bun run lint                                        # prettier + eslint
 - Write the minimum code that is correct and clear.
 - Prefer removing to adding; deleting a concept is better than adding a flag.
 - Use library APIs the way their documentation intends, and read the docs when unsure. Don't hand-roll what a library provides.
+- Report when an empirical test contradicts documentation; neither outranks the other.
+- Use full words for variable names (no abbreviations like `q` for `queue`).
 - Leave parameters at their defaults unless there is an explicit, significant reason not to.
 - No no-ops: passing a parameter its default, redeclaring a type a value already has, or guarding a case that cannot happen. Typing constants is fine.
 - One purpose per function, one group of things per file. Add a helper only when a function is too long or the helper is reused.
-- No linter-ignore rules, as comments, config or otherwise.
-- Only state figures that were measured. The fixture tests correctness; never use it to measure or extrapolate production behaviour.
+- No linter-ignore rules, as comments, config or otherwise, except excluding generated or vendored paths and settings a tool's own documentation recommends.
+- Only state figures that were measured, or computed from measured ones with the computation shown and consistent units. The fixture tests correctness; never use it to measure or extrapolate production behaviour.
 - A measurement records what produced it. Benchmark figures do not compare across machines or thread layouts, so a table that mixes runs is wrong even when every figure in it is real.
 
 ## Others
 
 - No code comments or docstrings. Explanations of a change (why it was made, what it replaced, what was tried) go in the issue, the pull request and their comments; how the code works now goes in `docs/`. A route's API description goes in its decorator's `description=` argument.
-- No em dashes.
+- No em dashes, in files, commit messages, pull requests, issues or comments. An en dash in a numeric range is fine.
+- Prefer literal phrasing to metaphor and flourish: "a parameter worth varying", not "a dial worth turning".

@@ -15,5 +15,4 @@ paths:
   - `docs/pipeline.md`: the build jobs and the artifact schemas.
   - `docs/performance.md`: the cost model, measured figures and scaling ceilings.
   - `docs/testing.md`: the test, benchmark and CI commands.
-- A doc changes in the same pull request as the code it describes.
 - A rule goes in the narrowest place it applies: a path-scoped file in `.claude/rules/` when it concerns certain files, `CLAUDE.md` only when it applies to the whole repository.
