@@ -14,7 +14,7 @@ import pyarrow.parquet as pq
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .config import (
     ANCHOR,
@@ -56,17 +56,25 @@ def labels() -> tuple[int, list[int], int]:
 
 
 class SpectrumGrid(BaseModel):
-    """Where spectral token `i` sits, in Ångström.
-
-    From `origin + i * width` to `origin + (i + 1) * width`.
-    """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Where spectral token `i` sits, in Ångström.\n\n"
+                "From `origin + i * width` to `origin + (i + 1) * width`."
+            )
+        }
+    )
 
     origin: float
     width: float
 
 
 class Meta(BaseModel):
-    """What the frontend needs before it can render anything."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": "What the frontend needs before it can render anything."
+        }
+    )
 
     author: str
     id: str
@@ -82,14 +90,18 @@ class Meta(BaseModel):
 
 
 class Survey(BaseModel):
-    """Whether one galaxy was crossmatched into one survey."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": "Whether one galaxy was crossmatched into one survey."
+        }
+    )
 
     survey: str
     matched: bool
 
 
 class Detail(BaseModel):
-    """An error body."""
+    model_config = ConfigDict(json_schema_extra={"description": "An error body."})
 
     detail: str
 
@@ -149,9 +161,11 @@ app.add_middleware(
 )
 
 
-@app.get("/meta")
+@app.get(
+    "/meta",
+    description="Dataset identity, size, patch grid, artifact roles and label counts.",
+)
 def get_meta() -> Meta:
-    """Dataset identity, size, patch grid, artifact roles and label counts."""
     galaxies, morphologies, unlabelled = labels()
     return Meta(
         author=DATASET_AUTHOR,
@@ -172,9 +186,9 @@ def get_meta() -> Meta:
     "/artifacts/{role}",
     response_class=FileResponse,
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
+    description="Download a build artifact by role.",
 )
 def get_artifact(role: str) -> Response:
-    """Download a build artifact by role."""
     try:
         path = artifact(role)
         path.stat()
@@ -202,9 +216,9 @@ def head_artifact(role: str) -> Response:
             "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}
         }
     },
+    description="The galaxy's anchor-survey cutout as a PNG.",
 )
 def get_image(galaxy: GalaxyIndex) -> Response:
-    """The galaxy's anchor-survey cutout as a PNG."""
     return Response(cutout(galaxy), media_type="image/png")
 
 
@@ -212,9 +226,9 @@ def get_image(galaxy: GalaxyIndex) -> Response:
     "/galaxies/{galaxy}/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
+    description="The galaxy's anchor image token ids, as raw little-endian uint32.",
 )
 def get_tokens(galaxy: GalaxyIndex) -> Response:
-    """The galaxy's anchor image token ids, as raw little-endian uint32."""
     table = source("tokens").to_table(
         columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
     )
@@ -229,9 +243,9 @@ def get_tokens(galaxy: GalaxyIndex) -> Response:
     "/galaxies/{galaxy}/spectra/{survey}",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}, **NOT_FOUND},
+    description="The galaxy's spectrum from one survey, as Arrow IPC.",
 )
 def get_spectrum(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
-    """The galaxy's spectrum from one survey, as Arrow IPC."""
     table = spectrum(galaxy, survey)
     if table is None:
         raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
@@ -242,9 +256,9 @@ def get_spectrum(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
     "/galaxies/{galaxy}/spectra/{survey}/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
+    description="The galaxy's spectrum token ids from one survey, as raw uint32.",
 )
 def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
-    """The galaxy's spectrum token ids from one survey, as raw uint32."""
     table = source("tokens").to_table(
         columns=[survey], filter=ds.field("galaxy") == galaxy
     )
@@ -256,9 +270,11 @@ def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response
     )
 
 
-@app.get("/galaxies/{galaxy}/coverage")
+@app.get(
+    "/galaxies/{galaxy}/coverage",
+    description="Which surveys the galaxy was crossmatched into.",
+)
 def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
-    """Which surveys the galaxy was crossmatched into."""
     table = source("tokens").to_table(
         columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
     )
@@ -275,15 +291,15 @@ def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
     "/similarity",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
+    description=(
+        "Galaxies ranked against the mean of the query tokens, as Arrow IPC.\n\n"
+        "One record batch of four columns: the galaxy index, its best token score,\n"
+        "a fixed-size list of one score per image patch, and one per spectral span\n"
+        "or null for a galaxy without a spectrum. Row 0 is always the query galaxy\n"
+        "itself."
+    ),
 )
 def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
-    """Galaxies ranked against the mean of the query tokens, as Arrow IPC.
-
-    One record batch of four columns: the galaxy index, its best token score,
-    a fixed-size list of one score per image patch, and one per spectral span
-    or null for a galaxy without a spectrum. Row 0 is always the query galaxy
-    itself.
-    """
     if query.spans and not with_spectrum()[query.galaxy]:
         raise HTTPException(422, f"galaxy {query.galaxy} has no spectrum")
     galaxies, scores, values, spans = search(query, index=index())
