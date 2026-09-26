@@ -1,0 +1,6 @@
+{
+  "codebook_size": 1024,
+  "min_log_value": -3,
+  "modality": "FLUX_W3",
+  "reservoir_size": 100000
+}

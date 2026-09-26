@@ -1,0 +1,5 @@
+{
+  "codebook_size": 1024,
+  "modality": "i_cmodel_mag",
+  "reservoir_size": 100000
+}
