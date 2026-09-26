@@ -63,7 +63,7 @@ bun run lint                                        # prettier + eslint
 - No no-ops: passing a parameter its default, redeclaring a type a value already has, or guarding a case that cannot happen. Typing constants is fine.
 - One purpose per function, one group of things per file. Add a helper only when a function is too long or the helper is reused.
 - No linter-ignore rules, as comments, config or otherwise, except excluding generated or vendored paths and settings a tool's own documentation recommends.
-- Only state figures that were measured. The fixture tests correctness; never use it to measure or extrapolate production behaviour.
+- Only state figures that were measured, or computed from measured ones with the computation shown and consistent units. The fixture tests correctness; never use it to measure or extrapolate production behaviour.
 - A measurement records what produced it. Benchmark figures do not compare across machines or thread layouts, so a table that mixes runs is wrong even when every figure in it is real.
 
 ## Others
