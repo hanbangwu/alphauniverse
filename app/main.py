@@ -1,5 +1,3 @@
-"""FastAPI stuff"""
-
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -44,7 +42,6 @@ if TYPE_CHECKING:
 
 @cache
 def labels() -> tuple[int, list[int], int]:
-    """The galaxy count, per-morphology counts and unlabelled count."""
     points = pq.read_table(artifact("mean_points"), columns=["galaxy", "category"])
     category = points["category"]
     labelled = np.asarray(category.drop_null())
@@ -118,7 +115,6 @@ ARROW_STREAM: dict[str, Any] = {
 
 
 def arrow(data: pa.RecordBatch | pa.Table) -> Response:
-    """`data` as one Arrow IPC stream."""
     sink = BytesIO()
     with pa.ipc.new_stream(sink, data.schema) as writer:
         writer.write(data)
@@ -127,7 +123,6 @@ def arrow(data: pa.RecordBatch | pa.Table) -> Response:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Load everything a request would otherwise load, before serving traffic."""
     galaxies = labels()[0]
     for role, load in (("cutouts", cutouts), ("spectra", spectra)):
         stored = len(load())
@@ -204,7 +199,6 @@ def get_artifact(role: str) -> Response:
 
 @app.head("/artifacts/{role}", include_in_schema=False)
 def head_artifact(role: str) -> Response:
-    """Artifact headers only, for range-request clients such as DuckDB."""
     return get_artifact(role)
 
 

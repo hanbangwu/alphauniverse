@@ -1,5 +1,3 @@
-"""Precomputed spectra, one struct column per spectrum survey."""
-
 from functools import cache
 
 import numpy as np
@@ -18,7 +16,6 @@ from .config import (
 
 
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
-    """One survey's spectrum as float32 `wavelength` and `flux`."""
     wavelength = np.asarray(cell["lambda"].values, dtype=np.float32)
     flux = np.asarray(cell["flux"].values, dtype=np.float32)
     kept = wavelength > 0
@@ -27,7 +24,6 @@ def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
 
 
 def write_spectra(cells: dict[str, list[dict[str, np.ndarray] | None]]) -> None:
-    """Write `cells` to the spectra artifact, taking their order as galaxy order."""
     build_dir().mkdir(parents=True, exist_ok=True)
     galaxies = len(next(iter(cells.values())))
     pq.write_table(
@@ -47,7 +43,6 @@ def write_spectra(cells: dict[str, list[dict[str, np.ndarray] | None]]) -> None:
 
 
 def generate_spectra() -> None:
-    """Build stage: extract every galaxy's spectra, in row order."""
     from .dataset import dataset
 
     table = dataset(DATASET_ID, DATASET_REVISION).data
@@ -64,7 +59,6 @@ def generate_spectra() -> None:
 
 @cache
 def spectra() -> pa.Table:
-    """Every spectrum, read into memory once per process."""
     table = pq.read_table(artifact("spectra"))
     galaxies = table.column("galaxy").to_numpy()
     if not np.array_equal(galaxies, np.arange(len(galaxies))):
@@ -73,7 +67,6 @@ def spectra() -> pa.Table:
 
 
 def spectrum(galaxy: int, survey: str) -> pa.Table | None:
-    """The galaxy's samples from `survey`, or None where it was not matched."""
     cell = spectra().column(survey)[galaxy]
     if not cell.is_valid:
         return None

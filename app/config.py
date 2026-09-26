@@ -109,10 +109,6 @@ STORES = ("encoded", "codebook", "tokens")
 
 
 def store_schema(role: str) -> pa.Schema:
-    """Schema of one per-galaxy store.
-
-    One nullable list column per token survey and boolean for flag survey.
-    """
     cell = (
         pa.list_(pa.uint32())
         if role == "tokens"
@@ -136,7 +132,6 @@ POINTS = pa.schema(
 
 
 def points(galaxy: np.ndarray, coordinates: np.ndarray, category: pa.Array) -> pa.Table:
-    """A table of projected points in the `POINTS` schema."""
     return pa.table(
         {
             "galaxy": galaxy,
@@ -149,7 +144,6 @@ def points(galaxy: np.ndarray, coordinates: np.ndarray, category: pa.Array) -> p
 
 
 def build_dir() -> Path:
-    """The directory holding this revision's artifacts."""
     return (
         Path(os.environ.get("ALPHAUNIVERSE_CACHE", DEFAULT_CACHE))
         / DATASET_AUTHOR
@@ -159,7 +153,6 @@ def build_dir() -> Path:
 
 
 def artifact(role: str) -> Path:
-    """Path to the artifact for `role`; raises `KeyError` if unknown."""
     return build_dir() / f"{role}.{ARTIFACTS[role]}"
 
 

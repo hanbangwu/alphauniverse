@@ -1,5 +1,3 @@
-"""Precomputed anchor-survey cutouts."""
-
 from functools import cache
 from io import BytesIO
 
@@ -20,7 +18,6 @@ from .config import (
 
 
 def encode(cutout: Cutout) -> bytes:
-    """Centre-crop to `CROP_PIXELS` square and encode as PNG."""
     left = (cutout.width - CROP_PIXELS) // 2
     top = (cutout.height - CROP_PIXELS) // 2
     crop = cutout.crop((left, top, left + CROP_PIXELS, top + CROP_PIXELS)).convert(
@@ -33,7 +30,6 @@ def encode(cutout: Cutout) -> bytes:
 
 
 def write_cutouts(pngs: list[bytes]) -> None:
-    """Write `pngs` to the cutout artifact, taking their order as galaxy order."""
     build_dir().mkdir(parents=True, exist_ok=True)
     pq.write_table(
         pa.table(
@@ -48,7 +44,6 @@ def write_cutouts(pngs: list[bytes]) -> None:
 
 
 def generate_cutouts() -> None:
-    """Build stage: crop and encode every galaxy, in row order."""
     from datasets import Image
 
     from .dataset import dataset
@@ -59,7 +54,6 @@ def generate_cutouts() -> None:
 
 @cache
 def cutouts() -> pa.ChunkedArray:
-    """Every cutout, read into memory once per process."""
     table = pq.read_table(artifact("cutouts"))
     galaxies = table.column("galaxy").to_numpy(zero_copy_only=False)
     if not np.array_equal(galaxies, np.arange(len(galaxies))):

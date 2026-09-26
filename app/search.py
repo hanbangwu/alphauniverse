@@ -1,5 +1,3 @@
-"""Token-level similarity search over the encoded embeddings."""
-
 from functools import cache
 from typing import Annotated, Self
 
@@ -30,8 +28,6 @@ from .config import (
 
 
 class Query(BaseModel):
-    """Some patches and spectral spans of one galaxy, and how many matches."""
-
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     galaxy: GalaxyIndex
@@ -54,13 +50,11 @@ class Query(BaseModel):
 
 @cache
 def source(role: str) -> ds.Dataset:
-    """The parquet dataset for `role`, opened once per process."""
     return ds.dataset(artifact(role), format="parquet")
 
 
 @cache
 def with_spectrum() -> np.ndarray:
-    """Whether each galaxy, by row, has a spectrum in the index."""
     table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
     return np.logical_or.reduce(
         [
@@ -72,19 +66,16 @@ def with_spectrum() -> np.ndarray:
 
 @cache
 def starts() -> np.ndarray:
-    """The id of each galaxy's first patch; its spans follow its patches."""
     has = with_spectrum()
     before = np.concatenate(([0], np.cumsum(has)[:-1]))
     return np.arange(len(has)) * N_PATCHES + before * N_SPANS
 
 
 def owners(ids: np.ndarray) -> np.ndarray:
-    """The galaxy each id belongs to."""
     return np.searchsorted(starts(), ids, side="right") - 1
 
 
 def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
-    """The unit vector the query's tokens average to, as one row."""
     start = starts()[query.galaxy]
     ids = np.concatenate(
         (
@@ -98,7 +89,6 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
 def candidates(
     query: Query, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
-    """The galaxies to score, the query galaxy first and the rest by proximity."""
     ids = index.search(direction, PROBE)[1][0]
     found, first = np.unique(owners(ids[ids >= 0]), return_index=True)
     ranked = found[np.argsort(first)]
@@ -108,21 +98,18 @@ def candidates(
 
 
 def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:
-    """Every patch of every galaxy in `order`, as `len(order) * N_PATCHES` rows."""
     return index.reconstruct_batch(
         (starts()[order][:, None] + np.arange(N_PATCHES)).reshape(-1)
     )
 
 
 def score_maps(rows: np.ndarray, direction: np.ndarray, *, width: int) -> np.ndarray:
-    """One cosine score per token, `width` tokens per galaxy."""
     return (rows @ direction.T).reshape(-1, width)
 
 
 def span_maps(
     order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
-    """One cosine score per span, per galaxy; NaN rows where there is no spectrum."""
     maps = np.full((len(order), N_SPANS), np.nan, dtype=np.float32)
     has = with_spectrum()[order]
     if has.any():
@@ -136,7 +123,6 @@ def span_maps(
 def rank(
     order: np.ndarray, scored: np.ndarray, spectral: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Sort by best token score over both maps, holding the query galaxy at row 0."""
     scores = np.maximum(
         scored.max(axis=1), np.nan_to_num(spectral, nan=-np.inf).max(axis=1)
     )
@@ -147,7 +133,6 @@ def rank(
 def search(
     query: Query, *, index: faiss.Index
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Rank galaxies against the mean of the query tokens."""
     direction = centroid(query, index=index)
     order = candidates(query, direction, index=index)
     scored = score_maps(vectors(order, index=index), direction, width=N_PATCHES)
@@ -155,28 +140,23 @@ def search(
 
 
 def rows(cells: pa.Array, start: int, stop: int | None) -> np.ndarray:
-    """Tokens `start` to `stop` of each cell as normalised float32 rows."""
     flat = pc.list_flatten(pc.list_flatten(pc.list_slice(cells, start, stop)))
     return normalize(np.asarray(flat, dtype=np.float32).reshape(-1, DIM), copy=False)
 
 
 def patches(cells: pa.Array) -> np.ndarray:
-    """The image patches leading each cell; the scalars after them are dropped."""
     return rows(cells, 0, N_PATCHES)
 
 
 def spectral(cells: pa.Array) -> np.ndarray:
-    """The spectral tokens of each cell; the normalisation token leading it is dropped."""
     return rows(cells, 1, None)
 
 
 def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array:
-    """Each galaxy's cell from its first matched spectrum survey, null if none."""
     return pc.coalesce(*(batch.column(survey) for survey in SPECTRUM_SURVEYS))
 
 
 def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
-    """Every token of every galaxy in `batch`, in the index's id order."""
     spectra = spectrum_cells(batch)
     has = pc.is_valid(spectra).to_numpy(zero_copy_only=False)
     patch_blocks = patches(batch.column(ANCHOR)).reshape(-1, N_PATCHES, DIM)
@@ -196,7 +176,6 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 
 @cache
 def index() -> faiss.Index:
-    """The search index, memory-mapped once per process."""
     loaded = faiss.read_index(str(artifact("encoded_index")), faiss.IO_FLAG_MMAP)
     loaded.make_direct_map()
     loaded.nprobe = NPROBE
@@ -204,7 +183,6 @@ def index() -> faiss.Index:
 
 
 def generate_index() -> None:
-    """Build the search index from `encoded.parquet` and write it to disk."""
     dataset = source("encoded")
     columns = [ANCHOR, *SPECTRUM_SURVEYS]
     galaxies = dataset.count_rows()
