@@ -1,0 +1,30 @@
+name: Build
+
+on:
+  pull_request:
+    paths:
+      - app/encode.py
+      - app/parametric_umap.py
+      - app/config.py
+      - app/dataset.py
+      - app/search.py
+      - pyproject.toml
+      - uv.lock
+      - tests/test_encode.py
+      - tests/test_parametric_umap.py
+      - tests/aion/**
+      - .github/workflows/build.yml
+
+env:
+  UV_LOCKED: "1"
+
+jobs:
+  torch:
+    name: Torch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Test
+        run: uv run --python 3.12 --group build pytest tests/test_encode.py tests/test_parametric_umap.py

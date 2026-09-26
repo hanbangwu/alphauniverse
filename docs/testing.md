@@ -24,6 +24,14 @@ Two tests in `tests/test_search.py` check what the shared tree cannot show on it
 - `test_approximate_ranking_agrees_with_exact` compares `search()` with a brute-force ranking over every token. The brute force follows `search()` except for the candidate step, scores the float32 embeddings rather than the index's fp16 copies, and holds the whole corpus in memory, so it only runs at fixture scale. The fixture is small enough that the candidate pool covers it, so the two rankings agree exactly; on production data they would not.
 - `test_ids_stay_contiguous_across_add_batches` builds its own index with one galaxy per `add()` call, including galaxies without a spectrum, because the shared tree is smaller than `BATCH` and goes in with a single call. A reordered or dropped batch would shift every galaxy id in every `/similarity` response without an error.
 
+The torch modules have their own tests, which skip unless the `build` group is installed:
+
+```sh
+uv run --group build pytest tests/test_encode.py tests/test_parametric_umap.py
+```
+
+They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base` at the revision in `tests/aion/REVISION`, so no test downloads weights. `test_padded_sdss_spectra_keep_their_flux` is marked `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input, and once that is fixed the test passes and the mark has to go.
+
 ## Benchmarks
 
 ```sh
@@ -60,5 +68,7 @@ There is no frontend test suite.
 Every uv command in the workflow runs with `UV_LOCKED=1`, so a `pyproject.toml` change without a matching `uv.lock` fails CI instead of being re-resolved.
 
 Lint fails on a comment that starts with `TODO`, `FIXME`, `HACK` or `XXX`, in any case: ruff's `FIX` rules check Python comments, and eslint's `no-warning-comments` checks JavaScript, TypeScript and Svelte `<script>` comments, after any leading `*`. Comments in other files and in Svelte markup or styles are not checked.
+
+`.github/workflows/build.yml` installs the `build` group and runs the torch tests on pull requests that change `app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`, `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or the workflow itself.
 
 `.github/workflows/rules.yml` runs on pull requests. Its Rules job fails on a commit in the pull request authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot, and on one committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.
