@@ -19,6 +19,14 @@ from app.config import (
 )
 
 ARROW = "application/vnd.apache.arrow.stream"
+ENDPOINTS = [
+    "/artifacts/mean_points",
+    "/meta",
+    "/galaxies/0/image.png",
+    "/galaxies/0/tokens",
+    "/galaxies/0/coverage",
+    "/similarity?galaxy=0&p=0",
+]
 
 
 def _with_spectrum() -> np.ndarray:
@@ -52,17 +60,7 @@ def test_artifact_head_is_served(client: TestClient) -> None:
     assert client.head("/artifacts/mean_points").status_code == 200
 
 
-@pytest.mark.parametrize(
-    "url",
-    [
-        "/artifacts/mean_points",
-        "/meta",
-        "/galaxies/0/image.png",
-        "/galaxies/0/tokens",
-        "/galaxies/0/coverage",
-        "/similarity?galaxy=0&p=0",
-    ],
-)
+@pytest.mark.parametrize("url", ENDPOINTS)
 def test_a_request_with_the_current_etag_is_not_modified(
     client: TestClient, url: str
 ) -> None:
@@ -73,6 +71,13 @@ def test_a_request_with_the_current_etag_is_not_modified(
 
     assert (unchanged.status_code, unchanged.content) == (304, b"")
     assert (stale.status_code, stale.content) == (200, served.content)
+
+
+@pytest.mark.parametrize("url", ENDPOINTS)
+def test_every_response_must_be_revalidated_before_reuse(
+    client: TestClient, url: str
+) -> None:
+    assert client.get(url).headers["cache-control"] == "no-cache"
 
 
 def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:

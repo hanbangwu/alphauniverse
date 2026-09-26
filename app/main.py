@@ -156,9 +156,11 @@ async def cache_headers(
         body = b"".join([chunk async for chunk in response.body_iterator])
         etag = f'"{hashlib.md5(body, usedforsecurity=False).hexdigest()}"'
         if not_modified(request, etag):
-            return Response(status_code=304, headers={"etag": etag})
-        response = Response(body, response.status_code, response.headers)
-        response.headers["etag"] = etag
+            response = Response(status_code=304, headers={"etag": etag})
+        else:
+            response = Response(body, response.status_code, response.headers)
+            response.headers["etag"] = etag
+    response.headers["cache-control"] = "no-cache"
     return response
 
 
