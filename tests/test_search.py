@@ -1,5 +1,3 @@
-"""The search path: index layout, ranking contract and approximation quality."""
-
 from pathlib import Path
 
 import faiss
@@ -39,12 +37,6 @@ def built(tree) -> faiss.Index:
 
 
 def exact_ranking(query: Query) -> tuple[np.ndarray, np.ndarray]:
-    """Brute-force ranking over every token: the ground truth for recall.
-
-    Mirrors `search()` apart from the candidate step, scoring against the
-    float32 embeddings rather than the index's fp16 copies. Holds the whole
-    corpus in memory, which is only viable at fixture scale.
-    """
     cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
     spectra = spectrum_cells(cells)
     owners = np.repeat(
@@ -84,7 +76,6 @@ def test_index_holds_every_patch_and_every_span(
 def test_ids_encode_galaxy_and_patch(
     built: faiss.Index, galaxy: int, patch: int
 ) -> None:
-    """The block layout that search() relies on: patches lead each galaxy."""
     stored = built.reconstruct(int(starts()[galaxy]) + patch)
     cell = source("encoded").to_table(columns=["ls"]).column("ls")
     expected = patches(cell.combine_chunks())[galaxy * N_PATCHES + patch]
@@ -95,7 +86,6 @@ def test_ids_encode_galaxy_and_patch(
 @pytest.mark.parametrize("galaxy", [0, 3, 8])
 @pytest.mark.parametrize("span", [0, N_SPANS - 1])
 def test_ids_encode_galaxy_and_span(built: faiss.Index, galaxy: int, span: int) -> None:
-    """Spans follow the patches of a galaxy that has a spectrum."""
     stored = built.reconstruct(int(starts()[galaxy]) + N_PATCHES + span)
     cells = spectrum_cells(source("encoded").to_table(columns=list(SPECTRUM_SURVEYS)))
     expected = spectral(cells[galaxy : galaxy + 1])[span]
@@ -150,7 +140,6 @@ def test_search_is_deterministic(built: faiss.Index) -> None:
 
 
 def test_stages_compose_into_search(built: faiss.Index) -> None:
-    """`search` is its stages in order, which is what the benchmark times."""
     query = Query(galaxy=4, p=(30, 31))
     direction = centroid(query, index=built)
     order = candidates(query, direction, index=built)
@@ -176,11 +165,6 @@ def test_stages_compose_into_search(built: faiss.Index) -> None:
 def test_approximate_ranking_agrees_with_exact(
     built: faiss.Index, query: Query, galaxies: int
 ) -> None:
-    """Recall against brute force over every token.
-
-    The fixture is small enough that the ANN candidate pool covers it, so the
-    two rankings should agree exactly. On production-sized data they will not.
-    """
     query = query.model_copy(update={"matches": galaxies - 1})
     found, _, _, _ = search(query, index=built)
     expected, _ = exact_ranking(query)
@@ -193,14 +177,6 @@ def test_approximate_ranking_agrees_with_exact(
 def test_ids_stay_contiguous_across_add_batches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The id layout holds across several `add()` calls in `generate_index`.
-
-    The shared fixture is smaller than `BATCH`, so it is built by a single
-    `add()` and cannot exercise this. Contiguity across batches is the half of
-    the invariant that a reordered or dropped batch would break, and it would
-    break silently: every galaxy id in every `/similarity` response would shift.
-    One galaxy per batch also puts spectrum-less batches on the add path.
-    """
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
     monkeypatch.setattr(search_module, "BATCH", 1)
 

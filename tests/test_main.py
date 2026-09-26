@@ -1,5 +1,3 @@
-"""The app's startup: label counts and the check that stops a short tree serving."""
-
 import shutil
 from pathlib import Path
 
@@ -22,7 +20,6 @@ def test_labels_partition_every_galaxy(tree: Path) -> None:
 def test_a_short_artifact_stops_startup(
     tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ordered but short passes the order check, then `IndexError`s per request."""
     full = pq.read_table(artifact("cutouts"))
 
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))

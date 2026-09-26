@@ -1,5 +1,3 @@
-"""The HTTP contract: status codes, content types and response shapes."""
-
 import io
 
 import numpy as np
@@ -132,7 +130,6 @@ def _similarity(client: TestClient, **query) -> pa.RecordBatch:
 def test_similarity_returns_one_arrow_batch(client: TestClient) -> None:
     table = _similarity(client, galaxy=2, p=[100, 101], matches=5)
 
-    # Upper bound alone would pass on a response holding only the query galaxy.
     assert 1 < table.num_rows <= 6
     assert table.column_names == ["galaxy", "score", "map", "spectrum"]
     assert len(table.column("map")[0]) == N_PATCHES

@@ -1,5 +1,3 @@
-"""Fixtures backed by a synthetic artifact tree."""
-
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -11,7 +9,6 @@ GALAXIES = 12
 
 
 def _forget() -> None:
-    """Drop every cached handle onto the artifact tree."""
     from app import cutouts, main, search, spectra
 
     search.source.cache_clear()
@@ -25,13 +22,11 @@ def _forget() -> None:
 
 @pytest.fixture(scope="session")
 def galaxies() -> int:
-    """How many galaxies the fixture tree holds."""
     return GALAXIES
 
 
 @pytest.fixture(scope="session")
 def tree(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
-    """A built artifact tree, with the app pointed at it."""
     from scripts.fixture import build
 
     os.environ["ALPHAUNIVERSE_CACHE"] = str(tmp_path_factory.mktemp("artifacts"))
@@ -44,7 +39,6 @@ def tree(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
 
 @pytest.fixture(scope="session")
 def client(tree: Path) -> Iterator[TestClient]:
-    """An HTTP client over the app, with lifespan startup run."""
     from app.main import app
 
     with TestClient(app) as opened:
