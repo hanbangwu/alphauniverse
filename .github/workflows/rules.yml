@@ -25,7 +25,8 @@ jobs:
 
       - name: No commits by Claude without its Co-Authored-By trailer
         run: |
-          violations=$(git log --regexp-ignore-case --committer='<noreply@anthropic\.com>' --invert-grep --grep='^Co-Authored-By: .*<noreply@anthropic\.com>' --format='%h %s' "$COMMITS")
+          commits=$(git log --regexp-ignore-case --committer='<noreply@anthropic\.com>' --format='%h %(trailers:key=Co-Authored-By,valueonly,separator=%x20)' "$COMMITS")
+          violations=$(printf '%s\n' "$commits" | grep --ignore-case --invert-match 'noreply@anthropic\.com' || [ $? -eq 1 ])
           if [ -n "$violations" ]; then
             echo "$violations"
             echo "::error::Commits committed by Claude without a Co-Authored-By trailer naming noreply@anthropic.com"
