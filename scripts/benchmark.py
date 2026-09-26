@@ -1,10 +1,15 @@
+import io
 import json
 import os
 import subprocess
+import sys
+import tarfile
+import tempfile
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from itertools import pairwise
+from pathlib import Path
 from typing import Any
 
 import faiss
@@ -34,6 +39,13 @@ image = serving_image.add_local_python_source("modal_app")
 PATCHES = 4
 MATCHES = (8, 32, 128)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
+SOURCES = ["app", "scripts", "modal_app.py"]
+REPORT = Path("docs/benchmarks/latest.json")
+ENTRY = (
+    "import json, sys; from app.config import DATASET_REVISION; "
+    "from scripts.benchmark import stages; "
+    "print(json.dumps(stages.local(int(sys.argv[1])) | {'revision': DATASET_REVISION}))"
+)
 
 
 def elapsed(call: Callable[[], Any]) -> float:
@@ -76,7 +88,16 @@ def spec(function: modal.Function) -> dict[str, Any]:
 
 
 def environment() -> dict[str, Any]:
+    processor = Path("/proc/cpuinfo").read_text().split("\n\n")[0]
+    fields = {
+        key.strip(): value.strip()
+        for key, _, value in (line.partition(":") for line in processor.splitlines())
+    }
     return {
+        "cpu": {
+            key: fields.get(key)
+            for key in ("vendor_id", "cpu family", "model", "model name")
+        },
         "cpu_count": os.cpu_count(),
         "faiss_threads": faiss.omp_get_max_threads(),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
@@ -122,6 +143,7 @@ def client(url: str, runs: int) -> dict[str, Any]:
             for matches in MATCHES
         }
         return {
+            "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
             "warm": {label: time_it(runs, call) for label, call in calls.items()},
@@ -147,13 +169,7 @@ def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
     return times, len(rows)
 
 
-@app.function(
-    image=image,
-    cpu=fastapi_app.spec.cpu,
-    memory=fastapi_app.spec.memory,
-    volumes=fastapi_app.spec.volumes,
-    timeout=60 * 60,
-)
+@app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = {
         load.__name__: round(elapsed(load), 3)
@@ -198,17 +214,100 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     }
 
 
+@app.function(
+    image=image,
+    cpu=fastapi_app.spec.cpu,
+    memory=fastapi_app.spec.memory,
+    volumes=fastapi_app.spec.volumes,
+    timeout=6 * 60 * 60,
+)
+def paired(sources: dict[str, bytes], order: list[str], runs: int) -> dict[str, Any]:
+    report = {"environment": environment(), "order": order}
+    root = Path(tempfile.mkdtemp())
+    for name, source in sources.items():
+        with tarfile.open(fileobj=io.BytesIO(source)) as bundle:
+            bundle.extractall(root / name, filter="data")
+
+    rounds: dict[str, list[dict[str, Any]]] = {name: [] for name in sources}
+    for position, name in enumerate(order):
+        try:
+            completed = subprocess.run(
+                [sys.executable, "-c", ENTRY, str(runs)],
+                cwd=root / name,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=60 * 60,
+            )
+            result = json.loads(completed.stdout.splitlines()[-1])
+        except subprocess.CalledProcessError as failure:
+            result = {"error": f"exit {failure.returncode}: {failure.stderr[-2000:]}"}
+        except subprocess.TimeoutExpired:
+            result = {"error": "no result within an hour"}
+        except (ValueError, IndexError):
+            result = {"error": f"no report on stdout: {completed.stdout[-2000:]}"}
+        rounds[name].append(result | {"position": position})
+    return report | {"rounds": rounds}
+
+
+def git(*arguments: str) -> str:
+    return subprocess.check_output(["git", *arguments], text=True).strip()
+
+
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
+    if git("status", "--porcelain"):
+        raise SystemExit("Commit every change first: the benchmark times commits.")
+    git("fetch", "origin", "main")
+    commits = {
+        "after": git("rev-parse", "HEAD"),
+        "before": git("rev-parse", "origin/main"),
+    }
+    code = {
+        git("rev-parse", *(f"{commit}:{source}" for source in SOURCES))
+        for commit in commits.values()
+    }
+    notes = []
+    stored = json.loads(REPORT.read_text()).get("best") if REPORT.exists() else None
+    if stored:
+        try:
+            stored_code = git(
+                "rev-parse", *(f"{stored['commit']}:{source}" for source in SOURCES)
+            )
+        except subprocess.CalledProcessError:
+            notes.append(f"best {stored['commit']} is not in this clone")
+        else:
+            if stored_code not in code:
+                commits["best"] = stored["commit"]
+    names = list(commits)
+    sources = {
+        name: subprocess.check_output(["git", "archive", commit, *SOURCES])
+        for name, commit in commits.items()
+    }
     report = {
-        "commit": subprocess.check_output(
-            ["git", "describe", "--always", "--dirty"], text=True
-        ).strip(),
+        "commit": git("describe", "--always"),
+        "commits": commits,
+        "notes": notes,
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "server": spec(fastapi_app),
         "client": spec(client),
         "requests": client.remote(fastapi_app.get_web_url(), runs),
-        "stages": stages.remote(runs),
+        "stages": paired.remote(sources, names + names[::-1], runs)
+        | {"locked_dependencies": "after"},
     }
-    print(json.dumps(report, indent=2))
+    means = {
+        name: float(np.mean([entry["total_p50_ms"] for entry in rounds]))
+        for name, rounds in report["stages"]["rounds"].items()
+        if all("error" not in entry for entry in rounds)
+    }
+    if means:
+        best = min(means, key=means.__getitem__)
+        report["best"] = {
+            "name": best,
+            "commit": commits[best],
+            "total_p50_ms": round(means[best], 3),
+        }
+    REPORT.parent.mkdir(exist_ok=True)
+    REPORT.write_text(json.dumps(report, indent=2) + "\n")
+    print(f"wrote {REPORT}")
