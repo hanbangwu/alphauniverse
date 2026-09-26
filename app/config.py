@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 import numpy as np
 import pyarrow as pa
-from pydantic import Field
+import pyarrow.parquet as pq
+from pydantic import AfterValidator, Field
 
 if TYPE_CHECKING:
     import torch
@@ -41,7 +42,6 @@ SPECTRUM_TOKEN_WIDTH = 32 * 0.8
 N_SPANS = 8704 // 32
 
 GALAXIES = 17369
-GalaxyIndex = Annotated[int, Field(ge=0, lt=GALAXIES)]
 
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
@@ -154,6 +154,20 @@ def build_dir() -> Path:
 
 def artifact(role: str) -> Path:
     return build_dir() / f"{role}.{ARTIFACTS[role]}"
+
+
+@cache
+def galaxy_count() -> int:
+    return pq.read_metadata(artifact("mean_points")).num_rows
+
+
+def stored_galaxy(galaxy: int) -> int:
+    if galaxy >= galaxy_count():
+        raise ValueError(f"should be less than {galaxy_count()}, the galaxy count")
+    return galaxy
+
+
+GalaxyIndex = Annotated[int, Field(ge=0), AfterValidator(stored_galaxy)]
 
 
 WANDB_ENTITY = "aistrophysics"
