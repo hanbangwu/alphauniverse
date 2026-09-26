@@ -2,6 +2,12 @@
 
 Tests run against a synthetic artifact tree built by `scripts/fixture.py`; they need neither Modal, a GPU nor the network.
 
+The tree has the production schemas at a size that fits in a CI runner, so the API and the search path run real code against real files:
+
+- Embeddings are drawn around a fixed set of random cluster centres, not as uniform noise. In 768 dimensions uniform random vectors are all nearly orthogonal, which would make every ranking arbitrary and every recall figure meaningless.
+- The 2-d points come from a fixed random projection, standing in for the trained parametric UMAP, which would pull torch and a training run into the tests. One projection serves both point sets, as one trained projector does in production.
+- The tree leaves out `codebook` and `parametric_umap`: nothing served reads them, and their absence exercises the 404 path.
+
 ## Tests
 
 ```sh

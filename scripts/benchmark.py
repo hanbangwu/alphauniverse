@@ -1,5 +1,3 @@
-"""Measures the serving path on Modal against the production artifacts."""
-
 import json
 import os
 import subprocess
@@ -39,14 +37,12 @@ STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"
 
 
 def elapsed(call: Callable[[], Any]) -> float:
-    """How long one call of `call` takes, in milliseconds."""
     start = time.perf_counter()
     call()
     return (time.perf_counter() - start) * 1000
 
 
 def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
-    """Time `call` over `runs` runs after one warm-up, in milliseconds."""
     call()
     samples = [elapsed(call) for _ in range(runs)]
     return {
@@ -57,7 +53,6 @@ def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
 
 
 def queries(count: int, patch_count: int, matches: int) -> list[Query]:
-    """A deterministic spread of queries across the corpus."""
     rng = np.random.default_rng(0)
     return [
         Query(
@@ -81,7 +76,6 @@ def spec(function: modal.Function) -> dict[str, Any]:
 
 
 def environment() -> dict[str, Any]:
-    """Thread configuration, which the stage shares depend on."""
     return {
         "cpu_count": os.cpu_count(),
         "faiss_threads": faiss.omp_get_max_threads(),
@@ -136,7 +130,6 @@ def client(url: str, runs: int) -> dict[str, Any]:
 
 
 def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
-    """How long each stage of `search()` takes on `query`, and how many rows it scores."""
     marks = [time.perf_counter()]
     direction = centroid(query, index=built)
     marks.append(time.perf_counter())
@@ -162,7 +155,6 @@ def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
     timeout=60 * 60,
 )
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
-    """What startup loads, and where a query's time goes by stage of `search()`."""
     loads = {
         load.__name__: round(elapsed(load), 3)
         for load in (labels, cutouts, spectra, index, starts)

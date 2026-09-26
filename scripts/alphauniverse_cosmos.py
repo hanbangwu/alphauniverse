@@ -1,7 +1,3 @@
-"""
-uv run --with datasets --with lsdb python scripts/alphauniverse_cosmos.py
-"""
-
 import math
 import shutil
 from pathlib import Path
