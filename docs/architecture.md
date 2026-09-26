@@ -47,7 +47,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 Eight endpoints, all `GET`; `/artifacts/{role}` also answers `HEAD` for range-request clients.
 
-A request whose `If-None-Match` matches a response's ETag gets `304 Not Modified` with no body. An artifact's ETag is the one Starlette derives from the file's size and modification time, and the route compares it before reading the file. Every other successful response's ETag is an MD5 hash of its body, added by a middleware, so the server still builds the response and saves only the transfer. Every response carries `Cache-Control: no-cache`, so a browser revalidates a stored response before each reuse.
+A request whose `If-None-Match` matches a response's ETag gets `304 Not Modified` with no body. An artifact's ETag is the one Starlette derives from the file's size and modification time, and the route compares it before reading the file. Every other successful response's ETag is an MD5 hash of its body, added by the route class every endpoint uses, so the server still builds the response and saves only the transfer. Successful responses and 304s carry `Cache-Control: no-cache`, so a browser revalidates a stored response before each reuse.
 
 | Endpoint                           | Returns      |
 | ---------------------------------- | ------------ |

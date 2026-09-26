@@ -60,6 +60,13 @@ def test_artifact_head_is_served(client: TestClient) -> None:
     assert client.head("/artifacts/mean_points").status_code == 200
 
 
+def test_artifact_ranges_are_served(client: TestClient, tree) -> None:
+    response = client.get("/artifacts/mean_points", headers={"Range": "bytes=0-9"})
+
+    assert response.status_code == 206
+    assert response.content == (tree / "mean_points.parquet").read_bytes()[:10]
+
+
 @pytest.mark.parametrize("url", ENDPOINTS)
 def test_a_request_with_the_current_etag_is_not_modified(
     client: TestClient, url: str
@@ -73,8 +80,16 @@ def test_a_request_with_the_current_etag_is_not_modified(
     assert (stale.status_code, stale.content) == (200, served.content)
 
 
+def test_a_weak_etag_in_a_list_is_not_modified(client: TestClient) -> None:
+    etag = client.get("/meta").headers["etag"]
+
+    response = client.get("/meta", headers={"If-None-Match": f'"stale", W/{etag}'})
+
+    assert response.status_code == 304
+
+
 @pytest.mark.parametrize("url", ENDPOINTS)
-def test_every_response_must_be_revalidated_before_reuse(
+def test_successful_responses_must_be_revalidated_before_reuse(
     client: TestClient, url: str
 ) -> None:
     assert client.get(url).headers["cache-control"] == "no-cache"

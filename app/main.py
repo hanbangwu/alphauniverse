@@ -12,7 +12,8 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, Response
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict
 
 from .config import (
@@ -38,7 +39,7 @@ from .search import index, search, source, starts, with_spectrum
 from .spectra import spectra, spectrum
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable
+    from collections.abc import AsyncIterator, Callable, Coroutine
 
 
 @cache
@@ -127,6 +128,24 @@ def not_modified(request: Request, etag: str) -> bool:
     return etag in [tag.strip().removeprefix("W/") for tag in tags.split(",")]
 
 
+class RevalidatedRoute(APIRoute):
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handler = super().get_route_handler()
+
+        async def with_cache_headers(request: Request) -> Response:
+            response = await handler(request)
+            if response.status_code == 200 and "etag" not in response.headers:
+                etag = f'"{hashlib.md5(response.body).hexdigest()}"'
+                if not_modified(request, etag):
+                    response = Response(status_code=304, headers={"etag": etag})
+                else:
+                    response.headers["etag"] = etag
+            response.headers["cache-control"] = "no-cache"
+            return response
+
+        return with_cache_headers
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxies = labels()[0]
@@ -145,24 +164,7 @@ app = FastAPI(
     lifespan=lifespan,
     generate_unique_id_function=lambda route: route.name,
 )
-
-
-@app.middleware("http")
-async def cache_headers(
-    request: Request, call_next: Callable[[Request], Awaitable[StreamingResponse]]
-) -> Response:
-    response = await call_next(request)
-    if response.status_code == 200 and "etag" not in response.headers:
-        body = b"".join([chunk async for chunk in response.body_iterator])
-        etag = f'"{hashlib.md5(body, usedforsecurity=False).hexdigest()}"'
-        if not_modified(request, etag):
-            response = Response(status_code=304, headers={"etag": etag})
-        else:
-            response = Response(body, response.status_code, response.headers)
-            response.headers["etag"] = etag
-    response.headers["cache-control"] = "no-cache"
-    return response
-
+app.router.route_class = RevalidatedRoute
 
 app.add_middleware(
     CORSMiddleware,
