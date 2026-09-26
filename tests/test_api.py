@@ -52,7 +52,17 @@ def test_artifact_head_is_served(client: TestClient) -> None:
     assert client.head("/artifacts/mean_points").status_code == 200
 
 
-@pytest.mark.parametrize("url", ["/artifacts/mean_points"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/artifacts/mean_points",
+        "/meta",
+        "/galaxies/0/image.png",
+        "/galaxies/0/tokens",
+        "/galaxies/0/coverage",
+        "/similarity?galaxy=0&p=0",
+    ],
+)
 def test_a_request_with_the_current_etag_is_not_modified(
     client: TestClient, url: str
 ) -> None:
