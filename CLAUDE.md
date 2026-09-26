@@ -57,6 +57,8 @@ bun run lint                                        # prettier + eslint
 - Write the minimum code that is correct and clear.
 - Prefer removing to adding; deleting a concept is better than adding a flag.
 - Use library APIs the way their documentation intends, and read the docs when unsure. Don't hand-roll what a library provides.
+- Report when an empirical test contradicts documentation; neither outranks the other.
+- Use full words for variable names (no abbreviations like `q` for `queue`).
 - Leave parameters at their defaults unless there is an explicit, significant reason not to.
 - No no-ops: passing a parameter its default, redeclaring a type a value already has, or guarding a case that cannot happen. Typing constants is fine.
 - One purpose per function, one group of things per file. Add a helper only when a function is too long or the helper is reused.
