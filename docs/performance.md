@@ -117,13 +117,13 @@ With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more 
 
 Current design targets COSMOS scale. Where it stops:
 
-| Ceiling                      | Now                 | Breaks at                                                                                     |
-| ---------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| Index size                   | 17.19 GB            | ~3.7×, when the pages queries touch outgrow the container's 64 GB. 100× needs PQ or sharding. |
-| Cold start                   | 19.5 s              | ~4× before it exceeds common proxy and browser timeouts                                       |
-| `full_points` in the browser | 180 MB              | ~10×; DuckDB-WASM has a few GB to work with.                                                  |
-| Cutouts in memory            | 215 MB              | linear; fine to ~100×, then needs tiling                                                      |
-| Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                         |
-| Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap     |
+| Ceiling                      | Now                 | Breaks at                                                                                                                             |
+| ---------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Index size                   | 17.19 GB            | when the pages queries touch outgrow the 64 GiB limit (68.72 GB, or 68.72 / 17.19 = 4.0× the index); how far below that is unmeasured |
+| Cold start                   | 19.5 s              | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
+| `full_points` in the browser | 180 MB              | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
+| Cutouts in memory            | 215 MB              | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
+| Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                                                                 |
+| Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap                                             |
 
 None of these need solving now. All of them should be checked before a change assumes they are not there.
