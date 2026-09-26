@@ -25,7 +25,7 @@ jobs:
 
       - name: No em dashes in commit messages
         run: |
-          if git log -F --grep "$EM_DASH" --format='%h %s' "$COMMITS" | grep .; then
+          if git log --fixed-strings --grep "$EM_DASH" --format='%h %s' "$COMMITS" | grep .; then
             echo "::error::Commit messages contain em dashes"
             exit 1
           fi
@@ -37,5 +37,19 @@ jobs:
         run: |
           if printf '%s\n' "$TITLE" "$BODY" | grep -nF "$EM_DASH"; then
             echo "::error::The pull request's title or body contains em dashes"
+            exit 1
+          fi
+
+      - name: No commits authored by an agent or bot
+        run: |
+          if git log --extended-regexp --regexp-ignore-case --author='<(noreply@anthropic\.com|.*\[bot\]@users\.noreply\.github\.com|.*\+copilot@users\.noreply\.github\.com)>' --format='%h %an <%ae>' "$COMMITS" | grep .; then
+            echo "::error::Commits authored by an agent or bot; CLAUDE.md requires a human author"
+            exit 1
+          fi
+
+      - name: No commits by Claude without its Co-Authored-By trailer
+        run: |
+          if git log --committer='<noreply@anthropic\.com>' --format='%h %(trailers:key=Co-Authored-By,valueonly,separator=%x20)' "$COMMITS" | grep -v 'noreply@anthropic\.com'; then
+            echo "::error::Commits committed by Claude without a Co-Authored-By trailer naming noreply@anthropic.com"
             exit 1
           fi
