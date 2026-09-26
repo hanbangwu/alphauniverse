@@ -58,3 +58,5 @@ There is no frontend test suite.
 4. **deploy**: Modal, on pushes to `main` only, and only if the other three pass
 
 Every uv command in the workflow runs with `UV_LOCKED=1`, so a `pyproject.toml` change without a matching `uv.lock` fails CI instead of being re-resolved.
+
+Lint fails on a comment that starts with `TODO`, `FIXME`, `HACK` or `XXX`, in any case: ruff through its `FIX` rules, eslint through `no-warning-comments`. Neither reads Svelte markup, CSS or YAML comments.

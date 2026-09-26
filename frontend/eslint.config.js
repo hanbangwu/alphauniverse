@@ -20,6 +20,7 @@ export default defineConfig(
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
       'no-undef': 'off',
+      'no-warning-comments': ['error', { terms: ['todo', 'fixme', 'hack', 'xxx'] }],
       'svelte/no-navigation-without-resolve': ['error', { ignoreReplaceState: true }]
     }
   },
