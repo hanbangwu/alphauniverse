@@ -12,7 +12,7 @@
     "check:watch": "openapi-ts && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
-    "shadcn": "bunx shadcn-svelte@latest add --yes --overwrite button dialog resizable select separator slider spinner switch table",
+    "shadcn": "bunx shadcn-svelte@latest add --yes --overwrite button dialog resizable input select separator slider spinner switch table",
     "openapi-ts": "openapi-ts"
   },
   "devDependencies": {

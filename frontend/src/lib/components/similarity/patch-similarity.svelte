@@ -4,6 +4,7 @@
   import { getApp } from '$lib/state/app.svelte'
   import MaskControls from './mask-controls.svelte'
   import MatchList from './match-list.svelte'
+  import SearchForm from './search-form.svelte'
   import SimilarityControls from './similarity-controls.svelte'
   import SimilaritySelf from './similarity-self.svelte'
   import { Similarity, setSimilarity } from './similarity.svelte'
@@ -27,6 +28,7 @@
     </Dialog.Header>
 
     <div class="flex flex-wrap items-center gap-4">
+      <SearchForm />
       <SimilarityControls />
       {#if display.on.value && similarity.imageDomain}
         <MaskControls domain={similarity.imageDomain} />
@@ -35,7 +37,7 @@
 
     <SimilaritySelf />
 
-    {#if view.querying}
+    {#if similarity.searched}
       <Separator />
       <MatchList />
     {/if}
