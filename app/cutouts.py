@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 from PIL.Image import Image as Cutout
 
 from .config import (
-    CROP_PX,
+    CROP_PIXELS,
     CUTOUTS,
     DATASET_ID,
     DATASET_REVISION,
@@ -20,10 +20,12 @@ from .config import (
 
 
 def encode(cutout: Cutout) -> bytes:
-    """Centre-crop to `CROP_PX` square and encode as PNG."""
-    left = (cutout.width - CROP_PX) // 2
-    top = (cutout.height - CROP_PX) // 2
-    crop = cutout.crop((left, top, left + CROP_PX, top + CROP_PX)).convert("RGB")
+    """Centre-crop to `CROP_PIXELS` square and encode as PNG."""
+    left = (cutout.width - CROP_PIXELS) // 2
+    top = (cutout.height - CROP_PIXELS) // 2
+    crop = cutout.crop((left, top, left + CROP_PIXELS, top + CROP_PIXELS)).convert(
+        "RGB"
+    )
 
     buffer = BytesIO()
     crop.save(buffer, format="PNG")

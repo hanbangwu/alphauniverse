@@ -36,7 +36,7 @@ A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 27
 
 ## `generate_cutouts`
 
-Centre-crops every galaxy's anchor image to `CROP_PX` square and PNG-encodes it, in dataset row order:
+Centre-crops every galaxy's anchor image to `CROP_PIXELS` square and PNG-encodes it, in dataset row order:
 
 ```
 galaxy: int32

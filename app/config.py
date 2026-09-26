@@ -29,7 +29,7 @@ DATASET_REVISION = "e250e43c35e63523ee3940c9543302c29ca56437"
 
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / ".cache"
 
-CROP_PX = 96
+CROP_PIXELS = 96
 
 DIM = 768
 

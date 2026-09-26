@@ -48,7 +48,7 @@ from tqdm import tqdm
 
 from .config import (
     ANCHOR,
-    CROP_PX,
+    CROP_PIXELS,
     DATASET_ID,
     DATASET_REVISION,
     DIM,
@@ -113,12 +113,12 @@ def model() -> AION:
 def image(
     modality: type[Image], row: dict[str, list], bands: list[str]
 ) -> torch.Tensor:
-    """Token ids for one image row, centre-cropped to `CROP_PX`."""
+    """Token ids for one image row, centre-cropped to `CROP_PIXELS`."""
     by_band = {
         band.upper(): flux for band, flux in zip(row["band"], row["flux"], strict=True)
     }
     flux = np.asarray([[by_band[band] for band in bands]], dtype=np.float32)
-    crop = F.center_crop(torch.from_numpy(flux), output_size=[CROP_PX, CROP_PX])
+    crop = F.center_crop(torch.from_numpy(flux), output_size=[CROP_PIXELS, CROP_PIXELS])
     return (
         codec()
         .encode(modality(flux=crop.to(device()), bands=bands))[modality.token_key]

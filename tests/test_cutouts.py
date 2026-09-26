@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 import pytest
 from PIL import Image
 
-from app.config import CROP_PX, CUTOUTS, artifact, build_dir
+from app.config import CROP_PIXELS, CUTOUTS, artifact, build_dir
 from app.cutouts import cutout, cutouts, encode
 
 
@@ -23,7 +23,7 @@ def test_cutout_returns_the_stored_bytes(tree: Path, galaxy: int) -> None:
 
 def test_cutouts_are_cropped_to_the_configured_size(tree: Path) -> None:
     with Image.open(BytesIO(cutout(0))) as png:
-        assert png.size == (CROP_PX, CROP_PX)
+        assert png.size == (CROP_PIXELS, CROP_PIXELS)
         assert png.format == "PNG"
 
 
@@ -55,13 +55,17 @@ def test_rows_out_of_galaxy_order_are_rejected(
 def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
     """The reason `encode` takes a box: a border derived from the width alone
     gives a non-square crop off the centre of a non-square source."""
-    width, height = CROP_PX + 104, CROP_PX + 8
+    width, height = CROP_PIXELS + 104, CROP_PIXELS + 8
     pixels = np.zeros((height, width, 3), dtype=np.uint8)
-    left, top = (width - CROP_PX) // 2, (height - CROP_PX) // 2
+    left, top = (width - CROP_PIXELS) // 2, (height - CROP_PIXELS) // 2
     pixels[top, left] = (255, 0, 0)
-    pixels[top + CROP_PX - 1, left + CROP_PX - 1] = (0, 0, 255)
+    pixels[top + CROP_PIXELS - 1, left + CROP_PIXELS - 1] = (0, 0, 255)
 
     with Image.open(BytesIO(encode(Image.fromarray(pixels)))) as png:
-        assert png.size == (CROP_PX, CROP_PX)
+        assert png.size == (CROP_PIXELS, CROP_PIXELS)
         assert png.convert("RGB").getpixel((0, 0)) == (255, 0, 0)
-        assert png.convert("RGB").getpixel((CROP_PX - 1, CROP_PX - 1)) == (0, 0, 255)
+        assert png.convert("RGB").getpixel((CROP_PIXELS - 1, CROP_PIXELS - 1)) == (
+            0,
+            0,
+            255,
+        )
