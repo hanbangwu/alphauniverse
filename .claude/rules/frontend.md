@@ -5,6 +5,7 @@ paths:
 
 # Frontend
 
+- A change to what the UI shows updates the README's feature list and the frontend section of `docs/architecture.md`.
 - Never edit `src/lib/components/ui`. It is changed only by `bun run shadcn` and formatted by `bun run format`.
 - `src/lib/api` is generated from `openapi.json`, and `openapi.json` from `app/main.py`. When needed, regenerate through `uv run python -m scripts.openapi` then `bun run check`.
 - Components never call the API. Each call goes through the generated SDK in `$lib/api`, wrapped as TanStack Query options in `src/lib/data/queries.ts`.

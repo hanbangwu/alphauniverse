@@ -35,6 +35,7 @@ bun run lint                                        # prettier + eslint
 - A pull request is a series of commits, each one small nominal goal. Before writing code, list the goals and the decisions they need, each with options and a recommendation, in the pull request's issue, and wait for agreement.
 - Implement the agreed goals one commit each, then stop before the pull request leaves draft. List choices made while carrying out a goal under "Decisions" in the pull request.
 - Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
+- Before opening a pull request that changes code, check `README.md` and `docs/` for anything it makes stale and update them in the same pull request.
 - A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
 - A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. The other maintainer then reviews it before it merges.
 - A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/code-review`, Copilot review, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
