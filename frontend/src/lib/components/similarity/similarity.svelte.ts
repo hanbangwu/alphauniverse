@@ -63,6 +63,10 @@ export class Similarity {
     return this.#result.isFetching
   }
 
+  get stale(): boolean {
+    return this.#result.isPlaceholderData
+  }
+
   get searched(): boolean {
     return this.#submitted !== null
   }

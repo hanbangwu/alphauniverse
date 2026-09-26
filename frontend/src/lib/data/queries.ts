@@ -5,7 +5,11 @@ import type { MosaicState } from '$lib/state/mosaic.svelte'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
 import type { Spectrum, SpectrumSurvey } from './spectra'
 import type { DataTag, DefaultError, QueryKey } from '@tanstack/query-core'
-import { type UndefinedInitialDataOptions, queryOptions } from '@tanstack/svelte-query'
+import {
+  type UndefinedInitialDataOptions,
+  keepPreviousData,
+  queryOptions
+} from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
 import { type Float32, tableFromIPC } from 'apache-arrow'
 
@@ -187,6 +191,7 @@ export function similarityQuery(
       }
     },
     enabled: request !== null,
+    placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000
   })
 }
