@@ -81,7 +81,7 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
     └── PatchSimilarity   dialog: query patches, spectrum spans, ranked matches
 ```
 
-App-wide state lives in plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`; the similarity dialog keeps its own state beside its components in `similarity.svelte.ts`. `Field<T>` and its subclasses wrap a `$state` value with normalisation (clamping numbers, sorting and deduping index lists), so the components never validate anything themselves. Numeric bounds are not typed by hand: `state/schema.ts` reads them out of the generated zod schema, so the slider ranges come from the API contract.
+App-wide state lives in plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`; the similarity dialog keeps its own state beside its components in `similarity.svelte.ts`. `Field<T>` and its subclasses wrap a `$state` value with normalisation (sorting and deduping index lists), so the components never validate anything themselves. The match count is kept as the text typed into its number box, and `SearchState` checks it against bounds that are not typed by hand: `state/schema.ts` reads them out of the generated zod schema, so they come from the API contract.
 
 `+layout.server.ts` fetches `/meta` during SSR. After that, two data paths, deliberately separate:
 

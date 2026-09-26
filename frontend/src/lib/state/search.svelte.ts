@@ -1,12 +1,20 @@
 import type { SimilarityQuery } from '$lib/data/similarity'
-import { NumberField } from './fields.svelte'
+import { Field } from './field.svelte'
 import { rangeOf } from './schema'
 
 export class SearchState {
-  readonly matches = new NumberField(rangeOf('matches'), 1, true)
+  readonly range = rangeOf('matches')
+  readonly matches = new Field(String(this.range.default))
+
+  get count(): number | null {
+    const value = Number(this.matches.value)
+    const { minimum, maximum } = this.range
+    return Number.isInteger(value) && value >= minimum && value <= maximum ? value : null
+  }
 
   request(galaxy: number | null, patches: number[], spans: number[]): SimilarityQuery | null {
-    if (galaxy === null || patches.length + spans.length === 0) return null
-    return { galaxy, p: patches, s: spans, matches: this.matches.value }
+    const matches = this.count
+    if (galaxy === null || matches === null || patches.length + spans.length === 0) return null
+    return { galaxy, p: patches, s: spans, matches }
   }
 }
