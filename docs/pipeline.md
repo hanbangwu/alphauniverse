@@ -34,7 +34,7 @@ Within an image cell the patches come first and the survey's scalars follow. A s
 
 Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches** (the scalars are sliced off), then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity.
 
-A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout. The app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that; one `generate_embeddings` run writes both.
+A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout. The app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that; one `generate_embeddings` run writes both. The serving app will not start if `tokens` holds a different number of galaxies than `mean_points`, or the index a different number of vectors than this layout gives. Both checks count, so a `tokens` and an `encoded` that disagree only on which galaxies have a spectrum still pass.
 
 ## `generate_cutouts`
 
