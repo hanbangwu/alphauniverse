@@ -29,6 +29,7 @@ from app.search import (
 from scripts.fixture import build
 
 CACHES = (source, index, with_spectrum, starts)
+SCORE_TOLERANCE = 1e-4
 
 
 @pytest.fixture(scope="module")
@@ -153,25 +154,35 @@ def test_stages_compose_into_search(built: faiss.Index) -> None:
         np.testing.assert_array_equal(left, right)
 
 
+def test_asking_for_every_galaxy_returns_every_galaxy(
+    built: faiss.Index, galaxies: int
+) -> None:
+    query = Query(galaxy=0, p=(64, 65), matches=galaxies - 1)
+    found, _, _, _ = search(query, index=built)
+
+    assert sorted(found.tolist()) == list(range(galaxies))
+
+
 @pytest.mark.parametrize(
     "query",
     [
-        Query(galaxy=0, p=(64, 65)),
-        Query(galaxy=4, p=(64, 65)),
-        Query(galaxy=9, s=(40, 41)),
-        Query(galaxy=6, p=(3,), s=(100,)),
+        Query(galaxy=0, p=(64, 65), matches=2),
+        Query(galaxy=4, p=(64, 65), matches=2),
+        Query(galaxy=9, s=(40, 41), matches=2),
+        Query(galaxy=6, p=(3,), s=(100,), matches=2),
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
-    built: faiss.Index, query: Query, galaxies: int
+    built: faiss.Index, query: Query
 ) -> None:
-    query = query.model_copy(update={"matches": galaxies - 1})
-    found, _, _, _ = search(query, index=built)
-    expected, _ = exact_ranking(query)
+    expected, expected_scores = exact_ranking(
+        query.model_copy(update={"matches": query.matches + 1})
+    )
+    found, found_scores, _, _ = search(query, index=built)
 
-    assert len(found) == galaxies
-
-    assert set(found[1:].tolist()) == set(expected[1 : len(found)].tolist())
+    assert np.all(-np.diff(expected_scores[1:]) > 2 * SCORE_TOLERANCE)
+    np.testing.assert_array_equal(found, expected[:-1])
+    np.testing.assert_allclose(found_scores, expected_scores[:-1], atol=SCORE_TOLERANCE)
 
 
 def test_ids_stay_contiguous_across_add_batches(
