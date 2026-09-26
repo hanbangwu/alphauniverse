@@ -41,8 +41,6 @@ SPECTRUM_ORIGIN = 3500.0
 SPECTRUM_TOKEN_WIDTH = 32 * 0.8
 N_SPANS = 8704 // 32
 
-GALAXIES = 17369
-
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
 HSC = "-mmu_hsc_pdr3_dud_22.5"
