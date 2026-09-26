@@ -29,17 +29,17 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 ## The artifacts
 
-| Role              | Shape                                      | Who reads it                          |
-| ----------------- | ------------------------------------------ | ------------------------------------- |
-| `encoded`         | one row per galaxy, embeddings per survey  | index build, projections, download    |
-| `codebook`        | same, raw codebook vectors                 | nothing at serve time                 |
-| `tokens`          | same, token ids                            | the `tokens` and `coverage` endpoints |
-| `encoded_index`   | faiss IVF over patches and spectral tokens | `/similarity`                         |
-| `cutouts`         | one PNG per galaxy, in galaxy order        | `/galaxies/{g}/image.png`             |
-| `spectra`         | one spectrum per matched survey, same      | `/galaxies/{g}/spectra/{s}`           |
-| `mean_points`     | one 2-d point per galaxy                   | `/meta`, the projection view          |
-| `full_points`     | one 2-d point per embedding                | the projection view                   |
-| `parametric_umap` | the trained projector's weights            | nothing at serve time                 |
+| Role              | Shape                                      | Who reads it                                             |
+| ----------------- | ------------------------------------------ | -------------------------------------------------------- |
+| `encoded`         | one row per galaxy, embeddings per survey  | index build, projections, download                       |
+| `codebook`        | same, the encoder's input embeddings       | nothing at serve time                                    |
+| `tokens`          | same, token ids                            | startup, `/similarity`, the token and coverage endpoints |
+| `encoded_index`   | faiss IVF over patches and spectral tokens | `/similarity`                                            |
+| `cutouts`         | one PNG per galaxy, in galaxy order        | `/galaxies/{g}/image.png`                                |
+| `spectra`         | one spectrum per matched survey, same      | `/galaxies/{g}/spectra/{s}`                              |
+| `mean_points`     | one 2-d point per galaxy                   | `/meta`, the projection view                             |
+| `full_points`     | one 2-d point per embedding                | the projection view                                      |
+| `parametric_umap` | the trained projector's weights            | nothing at serve time                                    |
 
 `docs/pipeline.md` has the schemas.
 
@@ -60,7 +60,14 @@ Eight endpoints, all `GET`; `/artifacts/{role}` also answers `HEAD` for range-re
 
 ## Similarity search
 
-A query is one or more image patches and spectral spans of one galaxy, averaged into one direction. The answer is a ranked list of galaxies, each with a per-patch score map and a per-span score map; the frontend draws the first and ignores the second. `app/search.py` states the method and the index layout it depends on.
+A query is one or more image patches and spectral spans of one galaxy. The answer is the query galaxy followed by up to `matches` other galaxies, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map; the frontend draws both.
+
+The search reads vectors back from the index by id, using the layout in `docs/pipeline.md`:
+
+1. The query's vectors are averaged and normalised into one direction.
+2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`.
+3. Every patch and span of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
+4. A galaxy's score is its best token score over both maps. The candidates are sorted by it, after the query galaxy.
 
 ## The frontend
 
@@ -70,7 +77,7 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
 +page.svelte
 ├── LeftPanel        point set toggle, morphology filter, download
 ├── ProjectionView   embedding-atlas over a DuckDB-WASM table
-└── RightPanel       selected galaxy: image, tokens, spectrum, coverage
+└── RightPanel       selected galaxy: image or spectrum, morphology, crossmatches
     └── PatchSimilarity   dialog: query patches, spectrum spans, ranked matches
 ```
 
@@ -81,7 +88,7 @@ App-wide state lives in plain classes under `src/lib/state/`, held in a `runed` 
 - **Row-level data** (tokens, coverage, spectra, similarity) goes through the generated client into TanStack Query. It is cached forever, except similarity, which goes stale after 5 minutes.
 - **The point sets** skip the JSON endpoints. DuckDB-WASM reads the parquet artifact from `/artifacts/{role}` into a table, and Mosaic pushes the morphology filter into SQL so filtering the projection never round-trips to the server.
 
-Patch grids are Apache ECharts custom series, one rect per patch on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. The image token grid in the similarity dialog sits over the image at `tokenAlpha` opacity, 0.3 or 0.8 when selected, and the spectrum's token areas sit over the line at the same opacity. Each grid is its own ECharts instance, and a match list is 32 rows of two grids and a spectrum each by default and up to 128.
+Patch grids are Apache ECharts custom series, one rect per patch on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. The image token grid in the similarity dialog sits over the image at `tokenAlpha` opacity, 0.3 or 0.8 when selected, and the spectrum's token areas sit over the line at the same opacity. Each grid is its own ECharts instance. A match row holds the galaxy's image, its score grid, a mask grid while the Mask switch is on, and a spectrum chart where it has a spectrum; a match list is 32 rows by default and up to 128.
 
 Spectra are Apache ECharts line charts. A galaxy's spectrum comes from the first of its matched spectrum surveys, DESI before SDSS. The interactive chart in the similarity dialog shades one area per spectrum token, laid out from `spectrum` in `/meta` and coloured like the token grid, and holds the selected spans in `view.spans`, which join the selected patches in the query; it zooms on the wheel and pans on drag because 272 spans do not fit a panel a few hundred pixels wide.
 

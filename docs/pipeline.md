@@ -14,7 +14,7 @@ The script is not part of the deployed pipeline and needs `lsdb`, which is not a
 
 For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
 
-Three stores are written, all with the same schema:
+Three stores are written, with the same columns:
 
 ```
 galaxy: int32
@@ -23,14 +23,16 @@ gz10, provabgs:      bool
 ```
 
 - **`encoded`**: the encoder's contextualised output. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
-- **`codebook`**: the raw codebook vector behind each token, uncontextualised.
-- **`tokens`**: the token ids, `list<uint32>` instead of embeddings.
+- **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
+- **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings.
 
-Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 272 tokens whatever survey it came from.
+Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spans.
 
 ## `generate_index`
 
-Builds `IVF{nlist},SQfp16` over one block per galaxy: the anchor survey's **image patches** (the scalars are sliced off), then the spectral tokens of the galaxy's first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. `app/search.py` states the id layout the result depends on.
+Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches** (the scalars are sliced off), then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity.
+
+A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout. The app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that; one `generate_embeddings` run writes both.
 
 ## `generate_cutouts`
 
@@ -41,7 +43,7 @@ galaxy: int32
 png:    large_binary
 ```
 
-Row `g` is galaxy `g`; `app/cutouts.py` states why that matters and checks it on load. The serving app will not start without this artifact.
+Row `g` is galaxy `g`: the app looks a cutout up by row position, not by the `galaxy` column, so it checks the order on load. The serving app will not start without this artifact, or if it is out of order or holds a different number of galaxies than `mean_points`.
 
 ## `generate_spectra`
 
@@ -56,7 +58,7 @@ Wavelength is in Ångström. Samples the survey pads with (wavelength at or belo
 
 ## `generate_projections`
 
-Fits a parametric UMAP on a sample of embeddings and applies it to every one; `app/parametric_umap.py` describes the model and the two passes over `encoded`.
+Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (500,000) embeddings uniformly from the whole store. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on that sample: UMAP's fuzzy simplicial set over the sample weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. The second pass projects every embedding.
 
 The trained projector is saved first, as **`parametric_umap`**, a `torch.save` of:
 

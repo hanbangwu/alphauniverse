@@ -7,8 +7,8 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 ## What you can do with it
 
 - **Explore the embedding space** - Every galaxy appears as a point in a parametric UMAP projection. There are two views: **mean**, one point per galaxy from its average embedding; and **full**, one point per embedding (all modalities share one map).
-- **Inspect a galaxy** - Selecting a point opens its Legacy Survey image, its DESI or SDSS spectrum, its morphology label, which surveys it was crossmatched into, and the codebook token behind each of its 576 image patches.
-- **Search by token** - Click image patches, spectrum spans, or both to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and thresholding the heatmap gives zero-shot segmentation.
+- **Inspect a galaxy** - Selecting a point shows its Legacy Survey image or its DESI or SDSS spectrum, its morphology label, and which surveys it was crossmatched into.
+- **Search by token** - Search on a selected galaxy shows the token behind each of its 576 image patches and each span of its spectrum. Click patches, spans, or both to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and of its span scores where it has a spectrum; thresholding the patch heatmap gives zero-shot segmentation.
 
 ## Data
 
@@ -21,11 +21,22 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 | DESI EDR SV3       | spectrum | 273               |
 | SDSS               | spectrum | 273               |
 
-Every token carries a 768-d embedding, in two flavours: **encoded**, the encoder's contextualised output, and **codebook**, the raw vector behind the token.
+Every token carries a 768-d embedding, in two flavours: **encoded**, the encoder's contextualised output, and **codebook**, the encoder's input embedding of the token id, before any context.
 
 ## Running
 
 Requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh).
+
+### Local API
+
+Serves the API from a small synthetic artifact tree in the production schemas:
+
+```sh
+uv run python -m scripts.fixture                                   # writes .cache/fixture
+ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py  # serves 127.0.0.1:8000
+```
+
+The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it.
 
 ### Frontend
 
@@ -34,6 +45,8 @@ cd frontend
 bun install
 bun run dev
 ```
+
+The dev build calls the API at `http://127.0.0.1:8000`, so start the local API first.
 
 ### Backend
 
@@ -45,7 +58,7 @@ uv run modal run modal_app.py::generate_spectra      # extract the spectra
 uv run modal run modal_app.py::generate_projections  # fit and apply the projection
 ```
 
-### API
+### API schema
 
 After changing a route or model in `app/main.py`, regenerate the API schema the frontend's client is built from:
 
