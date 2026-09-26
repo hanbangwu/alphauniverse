@@ -1,0 +1,34 @@
+name: Rules
+
+on:
+  pull_request:
+
+jobs:
+  rules:
+    name: Rules
+    runs-on: ubuntu-latest
+    env:
+      COMMITS: HEAD^1..HEAD^2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: No commits authored by an agent or bot
+        run: |
+          violations=$(git log --extended-regexp --regexp-ignore-case --author='<(noreply@anthropic\.com|.*\[bot\]@users\.noreply\.github\.com|.*\+copilot@users\.noreply\.github\.com)>' --format='%h %an <%ae>' "$COMMITS")
+          if [ -n "$violations" ]; then
+            echo "$violations"
+            echo "::error::Commits authored by an agent or bot; CLAUDE.md requires a human author"
+            exit 1
+          fi
+
+      - name: No commits by Claude without its Co-Authored-By trailer
+        run: |
+          commits=$(git log --regexp-ignore-case --committer='<noreply@anthropic\.com>' --format='%h %(trailers:key=Co-Authored-By,valueonly,separator=%x20)' "$COMMITS")
+          violations=$(printf '%s\n' "$commits" | grep --ignore-case --invert-match 'noreply@anthropic\.com' || [ $? -eq 1 ])
+          if [ -n "$violations" ]; then
+            echo "$violations"
+            echo "::error::Commits committed by Claude without a Co-Authored-By trailer naming noreply@anthropic.com"
+            exit 1
+          fi

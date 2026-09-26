@@ -58,3 +58,7 @@ There is no frontend test suite.
 4. **deploy**: Modal, on pushes to `main` only, and only if the other three pass
 
 Every uv command in the workflow runs with `UV_LOCKED=1`, so a `pyproject.toml` change without a matching `uv.lock` fails CI instead of being re-resolved.
+
+Lint fails on a comment that starts with `TODO`, `FIXME`, `HACK` or `XXX`, in any case: ruff's `FIX` rules check Python comments, and eslint's `no-warning-comments` checks JavaScript, TypeScript and Svelte `<script>` comments, after any leading `*`. Comments in other files and in Svelte markup or styles are not checked.
+
+`.github/workflows/rules.yml` runs on pull requests. Its Rules job fails on a commit in the pull request authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot, and on one committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.
