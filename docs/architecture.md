@@ -94,4 +94,4 @@ Spectra are Apache ECharts line charts. A galaxy's spectrum comes from the first
 
 ## Deployment
 
-`main` deploys to Modal through `.github/workflows/ci-cd.yml`. `docs/testing.md` lists the jobs. The frontend deploys separately on Vercel.
+`main` deploys to Modal through `.github/workflows/ci-cd.yml`, except on pushes that change only docs or instructions. `docs/testing.md` lists the jobs. The frontend deploys separately on Vercel.

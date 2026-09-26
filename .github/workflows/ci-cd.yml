@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - CLAUDE.md
+      - .claude/rules/**
+      - README.md
+      - docs/**
   pull_request:
 
 env:
