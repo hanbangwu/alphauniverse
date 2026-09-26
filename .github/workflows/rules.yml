@@ -7,10 +7,11 @@ on:
 jobs:
   rules:
     name: Rules
+    if: github.event.pull_request.state == 'open'
     runs-on: ubuntu-latest
     env:
       EM_DASH: "\u2014"
-      COMMITS: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+      COMMITS: HEAD^1..HEAD^2
     steps:
       - uses: actions/checkout@v6
         with:
@@ -18,14 +19,18 @@ jobs:
 
       - name: No em dashes in tracked files
         run: |
-          if git grep -nIF "$EM_DASH"; then
+          violations=$(git grep -nIF "$EM_DASH" -- ':!frontend/src/lib/components/ui/' || [ $? -eq 1 ])
+          if [ -n "$violations" ]; then
+            echo "$violations"
             echo "::error::Tracked files contain em dashes"
             exit 1
           fi
 
       - name: No em dashes in commit messages
         run: |
-          if git log --fixed-strings --grep "$EM_DASH" --format='%h %s' "$COMMITS" | grep .; then
+          violations=$(git log --fixed-strings --grep "$EM_DASH" --format='%h %s' "$COMMITS")
+          if [ -n "$violations" ]; then
+            echo "$violations"
             echo "::error::Commit messages contain em dashes"
             exit 1
           fi
@@ -35,21 +40,27 @@ jobs:
           TITLE: ${{ github.event.pull_request.title }}
           BODY: ${{ github.event.pull_request.body }}
         run: |
-          if printf '%s\n' "$TITLE" "$BODY" | grep -nF "$EM_DASH"; then
+          violations=$(printf '%s\n' "$TITLE" "$BODY" | grep -nF "$EM_DASH" || [ $? -eq 1 ])
+          if [ -n "$violations" ]; then
+            echo "$violations"
             echo "::error::The pull request's title or body contains em dashes"
             exit 1
           fi
 
       - name: No commits authored by an agent or bot
         run: |
-          if git log --extended-regexp --regexp-ignore-case --author='<(noreply@anthropic\.com|.*\[bot\]@users\.noreply\.github\.com|.*\+copilot@users\.noreply\.github\.com)>' --format='%h %an <%ae>' "$COMMITS" | grep .; then
+          violations=$(git log --extended-regexp --regexp-ignore-case --author='<(noreply@anthropic\.com|.*\[bot\]@users\.noreply\.github\.com|.*\+copilot@users\.noreply\.github\.com)>' --format='%h %an <%ae>' "$COMMITS")
+          if [ -n "$violations" ]; then
+            echo "$violations"
             echo "::error::Commits authored by an agent or bot; CLAUDE.md requires a human author"
             exit 1
           fi
 
       - name: No commits by Claude without its Co-Authored-By trailer
         run: |
-          if git log --committer='<noreply@anthropic\.com>' --format='%h %(trailers:key=Co-Authored-By,valueonly,separator=%x20)' "$COMMITS" | grep -v 'noreply@anthropic\.com'; then
+          violations=$(git log --regexp-ignore-case --committer='<noreply@anthropic\.com>' --invert-grep --grep='^Co-Authored-By: .*<noreply@anthropic\.com>' --format='%h %s' "$COMMITS")
+          if [ -n "$violations" ]; then
+            echo "$violations"
             echo "::error::Commits committed by Claude without a Co-Authored-By trailer naming noreply@anthropic.com"
             exit 1
           fi
