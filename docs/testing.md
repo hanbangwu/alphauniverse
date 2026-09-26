@@ -33,7 +33,7 @@ uv run modal run -m scripts.benchmark --runs 50
 
 The benchmark measures the production artifacts on the Modal volume, never the fixture. `modal run` starts an ephemeral copy of `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A client in a separate container times one cold `/meta` and one cold `/similarity`, then, warm, `/meta`, the image, tokens and coverage endpoints, and patch-only `/similarity` at three values of `matches`. The spectrum endpoints, span queries and artifact downloads are not timed. A container with the server's spec times the startup loads, then the stages of `search()` for the first query and warm.
 
-Output is JSON recording the commit, dataset revision, date, the Modal spec of server and client, and the thread configuration. It never runs in CI.
+Output is JSON recording the commit, dataset revision, date, the Modal spec of server and client, the thread configuration, and the CPU model of the client and stage containers. It never runs in CI.
 
 Read `docs/performance.md` before drawing a conclusion from a benchmark run.
 

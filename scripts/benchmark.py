@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from itertools import pairwise
+from pathlib import Path
 from typing import Any
 
 import faiss
@@ -77,6 +78,11 @@ def spec(function: modal.Function) -> dict[str, Any]:
 
 def environment() -> dict[str, Any]:
     return {
+        "cpu_model": next(
+            line.split(":", 1)[1].strip()
+            for line in Path("/proc/cpuinfo").read_text().splitlines()
+            if line.startswith("model name")
+        ),
         "cpu_count": os.cpu_count(),
         "faiss_threads": faiss.omp_get_max_threads(),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
@@ -122,6 +128,7 @@ def client(url: str, runs: int) -> dict[str, Any]:
             for matches in MATCHES
         }
         return {
+            "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
             "warm": {label: time_it(runs, call) for label, call in calls.items()},
