@@ -259,6 +259,9 @@ def main(runs: int = 30) -> None:
         "before": git("rev-parse", "origin/main"),
         "after": git("stash", "create") or git("rev-parse", "HEAD"),
     }
+    stored = json.loads(REPORT.read_text()).get("best") if REPORT.exists() else None
+    if stored and stored["commit"] not in commits.values():
+        commits["best"] = stored["commit"]
     names = list(commits)
     report = {
         "commit": git("describe", "--always", "--dirty"),
