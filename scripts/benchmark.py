@@ -1,6 +1,10 @@
+import io
 import json
 import os
 import subprocess
+import sys
+import tarfile
+import tempfile
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -35,6 +39,11 @@ image = serving_image.add_local_python_source("modal_app")
 PATCHES = 4
 MATCHES = (8, 32, 128)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
+SOURCES = ["app", "scripts", "modal_app.py"]
+ENTRY = (
+    "import json, sys; from scripts.benchmark import stages; "
+    "print(json.dumps(stages.local(int(sys.argv[1]))))"
+)
 
 
 def elapsed(call: Callable[[], Any]) -> float:
@@ -205,17 +214,64 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     }
 
 
+@app.function(
+    image=image,
+    cpu=fastapi_app.spec.cpu,
+    memory=fastapi_app.spec.memory,
+    volumes=fastapi_app.spec.volumes,
+    timeout=6 * 60 * 60,
+)
+def paired(sources: dict[str, bytes], order: list[str], runs: int) -> dict[str, Any]:
+    root = Path(tempfile.mkdtemp())
+    for name, source in sources.items():
+        with tarfile.open(fileobj=io.BytesIO(source)) as bundle:
+            bundle.extractall(root / name, filter="data")
+
+    rounds: dict[str, list[dict[str, Any]]] = {name: [] for name in sources}
+    for name in order:
+        try:
+            completed = subprocess.run(
+                [sys.executable, "-c", ENTRY, str(runs)],
+                cwd=root / name,
+                env=os.environ | {"PYTHONPATH": str(root / name)},
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            rounds[name].append(json.loads(completed.stdout.splitlines()[-1]))
+        except subprocess.CalledProcessError as failure:
+            rounds[name].append({"error": failure.stderr[-2000:]})
+    return {"environment": environment(), "order": order, "rounds": rounds}
+
+
+def archive(commit: str) -> bytes:
+    return subprocess.check_output(["git", "archive", "--format=tar", commit, *SOURCES])
+
+
+def git(*arguments: str) -> str:
+    return subprocess.check_output(["git", *arguments], text=True).strip()
+
+
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
+    commits = {
+        "before": git("rev-parse", "origin/main"),
+        "after": git("stash", "create") or git("rev-parse", "HEAD"),
+    }
+    names = list(commits)
     report = {
-        "commit": subprocess.check_output(
-            ["git", "describe", "--always", "--dirty"], text=True
-        ).strip(),
+        "commit": git("describe", "--always", "--dirty"),
+        "commits": commits,
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "server": spec(fastapi_app),
         "client": spec(client),
         "requests": client.remote(fastapi_app.get_web_url(), runs),
-        "stages": stages.remote(runs),
+        "stages": paired.remote(
+            {name: archive(commit) for name, commit in commits.items()},
+            names + names[::-1],
+            runs,
+        )
+        | {"locked_dependencies": "after"},
     }
     print(json.dumps(report, indent=2))
