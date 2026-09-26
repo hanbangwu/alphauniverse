@@ -52,6 +52,19 @@ def test_artifact_head_is_served(client: TestClient) -> None:
     assert client.head("/artifacts/mean_points").status_code == 200
 
 
+@pytest.mark.parametrize("url", ["/artifacts/mean_points"])
+def test_a_request_with_the_current_etag_is_not_modified(
+    client: TestClient, url: str
+) -> None:
+    served = client.get(url)
+
+    unchanged = client.get(url, headers={"If-None-Match": served.headers["etag"]})
+    stale = client.get(url, headers={"If-None-Match": '"stale"'})
+
+    assert (unchanged.status_code, unchanged.content) == (304, b"")
+    assert (stale.status_code, stale.content) == (200, served.content)
+
+
 def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:
     assert client.get("/artifacts/nonsense").status_code == 404
 

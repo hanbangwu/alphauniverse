@@ -47,6 +47,8 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 Eight endpoints, all `GET`; `/artifacts/{role}` also answers `HEAD` for range-request clients.
 
+A request whose `If-None-Match` matches a response's ETag gets `304 Not Modified` with no body. An artifact's ETag is the one Starlette derives from the file's size and modification time, and the route compares it before reading the file.
+
 | Endpoint                           | Returns      |
 | ---------------------------------- | ------------ |
 | `/meta`                            | JSON         |

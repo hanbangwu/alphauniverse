@@ -9,7 +9,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict
@@ -121,6 +121,11 @@ def arrow(data: pa.RecordBatch | pa.Table) -> Response:
     return Response(sink.getvalue(), media_type="application/vnd.apache.arrow.stream")
 
 
+def not_modified(request: Request, etag: str) -> bool:
+    tags = request.headers.get("if-none-match", "")
+    return etag in [tag.strip().removeprefix("W/") for tag in tags.split(",")]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxies = labels()[0]
@@ -183,23 +188,27 @@ def get_meta() -> Meta:
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
     description="Download a build artifact by role.",
 )
-def get_artifact(role: str) -> Response:
+def get_artifact(role: str, request: Request) -> Response:
     try:
         path = artifact(role)
-        path.stat()
+        stat_result = path.stat()
     except (KeyError, OSError) as exception:
         raise HTTPException(404, str(exception)) from exception
 
-    return FileResponse(
+    response = FileResponse(
         path,
         media_type="application/octet-stream",
         filename=path.name,
+        stat_result=stat_result,
     )
+    if not_modified(request, response.headers["etag"]):
+        return Response(status_code=304, headers={"etag": response.headers["etag"]})
+    return response
 
 
 @app.head("/artifacts/{role}", include_in_schema=False)
-def head_artifact(role: str) -> Response:
-    return get_artifact(role)
+def head_artifact(role: str, request: Request) -> Response:
+    return get_artifact(role, request)
 
 
 @app.get(
