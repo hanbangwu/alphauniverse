@@ -25,6 +25,8 @@ ENDPOINTS = [
     "/galaxies/0/image.png",
     "/galaxies/0/tokens",
     "/galaxies/0/coverage",
+    "/galaxies/0/spectra/desi",
+    "/galaxies/0/spectra/sdss/tokens",
     "/similarity?galaxy=0&p=0",
 ]
 
@@ -78,6 +80,16 @@ def test_a_request_with_the_current_etag_is_not_modified(
 
     assert (unchanged.status_code, unchanged.content) == (304, b"")
     assert (stale.status_code, stale.content) == (200, served.content)
+
+
+def test_an_artifact_head_with_the_current_etag_is_not_modified(
+    client: TestClient,
+) -> None:
+    etag = client.head("/artifacts/mean_points").headers["etag"]
+
+    response = client.head("/artifacts/mean_points", headers={"If-None-Match": etag})
+
+    assert (response.status_code, response.content) == (304, b"")
 
 
 def test_a_weak_etag_in_a_list_is_not_modified(client: TestClient) -> None:
