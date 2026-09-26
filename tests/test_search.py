@@ -29,6 +29,13 @@ from app.search import (
 from scripts.fixture import build
 
 CACHES = (source, index, with_spectrum, starts)
+SEPARATION = 1e-3
+RANKED_QUERIES = [
+    Query(galaxy=0, p=(64, 65), matches=2),
+    Query(galaxy=4, p=(64, 65), matches=2),
+    Query(galaxy=9, s=(40, 41), matches=2),
+    Query(galaxy=6, p=(3,), s=(100,), matches=2),
+]
 
 
 @pytest.fixture(scope="module")
@@ -153,15 +160,14 @@ def test_stages_compose_into_search(built: faiss.Index) -> None:
         np.testing.assert_array_equal(left, right)
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        Query(galaxy=0, p=(64, 65), matches=2),
-        Query(galaxy=4, p=(64, 65), matches=2),
-        Query(galaxy=9, s=(40, 41), matches=2),
-        Query(galaxy=6, p=(3,), s=(100,), matches=2),
-    ],
-)
+@pytest.mark.parametrize("query", RANKED_QUERIES)
+def test_fixture_separates_the_ranked_scores(tree: Path, query: Query) -> None:
+    _, scores = exact_ranking(query.model_copy(update={"matches": query.matches + 1}))
+
+    assert np.all(-np.diff(scores[1:]) > SEPARATION)
+
+
+@pytest.mark.parametrize("query", RANKED_QUERIES)
 def test_approximate_ranking_agrees_with_exact(
     built: faiss.Index, query: Query
 ) -> None:
