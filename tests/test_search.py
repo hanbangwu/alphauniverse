@@ -154,18 +154,18 @@ def test_stages_compose_into_search(built: faiss.Index) -> None:
 
 
 @pytest.mark.parametrize(
-    "query",
+    "fields",
     [
-        Query(galaxy=0, p=(64, 65)),
-        Query(galaxy=4, p=(64, 65)),
-        Query(galaxy=9, s=(40, 41)),
-        Query(galaxy=6, p=(3,), s=(100,)),
+        {"galaxy": 0, "p": (64, 65)},
+        {"galaxy": 4, "p": (64, 65)},
+        {"galaxy": 9, "s": (40, 41)},
+        {"galaxy": 6, "p": (3,), "s": (100,)},
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
-    built: faiss.Index, query: Query, galaxies: int
+    built: faiss.Index, fields: dict[str, int | tuple[int, ...]], galaxies: int
 ) -> None:
-    query = query.model_copy(update={"matches": galaxies - 1})
+    query = Query.model_validate(fields | {"matches": galaxies - 1})
     found, _, _, _ = search(query, index=built)
     expected, _ = exact_ranking(query)
 

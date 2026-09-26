@@ -170,6 +170,8 @@ def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
     response = client.get("/similarity", params={"galaxy": galaxy, "s": [0]})
 
     assert response.status_code == 422
+    [error] = response.json()["detail"]
+    assert f"galaxy {galaxy} has no spectrum" in error["msg"]
 
 
 def test_negative_galaxy_is_rejected(client: TestClient) -> None:
