@@ -40,7 +40,7 @@ Cold start dominates, and it is not the search algorithm: the approximate neares
 | 32      | 263 ms | 269 ms |
 | 128     | 489 ms | 761 ms |
 
-**Cost is set by `matches`.** It sets how many galaxies get fully rescored, at 576 vector reconstructions each, while the patch count only changes one averaging step over a handful of vectors, so the run holds patches at 4. Every request pays the ~148 ms floor `/meta` shows in [Other endpoints](#other-endpoints), so the default of 32 matches adds about 115 ms to it and the UI's maximum of 128 about 341 ms.
+**Cost is set by `matches`.** It sets how many galaxies get fully rescored, at 576 vector reconstructions each, while the patch count only changes one averaging step over a handful of vectors, so the run holds patches at 4. Every request pays the ~148 ms floor `/meta` shows in [Other endpoints](#other-endpoints), so at p50 the default of 32 matches adds 263 − 148 = 115 ms to it and the UI's maximum of 128 adds 489 − 148 = 341 ms.
 
 The first `/similarity` to a freshly started container takes **0.64 s**. `search()` is 72 ms of a first query in the stage container, so most of the rest is outside it, in a split that is **unmeasured**.
 
@@ -58,7 +58,7 @@ Queries of 4 patches and 32 matches. The first query runs right after the index 
 | `rank`        | 0.19 ms     | 0.16 ms     | 0.3 %      |
 | Total         | 71.8 ms     | 51.1 ms     |            |
 
-`vectors` reconstructs 19,008 vectors at **2.0 µs each**, because `reconstruct_batch` walks the IVF direct map one vector at a time: a list lookup and a per-vector decode call rather than a contiguous read.
+`vectors` reconstructs the patches of the query galaxy and its 32 matches, 33 × 576 = 19,008 vectors, in 38.2 ms: **2.0 µs each**, because `reconstruct_batch` walks the IVF direct map one vector at a time: a list lookup and a per-vector decode call rather than a contiguous read.
 
 Shares depend on the thread configuration: `vectors` is faiss-parallel and the `score_maps` GEMV contends with that pool, so stage figures only compare between runs whose thread configuration agrees.
 
@@ -93,7 +93,7 @@ Warm, same client:
 
 Loading the 17.19 GB index takes 6.0 s. `read_index` memory-maps its inverted lists and `make_direct_map()` reads every list's ids.
 
-`codebook` is 8.5× smaller than `encoded` despite an identical schema because each of its rows depends only on the token id and modality, so the same 768-d rows repeat and zstd compresses them well. Contextualised outputs are all distinct and do not compress.
+`codebook` is 22.97 / 2.70 = 8.5× smaller than `encoded` despite an identical schema because each of its rows depends only on the token id and modality, so the same 768-d rows repeat and zstd compresses them well. Contextualised outputs are all distinct and do not compress.
 
 ## Cold start
 
@@ -109,7 +109,7 @@ The startup loads, timed in a separate container of the same spec, add up to 7.9
 | `starts`  | 0.03 s |
 | `labels`  | 0.01 s |
 
-`faiss.read_index` memory-maps the 17.19 GB with `IO_FLAG_MMAP`, so pages fault in as queries touch them, and `make_direct_map()` reads every id. What the other 11.6 s of a cold request is made of is **unmeasured**.
+`faiss.read_index` memory-maps the 17.19 GB with `IO_FLAG_MMAP`, so pages fault in as queries touch them, and `make_direct_map()` reads every id. What the other 19.5 − 7.9 = 11.6 s of a cold request is made of is **unmeasured**.
 
 With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more than five minutes after the last one waits the full 20 s, so on a low-traffic site it is the usual case.
 
@@ -117,13 +117,13 @@ With `scaledown_window=5*60` this is not a tail case. Any visitor arriving more 
 
 Current design targets COSMOS scale. Where it stops:
 
-| Ceiling                      | Now                 | Breaks at                                                                                     |
-| ---------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| Index size                   | 17.19 GB            | ~3.7×, when the pages queries touch outgrow the container's 64 GB. 100× needs PQ or sharding. |
-| Cold start                   | 19.5 s              | ~4× before it exceeds common proxy and browser timeouts                                       |
-| `full_points` in the browser | 180 MB              | ~10×; DuckDB-WASM has a few GB to work with.                                                  |
-| Cutouts in memory            | 215 MB              | linear; fine to ~100×, then needs tiling                                                      |
-| Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                         |
-| Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap     |
+| Ceiling                      | Now                 | Breaks at                                                                                                                             |
+| ---------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Index size                   | 17.19 GB            | when the pages queries touch outgrow the 64 GiB limit (68.72 GB, or 68.72 / 17.19 = 4.0× the index); how far below that is unmeasured |
+| Cold start                   | 19.5 s              | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
+| `full_points` in the browser | 180 MB              | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
+| Cutouts in memory            | 215 MB              | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
+| Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                                                                 |
+| Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap                                             |
 
 None of these need solving now. All of them should be checked before a change assumes they are not there.
