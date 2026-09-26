@@ -67,4 +67,4 @@ bun run lint                                        # prettier + eslint
 ## Others
 
 - No code comments or docstrings. Explanations of a change (why it was made, what it replaced, what was tried) go in the issue, the pull request and their comments; how the code works now goes in `docs/`. A route's API description goes in its decorator's `description=` argument.
-- No em dashes.
+- No em dashes, in files, commit messages, pull requests, issues or comments. An en dash in a numeric range is fine.
