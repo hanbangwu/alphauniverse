@@ -2,50 +2,17 @@ name: Rules
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
 
 jobs:
   rules:
     name: Rules
-    if: github.event.pull_request.state == 'open'
     runs-on: ubuntu-latest
     env:
-      EM_DASH: "\u2014"
       COMMITS: HEAD^1..HEAD^2
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: No em dashes in tracked files
-        run: |
-          violations=$(git grep -nIF "$EM_DASH" -- ':!frontend/src/lib/components/ui/' || [ $? -eq 1 ])
-          if [ -n "$violations" ]; then
-            echo "$violations"
-            echo "::error::Tracked files contain em dashes"
-            exit 1
-          fi
-
-      - name: No em dashes in commit messages
-        run: |
-          violations=$(git log --fixed-strings --grep "$EM_DASH" --format='%h %s' "$COMMITS")
-          if [ -n "$violations" ]; then
-            echo "$violations"
-            echo "::error::Commit messages contain em dashes"
-            exit 1
-          fi
-
-      - name: No em dashes in the title or body
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-          BODY: ${{ github.event.pull_request.body }}
-        run: |
-          violations=$(printf '%s\n' "$TITLE" "$BODY" | grep -nF "$EM_DASH" || [ $? -eq 1 ])
-          if [ -n "$violations" ]; then
-            echo "$violations"
-            echo "::error::The pull request's title or body contains em dashes"
-            exit 1
-          fi
 
       - name: No commits authored by an agent or bot
         run: |

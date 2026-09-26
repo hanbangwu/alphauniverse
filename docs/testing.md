@@ -61,8 +61,4 @@ Every uv command in the workflow runs with `UV_LOCKED=1`, so a `pyproject.toml` 
 
 Lint fails on a comment that starts with `TODO`, `FIXME`, `HACK` or `XXX`, in any case: ruff's `FIX` rules check Python comments, and eslint's `no-warning-comments` checks JavaScript, TypeScript and Svelte `<script>` comments, after any leading `*`. Comments in other files and in Svelte markup or styles are not checked.
 
-`.github/workflows/rules.yml` runs on open pull requests, including when the title or body is edited. Its Rules job fails on:
-
-- an em dash in a tracked file outside the shadcn components in `frontend/src/lib/components/ui/`, in one of the pull request's commit messages, or in its title or body;
-- a commit in the pull request authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot;
-- a commit in the pull request committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.
+`.github/workflows/rules.yml` runs on pull requests. Its Rules job fails on a commit in the pull request authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot, and on one committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.
