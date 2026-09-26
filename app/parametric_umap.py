@@ -31,7 +31,7 @@ from .search import source
 BATCH = 1024
 CHUNK = 128
 EPOCHS = 10
-LR = 1e-3
+LEARNING_RATE = 1e-3
 NEIGHBORS = 16
 MIN_DIST = 0.1
 NEGATIVES = 5
@@ -91,7 +91,7 @@ def fit_parametric_umap(sampled: np.ndarray) -> None:
     torch.manual_seed(SEED)
     model = ParametricUMAP(rows.shape[1]).to(device())
     model.train()
-    optim = torch.optim.Adam(model.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     with wandb.init(
         entity=WANDB_ENTITY,
@@ -102,7 +102,7 @@ def fit_parametric_umap(sampled: np.ndarray) -> None:
         mode=WANDB_MODE,
         config={
             "optimizer": "Adam",
-            "learning_rate": LR,
+            "learning_rate": LEARNING_RATE,
             "epochs": EPOCHS,
             "batch_size": BATCH,
             "n_neighbors": NEIGHBORS,
@@ -135,9 +135,9 @@ def fit_parametric_umap(sampled: np.ndarray) -> None:
                     attract, torch.ones_like(attract)
                 ) + F.binary_cross_entropy_with_logits(repel, torch.zeros_like(repel))
 
-                optim.zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
-                optim.step()
+                optimizer.step()
 
                 total += loss.detach()
 
@@ -221,10 +221,10 @@ def generate_projections() -> None:
     held = np.zeros(count, dtype=np.int64)
     taken: list[np.ndarray] = []
     seen = 0
-    for gids, offsets, values in tqdm(_stream(counts), desc="scan"):
+    for galaxies, offsets, values in tqdm(_stream(counts), desc="scan"):
         live = np.diff(offsets) > 0
-        sums[gids[live]] += np.add.reduceat(values, offsets[:-1][live])
-        held[gids] += np.diff(offsets)
+        sums[galaxies[live]] += np.add.reduceat(values, offsets[:-1][live])
+        held[galaxies] += np.diff(offsets)
         window = chosen[
             np.searchsorted(chosen, seen) : np.searchsorted(chosen, seen + len(values))
         ]
@@ -253,8 +253,8 @@ def generate_projections() -> None:
     full_points = artifact("full_points")
     staging = full_points.with_name(f"{full_points.name}.partial")
     with pq.ParquetWriter(staging, POINTS, compression="zstd") as writer:
-        for gids, offsets, values in tqdm(_stream(counts), desc="project"):
-            owner = np.repeat(gids, np.diff(offsets))
+        for galaxies, offsets, values in tqdm(_stream(counts), desc="project"):
+            owner = np.repeat(galaxies, np.diff(offsets))
             writer.write_table(
                 points(owner, model.transform(values), category.take(owner))
             )

@@ -29,15 +29,15 @@ if __name__ == "__main__":
 
     left_suffix = "-" + ANCHOR.split("/")[-1]
 
-    for repo in (
+    for repository in (
         "UniverseTBD/mmu_sdss_sdss",
         "UniverseTBD/mmu_gz10",
         "UniverseTBD/mmu_desi_provabgs",
         "UniverseTBD/mmu_desi_edr_sv3",
         "UniverseTBD/mmu_hsc_pdr3_dud_22.5",
     ):
-        right = lsdb.open_catalog(f"hf://datasets/{repo}", search_filter=COSMOS)
-        right_suffix = "-" + repo.split("/")[-1]
+        right = lsdb.open_catalog(f"hf://datasets/{repository}", search_filter=COSMOS)
+        right_suffix = "-" + repository.split("/")[-1]
         matched = matched.crossmatch(
             right,
             how="left",
