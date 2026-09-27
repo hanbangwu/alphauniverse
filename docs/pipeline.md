@@ -26,7 +26,7 @@ gz10, provabgs:      bool
 
 - **`encoded`**: the encoder's contextualised output. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
 - **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
-- **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings. The serving app will not start if it holds a different number of galaxies than `mean_points`.
+- **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings. The serving app will not start if it is out of order or holds a different number of galaxies than `mean_points`.
 
 Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spans.
 

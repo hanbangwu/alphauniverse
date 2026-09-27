@@ -55,7 +55,10 @@ def source(role: str) -> ds.Dataset:
 
 @cache
 def with_spectrum() -> np.ndarray:
-    table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
+    table = source("tokens").to_table(columns=["galaxy", *SPECTRUM_SURVEYS])
+    galaxies = table.column("galaxy").to_numpy()
+    if not np.array_equal(galaxies, np.arange(len(galaxies))):
+        raise ValueError(f"{artifact('tokens')} is not in galaxy order")
     return np.logical_or.reduce(
         [
             pc.is_valid(table.column(survey)).to_numpy(zero_copy_only=False)
