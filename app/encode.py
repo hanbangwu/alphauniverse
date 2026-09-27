@@ -7,7 +7,8 @@ import pyarrow.parquet as pq
 import torch
 import torchvision.transforms.functional as F
 from aion import AION
-from aion.codecs import CodecManager
+from aion.codecs import Codec
+from aion.codecs.config import MODALITY_CODEC_MAPPING
 from aion.modalities import (
     HSCAG,
     HSCAI,
@@ -38,6 +39,7 @@ from aion.modalities import (
     LegacySurveyShapeE1,
     LegacySurveyShapeE2,
     LegacySurveyShapeR,
+    Modality,
     Scalar,
     SDSSSpectrum,
     Spectrum,
@@ -45,6 +47,8 @@ from aion.modalities import (
 from tqdm import tqdm
 
 from .config import (
+    AION_REPOSITORY,
+    AION_REVISION,
     ANCHOR,
     CROP_PIXELS,
     DATASET_ID,
@@ -95,13 +99,24 @@ HSC_SCALARS = (
 
 
 @cache
-def codec() -> CodecManager:
-    return CodecManager(device=device())
+def codec(modality: type[Modality]) -> Codec:
+    loaded = (
+        MODALITY_CODEC_MAPPING[modality]
+        .from_pretrained(AION_REPOSITORY, modality=modality, revision=AION_REVISION)
+        .to(device())
+        .eval()
+    )
+    loaded.requires_grad_(False)
+    return loaded
 
 
 @cache
 def model() -> AION:
-    network = AION.from_pretrained("polymathic-ai/aion-base").to(device()).eval()
+    network = (
+        AION.from_pretrained(AION_REPOSITORY, revision=AION_REVISION)
+        .to(device())
+        .eval()
+    )
     network.requires_grad_(False)
     return network
 
@@ -115,8 +130,8 @@ def image(
     flux = np.asarray([[by_band[band] for band in bands]], dtype=np.float32)
     crop = F.center_crop(torch.from_numpy(flux), output_size=[CROP_PIXELS, CROP_PIXELS])
     return (
-        codec()
-        .encode(modality(flux=crop.to(device()), bands=bands))[modality.token_key]
+        codec(modality)
+        .encode(modality(flux=crop.to(device()), bands=bands))
         .reshape(1, -1)
     )
 
@@ -134,17 +149,17 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
         )
         for argument, (field, dtype) in fields.items()
     }
-    return codec().encode(modality(**samples))[modality.token_key].reshape(1, -1)
+    return codec(modality).encode(modality(**samples)).reshape(1, -1)
 
 
 def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
     return (
-        codec()
+        codec(modality)
         .encode(
             modality(
                 value=torch.as_tensor([value], dtype=torch.float32, device=device())
             )
-        )[modality.token_key]
+        )
         .reshape(1, -1)
     )
 

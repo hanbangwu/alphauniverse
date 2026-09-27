@@ -27,6 +27,9 @@ DATASET_NAME = "alphauniverse-cosmos"
 DATASET_ID = f"{DATASET_AUTHOR}/{DATASET_NAME}"
 DATASET_REVISION = "e250e43c35e63523ee3940c9543302c29ca56437"
 
+AION_REPOSITORY = "polymathic-ai/aion-base"
+AION_REVISION = "40541618104bab0fa85c8af68daeb867a720bb8c"
+
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / ".cache"
 
 CROP_PIXELS = 96
