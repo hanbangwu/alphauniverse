@@ -19,6 +19,16 @@ from app.config import (
 )
 
 ARROW = "application/vnd.apache.arrow.stream"
+ENDPOINTS = [
+    "/artifacts/mean_points",
+    "/meta",
+    "/galaxies/0/image.png",
+    "/galaxies/0/tokens",
+    "/galaxies/0/coverage",
+    "/galaxies/0/spectra/desi",
+    "/galaxies/0/spectra/sdss/tokens",
+    "/similarity?galaxy=0&p=0",
+]
 
 
 def _with_spectrum() -> np.ndarray:
@@ -50,6 +60,51 @@ def test_artifact_downloads(client: TestClient, tree) -> None:
 
 def test_artifact_head_is_served(client: TestClient) -> None:
     assert client.head("/artifacts/mean_points").status_code == 200
+
+
+def test_artifact_ranges_are_served(client: TestClient, tree) -> None:
+    response = client.get("/artifacts/mean_points", headers={"Range": "bytes=0-9"})
+
+    assert response.status_code == 206
+    assert response.content == (tree / "mean_points.parquet").read_bytes()[:10]
+
+
+@pytest.mark.parametrize("url", ENDPOINTS)
+def test_a_request_with_the_current_etag_is_not_modified(
+    client: TestClient, url: str
+) -> None:
+    served = client.get(url)
+
+    unchanged = client.get(url, headers={"If-None-Match": served.headers["etag"]})
+    stale = client.get(url, headers={"If-None-Match": '"stale"'})
+
+    assert (unchanged.status_code, unchanged.content) == (304, b"")
+    assert (stale.status_code, stale.content) == (200, served.content)
+
+
+def test_an_artifact_head_with_the_current_etag_is_not_modified(
+    client: TestClient,
+) -> None:
+    etag = client.head("/artifacts/mean_points").headers["etag"]
+
+    response = client.head("/artifacts/mean_points", headers={"If-None-Match": etag})
+
+    assert (response.status_code, response.content) == (304, b"")
+
+
+def test_a_weak_etag_in_a_list_is_not_modified(client: TestClient) -> None:
+    etag = client.get("/meta").headers["etag"]
+
+    response = client.get("/meta", headers={"If-None-Match": f'"stale", W/{etag}'})
+
+    assert response.status_code == 304
+
+
+@pytest.mark.parametrize("url", ENDPOINTS)
+def test_successful_responses_must_be_revalidated_before_reuse(
+    client: TestClient, url: str
+) -> None:
+    assert client.get(url).headers["cache-control"] == "no-cache"
 
 
 def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:
