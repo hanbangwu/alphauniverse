@@ -37,6 +37,7 @@ bun run lint                                        # prettier + eslint
 - Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
 - Before opening a pull request that changes code, check `README.md` and `docs/` for anything it makes stale and update them in the same pull request.
 - A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
+- Every issue and pull request carries GitHub's default labels, and no others: `bug` for wrong behaviour; `enhancement` for features, performance, tests, CI and refactors; `documentation` when docs or instructions are the main change; `question` while it waits on an answer; `duplicate` or `wontfix` when it closes for either reason.
 - A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. The other maintainer then reviews it before it merges.
 - A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/code-review`, Copilot review, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
 - Claude monitors every pull request it opens, light path included, until it merges or closes: CI, comments and merge conflicts, with a check-in about an hour out.
