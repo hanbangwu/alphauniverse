@@ -154,6 +154,36 @@ def test_stages_compose_into_search(built: faiss.Index) -> None:
         np.testing.assert_array_equal(left, right)
 
 
+def test_rank_keeps_the_query_first_and_each_row_together() -> None:
+    order = np.array([7, 3, 9, 1, 5], dtype=np.int32)
+    patch_scores = np.array(
+        [
+            [0.5, 0.6, 0.1],
+            [0.2, 0.1, 0.0],
+            [-0.4, -0.2, -0.3],
+            [0.4, 0.7, 0.2],
+            [0.9, 0.5, 0.3],
+        ],
+        dtype=np.float32,
+    )
+    span_scores = np.array(
+        [[0.1, 0.2], [0.3, 0.25], [np.nan, np.nan], [0.8, 0.0], [0.1, 0.4]],
+        dtype=np.float32,
+    )
+    rows = [0, 4, 3, 1, 2]
+    expected = (
+        order[rows],
+        np.array([0.6, 0.9, 0.8, 0.3, -0.2], dtype=np.float32),
+        patch_scores[rows],
+        span_scores[rows],
+    )
+
+    for found, wanted in zip(
+        rank(order, patch_scores, span_scores), expected, strict=True
+    ):
+        np.testing.assert_array_equal(found, wanted, strict=True)
+
+
 def test_asking_for_every_galaxy_returns_every_galaxy(
     built: faiss.Index, galaxies: int
 ) -> None:
