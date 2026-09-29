@@ -1,0 +1,16 @@
+{
+  "embedding_dim": 5,
+  "hidden_dims": 512,
+  "mult_factor": 10.0,
+  "multisurvey_projection_dims": 54,
+  "n_compressions": 2,
+  "num_consecutive": 4,
+  "quantizer_levels": [
+    7,
+    5,
+    5,
+    5,
+    5
+  ],
+  "range_compression_factor": 0.01
+}

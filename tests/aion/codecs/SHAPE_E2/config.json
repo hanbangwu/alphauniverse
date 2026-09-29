@@ -1,0 +1,5 @@
+{
+  "codebook_size": 1024,
+  "modality": "SHAPE_E2",
+  "reservoir_size": 100000
+}

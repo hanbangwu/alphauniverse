@@ -171,17 +171,18 @@ def test_asking_for_every_galaxy_returns_every_galaxy(
 
 
 @pytest.mark.parametrize(
-    "query",
+    "fields",
     [
-        Query(galaxy=0, p=(64, 65), matches=2),
-        Query(galaxy=4, p=(64, 65), matches=2),
-        Query(galaxy=9, s=(40, 41), matches=2),
-        Query(galaxy=6, p=(3,), s=(100,), matches=2),
+        {"galaxy": 0, "p": (64, 65), "matches": 2},
+        {"galaxy": 4, "p": (64, 65), "matches": 2},
+        {"galaxy": 9, "s": (40, 41), "matches": 2},
+        {"galaxy": 6, "p": (3,), "s": (100,), "matches": 2},
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
-    built: faiss.Index, query: Query
+    built: faiss.Index, fields: dict[str, int | tuple[int, ...]]
 ) -> None:
+    query = Query.model_validate(fields)
     expected, expected_scores, expected_maps, expected_spectral_maps = exact_ranking(
         query.model_copy(update={"matches": query.matches + 1})
     )
