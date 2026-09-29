@@ -1,0 +1,40 @@
+{
+  "clip_flux": null,
+  "clip_ivar": 100.0,
+  "codebook_size": 1024,
+  "decoder_depths": [
+    3,
+    9,
+    3,
+    3
+  ],
+  "decoder_dims": [
+    256,
+    128,
+    64,
+    2
+  ],
+  "dim": 10,
+  "embedding_dim": 10,
+  "encoder_depths": [
+    3,
+    3,
+    27,
+    3
+  ],
+  "encoder_dims": [
+    64,
+    128,
+    256,
+    512
+  ],
+  "input_scaling": 0.2,
+  "lambda_min": 3500.0,
+  "latent_channels": 512,
+  "normalization_range": [
+    -1,
+    5
+  ],
+  "num_pixels": 8704,
+  "resolution": 0.8
+}

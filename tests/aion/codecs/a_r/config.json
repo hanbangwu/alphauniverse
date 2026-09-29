@@ -1,0 +1,5 @@
+{
+  "codebook_size": 1024,
+  "modality": "a_r",
+  "reservoir_size": 100000
+}
