@@ -18,7 +18,6 @@ from app.config import (
     NPROBE,
     PROBE,
     SPECTRUM_SURVEYS,
-    galaxy_count,
 )
 from app.search import (
     Query,
@@ -30,14 +29,14 @@ from app.search import (
     spectrum_cells,
     with_spectrum,
 )
-from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmark import environment, spec
+from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
+from scripts.benchmark import PATCHES, environment, queries, spec
 
 app = modal.App("alphauniverse-recall")
 image = build_image.add_local_python_source("modal_app")
 
-MATCHES = 32
-TOKENS = 4
+MATCHES = Query.model_fields["matches"].default
+SPANS = 4
 
 
 class Corpus(NamedTuple):
@@ -83,31 +82,20 @@ def exact_ranking(
     return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
 
 
-def queries(per_kind: int) -> dict[str, list[Query]]:
-    rng = np.random.default_rng(0)
+def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
+    rng = np.random.default_rng(seed)
     spectrum_galaxies = np.flatnonzero(with_spectrum())
-
-    def tokens(width: int) -> tuple[int, ...]:
-        return tuple(int(token) for token in rng.choice(width, TOKENS, replace=False))
-
-    def draw(kind: str) -> Query:
-        if kind == "patches":
-            return Query(
-                galaxy=int(rng.integers(galaxy_count())),
-                p=tokens(N_PATCHES),
-                matches=MATCHES,
-            )
-        galaxy = int(rng.choice(spectrum_galaxies))
-        if kind == "spans":
-            return Query(galaxy=galaxy, s=tokens(N_SPANS), matches=MATCHES)
-        return Query(
-            galaxy=galaxy, p=tokens(N_PATCHES), s=tokens(N_SPANS), matches=MATCHES
+    return [
+        Query(
+            galaxy=int(rng.choice(spectrum_galaxies)),
+            p=tuple(
+                int(patch)
+                for patch in rng.choice(N_PATCHES, patch_count, replace=False)
+            ),
+            s=tuple(int(span) for span in rng.choice(N_SPANS, SPANS, replace=False)),
         )
-
-    return {
-        kind: [draw(kind) for _ in range(per_kind)]
-        for kind in ("patches", "spans", "both")
-    }
+        for _ in range(count)
+    ]
 
 
 def recall(per_kind: int) -> dict[str, Any]:
@@ -117,17 +105,25 @@ def recall(per_kind: int) -> dict[str, Any]:
     built = index()
 
     measured = {}
-    for kind, batch in queries(per_kind).items():
-        fractions = []
+    for kind, batch in (
+        ("patches", queries(per_kind, PATCHES, MATCHES)),
+        ("spans", with_spans(per_kind, 0, seed=1)),
+        ("both", with_spans(per_kind, PATCHES, seed=2)),
+    ):
+        fractions, short = [], []
         for query in batch:
             expected = exact_ranking(query, reference)[0][1:]
             found = search(query, index=built)[0][1:]
             fractions.append(len(np.intersect1d(found, expected)) / len(expected))
+            short.append(len(found) < len(expected))
         measured[kind] = {
-            "queries": len(fractions),
+            "queries": len(batch),
+            "patches": len(batch[0].patches),
+            "spans": len(batch[0].spans),
             "mean": round(float(np.mean(fractions)), 4),
             "min": round(float(np.min(fractions)), 4),
             "all_found": round(float(np.mean(np.equal(fractions, 1))), 4),
+            "short_of_matches": round(float(np.mean(short)), 4),
         }
 
     return {
@@ -135,7 +131,6 @@ def recall(per_kind: int) -> dict[str, Any]:
         "probe": PROBE,
         "nprobe": NPROBE,
         "matches": MATCHES,
-        "tokens_per_query": TOKENS,
         "corpus_load_s": round(loaded, 1),
         "total_s": round(time.perf_counter() - start, 1),
         "peak_rss_gb": round(
@@ -147,10 +142,10 @@ def recall(per_kind: int) -> dict[str, Any]:
 
 @app.function(
     image=image,
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
+    cpu=generate_index.spec.cpu,
+    memory=generate_index.spec.memory,
     timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume.read_only()},
+    volumes={CACHE_PATH: cache_volume.with_mount_options(read_only=True)},
 )
 def measure(per_kind: int) -> dict[str, Any]:
     return recall(per_kind)
