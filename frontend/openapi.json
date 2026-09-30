@@ -88,7 +88,6 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "exclusiveMaximum": 17369,
               "title": "Galaxy"
             }
           }
@@ -131,7 +130,6 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "exclusiveMaximum": 17369,
               "title": "Galaxy"
             }
           }
@@ -174,7 +172,6 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "exclusiveMaximum": 17369,
               "title": "Galaxy"
             }
           },
@@ -240,7 +237,6 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "exclusiveMaximum": 17369,
               "title": "Galaxy"
             }
           },
@@ -306,7 +302,6 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "exclusiveMaximum": 17369,
               "title": "Galaxy"
             }
           }
@@ -352,7 +347,6 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "exclusiveMaximum": 17369,
               "title": "Galaxy"
             }
           },

@@ -32,6 +32,7 @@ from .config import (
     GalaxyIndex,
     SpectrumSurvey,
     artifact,
+    galaxy_count,
 )
 from .cutouts import cutout, cutouts
 from .search import Query as SearchQuery
@@ -156,6 +157,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     index()
     starts()
+    galaxy_count()
     yield
 
 

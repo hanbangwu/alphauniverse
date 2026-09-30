@@ -9,8 +9,9 @@ GALAXIES = 12
 
 
 def _forget() -> None:
-    from app import cutouts, main, search, spectra
+    from app import config, cutouts, main, search, spectra
 
+    config.galaxy_count.cache_clear()
     search.source.cache_clear()
     search.index.cache_clear()
     search.with_spectrum.cache_clear()
