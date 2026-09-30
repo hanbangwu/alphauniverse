@@ -8,7 +8,14 @@ import pytest
 from sklearn.preprocessing import normalize
 
 from app import search as search_module
-from app.config import ANCHOR, N_PATCHES, N_SPANS, SPECTRUM_SURVEYS, artifact
+from app.config import (
+    ANCHOR,
+    N_PATCHES,
+    N_SPANS,
+    SPECTRUM_SURVEYS,
+    artifact,
+    build_dir,
+)
 from app.search import (
     Query,
     candidates,
@@ -252,6 +259,25 @@ def test_ids_stay_contiguous_across_add_batches(
         expected = rows[np.arange(galaxies) * N_PATCHES + 7]
 
         np.testing.assert_allclose(stored, expected, atol=1e-3)
+    finally:
+        for cache in CACHES:
+            cache.cache_clear()
+
+
+def test_tokens_out_of_galaxy_order_are_rejected(
+    tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tokens = pq.read_table(artifact("tokens"))
+
+    monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
+    build_dir().mkdir(parents=True, exist_ok=True)
+    pq.write_table(tokens.take([1, 0]), artifact("tokens"))
+
+    for cache in CACHES:
+        cache.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="galaxy order"):
+            with_spectrum()
     finally:
         for cache in CACHES:
             cache.cache_clear()
