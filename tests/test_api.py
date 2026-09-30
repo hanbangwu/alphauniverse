@@ -233,10 +233,18 @@ def test_negative_galaxy_is_rejected(client: TestClient) -> None:
     assert client.get("/galaxies/-1/tokens").status_code == 422
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="GalaxyIndex hardcodes the production galaxy count instead of "
-    "deriving it from the artifacts, so rows past the end pass validation",
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/galaxies/{galaxy}/image.png",
+        "/galaxies/{galaxy}/tokens",
+        "/galaxies/{galaxy}/coverage",
+        "/galaxies/{galaxy}/spectra/desi",
+        "/galaxies/{galaxy}/spectra/sdss/tokens",
+        "/similarity?galaxy={galaxy}&p=0",
+    ],
 )
-def test_galaxy_past_the_end_is_rejected(client: TestClient, galaxies: int) -> None:
-    assert client.get(f"/galaxies/{galaxies + 1}/tokens").status_code == 422
+def test_galaxy_past_the_end_is_rejected(
+    client: TestClient, galaxies: int, path: str
+) -> None:
+    assert client.get(path.format(galaxy=galaxies)).status_code == 422

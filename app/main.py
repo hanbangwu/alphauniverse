@@ -32,10 +32,11 @@ from .config import (
     GalaxyIndex,
     SpectrumSurvey,
     artifact,
+    galaxy_count,
 )
 from .cutouts import cutout, cutouts
 from .search import Query as SearchQuery
-from .search import index, search, source, starts
+from .search import index, search, source, starts, with_spectrum
 from .spectra import spectra, spectrum
 
 if TYPE_CHECKING:
@@ -149,13 +150,21 @@ class RevalidatedRoute(APIRoute):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxies = labels()[0]
-    for role, load in (("cutouts", cutouts), ("spectra", spectra)):
+    for role, load in (
+        ("cutouts", cutouts),
+        ("spectra", spectra),
+        ("tokens", with_spectrum),
+    ):
         stored = len(load())
         if stored != galaxies:
             raise ValueError(f"{stored} {role} for {galaxies} galaxies")
 
-    index()
+    stored = index().ntotal
+    vectors = galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
+    if stored != vectors:
+        raise ValueError(f"{stored} vectors in encoded_index for {vectors} in tokens")
     starts()
+    galaxy_count()
     yield
 
 
