@@ -7,6 +7,7 @@ from typing import Any, NamedTuple
 
 import modal
 import numpy as np
+import pyarrow as pa
 import pyarrow.compute as pc
 from sklearn.preprocessing import normalize
 
@@ -17,7 +18,9 @@ from app.config import (
     N_SPANS,
     NPROBE,
     PROBE,
+    SPECTRUM_ORIGIN,
     SPECTRUM_SURVEYS,
+    SPECTRUM_TOKEN_WIDTH,
 )
 from app.search import (
     Query,
@@ -29,6 +32,7 @@ from app.search import (
     spectrum_cells,
     with_spectrum,
 )
+from app.spectra import spectra
 from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
 from scripts.benchmark import PATCHES, environment, queries, spec
 
@@ -82,19 +86,33 @@ def exact_ranking(
     return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
 
 
+def observed_spans(cell: pa.StructScalar) -> np.ndarray:
+    wavelength = np.asarray(cell["wavelength"].values)
+    first, last = np.floor(
+        (np.array([wavelength.min(), wavelength.max()]) - SPECTRUM_ORIGIN)
+        / SPECTRUM_TOKEN_WIDTH
+    ).astype(int)
+    return np.arange(max(first, 0), min(last, N_SPANS - 1) + 1)
+
+
 def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
     rng = np.random.default_rng(seed)
-    spectrum_galaxies = np.flatnonzero(with_spectrum())
+    cells = spectrum_cells(spectra())
     return [
         Query(
-            galaxy=int(rng.choice(spectrum_galaxies)),
+            galaxy=int(galaxy),
             p=tuple(
                 int(patch)
                 for patch in rng.choice(N_PATCHES, patch_count, replace=False)
             ),
-            s=tuple(int(span) for span in rng.choice(N_SPANS, SPANS, replace=False)),
+            s=tuple(
+                int(span)
+                for span in rng.choice(
+                    observed_spans(cells[int(galaxy)]), SPANS, replace=False
+                )
+            ),
         )
-        for _ in range(count)
+        for galaxy in rng.choice(np.flatnonzero(with_spectrum()), count)
     ]
 
 
