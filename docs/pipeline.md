@@ -2,6 +2,8 @@
 
 Five Modal jobs; the README has the commands. Embeddings first, then the index and the projections, which read `encoded`; cutouts and spectra read the source dataset directly and can run at any point. All of them share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts are written under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
+Each job writes an artifact to a `.partial` file beside it and replaces the artifact with that file only once the file is complete, so a run that fails leaves the previous artifact in place. A job that writes several artifacts replaces them one after another as it finishes.
+
 `generate_embeddings` and `generate_projections` need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
 
 ## The dataset
@@ -14,7 +16,7 @@ The script is not part of the deployed pipeline and needs `lsdb`, which is not a
 
 For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
 
-Galaxies are encoded one at a time and written in batches of 1024 rows to a `.partial` file per store, which replaces the store when the job finishes.
+Galaxies are encoded one at a time and written in batches of 1024 rows.
 
 Three stores are written, with the same columns:
 

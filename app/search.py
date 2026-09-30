@@ -24,6 +24,7 @@ from .config import (
     TRAIN_GALAXIES,
     GalaxyIndex,
     artifact,
+    staged,
 )
 
 
@@ -204,4 +205,5 @@ def generate_index() -> None:
     for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
         built.add(blocks(batch))
 
-    faiss.write_index(built, str(artifact("encoded_index")))
+    faiss.write_index(built, str(staged("encoded_index")))
+    staged("encoded_index").replace(artifact("encoded_index"))
