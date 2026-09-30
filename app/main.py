@@ -36,7 +36,7 @@ from .config import (
 )
 from .cutouts import cutout, cutouts
 from .search import Query as SearchQuery
-from .search import index, search, source, starts, with_spectrum
+from .search import index, search, source, starts
 from .spectra import spectra, spectrum
 
 if TYPE_CHECKING:
@@ -326,8 +326,6 @@ def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
     ),
 )
 def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
-    if query.spans and not with_spectrum()[query.galaxy]:
-        raise HTTPException(422, f"galaxy {query.galaxy} has no spectrum")
     galaxies, scores, values, spans = search(query, index=index())
 
     item = pa.field("item", pa.float32(), nullable=False)

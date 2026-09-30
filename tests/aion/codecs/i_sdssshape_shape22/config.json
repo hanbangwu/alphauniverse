@@ -1,0 +1,5 @@
+{
+  "codebook_size": 1024,
+  "modality": "i_sdssshape_shape22",
+  "reservoir_size": 100000
+}
