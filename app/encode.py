@@ -1,5 +1,4 @@
 from functools import cache
-from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
@@ -237,13 +236,11 @@ def generate_embeddings() -> None:
     }
 
     schemas: dict[str, pa.Schema] = {}
-    staging: dict[str, Path] = {}
     writers: dict[str, pq.ParquetWriter] = {}
     for role in STORES:
-        staging[role] = staged(role)
         schemas[role] = store_schema(role)
         writers[role] = pq.ParquetWriter(
-            staging[role], schemas[role], compression="zstd"
+            staged(role), schemas[role], compression="zstd"
         )
 
     for galaxy in tqdm(range(count), desc="encode"):
@@ -314,6 +311,7 @@ def generate_embeddings() -> None:
             for values in batch.values():
                 values.clear()
 
+    for writer in writers.values():
+        writer.close()
     for role in STORES:
-        writers[role].close()
-        staging[role].replace(artifact(role))
+        staged(role).replace(artifact(role))

@@ -14,6 +14,7 @@ pytest.importorskip("torch")
 umap_module = importlib.import_module("app.parametric_umap")
 
 LABELS = [1, None, 3, 0]
+PROJECTIONS = ("mean_points", "full_points")
 CACHES = (
     search_module.source,
     search_module.index,
@@ -43,12 +44,11 @@ def runs(
                 cache.cache_clear()
             tables = []
             for _ in range(2):
+                for role in PROJECTIONS:
+                    artifact(role).unlink()
                 umap_module.generate_projections()
                 tables.append(
-                    {
-                        role: pq.read_table(artifact(role))
-                        for role in ("mean_points", "full_points")
-                    }
+                    {role: pq.read_table(artifact(role)) for role in PROJECTIONS}
                 )
             yield tables
         finally:
@@ -75,3 +75,14 @@ def test_projections_are_deterministic(runs: list[dict[str, pa.Table]]) -> None:
 
     for role in first:
         assert first[role].equals(second[role])
+
+
+def test_a_failed_run_leaves_the_projections_in_place(
+    runs: list[dict[str, pa.Table]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(umap_module, "dataset", lambda *_: {})
+    with pytest.raises(KeyError):
+        umap_module.generate_projections()
+
+    for role, table in runs[-1].items():
+        assert pq.read_table(artifact(role)).equals(table)

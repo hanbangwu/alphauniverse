@@ -23,7 +23,7 @@ from app.config import (
     store_schema,
 )
 from app.search import blocks, source
-from scripts.fixture import TOKENS
+from scripts.fixture import TOKENS, build
 
 torch = pytest.importorskip("torch")
 encode_module = importlib.import_module("app.encode")
@@ -174,6 +174,30 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
             len(rows) * N_PATCHES + spectra * N_SPANS,
             DIM,
         )
+    finally:
+        for cache in CACHES:
+            cache.cache_clear()
+
+
+def test_a_failed_run_leaves_the_stores_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
+    monkeypatch.setattr(encode_module, "dataset", lambda *_: [{}])
+    for cache in CACHES:
+        cache.cache_clear()
+
+    try:
+        build(3)
+        stored = {
+            role: artifact(role).read_bytes()
+            for role in STORES
+            if artifact(role).exists()
+        }
+        with pytest.raises(KeyError):
+            encode_module.generate_embeddings()
+
+        assert {role: artifact(role).read_bytes() for role in stored} == stored
     finally:
         for cache in CACHES:
             cache.cache_clear()

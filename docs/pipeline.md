@@ -64,14 +64,14 @@ Wavelength is in Ångström. Samples the survey pads with (wavelength at or belo
 
 Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (500,000) embeddings uniformly from the whole store. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on that sample: UMAP's fuzzy simplicial set over the sample weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. The second pass projects every embedding.
 
-The trained projector is saved first, as **`parametric_umap`**, a `torch.save` of:
+The trained projector, **`parametric_umap`**, is a `torch.save` of:
 
 ```
 dim:   int         -- input width, DIM
 state: state_dict  -- ParametricUMAP weights
 ```
 
-Nothing reads it at serve time; the job reloads it to project. Then two point sets, both in the `POINTS` schema (`app/config.py`):
+Nothing reads it at serve time. The job saves it to its `.partial` file first and reloads it from there to project. Then it writes two point sets, both in the `POINTS` schema (`app/config.py`):
 
 ```
 galaxy: int32 not null
