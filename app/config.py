@@ -154,6 +154,11 @@ def artifact(role: str) -> Path:
     return build_dir() / f"{role}.{ARTIFACTS[role]}"
 
 
+def staged(role: str) -> Path:
+    path = artifact(role)
+    return path.with_name(f"{path.name}.partial")
+
+
 @cache
 def galaxy_count() -> int:
     return pq.read_metadata(artifact("mean_points")).num_rows
