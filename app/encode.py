@@ -58,6 +58,7 @@ from .config import (
     artifact,
     build_dir,
     device,
+    staged,
     store_schema,
 )
 from .dataset import dataset
@@ -239,11 +240,7 @@ def generate_embeddings() -> None:
     staging: dict[str, Path] = {}
     writers: dict[str, pq.ParquetWriter] = {}
     for role in STORES:
-        path = artifact(role)
-        path.unlink(missing_ok=True)
-        staging[role] = path.with_name(f"{path.name}.partial")
-        staging[role].unlink(missing_ok=True)
-
+        staging[role] = staged(role)
         schemas[role] = store_schema(role)
         writers[role] = pq.ParquetWriter(
             staging[role], schemas[role], compression="zstd"
