@@ -153,8 +153,7 @@ dependencies = [
 
 [package.dev-dependencies]
 build = [
-    { name = "polymathic-aion" },
-    { name = "safetensors" },
+    { name = "polymathic-aion", extra = ["torch"] },
     { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
@@ -181,8 +180,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 build = [
-    { name = "polymathic-aion", specifier = ">=0.0.2" },
-    { name = "safetensors", specifier = ">=0.8.0" },
+    { name = "polymathic-aion", extras = ["torch"], specifier = ">=0.0.2" },
     { name = "torch", specifier = ">=2.13.0" },
     { name = "torchvision", specifier = ">=0.28.0" },
     { name = "tqdm", specifier = ">=4.70.0" },
@@ -937,6 +935,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3e/9b/ddf3d02a8681f1b9ce52fda03d755dad6b74c4f8172304c4c8d2975450f9/huggingface_hub-1.27.0.tar.gz", hash = "sha256:c1fed40ea82a6b41b477f5243546549b792ae0a93abcea608cff66089bf8f8df", size = 942668, upload-time = "2026-08-07T12:48:05.161Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/de/d8/95b735e183957c1f26d94c52977f09d466d55119cbbc1558ea4975e4c216/huggingface_hub-1.27.0-py3-none-any.whl", hash = "sha256:7df6827c2f956c60fbaa64646e979e566db76f619dd0a9729dfb8c5a3eb4f68d", size = 784926, upload-time = "2026-08-07T12:48:02.905Z" },
+]
+
+[package.optional-dependencies]
+torch = [
+    { name = "safetensors", extra = ["torch"] },
+    { name = "torch" },
 ]
 
 [[package]]
@@ -1702,6 +1706,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/ff/8606b7a33e700bc47e27ffdc9cf13b920f469aeeefd9b3a8076eb3c5ad41/polymathic_aion-0.0.2-py3-none-any.whl", hash = "sha256:d6d5dbcf58244516df981cd530a1e07e02bab5c48be30209c4b3272045b58bbd", size = 88952, upload-time = "2025-06-27T19:43:58.346Z" },
 ]
 
+[package.optional-dependencies]
+torch = [
+    { name = "huggingface-hub", extra = ["torch"] },
+    { name = "torch" },
+]
+
 [[package]]
 name = "propcache"
 version = "0.5.2"
@@ -2279,6 +2289,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8e/3f/73ccf82579412b4a71c4ca673f10b5f1f888d7cf5af7fe24f27d30307be4/safetensors-0.8.0-cp310-abi3-win32.whl", hash = "sha256:2ddf52eac562eda224f99acfa7889d02968c1fd59a5b011ae7d8137c37e9c02d", size = 342401, upload-time = "2026-06-09T07:52:28.895Z" },
     { url = "https://files.pythonhosted.org/packages/1b/6d/3fba214c1e5e0f69991677ec3bc17023f0421776975e1de0c682dca475e2/safetensors-0.8.0-cp310-abi3-win_amd64.whl", hash = "sha256:096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f", size = 355540, upload-time = "2026-06-09T07:52:27.832Z" },
     { url = "https://files.pythonhosted.org/packages/8d/fc/7eedc3510d97878876e32774eebbeb61c43f148a96e915c84229a3e967aa/safetensors-0.8.0-cp310-abi3-win_arm64.whl", hash = "sha256:f7838e5135a406ad3e02efdcb8cf2e5397d368b0154537c4fec682dbc544d452", size = 340500, upload-time = "2026-06-09T07:52:26.745Z" },
+]
+
+[package.optional-dependencies]
+torch = [
+    { name = "numpy" },
+    { name = "torch" },
 ]
 
 [[package]]
