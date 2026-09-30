@@ -31,7 +31,7 @@ The torch modules have their own tests, which skip unless the `build` group is i
 uv run --group build pytest tests/test_encode.py tests/test_parametric_umap.py
 ```
 
-They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base` at the revision in `tests/aion/REVISION`, so no test downloads weights. `test_copied_configs_come_from_the_pinned_revision` fails when that revision is not `AION_REVISION`, so moving the pin means copying the configs again. `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, to check that the result is deterministic. `test_padded_sdss_spectra_keep_their_flux` is marked `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input, and once that is fixed the test passes and the mark has to go.
+They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base` at the revision in `tests/aion/REVISION`, so no test downloads weights. `test_copied_configs_come_from_the_pinned_revision` fails when that revision is not `AION_REVISION`; moving the pin means copying the configs again and updating that file. `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, to check that the result is deterministic. `test_padded_sdss_spectra_keep_their_flux` is marked `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input, and once that is fixed the test passes and the mark has to go.
 
 ## Benchmarks
 

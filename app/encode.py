@@ -100,14 +100,12 @@ HSC_SCALARS = (
 
 @cache
 def codec(modality: type[Modality]) -> Codec:
-    loaded = (
+    return (
         MODALITY_CODEC_MAPPING[modality]
         .from_pretrained(AION_REPOSITORY, modality=modality, revision=AION_REVISION)
         .to(device())
-        .eval()
+        .requires_grad_(False)
     )
-    loaded.requires_grad_(False)
-    return loaded
 
 
 @cache

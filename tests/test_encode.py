@@ -1,4 +1,3 @@
-import functools
 import importlib
 import json
 from collections.abc import Iterator
@@ -78,24 +77,25 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
 
 @pytest.fixture(scope="module", autouse=True)
 def random_weights() -> Iterator[None]:
-    @functools.cache
-    def load(modality: type) -> object:
+    def load(
+        codec_class: type, repository: str, modality: type, revision: str
+    ) -> object:
         torch.manual_seed(0)
         path = CONFIGS / "codecs" / modality.name / "config.json"
-        codec_class = encode_module.MODALITY_CODEC_MAPPING[modality]
-        loaded = codec_class(**json.loads(path.read_text())).to(device()).eval()
-        loaded.requires_grad_(False)
-        return loaded
+        return codec_class(**json.loads(path.read_text())).eval()
 
     torch.manual_seed(0)
     config = json.loads((CONFIGS / "config.json").read_text())
     network = encode_module.AION(config | {"encoder_depth": 1, "decoder_depth": 1})
     network = network.to(device()).eval()
     network.requires_grad_(False)
+    encode_module.codec.cache_clear()
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(encode_module, "codec", load)
+        for codec_class in set(encode_module.MODALITY_CODEC_MAPPING.values()):
+            patch.setattr(codec_class, "from_pretrained", classmethod(load))
         patch.setattr(encode_module, "model", lambda: network)
         yield
+    encode_module.codec.cache_clear()
 
 
 def test_copied_configs_come_from_the_pinned_revision() -> None:
