@@ -1,11 +1,43 @@
-from typing import NamedTuple
+import json
+import resource
+import subprocess
+import time
+from datetime import UTC, datetime
+from typing import Any, NamedTuple
 
+import modal
 import numpy as np
 import pyarrow.compute as pc
 from sklearn.preprocessing import normalize
 
-from app.config import ANCHOR, N_PATCHES, N_SPANS, SPECTRUM_SURVEYS
-from app.search import Query, patches, source, spectral, spectrum_cells
+from app.config import (
+    ANCHOR,
+    DATASET_REVISION,
+    N_PATCHES,
+    N_SPANS,
+    NPROBE,
+    PROBE,
+    SPECTRUM_SURVEYS,
+    galaxy_count,
+)
+from app.search import (
+    Query,
+    index,
+    patches,
+    search,
+    source,
+    spectral,
+    spectrum_cells,
+    with_spectrum,
+)
+from modal_app import CACHE_PATH, build_image, cache_volume
+from scripts.benchmark import environment, spec
+
+app = modal.App("alphauniverse-recall")
+image = build_image.add_local_python_source("modal_app")
+
+MATCHES = 32
+TOKENS = 4
 
 
 class Corpus(NamedTuple):
@@ -49,3 +81,90 @@ def exact_ranking(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
     return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
+
+
+def queries(per_kind: int) -> dict[str, list[Query]]:
+    rng = np.random.default_rng(0)
+    spectrum_galaxies = np.flatnonzero(with_spectrum())
+
+    def tokens(width: int) -> tuple[int, ...]:
+        return tuple(int(token) for token in rng.choice(width, TOKENS, replace=False))
+
+    def draw(kind: str) -> Query:
+        if kind == "patches":
+            return Query(
+                galaxy=int(rng.integers(galaxy_count())),
+                p=tokens(N_PATCHES),
+                matches=MATCHES,
+            )
+        galaxy = int(rng.choice(spectrum_galaxies))
+        if kind == "spans":
+            return Query(galaxy=galaxy, s=tokens(N_SPANS), matches=MATCHES)
+        return Query(
+            galaxy=galaxy, p=tokens(N_PATCHES), s=tokens(N_SPANS), matches=MATCHES
+        )
+
+    return {
+        kind: [draw(kind) for _ in range(per_kind)]
+        for kind in ("patches", "spans", "both")
+    }
+
+
+def recall(per_kind: int) -> dict[str, Any]:
+    start = time.perf_counter()
+    reference = corpus()
+    loaded = time.perf_counter() - start
+    built = index()
+
+    measured = {}
+    for kind, batch in queries(per_kind).items():
+        fractions = []
+        for query in batch:
+            expected = exact_ranking(query, reference)[0][1:]
+            found = search(query, index=built)[0][1:]
+            fractions.append(len(np.intersect1d(found, expected)) / len(expected))
+        measured[kind] = {
+            "queries": len(fractions),
+            "mean": round(float(np.mean(fractions)), 4),
+            "min": round(float(np.min(fractions)), 4),
+            "all_found": round(float(np.mean(np.equal(fractions, 1))), 4),
+        }
+
+    return {
+        "environment": environment(),
+        "probe": PROBE,
+        "nprobe": NPROBE,
+        "matches": MATCHES,
+        "tokens_per_query": TOKENS,
+        "corpus_load_s": round(loaded, 1),
+        "total_s": round(time.perf_counter() - start, 1),
+        "peak_rss_gb": round(
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 / 1e9, 2
+        ),
+        "recall": measured,
+    }
+
+
+@app.function(
+    image=image,
+    cpu=16,
+    memory=(32 * 1024, 128 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume.read_only()},
+)
+def measure(per_kind: int) -> dict[str, Any]:
+    return recall(per_kind)
+
+
+@app.local_entrypoint()
+def main(per_kind: int = 100) -> None:
+    report = {
+        "commit": subprocess.check_output(
+            ["git", "describe", "--always", "--dirty"], text=True
+        ).strip(),
+        "revision": DATASET_REVISION,
+        "date": datetime.now(UTC).isoformat(timespec="seconds"),
+        "job": spec(measure),
+        **measure.remote(per_kind),
+    }
+    print(json.dumps(report, indent=2))

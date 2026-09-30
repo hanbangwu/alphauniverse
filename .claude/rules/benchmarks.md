@@ -1,6 +1,7 @@
 ---
 paths:
   - "scripts/benchmark.py"
+  - "scripts/recall.py"
   - "docs/performance.md"
   - "modal_app.py"
 ---

@@ -44,7 +44,14 @@ The benchmark measures the production artifacts on the Modal volume, never the f
 
 Output is JSON recording the commit, dataset revision, date, the Modal spec of server and client, and the thread configuration. It never runs in CI.
 
-Read `docs/performance.md` before drawing a conclusion from a benchmark run.
+```sh
+uv run modal run -m scripts.recall
+uv run modal run -m scripts.recall --per-kind 50
+```
+
+`scripts/recall.py` measures how often `search()` finds the galaxies an exact search ranks highest, on the production artifacts. A container on the build image, with the build jobs' CPU and memory and the volume mounted read-only, loads every patch and span embedding once. It then runs `--per-kind` queries (100 by default) of each kind, drawn with a fixed seed: 4 patches, 4 spans, and 4 of each, at 32 matches. A query's recall is the share of `exact_ranking`'s 32 galaxies that `search()` also returns, with `search()` at the served `PROBE` and `NPROBE`. The report gives each kind's mean, its minimum and the share of queries that found all 32. Like the benchmark's, it records the commit, dataset revision, date, the container's Modal spec and the thread configuration, and adds the corpus load time, the total time and the peak memory.
+
+Read `docs/performance.md` before drawing a conclusion from a benchmark or recall run.
 
 ## Frontend
 
