@@ -19,10 +19,11 @@ uv run ruff format app scripts tests modal_app.py
 
 `tests/conftest.py` builds the tree once per session.
 
-Two tests in `tests/test_search.py` check what the shared tree cannot show on its own:
+Three tests in `tests/test_search.py` check what the shared tree cannot show on its own:
 
 - `test_approximate_ranking_agrees_with_exact` compares `search()` with a brute-force ranking over every token. The brute force follows `search()` except for the candidate step, scores the float32 embeddings rather than the index's fp16 copies, and holds the whole corpus in memory, so it only runs at fixture scale. The test asks for fewer matches than the corpus holds, so the candidate step has to choose, and checks the galaxies, their order, and each score to within `SCORE_TOLERANCE`. It first asserts that the exact scores it compares are more than twice that tolerance apart, so rounding within the tolerance cannot reorder them. It also checks each galaxy's patch and span score maps to within the same tolerance, with a null span map where the galaxy has no spectrum: a map entry is a token's score, and the galaxy's score is the largest of them. The fixture's clusters are tight enough that the index finds the tokens the brute force ranks highest, so the two agree; on production data they would not.
 - `test_ids_stay_contiguous_across_add_batches` builds its own index with one galaxy per `add()` call, including galaxies without a spectrum, because the shared tree is smaller than `BATCH` and goes in with a single call. A reordered or dropped batch would shift every galaxy id in every `/similarity` response without an error.
+- `test_rank_keeps_the_query_first_and_each_row_together` calls `rank()` on arrays built in the test, because on the shared tree `candidates()` already returns every query's galaxies in ranked order, so `rank()` never reorders them. In them the query galaxy scores below two others, and a galaxy without a spectrum, whose patch scores are all negative, moves from the middle to the end.
 
 The torch modules have their own tests, which skip unless the `build` group is installed:
 
