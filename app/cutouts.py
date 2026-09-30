@@ -14,6 +14,7 @@ from .config import (
     RGB_COLUMN,
     artifact,
     build_dir,
+    staged,
 )
 
 
@@ -39,8 +40,9 @@ def write_cutouts(pngs: list[bytes]) -> None:
             },
             schema=CUTOUTS,
         ),
-        artifact("cutouts"),
+        staged("cutouts"),
     )
+    staged("cutouts").replace(artifact("cutouts"))
 
 
 def generate_cutouts() -> None:

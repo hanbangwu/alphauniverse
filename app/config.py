@@ -159,6 +159,11 @@ def artifact(role: str) -> Path:
     return build_dir() / f"{role}.{ARTIFACTS[role]}"
 
 
+def staged(role: str) -> Path:
+    path = artifact(role)
+    return path.with_name(f"{path.name}.partial")
+
+
 WANDB_ENTITY = "aistrophysics"
 WANDB_PROJECT = "alphaUniverse"
 WANDB_MODE = os.environ.get(

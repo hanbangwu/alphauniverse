@@ -2,6 +2,8 @@
 
 Five Modal jobs; the README has the commands. Embeddings first, then the index and the projections, which read `encoded`; cutouts and spectra read the source dataset directly and can run at any point. All of them share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts are written under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
+Each job writes an artifact to a `.partial` file beside it and replaces the artifact with that file only once the file is complete, so a run that fails leaves the previous artifact in place. A job that writes several artifacts replaces them one after another as it finishes.
+
 `generate_embeddings` and `generate_projections` need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
 
 ## The dataset
@@ -16,7 +18,7 @@ For each galaxy: tokenise every modality it has, run all its tokens through the 
 
 The model and every codec load from `polymathic-ai/aion-base` at the commit `AION_REVISION` in `app/config.py`, so a push to that repository changes nothing here until the pin moves.
 
-The job deletes the existing stores when it starts. Galaxies are encoded one at a time and written in batches of 1024 rows to a `.partial` file per store, which replaces the store when the job finishes.
+Galaxies are encoded one at a time and written in batches of 1024 rows.
 
 Three stores are written, with the same columns:
 
@@ -64,14 +66,14 @@ Wavelength is in Ångström. Samples the survey pads with (wavelength at or belo
 
 Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (500,000) embeddings uniformly from the whole store. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on that sample: UMAP's fuzzy simplicial set over the sample weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. The second pass projects every embedding.
 
-The trained projector is saved first, as **`parametric_umap`**, a `torch.save` of:
+The trained projector, **`parametric_umap`**, is a `torch.save` of:
 
 ```
 dim:   int         -- input width, DIM
 state: state_dict  -- ParametricUMAP weights
 ```
 
-Nothing reads it at serve time; the job reloads it to project. Then two point sets, both in the `POINTS` schema (`app/config.py`):
+Nothing reads it at serve time. The job saves it to its `.partial` file first and reloads it from there to project. Then it writes two point sets, both in the `POINTS` schema (`app/config.py`):
 
 ```
 galaxy: int32 not null
