@@ -16,6 +16,8 @@ The script is not part of the deployed pipeline and needs `lsdb`, which is not a
 
 For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
 
+The model and every codec load from `polymathic-ai/aion-base` at the commit `AION_REVISION` in `app/config.py`, so a push to that repository changes nothing here until the pin moves.
+
 Galaxies are encoded one at a time and written in batches of 1024 rows.
 
 Three stores are written, with the same columns:

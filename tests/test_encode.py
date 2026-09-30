@@ -9,6 +9,8 @@ import pytest
 
 from app import search as search_module
 from app.config import (
+    AION_REPOSITORY,
+    AION_REVISION,
     ANCHOR,
     CROP_PIXELS,
     DIM,
@@ -75,7 +77,9 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
 
 @pytest.fixture(scope="module", autouse=True)
 def random_weights() -> Iterator[None]:
-    def load(codec_class: type, modality: type) -> object:
+    def load(
+        codec_class: type, repository: str, modality: type, revision: str
+    ) -> object:
         torch.manual_seed(0)
         path = CONFIGS / "codecs" / modality.name / "config.json"
         return codec_class(**json.loads(path.read_text())).eval()
@@ -87,12 +91,27 @@ def random_weights() -> Iterator[None]:
     network.requires_grad_(False)
     encode_module.codec.cache_clear()
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(
-            encode_module.CodecManager, "_load_codec_from_hf", staticmethod(load)
-        )
+        for codec_class in set(encode_module.MODALITY_CODEC_MAPPING.values()):
+            patch.setattr(codec_class, "from_pretrained", classmethod(load))
         patch.setattr(encode_module, "model", lambda: network)
         yield
     encode_module.codec.cache_clear()
+
+
+def test_copied_configs_come_from_the_pinned_revision() -> None:
+    copied = (CONFIGS / "REVISION").read_text().split()
+
+    assert copied == [AION_REPOSITORY, AION_REVISION]
+
+
+def test_saved_weights_load_back_unchanged(tmp_path: Path) -> None:
+    network = encode_module.model()
+    network.save_pretrained(tmp_path)
+    loaded = encode_module.AION.from_pretrained(tmp_path).to(device())
+
+    torch.testing.assert_close(
+        loaded.state_dict(), network.state_dict(), rtol=0, atol=0
+    )
 
 
 def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
