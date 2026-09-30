@@ -10,6 +10,8 @@ import pytest
 
 from app import search as search_module
 from app.config import (
+    AION_REPOSITORY,
+    AION_REVISION,
     ANCHOR,
     CROP_PIXELS,
     DIM,
@@ -94,6 +96,12 @@ def random_weights() -> Iterator[None]:
         patch.setattr(encode_module, "codec", load)
         patch.setattr(encode_module, "model", lambda: network)
         yield
+
+
+def test_copied_configs_come_from_the_pinned_revision() -> None:
+    copied = (CONFIGS / "REVISION").read_text().split()
+
+    assert copied == [AION_REPOSITORY, AION_REVISION]
 
 
 def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
