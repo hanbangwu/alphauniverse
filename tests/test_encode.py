@@ -1,3 +1,4 @@
+import functools
 import importlib
 import json
 from collections.abc import Iterator
@@ -75,24 +76,24 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
 
 @pytest.fixture(scope="module", autouse=True)
 def random_weights() -> Iterator[None]:
-    def load(codec_class: type, modality: type) -> object:
+    @functools.cache
+    def load(modality: type) -> object:
         torch.manual_seed(0)
         path = CONFIGS / "codecs" / modality.name / "config.json"
-        return codec_class(**json.loads(path.read_text())).eval()
+        codec_class = encode_module.MODALITY_CODEC_MAPPING[modality]
+        loaded = codec_class(**json.loads(path.read_text())).to(device()).eval()
+        loaded.requires_grad_(False)
+        return loaded
 
     torch.manual_seed(0)
     config = json.loads((CONFIGS / "config.json").read_text())
     network = encode_module.AION(config | {"encoder_depth": 1, "decoder_depth": 1})
     network = network.to(device()).eval()
     network.requires_grad_(False)
-    encode_module.codec.cache_clear()
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(
-            encode_module.CodecManager, "_load_codec_from_hf", staticmethod(load)
-        )
+        patch.setattr(encode_module, "codec", load)
         patch.setattr(encode_module, "model", lambda: network)
         yield
-    encode_module.codec.cache_clear()
 
 
 def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
