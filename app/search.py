@@ -47,6 +47,12 @@ class Query(BaseModel):
             raise ValueError("select at least one patch or span")
         return self
 
+    @model_validator(mode="after")
+    def spans_need_a_spectrum(self) -> Self:
+        if self.spans and not with_spectrum()[self.galaxy]:
+            raise ValueError(f"galaxy {self.galaxy} has no spectrum")
+        return self
+
 
 @cache
 def source(role: str) -> ds.Dataset:

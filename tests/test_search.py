@@ -45,27 +45,34 @@ def built(tree) -> faiss.Index:
     return index()
 
 
-def exact_ranking(query: Query) -> tuple[np.ndarray, np.ndarray]:
+def exact_ranking(
+    query: Query,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
     spectra = spectrum_cells(cells)
-    owners = np.repeat(
-        np.flatnonzero(pc.is_valid(spectra).to_numpy(zero_copy_only=False)), N_SPANS
+    spectrum_galaxies = np.flatnonzero(
+        pc.is_valid(spectra).to_numpy(zero_copy_only=False)
     )
+    owners = np.repeat(spectrum_galaxies, N_SPANS)
     patch_rows = patches(cells.column(ANCHOR).combine_chunks())
     span_rows = spectral(spectra.drop_null())
-    chosen = []
+    query_rows = []
     if query.patches:
-        chosen.append(patch_rows[query.galaxy * N_PATCHES + np.asarray(query.patches)])
+        query_rows.append(
+            patch_rows[query.galaxy * N_PATCHES + np.asarray(query.patches)]
+        )
     if query.spans:
-        chosen.append(span_rows[owners == query.galaxy][np.asarray(query.spans)])
-    direction = normalize(np.concatenate(chosen).mean(axis=0, keepdims=True))
-    scores = (patch_rows @ direction.T).reshape(-1, N_PATCHES).max(axis=1)
-    np.maximum.at(scores, owners, (span_rows @ direction.T).reshape(-1))
+        query_rows.append(span_rows[owners == query.galaxy][np.asarray(query.spans)])
+    direction = normalize(np.concatenate(query_rows).mean(axis=0, keepdims=True))
+    patch_maps = (patch_rows @ direction.T).reshape(-1, N_PATCHES)
+    spectral_maps = np.full((len(patch_maps), N_SPANS), np.nan, dtype=np.float32)
+    spectral_maps[spectrum_galaxies] = (span_rows @ direction.T).reshape(-1, N_SPANS)
+    scores = np.fmax(patch_maps.max(axis=1), spectral_maps.max(axis=1))
     order = np.argsort(-scores, kind="stable")
     chosen = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
-    return chosen, scores[chosen]
+    return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
 
 
 def test_index_holds_every_patch_and_every_span(
@@ -162,6 +169,36 @@ def test_stages_compose_into_search(built: faiss.Index) -> None:
         np.testing.assert_array_equal(left, right)
 
 
+def test_rank_keeps_the_query_first_and_each_row_together() -> None:
+    order = np.array([7, 3, 9, 1, 5], dtype=np.int32)
+    patch_scores = np.array(
+        [
+            [0.5, 0.6, 0.1],
+            [0.2, 0.1, 0.0],
+            [-0.4, -0.2, -0.3],
+            [0.4, 0.7, 0.2],
+            [0.9, 0.5, 0.3],
+        ],
+        dtype=np.float32,
+    )
+    span_scores = np.array(
+        [[0.1, 0.2], [0.3, 0.25], [np.nan, np.nan], [0.8, 0.0], [0.1, 0.4]],
+        dtype=np.float32,
+    )
+    rows = [0, 4, 3, 1, 2]
+    expected = (
+        order[rows],
+        np.array([0.6, 0.9, 0.8, 0.3, -0.2], dtype=np.float32),
+        patch_scores[rows],
+        span_scores[rows],
+    )
+
+    for found, wanted in zip(
+        rank(order, patch_scores, span_scores), expected, strict=True
+    ):
+        np.testing.assert_array_equal(found, wanted, strict=True)
+
+
 def test_asking_for_every_galaxy_returns_every_galaxy(
     built: faiss.Index, galaxies: int
 ) -> None:
@@ -188,25 +225,30 @@ def test_a_search_that_finds_too_few_looks_further(
 
 
 @pytest.mark.parametrize(
-    "query",
+    "fields",
     [
-        Query(galaxy=0, p=(64, 65), matches=2),
-        Query(galaxy=4, p=(64, 65), matches=2),
-        Query(galaxy=9, s=(40, 41), matches=2),
-        Query(galaxy=6, p=(3,), s=(100,), matches=2),
+        {"galaxy": 0, "p": (64, 65), "matches": 2},
+        {"galaxy": 4, "p": (64, 65), "matches": 2},
+        {"galaxy": 9, "s": (40, 41), "matches": 2},
+        {"galaxy": 6, "p": (3,), "s": (100,), "matches": 2},
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
-    built: faiss.Index, query: Query
+    built: faiss.Index, fields: dict[str, int | tuple[int, ...]]
 ) -> None:
-    expected, expected_scores = exact_ranking(
+    query = Query.model_validate(fields)
+    expected, expected_scores, expected_maps, expected_spectral_maps = exact_ranking(
         query.model_copy(update={"matches": query.matches + 1})
     )
-    found, found_scores, _, _ = search(query, index=built)
+    found, found_scores, maps, spectral_maps = search(query, index=built)
 
     assert np.all(-np.diff(expected_scores[1:]) > 2 * SCORE_TOLERANCE)
     np.testing.assert_array_equal(found, expected[:-1])
     np.testing.assert_allclose(found_scores, expected_scores[:-1], atol=SCORE_TOLERANCE)
+    np.testing.assert_allclose(maps, expected_maps[:-1], atol=SCORE_TOLERANCE)
+    np.testing.assert_allclose(
+        spectral_maps, expected_spectral_maps[:-1], atol=SCORE_TOLERANCE
+    )
 
 
 def test_ids_stay_contiguous_across_add_batches(
