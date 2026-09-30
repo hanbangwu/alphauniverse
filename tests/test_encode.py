@@ -104,6 +104,16 @@ def test_copied_configs_come_from_the_pinned_revision() -> None:
     assert copied == [AION_REPOSITORY, AION_REVISION]
 
 
+def test_saved_weights_load_back_unchanged(tmp_path: Path) -> None:
+    network = encode_module.model()
+    network.save_pretrained(tmp_path)
+    loaded = encode_module.AION.from_pretrained(tmp_path).to(device())
+
+    torch.testing.assert_close(
+        loaded.state_dict(), network.state_dict(), rtol=0, atol=0
+    )
+
+
 def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
     groups = encode_module.tokenize(galaxy(0, hsc=True, desi=True, sdss=True))
 
