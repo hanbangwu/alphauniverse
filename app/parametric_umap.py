@@ -24,6 +24,7 @@ from .config import (
     artifact,
     device,
     points,
+    staged,
 )
 from .dataset import dataset
 from .search import source
@@ -135,7 +136,7 @@ def fit_parametric_umap(sampled: np.ndarray) -> None:
             run.log({"epoch": epoch, "train/loss": total.item() / steps})
 
     model.eval()
-    weights = artifact("parametric_umap")
+    weights = staged("parametric_umap")
     weights.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"dim": rows.shape[1], "state": model.state_dict()}, weights)
 
@@ -164,11 +165,6 @@ def _stream(
 
 
 def generate_projections() -> None:
-    for role in ("parametric_umap", "mean_points", "full_points"):
-        path = artifact(role)
-        path.unlink(missing_ok=True)
-        path.with_name(f"{path.name}.partial").unlink(missing_ok=True)
-
     data = dataset(DATASET_ID, DATASET_REVISION)
     raw = np.asarray(data[FLAG_SURVEYS["gz10"]], dtype=np.float64)
     category = pa.array(np.nan_to_num(raw).astype(dtype=np.uint8), mask=np.isnan(raw))
@@ -219,24 +215,23 @@ def generate_projections() -> None:
     fit_parametric_umap(sampled)
     del sampled
 
-    saved = torch.load(artifact("parametric_umap"), map_location="cpu")
+    saved = torch.load(staged("parametric_umap"), map_location="cpu")
     model = ParametricUMAP(saved["dim"])
     model.load_state_dict(saved["state"])
     model.to(device()).eval()
 
     pq.write_table(
         points(galaxy, model.transform(mean), category),
-        artifact("mean_points"),
+        staged("mean_points"),
         compression="zstd",
     )
 
-    full_points = artifact("full_points")
-    staging = full_points.with_name(f"{full_points.name}.partial")
-    with pq.ParquetWriter(staging, POINTS, compression="zstd") as writer:
+    with pq.ParquetWriter(staged("full_points"), POINTS, compression="zstd") as writer:
         for galaxies, offsets, values in tqdm(_stream(counts), desc="project"):
             owner = np.repeat(galaxies, np.diff(offsets))
             writer.write_table(
                 points(owner, model.transform(values), category.take(owner))
             )
 
-    staging.replace(full_points)
+    for role in ("parametric_umap", "mean_points", "full_points"):
+        staged(role).replace(artifact(role))
