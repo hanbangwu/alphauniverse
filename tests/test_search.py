@@ -2,14 +2,11 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import pytest
-from sklearn.preprocessing import normalize
 
 from app import search as search_module
 from app.config import (
-    ANCHOR,
     N_PATCHES,
     N_SPANS,
     SPECTRUM_SURVEYS,
@@ -34,6 +31,7 @@ from app.search import (
     with_spectrum,
 )
 from scripts.fixture import build
+from scripts.recall import Corpus, corpus, exact_ranking
 
 CACHES = (source, index, with_spectrum, starts)
 SCORE_TOLERANCE = 1e-4
@@ -44,34 +42,9 @@ def built(tree) -> faiss.Index:
     return index()
 
 
-def exact_ranking(
-    query: Query,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
-    spectra = spectrum_cells(cells)
-    spectrum_galaxies = np.flatnonzero(
-        pc.is_valid(spectra).to_numpy(zero_copy_only=False)
-    )
-    owners = np.repeat(spectrum_galaxies, N_SPANS)
-    patch_rows = patches(cells.column(ANCHOR).combine_chunks())
-    span_rows = spectral(spectra.drop_null())
-    query_rows = []
-    if query.patches:
-        query_rows.append(
-            patch_rows[query.galaxy * N_PATCHES + np.asarray(query.patches)]
-        )
-    if query.spans:
-        query_rows.append(span_rows[owners == query.galaxy][np.asarray(query.spans)])
-    direction = normalize(np.concatenate(query_rows).mean(axis=0, keepdims=True))
-    patch_maps = (patch_rows @ direction.T).reshape(-1, N_PATCHES)
-    spectral_maps = np.full((len(patch_maps), N_SPANS), np.nan, dtype=np.float32)
-    spectral_maps[spectrum_galaxies] = (span_rows @ direction.T).reshape(-1, N_SPANS)
-    scores = np.fmax(patch_maps.max(axis=1), spectral_maps.max(axis=1))
-    order = np.argsort(-scores, kind="stable")
-    chosen = np.concatenate(
-        ([query.galaxy], order[order != query.galaxy][: query.matches])
-    )
-    return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
+@pytest.fixture(scope="module")
+def reference(tree) -> Corpus:
+    return corpus()
 
 
 def test_index_holds_every_patch_and_every_span(
@@ -217,11 +190,13 @@ def test_asking_for_every_galaxy_returns_every_galaxy(
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
-    built: faiss.Index, fields: dict[str, int | tuple[int, ...]]
+    built: faiss.Index,
+    reference: Corpus,
+    fields: dict[str, int | tuple[int, ...]],
 ) -> None:
     query = Query.model_validate(fields)
     expected, expected_scores, expected_maps, expected_spectral_maps = exact_ranking(
-        query.model_copy(update={"matches": query.matches + 1})
+        query.model_copy(update={"matches": query.matches + 1}), reference
     )
     found, found_scores, maps, spectral_maps = search(query, index=built)
 

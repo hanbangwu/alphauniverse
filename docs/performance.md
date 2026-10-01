@@ -123,7 +123,7 @@ Current design targets COSMOS scale. Where it stops:
 | Cold start                   | 19.5 s              | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
 | `full_points` in the browser | 180 MB              | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
 | Cutouts in memory            | 215 MB              | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
-| Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                                                                 |
+| Exact-search reference       | whole corpus in RAM | when it outgrows the recall job's 128 GiB; its peak memory and production recall are unmeasured until `scripts/recall.py` runs        |
 | Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap                                             |
 
 None of these need solving now. All of them should be checked before a change assumes they are not there.

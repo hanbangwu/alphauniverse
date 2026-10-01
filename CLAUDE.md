@@ -19,6 +19,7 @@ uv run ruff check app scripts tests modal_app.py    # lint
 uv run ruff format app scripts tests modal_app.py   # format
 uv run python -m scripts.fixture --galaxies 12      # build fixture tree
 uv run modal run -m scripts.benchmark               # measure the serving path on Modal
+uv run modal run -m scripts.recall                  # measure production recall on Modal
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
 
 cd frontend
