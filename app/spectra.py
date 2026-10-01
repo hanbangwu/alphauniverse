@@ -12,6 +12,7 @@ from .config import (
     SPECTRUM_SURVEYS,
     artifact,
     build_dir,
+    staged,
 )
 
 
@@ -37,9 +38,10 @@ def write_spectra(cells: dict[str, list[dict[str, np.ndarray] | None]]) -> None:
             },
             schema=SPECTRA,
         ),
-        artifact("spectra"),
+        staged("spectra"),
         compression="zstd",
     )
+    staged("spectra").replace(artifact("spectra"))
 
 
 def generate_spectra() -> None:

@@ -17,7 +17,7 @@ import httpx
 import modal
 import numpy as np
 
-from app.config import ARTIFACTS, DATASET_REVISION, GALAXIES, N_PATCHES
+from app.config import ARTIFACTS, DATASET_REVISION, N_PATCHES, galaxy_count
 from app.cutouts import cutouts
 from app.main import labels
 from app.search import (
@@ -68,7 +68,7 @@ def queries(count: int, patch_count: int, matches: int) -> list[Query]:
     rng = np.random.default_rng(0)
     return [
         Query(
-            galaxy=int(rng.integers(GALAXIES)),
+            galaxy=int(rng.integers(galaxy_count())),
             p=tuple(
                 int(patch)
                 for patch in rng.choice(N_PATCHES, patch_count, replace=False)
@@ -108,9 +108,6 @@ def environment() -> dict[str, Any]:
 def client(url: str, runs: int) -> dict[str, Any]:
     rng = np.random.default_rng(0)
 
-    def galaxy() -> int:
-        return int(rng.integers(GALAXIES))
-
     with httpx.Client(base_url=url, timeout=None) as session:
 
         def get(path: str, **params: Any) -> None:
@@ -129,6 +126,11 @@ def client(url: str, runs: int) -> dict[str, Any]:
             )
 
         cold_meta = round(elapsed(lambda: get("/meta")), 3)
+        galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
+
+        def galaxy() -> int:
+            return int(rng.integers(galaxies))
+
         cold_similarity = round(elapsed(lambda: similarity(32)), 3)
 
         calls = {

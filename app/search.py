@@ -24,6 +24,7 @@ from .config import (
     TRAIN_GALAXIES,
     GalaxyIndex,
     artifact,
+    staged,
 )
 
 
@@ -47,6 +48,12 @@ class Query(BaseModel):
             raise ValueError("select at least one patch or span")
         return self
 
+    @model_validator(mode="after")
+    def spans_need_a_spectrum(self) -> Self:
+        if self.spans and not with_spectrum()[self.galaxy]:
+            raise ValueError(f"galaxy {self.galaxy} has no spectrum")
+        return self
+
 
 @cache
 def source(role: str) -> ds.Dataset:
@@ -55,7 +62,10 @@ def source(role: str) -> ds.Dataset:
 
 @cache
 def with_spectrum() -> np.ndarray:
-    table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
+    table = source("tokens").to_table(columns=["galaxy", *SPECTRUM_SURVEYS])
+    galaxies = table.column("galaxy").to_numpy()
+    if not np.array_equal(galaxies, np.arange(len(galaxies))):
+        raise ValueError(f"{artifact('tokens')} is not in galaxy order")
     return np.logical_or.reduce(
         [
             pc.is_valid(table.column(survey)).to_numpy(zero_copy_only=False)
@@ -198,4 +208,5 @@ def generate_index() -> None:
     for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
         built.add(blocks(batch))
 
-    faiss.write_index(built, str(artifact("encoded_index")))
+    faiss.write_index(built, str(staged("encoded_index")))
+    staged("encoded_index").replace(artifact("encoded_index"))

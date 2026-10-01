@@ -19,6 +19,7 @@ uv run ruff check app scripts tests modal_app.py    # lint
 uv run ruff format app scripts tests modal_app.py   # format
 uv run python -m scripts.fixture --galaxies 12      # build fixture tree
 uv run modal run -m scripts.benchmark               # measure the serving path on Modal
+uv run modal run -m scripts.recall                  # measure production recall on Modal
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
 
 cd frontend
@@ -37,7 +38,8 @@ bun run lint                                        # prettier + eslint
 - Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
 - Before opening a pull request that changes code, check `README.md` and `docs/` for anything it makes stale and update them in the same pull request.
 - A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
-- A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. The other maintainer then reviews it before it merges.
+- Every issue and pull request carries GitHub's default labels, and no others: `bug` for wrong behaviour; `enhancement` for features, performance, tests, CI and refactors; `documentation` when docs or instructions are the main change; `question` while it waits on an answer; `duplicate` or `wontfix` when it closes for either reason.
+- A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. A minor bug fix, a test-only change or a docs change can then merge without the other maintainer's review; anything bigger, and anything that touches `frontend/`, waits for their review.
 - A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/code-review`, Copilot review, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
 - Claude monitors every pull request it opens, light path included, until it merges or closes: CI, comments and merge conflicts, with a check-in about an hour out.
 - Once a pull request is ready for review, push to it only when a maintainer asks, to fix a failing check that Claude's own changes caused, or to address Copilot's review comments as long as no maintainer has pushed commits of their own to the branch. Leave a check broken by anyone else's change as it is unless a maintainer asks. Post other review findings, and later findings of your own, as a comment with the proposed fix, and wait. An emergency is production down or a secret exposed; even then, comment first and put the fix in a new pull request.
@@ -48,7 +50,7 @@ bun run lint                                        # prettier + eslint
 - Anything Claude posts to GitHub says that Claude wrote it.
 - A comment from `joshspeagle` or `hanbangwu` that addresses Claude (for example, one starting "Claude:") is a request: answer it briefly in the thread, and if it asks for an issue or a pull request, open it and link it.
 - Change only what the task requires; do not improvise. Report unrelated changes you notice rather than making them.
-- No `TODO`, `FIXME`, `HACK` or `XXX` comments. Future work lives in GitHub issues; a test marked `xfail(strict=True)` may also pin known-wrong behaviour (see `tests/test_api.py`). Do not reopen a closed decision in a new issue.
+- No `TODO`, `FIXME`, `HACK` or `XXX` comments. Future work lives in GitHub issues; a test marked `xfail(strict=True)` may also pin known-wrong behaviour. Do not reopen a closed decision in a new issue.
 - Nothing runs on Modal (`modal run`, `modal serve`, `modal deploy`) unless a maintainer asks, and no load or cold-start traffic goes to the deployed app unless asked. Deploys happen only through CI on `main`.
 - Working notes (scratch analysis, session logs, write-ups) are not committed; they live outside the repository.
 - Ask when unsure about anything: a new file or not, leanness versus performance, installing a library. Ask before editing, not midway.
