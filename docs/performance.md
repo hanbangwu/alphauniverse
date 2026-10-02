@@ -1,6 +1,6 @@
 # Performance
 
-Every figure here comes from one run of `scripts/benchmark.py`, whose report is `docs/benchmarks/latest.json`:
+Every figure here comes from one run of `scripts/benchmark.py`, whose report is `docs/benchmarks/latest.json`, except those under [Recall](#recall), which come from one run of `scripts/recall.py`:
 
 | Run              |                                                                                                                  |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -69,6 +69,31 @@ The first `/search` to a fresh container takes **0.42 s**, of which `search()` i
 `vectors` is faiss-parallel and the `score_maps` GEMV contends with its threads, so stage figures compare only between runs with the same thread configuration.
 
 Both versions ran the same code, so the spread between rounds is noise: the four rounds' warm totals span 96.9–98.8 ms, 1.9 ms or 1.9% of their 98.1 ms mean. A difference between versions smaller than that is within round-to-round variation on this host.
+
+## Recall
+
+From one run of `scripts/recall.py`, whose report is `docs/benchmarks/recall.json`:
+
+| Run              |                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Date             | 2026-10-02                                                                                                                     |
+| Commit           | `9b2e182`, the same code as `b3077c5`                                                                                          |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                                     |
+| Started by       | the Benchmark workflow, run 37046901562                                                                                        |
+| Job              | build image: 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
+| Queries          | 100 per kind, 32 matches, `search()` at `PROBE=2048` and `NPROBE=64`                                                           |
+
+A query's recall is the share of the exact search's 32 galaxies that `search()` also returns:
+
+| Query                 | Mean  | Lowest | All 32 found | Fewer than 32 returned |
+| --------------------- | ----- | ------ | ------------ | ---------------------- |
+| 4 patches             | 98.0% | 65.6%  | 74%          | 0%                     |
+| 4 spans               | 96.8% | 71.9%  | 67%          | 0%                     |
+| 4 patches and 4 spans | 94.8% | 68.8%  | 52%          | 2%                     |
+
+Galaxies `search()` does not return count as misses, so the 2% of combined queries that came back short also lose recall.
+
+Loading every patch and span embedding took 71.8 s of the 171.3 s run, and the job's memory peaked at **86.93 GB**.
 
 ## Other endpoints
 
@@ -139,13 +164,13 @@ With `scaledown_window=300`, any visitor arriving more than five minutes after t
 
 The design targets COSMOS scale. Where it stops:
 
-| Ceiling                      | Now                 | Breaks at                                                                                                                             |
-| ---------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Index size                   | 17.19 GB            | when the pages queries touch outgrow the 64 GiB limit (68.72 GB, or 68.72 / 17.19 = 4.0× the index); how far below that is unmeasured |
-| Cold start                   | 16.8 s              | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
-| `full_points` in the browser | 180 MB              | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
-| Images in memory             | 215 MB              | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
-| Exact-search reference       | whole corpus in RAM | when it outgrows the recall job's 128 GiB; its peak memory and production recall are unmeasured until `scripts/recall.py` runs        |
-| Serving capacity             | one container       | `/search` levels off at about 10.5 requests/s from 4 concurrent clients; `max_containers=1` is a hard cap                             |
+| Ceiling                      | Now           | Breaks at                                                                                                                             |
+| ---------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Index size                   | 17.19 GB      | when the pages queries touch outgrow the 64 GiB limit (68.72 GB, or 68.72 / 17.19 = 4.0× the index); how far below that is unmeasured |
+| Cold start                   | 16.8 s        | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
+| `full_points` in the browser | 180 MB        | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
+| Images in memory             | 215 MB        | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
+| Exact-search reference       | 86.93 GB peak | when it outgrows the recall job's 128 GiB (137.44 GB); it uses 86.93 / 137.44 = 63% of that                                           |
+| Serving capacity             | one container | `/search` levels off at about 10.5 requests/s from 4 concurrent clients; `max_containers=1` is a hard cap                             |
 
 Check these before a change assumes they are not there.
