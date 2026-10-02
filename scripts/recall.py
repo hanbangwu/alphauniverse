@@ -7,7 +7,6 @@ from typing import Any, NamedTuple
 
 import modal
 import numpy as np
-import pyarrow as pa
 import pyarrow.compute as pc
 from sklearn.preprocessing import normalize
 
@@ -18,9 +17,7 @@ from app.config import (
     N_SPANS,
     NPROBE,
     PROBE,
-    SPECTRUM_ORIGIN,
     SPECTRUM_SURVEYS,
-    SPECTRUM_TOKEN_WIDTH,
 )
 from app.search import (
     Query,
@@ -34,13 +31,19 @@ from app.search import (
 )
 from app.spectra import spectra
 from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
-from scripts.benchmark import PATCHES, environment, queries, spec
+from scripts.benchmark import (
+    PATCHES,
+    SPANS,
+    environment,
+    observed_spans,
+    queries,
+    spec,
+)
 
 app = modal.App("alphauniverse-recall")
 image = build_image.add_local_python_source("modal_app")
 
 MATCHES = Query.model_fields["matches"].default
-SPANS = 4
 
 
 class Corpus(NamedTuple):
@@ -86,15 +89,6 @@ def exact_ranking(
     return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
 
 
-def observed_spans(cell: pa.StructScalar) -> np.ndarray:
-    wavelength = np.asarray(cell["wavelength"].values)
-    first, last = np.floor(
-        (np.array([wavelength.min(), wavelength.max()]) - SPECTRUM_ORIGIN)
-        / SPECTRUM_TOKEN_WIDTH
-    ).astype(int)
-    return np.arange(max(first, 0), min(last, N_SPANS - 1) + 1)
-
-
 def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
     rng = np.random.default_rng(seed)
     cells = spectrum_cells(spectra())
@@ -108,7 +102,9 @@ def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
             s=tuple(
                 int(span)
                 for span in rng.choice(
-                    observed_spans(cells[int(galaxy)]), SPANS, replace=False
+                    observed_spans(np.asarray(cells[int(galaxy)]["wavelength"].values)),
+                    SPANS,
+                    replace=False,
                 )
             ),
         )
