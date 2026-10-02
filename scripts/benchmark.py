@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -35,6 +36,7 @@ from app.spectra import spectra
 from modal_app import app, fastapi_app, serving_image
 
 image = serving_image.add_local_python_source("modal_app")
+logger = logging.getLogger(__name__)
 
 PATCHES = 4
 MATCHES = (8, 32, 128)
@@ -256,6 +258,14 @@ def git(*arguments: str) -> str:
     return subprocess.check_output(["git", *arguments], text=True).strip()
 
 
+def attempt(call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return call()
+    except Exception as failure:
+        logger.exception("a part of the benchmark failed")
+        return {"error": f"{type(failure).__name__}: {failure}"}
+
+
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
     if git("status", "--porcelain"):
@@ -294,13 +304,17 @@ def main(runs: int = 30) -> None:
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "server": spec(fastapi_app),
         "client": spec(client),
-        "requests": client.remote(fastapi_app.get_web_url(), runs),
-        "stages": paired.remote(sources, names + names[::-1], runs)
-        | {"locked_dependencies": "after"},
+        "requests": attempt(lambda: client.remote(fastapi_app.get_web_url(), runs)),
+        "stages": attempt(
+            lambda: (
+                paired.remote(sources, names + names[::-1], runs)
+                | {"locked_dependencies": "after"}
+            )
+        ),
     }
     means = {
         name: float(np.mean([entry["total_p50_ms"] for entry in rounds]))
-        for name, rounds in report["stages"]["rounds"].items()
+        for name, rounds in report["stages"].get("rounds", {}).items()
         if all("error" not in entry for entry in rounds)
     }
     if means:
@@ -310,6 +324,8 @@ def main(runs: int = 30) -> None:
             "commit": commits[best],
             "total_p50_ms": round(means[best], 3),
         }
+    elif stored:
+        report["best"] = stored
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
     print(f"wrote {REPORT}")
