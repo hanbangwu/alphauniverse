@@ -27,6 +27,7 @@ from app.search import (
     index,
     rank,
     score_maps,
+    search,
     span_maps,
     starts,
     vectors,
@@ -171,6 +172,35 @@ def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
     return times, len(rows)
 
 
+class SearchCounter:
+    def __init__(self, index: faiss.Index) -> None:
+        self.index = index
+        self.searches = 0
+
+    def search(self, *arguments: Any, **options: Any) -> Any:
+        self.searches += 1
+        return self.index.search(*arguments, **options)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.index, name)
+
+
+def looking_further(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
+    batch = queries(runs + 1, PATCHES, matches)
+    pending = iter(batch)
+    timing = time_it(runs, lambda: search(next(pending), index=built))
+    counter = SearchCounter(built)
+    searches = []
+    for query in batch[1:]:
+        counter.searches = 0
+        candidates(query, centroid(query, index=built), index=counter)
+        searches.append(counter.searches)
+    return timing | {
+        "looked_further": round(float(np.mean(np.greater(searches, 1))), 4),
+        "most_searches": max(searches),
+    }
+
+
 @app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = {
@@ -212,6 +242,9 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
                 "share": round(float(np.median(values)) / total, 4),
             }
             for name, values in samples.items()
+        },
+        "searches": {
+            f"matches={asked}": looking_further(runs, asked, built) for asked in MATCHES
         },
     }
 
