@@ -19,6 +19,7 @@ uv run ruff check app scripts tests modal_app.py    # lint
 uv run ruff format app scripts tests modal_app.py   # format
 uv run python -m scripts.fixture --galaxies 12      # build fixture tree
 uv run modal run -m scripts.benchmark               # measure the serving path on Modal
+uv run modal run -m scripts.recall                  # measure production recall on Modal
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
 
 cd frontend
@@ -42,6 +43,7 @@ bun run lint                                        # prettier + eslint
 - A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/code-review`, Copilot review, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
 - Claude monitors every pull request it opens, light path included, until it merges or closes: CI, comments and merge conflicts, with a check-in about an hour out.
 - Once a pull request is ready for review, push to it only when a maintainer asks, to fix a failing check that Claude's own changes caused, or to address Copilot's review comments as long as no maintainer has pushed commits of their own to the branch. Leave a check broken by anyone else's change as it is unless a maintainer asks. Post other review findings, and later findings of your own, as a comment with the proposed fix, and wait. An emergency is production down or a secret exposed; even then, comment first and put the fix in a new pull request.
+- A pull request's branch is deleted once it merges.
 - Pull before each commit and build on a maintainer's edits. Never force-push, rebase or reset a branch a human has committed to, and never push to a branch someone is merging.
 - Before changing a line, read its history; if a maintainer set it on purpose, ask.
 - Commit messages: short, terse, semicolon-delimited; they need not list every change.
@@ -74,3 +76,4 @@ bun run lint                                        # prettier + eslint
 - No code comments or docstrings, except in generated, vendored or scaffold files, which stay as generated. Explanations of a change (why it was made, what it replaced, what was tried) go in the issue, the pull request and their comments; how the code works now goes in `docs/`. User-facing descriptions go in the library's own argument for them: a route's in its decorator's `description=`, a response model's in `json_schema_extra`, and a script's `--help` in `ArgumentParser(description=)`.
 - No em dashes, in files, commit messages, pull requests, issues or comments. An en dash in a numeric range is fine.
 - Prefer literal phrasing to metaphor and flourish: "a parameter worth varying", not "a dial worth turning".
+- Write docs, rules, issues, pull requests and comments spartan: what is true now, in the fewest words that stay exact. Cut restatement, hedges, background the reader does not need, and lists of what did not change.

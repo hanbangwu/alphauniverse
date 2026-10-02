@@ -9,6 +9,11 @@ if TYPE_CHECKING:
 
 CACHE_PATH = "/cache"
 WANDB_MODE = "offline"
+SERVING_CPU = 8
+SERVING_MEMORY = (8 * 1024, 64 * 1024)
+SERVING_MAX_INPUTS = 16
+SERVING_MAX_CONTAINERS = 1
+SERVING_SCALEDOWN_WINDOW = 5 * 60
 
 app = modal.App("alphauniverse")
 
@@ -115,14 +120,14 @@ def generate_projections() -> None:
 
 @app.function(
     image=serving_image,
-    cpu=8,
-    memory=(8 * 1024, 64 * 1024),
+    cpu=SERVING_CPU,
+    memory=SERVING_MEMORY,
     timeout=10 * 60,
     volumes={CACHE_PATH: cache_volume},
-    max_containers=1,
-    scaledown_window=5 * 60,
+    max_containers=SERVING_MAX_CONTAINERS,
+    scaledown_window=SERVING_SCALEDOWN_WINDOW,
 )
-@modal.concurrent(max_inputs=16)
+@modal.concurrent(max_inputs=SERVING_MAX_INPUTS)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
     from app.main import app
