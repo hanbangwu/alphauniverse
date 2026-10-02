@@ -7,7 +7,9 @@ import tarfile
 import tempfile
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from functools import partial
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -38,6 +40,7 @@ image = serving_image.add_local_python_source("modal_app")
 
 PATCHES = 4
 MATCHES = (8, 32, 128)
+CLIENTS = (1, 4, 16, 32)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/latest.json")
@@ -54,14 +57,31 @@ def elapsed(call: Callable[[], Any]) -> float:
     return (time.perf_counter() - start) * 1000
 
 
-def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
-    call()
-    samples = [elapsed(call) for _ in range(runs)]
+def summary(samples: list[float]) -> dict[str, float]:
     return {
-        "runs": runs,
+        "runs": len(samples),
         "p50_ms": round(float(np.percentile(samples, 50)), 3),
         "p95_ms": round(float(np.percentile(samples, 95)), 3),
     }
+
+
+def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
+    call()
+    return summary([elapsed(call) for _ in range(runs)])
+
+
+def one_client(
+    url: str, batch: list[dict[str, Any]]
+) -> tuple[float, float, list[float]]:
+    with httpx.Client(base_url=url, timeout=None) as session:
+
+        def ask(params: dict[str, Any]) -> None:
+            session.get("/similarity", params=params).raise_for_status()
+
+        ask(batch[0])
+        begin = time.perf_counter()
+        samples = [elapsed(partial(ask, params)) for params in batch[1:]]
+        return begin, time.perf_counter(), samples
 
 
 def queries(count: int, patch_count: int, matches: int) -> list[Query]:
@@ -144,11 +164,37 @@ def client(url: str, runs: int) -> dict[str, Any]:
             )
             for matches in MATCHES
         }
+        warm = {label: time_it(runs, call) for label, call in calls.items()}
+
+        def concurrent(clients: int) -> dict[str, float]:
+            batches = [
+                [
+                    {
+                        "galaxy": galaxy(),
+                        "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                        "matches": 32,
+                    }
+                    for _ in range(runs + 1)
+                ]
+                for _ in range(clients)
+            ]
+            with ThreadPoolExecutor(clients) as pool:
+                results = list(pool.map(partial(one_client, url), batches))
+            begin = min(result[0] for result in results)
+            end = max(result[1] for result in results)
+            samples = [sample for result in results for sample in result[2]]
+            return summary(samples) | {
+                "requests_per_s": round(len(samples) / (end - begin), 2)
+            }
+
         return {
             "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
-            "warm": {label: time_it(runs, call) for label, call in calls.items()},
+            "warm": warm,
+            "concurrency": {
+                f"clients={clients}": concurrent(clients) for clients in CLIENTS
+            },
             "artifact_bytes": {role: size(role) for role in ARTIFACTS},
         }
 
