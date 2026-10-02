@@ -8,7 +8,10 @@ import tarfile
 import tempfile
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import UTC, datetime
+from functools import partial
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -62,6 +65,7 @@ logger = logging.getLogger(__name__)
 PATCHES = 4
 SPANS = 4
 MATCHES = (8, 32, 128)
+CLIENTS = (1, 4, SERVING_MAX_INPUTS, 2 * SERVING_MAX_INPUTS)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/latest.json")
@@ -78,14 +82,24 @@ def elapsed(call: Callable[[], Any]) -> float:
     return (time.perf_counter() - start) * 1000
 
 
-def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
-    call()
-    samples = [elapsed(call) for _ in range(runs)]
+def summary(samples: list[float]) -> dict[str, Any]:
     return {
-        "runs": runs,
+        "runs": len(samples),
         "p50_ms": round(float(np.percentile(samples, 50)), 3),
         "p95_ms": round(float(np.percentile(samples, 95)), 3),
     }
+
+
+def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
+    call()
+    return summary([elapsed(call) for _ in range(runs)])
+
+
+def timed_requests(session: httpx.Client, batch: list[dict[str, Any]]) -> list[float]:
+    def ask(params: dict[str, Any]) -> None:
+        session.get("/similarity", params=params).raise_for_status()
+
+    return [elapsed(partial(ask, params)) for params in batch]
 
 
 def queries(count: int, patch_count: int, matches: int) -> list[Query]:
@@ -149,13 +163,15 @@ def client(url: str, runs: int) -> dict[str, Any]:
             response = session.head(f"/artifacts/{role}").raise_for_status()
             return int(response.headers["content-length"])
 
+        def parameters(matches: int) -> dict[str, Any]:
+            return {
+                "galaxy": galaxy(),
+                "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                "matches": matches,
+            }
+
         def similarity(matches: int) -> None:
-            get(
-                "/similarity",
-                galaxy=galaxy(),
-                p=rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
-                matches=matches,
-            )
+            get("/similarity", **parameters(matches))
 
         cold_meta = round(elapsed(lambda: get("/meta")), 3)
         galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
@@ -177,6 +193,28 @@ def client(url: str, runs: int) -> dict[str, Any]:
             for matches in MATCHES
         }
         warm = {label: time_it(runs, call) for label, call in calls.items()}
+
+        def concurrent(clients: int) -> dict[str, Any]:
+            batches = [
+                [parameters(32) for _ in range(runs + 1)] for _ in range(clients)
+            ]
+            with ExitStack() as stack, ThreadPoolExecutor(clients) as pool:
+                sessions = [
+                    stack.enter_context(httpx.Client(base_url=url, timeout=None))
+                    for _ in batches
+                ]
+                list(
+                    pool.map(timed_requests, sessions, [batch[:1] for batch in batches])
+                )
+                begin = time.perf_counter()
+                timed = list(
+                    pool.map(timed_requests, sessions, [batch[1:] for batch in batches])
+                )
+                seconds = time.perf_counter() - begin
+            samples = [sample for client_samples in timed for sample in client_samples]
+            return summary(samples) | {
+                "requests_per_s": round(len(samples) / seconds, 2)
+            }
 
         cells = pq.read_table(
             io.BytesIO(session.get("/artifacts/tokens").raise_for_status().content),
@@ -225,6 +263,9 @@ def client(url: str, runs: int) -> dict[str, Any]:
             "cold_similarity_ms": cold_similarity,
             "warm": warm
             | {label: time_it(runs, call) for label, call in spectral_calls.items()},
+            "concurrency": {
+                f"clients={clients}": concurrent(clients) for clients in CLIENTS
+            },
             "artifact_bytes": {role: size(role) for role in ARTIFACTS},
         }
 
