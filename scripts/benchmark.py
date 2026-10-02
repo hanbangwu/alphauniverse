@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -19,8 +20,20 @@ import faiss
 import httpx
 import modal
 import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.parquet as pq
 
-from app.config import ARTIFACTS, DATASET_REVISION, N_PATCHES, galaxy_count
+from app.config import (
+    ARTIFACTS,
+    DATASET_REVISION,
+    N_PATCHES,
+    N_SPANS,
+    SPECTRUM_ORIGIN,
+    SPECTRUM_SURVEYS,
+    SPECTRUM_TOKEN_WIDTH,
+    galaxy_count,
+)
 from app.cutouts import cutouts
 from app.main import labels
 from app.search import (
@@ -35,11 +48,22 @@ from app.search import (
     vectors,
 )
 from app.spectra import spectra
-from modal_app import app, fastapi_app, serving_image
+from modal_app import (
+    SERVING_CPU,
+    SERVING_MAX_CONTAINERS,
+    SERVING_MAX_INPUTS,
+    SERVING_MEMORY,
+    SERVING_SCALEDOWN_WINDOW,
+    app,
+    fastapi_app,
+    serving_image,
+)
 
 image = serving_image.add_local_python_source("modal_app")
+logger = logging.getLogger(__name__)
 
 PATCHES = 4
+SPANS = 4
 MATCHES = (8, 32, 128)
 CLIENTS = (1, 4, 16, 32)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
@@ -91,6 +115,14 @@ def queries(count: int, patch_count: int, matches: int) -> list[Query]:
         )
         for _ in range(count)
     ]
+
+
+def observed_spans(wavelength: np.ndarray) -> np.ndarray:
+    first, last = np.floor(
+        (np.array([wavelength.min(), wavelength.max()]) - SPECTRUM_ORIGIN)
+        / SPECTRUM_TOKEN_WIDTH
+    ).astype(int)
+    return np.arange(max(first, 0), min(last, N_SPANS - 1) + 1)
 
 
 def spec(function: modal.Function) -> dict[str, Any]:
@@ -184,11 +216,53 @@ def client(url: str, runs: int) -> dict[str, Any]:
                 "requests_per_s": round(len(samples) / seconds, 2)
             }
 
+        cells = pq.read_table(
+            io.BytesIO(session.get("/artifacts/tokens").raise_for_status().content),
+            columns=list(SPECTRUM_SURVEYS),
+        )
+        present = {
+            survey: pc.is_valid(cells.column(survey)).to_numpy(zero_copy_only=False)
+            for survey in SPECTRUM_SURVEYS
+        }
+        holders = {survey: np.flatnonzero(mask) for survey, mask in present.items()}
+        spectral_galaxies = np.flatnonzero(np.logical_or.reduce(list(present.values())))
+
+        def spectrum(survey: str, route: str) -> None:
+            get(f"/galaxies/{rng.choice(holders[survey])}/spectra/{survey}{route}")
+
+        def span_query(patch_count: int) -> dict[str, Any]:
+            galaxy = int(rng.choice(spectral_galaxies))
+            survey = next(name for name in SPECTRUM_SURVEYS if present[name][galaxy])
+            response = session.get(f"/galaxies/{galaxy}/spectra/{survey}")
+            table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
+            spans = observed_spans(table.column("wavelength").to_numpy())
+            return {
+                "galaxy": galaxy,
+                "p": rng.choice(N_PATCHES, patch_count, replace=False).tolist(),
+                "s": rng.choice(spans, SPANS, replace=False).tolist(),
+                "matches": 32,
+            }
+
+        def span_similarity(patch_count: int) -> Callable[[], None]:
+            batch = iter([span_query(patch_count) for _ in range(runs + 1)])
+            return lambda: get("/similarity", **next(batch))
+
+        spectral_calls = {
+            f"{name} {survey}": (
+                lambda survey=survey, route=route: spectrum(survey, route)
+            )
+            for survey in SPECTRUM_SURVEYS
+            for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
+        } | {
+            "similarity spans matches=32": span_similarity(0),
+            "similarity patches and spans matches=32": span_similarity(PATCHES),
+        }
         return {
             "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
-            "warm": warm,
+            "warm": warm
+            | {label: time_it(runs, call) for label, call in spectral_calls.items()},
             "concurrency": {
                 f"clients={clients}": concurrent(clients) for clients in CLIENTS
             },
@@ -261,8 +335,8 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
 
 @app.function(
     image=image,
-    cpu=fastapi_app.spec.cpu,
-    memory=fastapi_app.spec.memory,
+    cpu=SERVING_CPU,
+    memory=SERVING_MEMORY,
     volumes=fastapi_app.spec.volumes,
     timeout=6 * 60 * 60,
 )
@@ -299,6 +373,14 @@ def git(*arguments: str) -> str:
     return subprocess.check_output(["git", *arguments], text=True).strip()
 
 
+def attempt(part: str, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return call()
+    except Exception as failure:
+        logger.exception("the %s part of the benchmark failed", part)
+        return {"error": f"{type(failure).__name__}: {failure}"}
+
+
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
     if git("status", "--porcelain"):
@@ -321,6 +403,7 @@ def main(runs: int = 30) -> None:
             )
         except subprocess.CalledProcessError:
             notes.append(f"best {stored['commit']} is not in this clone")
+            stored = None
         else:
             if stored_code not in code:
                 commits["best"] = stored["commit"]
@@ -335,15 +418,28 @@ def main(runs: int = 30) -> None:
         "notes": notes,
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "server": spec(fastapi_app),
+        "server": {
+            "cpu": SERVING_CPU,
+            "memory_mb": SERVING_MEMORY,
+            "max_inputs": SERVING_MAX_INPUTS,
+            "max_containers": SERVING_MAX_CONTAINERS,
+            "scaledown_window_s": SERVING_SCALEDOWN_WINDOW,
+        },
         "client": spec(client),
-        "requests": client.remote(fastapi_app.get_web_url(), runs),
-        "stages": paired.remote(sources, names + names[::-1], runs)
-        | {"locked_dependencies": "after"},
+        "requests": attempt(
+            "requests", lambda: client.remote(fastapi_app.get_web_url(), runs)
+        ),
+        "stages": attempt(
+            "stages",
+            lambda: (
+                paired.remote(sources, names + names[::-1], runs)
+                | {"locked_dependencies": "after"}
+            ),
+        ),
     }
     means = {
         name: float(np.mean([entry["total_p50_ms"] for entry in rounds]))
-        for name, rounds in report["stages"]["rounds"].items()
+        for name, rounds in report["stages"].get("rounds", {}).items()
         if all("error" not in entry for entry in rounds)
     }
     if means:
@@ -353,6 +449,9 @@ def main(runs: int = 30) -> None:
             "commit": commits[best],
             "total_p50_ms": round(means[best], 3),
         }
+    elif stored:
+        report["best"] = {"commit": stored["commit"]}
+        notes.append("no version timed fully, so best keeps the stored commit")
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
     print(f"wrote {REPORT}")
