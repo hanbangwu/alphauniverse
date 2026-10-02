@@ -1,0 +1,59 @@
+{
+  "commit": "9b2e182",
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-10-02T18:21:58+00:00",
+  "job": {
+    "cpu": 16,
+    "memory_mb": [
+      32768,
+      131072
+    ],
+    "gpu": null
+  },
+  "environment": {
+    "cpu": {
+      "vendor_id": "AuthenticAMD",
+      "cpu family": "25",
+      "model": "17",
+      "model name": "unknown"
+    },
+    "cpu_count": 32,
+    "faiss_threads": 16,
+    "omp_num_threads": "16"
+  },
+  "probe": 2048,
+  "nprobe": 64,
+  "matches": 32,
+  "corpus_load_s": 71.8,
+  "total_s": 171.3,
+  "peak_rss_gb": 86.93,
+  "recall": {
+    "patches": {
+      "queries": 100,
+      "patches": 4,
+      "spans": 0,
+      "mean": 0.9803,
+      "min": 0.6562,
+      "all_found": 0.74,
+      "short_of_matches": 0.0
+    },
+    "spans": {
+      "queries": 100,
+      "patches": 0,
+      "spans": 4,
+      "mean": 0.9678,
+      "min": 0.7188,
+      "all_found": 0.67,
+      "short_of_matches": 0.0
+    },
+    "both": {
+      "queries": 100,
+      "patches": 4,
+      "spans": 4,
+      "mean": 0.9484,
+      "min": 0.6875,
+      "all_found": 0.52,
+      "short_of_matches": 0.02
+    }
+  }
+}
