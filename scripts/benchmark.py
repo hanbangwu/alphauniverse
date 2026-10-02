@@ -8,6 +8,7 @@ import tempfile
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from functools import partial
 from itertools import pairwise
@@ -57,7 +58,7 @@ def elapsed(call: Callable[[], Any]) -> float:
     return (time.perf_counter() - start) * 1000
 
 
-def summary(samples: list[float]) -> dict[str, float]:
+def summary(samples: list[float]) -> dict[str, Any]:
     return {
         "runs": len(samples),
         "p50_ms": round(float(np.percentile(samples, 50)), 3),
@@ -65,23 +66,16 @@ def summary(samples: list[float]) -> dict[str, float]:
     }
 
 
-def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
+def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
     call()
     return summary([elapsed(call) for _ in range(runs)])
 
 
-def one_client(
-    url: str, batch: list[dict[str, Any]]
-) -> tuple[float, float, list[float]]:
-    with httpx.Client(base_url=url, timeout=None) as session:
+def timed_requests(session: httpx.Client, batch: list[dict[str, Any]]) -> list[float]:
+    def ask(params: dict[str, Any]) -> None:
+        session.get("/similarity", params=params).raise_for_status()
 
-        def ask(params: dict[str, Any]) -> None:
-            session.get("/similarity", params=params).raise_for_status()
-
-        ask(batch[0])
-        begin = time.perf_counter()
-        samples = [elapsed(partial(ask, params)) for params in batch[1:]]
-        return begin, time.perf_counter(), samples
+    return [elapsed(partial(ask, params)) for params in batch]
 
 
 def queries(count: int, patch_count: int, matches: int) -> list[Query]:
@@ -137,13 +131,15 @@ def client(url: str, runs: int) -> dict[str, Any]:
             response = session.head(f"/artifacts/{role}").raise_for_status()
             return int(response.headers["content-length"])
 
+        def parameters(matches: int) -> dict[str, Any]:
+            return {
+                "galaxy": galaxy(),
+                "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                "matches": matches,
+            }
+
         def similarity(matches: int) -> None:
-            get(
-                "/similarity",
-                galaxy=galaxy(),
-                p=rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
-                matches=matches,
-            )
+            get("/similarity", **parameters(matches))
 
         cold_meta = round(elapsed(lambda: get("/meta")), 3)
         galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
@@ -166,25 +162,26 @@ def client(url: str, runs: int) -> dict[str, Any]:
         }
         warm = {label: time_it(runs, call) for label, call in calls.items()}
 
-        def concurrent(clients: int) -> dict[str, float]:
+        def concurrent(clients: int) -> dict[str, Any]:
             batches = [
-                [
-                    {
-                        "galaxy": galaxy(),
-                        "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
-                        "matches": 32,
-                    }
-                    for _ in range(runs + 1)
-                ]
-                for _ in range(clients)
+                [parameters(32) for _ in range(runs + 1)] for _ in range(clients)
             ]
-            with ThreadPoolExecutor(clients) as pool:
-                results = list(pool.map(partial(one_client, url), batches))
-            begin = min(result[0] for result in results)
-            end = max(result[1] for result in results)
-            samples = [sample for result in results for sample in result[2]]
+            with ExitStack() as stack, ThreadPoolExecutor(clients) as pool:
+                sessions = [
+                    stack.enter_context(httpx.Client(base_url=url, timeout=None))
+                    for _ in batches
+                ]
+                list(
+                    pool.map(timed_requests, sessions, [batch[:1] for batch in batches])
+                )
+                begin = time.perf_counter()
+                timed = list(
+                    pool.map(timed_requests, sessions, [batch[1:] for batch in batches])
+                )
+                seconds = time.perf_counter() - begin
+            samples = [sample for client_samples in timed for sample in client_samples]
             return summary(samples) | {
-                "requests_per_s": round(len(samples) / (end - begin), 2)
+                "requests_per_s": round(len(samples) / seconds, 2)
             }
 
         return {
