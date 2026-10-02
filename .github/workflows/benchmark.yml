@@ -39,7 +39,12 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Run on Modal
-        run: uv run --python 3.12 modal run -m "scripts.$SCRIPT" ${RUNS:+--runs "$RUNS"} ${PER_KIND:+--per-kind "$PER_KIND"}
+        run: |
+          case "$SCRIPT" in
+            benchmark) set -- ${RUNS:+--runs "$RUNS"} ;;
+            recall) set -- ${PER_KIND:+--per-kind "$PER_KIND"} ;;
+          esac
+          uv run --python 3.12 modal run -m "scripts.$SCRIPT" "$@"
 
       - name: Report
         run: |
