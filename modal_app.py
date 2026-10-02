@@ -45,11 +45,11 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
+    from app.config import build_dir
     from app.encode import generate_embeddings
 
-    cache_volume.reload()
+    build_dir().mkdir(parents=True, exist_ok=True)
     generate_embeddings()
-    cache_volume.commit()
 
 
 @app.function(
@@ -60,11 +60,11 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_index() -> None:
+    from app.config import build_dir
     from app.search import generate_index
 
-    cache_volume.reload()
+    build_dir().mkdir(parents=True, exist_ok=True)
     generate_index()
-    cache_volume.commit()
 
 
 @app.function(
@@ -74,12 +74,12 @@ def generate_index() -> None:
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_cutouts() -> None:
-    from app.cutouts import generate_cutouts
+def generate_images() -> None:
+    from app.config import build_dir
+    from app.images import generate_images
 
-    cache_volume.reload()
-    generate_cutouts()
-    cache_volume.commit()
+    build_dir().mkdir(parents=True, exist_ok=True)
+    generate_images()
 
 
 @app.function(
@@ -90,11 +90,11 @@ def generate_cutouts() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_spectra() -> None:
+    from app.config import build_dir
     from app.spectra import generate_spectra
 
-    cache_volume.reload()
+    build_dir().mkdir(parents=True, exist_ok=True)
     generate_spectra()
-    cache_volume.commit()
 
 
 @app.function(
@@ -104,18 +104,13 @@ def generate_spectra() -> None:
     memory=(32 * 1024, 128 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
-    secrets=(
-        [modal.Secret.from_name("wandb", required_keys=["WANDB_API_KEY"])]
-        if WANDB_MODE == "online"
-        else []
-    ),
 )
 def generate_projections() -> None:
+    from app.config import build_dir
     from app.parametric_umap import generate_projections
 
-    cache_volume.reload()
+    build_dir().mkdir(parents=True, exist_ok=True)
     generate_projections()
-    cache_volume.commit()
 
 
 @app.function(

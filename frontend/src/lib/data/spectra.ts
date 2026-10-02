@@ -1,22 +1,15 @@
-import type { GetSpectrumData, SpectrumGrid, Survey } from '$lib/api'
-import { zGetSpectrumPath } from '$lib/api/zod.gen'
+import type { SpectrumGrid, Survey } from '$lib/api'
 import type { Extent } from './similarity'
 
-export type SpectrumSurvey = GetSpectrumData['path']['survey']
-
-export const SPECTRUM_SURVEYS: readonly SpectrumSurvey[] = zGetSpectrumPath.shape.survey.options
+export const SPECTRUM_SURVEY = 'desi'
 
 export interface Spectrum {
   wavelength: Float32Array
   flux: Float32Array
 }
 
-export function spectrumSurvey(coverage: Survey[]): SpectrumSurvey | null {
-  return (
-    SPECTRUM_SURVEYS.find((survey) =>
-      coverage.some((row) => row.survey === survey && row.matched)
-    ) ?? null
-  )
+export function hasSpectrum(coverage: Survey[]): boolean {
+  return coverage.some((row) => row.survey === SPECTRUM_SURVEY && row.matched)
 }
 
 export function spanAt(grid: SpectrumGrid, wavelength: number): number {

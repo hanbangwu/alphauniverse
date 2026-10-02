@@ -13,7 +13,7 @@ import modal
 import numpy as np
 
 from app.config import ARTIFACTS, DATASET_REVISION, N_PATCHES, galaxy_count
-from app.cutouts import cutouts
+from app.images import images
 from app.main import labels
 from app.search import (
     Query,
@@ -98,7 +98,7 @@ def client(url: str, runs: int) -> dict[str, Any]:
 
         def similarity(matches: int) -> None:
             get(
-                "/similarity",
+                "/search",
                 galaxy=galaxy(),
                 p=rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
                 matches=matches,
@@ -114,9 +114,9 @@ def client(url: str, runs: int) -> dict[str, Any]:
 
         calls = {
             "meta": lambda: get("/meta"),
-            "image": lambda: get(f"/galaxies/{galaxy()}/image.png"),
-            "tokens": lambda: get(f"/galaxies/{galaxy()}/tokens"),
-            "coverage": lambda: get(f"/galaxies/{galaxy()}/coverage"),
+            "image": lambda: get(f"/galaxy/{galaxy()}/image"),
+            "tokens": lambda: get(f"/galaxy/{galaxy()}/image/tokens"),
+            "coverage": lambda: get(f"/galaxy/{galaxy()}"),
         } | {
             f"similarity matches={matches}": (
                 lambda matches=matches: similarity(matches)
@@ -159,7 +159,7 @@ def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = {
         load.__name__: round(elapsed(load), 3)
-        for load in (labels, cutouts, spectra, index, starts)
+        for load in (labels, images, spectra, index, starts)
     }
     built = index()
 

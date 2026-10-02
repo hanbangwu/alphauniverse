@@ -4,7 +4,7 @@ paths:
   - "app/parametric_umap.py"
   - "app/dataset.py"
   - "app/search.py"
-  - "app/cutouts.py"
+  - "app/images.py"
   - "app/spectra.py"
   - "modal_app.py"
   - "pyproject.toml"

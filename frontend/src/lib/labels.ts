@@ -6,7 +6,7 @@ export type Labels<T extends string> = Record<T, Label>
 
 export type Choice<T extends string> = Label & { value: T }
 
-export const SIMILARITY = { label: 'Cosine similarity', short: 'cos sim' } as const
+export const SIMILARITY = { short: 'cos sim' } as const
 
 export const SURVEYS: Labels<string> = {
   ls: { label: 'Legacy Survey DR10' },
@@ -45,9 +45,3 @@ export const MORPHOLOGIES: readonly string[] = [
 ]
 
 export const UNLABELLED: number = MORPHOLOGIES.length - 1
-
-export function checkMorphologies(classes: number): void {
-  if (classes !== UNLABELLED) {
-    throw new Error(`the API counts ${classes} morphologies, this build names ${UNLABELLED}`)
-  }
-}

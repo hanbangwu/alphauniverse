@@ -72,12 +72,13 @@
         lineWidth: 2
       },
       z2: picked ? 1 : 0,
+      transition: 'style',
       emphasis: { style: picked ? {} : { stroke: '#fff', lineWidth: 1 } }
     }
   }
 
   const option = $derived<Option>({
-    animation: false,
+    animationDurationUpdate: 150,
     grid: { left: 0, right: 0, top: 0, bottom: 0 },
     xAxis: { type: 'value', min: 0, max: grid, show: false },
     yAxis: { type: 'value', min: 0, max: grid, inverse: true, show: false },

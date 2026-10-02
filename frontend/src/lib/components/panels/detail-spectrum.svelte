@@ -2,9 +2,8 @@
   import PatchFrame from '$lib/components/common/patch-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery } from '$lib/data/queries'
-  import { spectrumSurvey } from '$lib/data/spectra'
+  import { SPECTRUM_SURVEY, hasSpectrum } from '$lib/data/spectra'
   import { SURVEYS } from '$lib/labels'
-  import { getMeta } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
@@ -13,21 +12,19 @@
 
   let { galaxy }: Props = $props()
 
-  const meta = getMeta()
-
-  const coverage = createQuery(() => coverageQuery(meta, galaxy))
-  const survey = $derived(coverage.data ? spectrumSurvey(coverage.data) : null)
-  const spectrum = createQuery(() => spectrumQuery(meta, galaxy, survey))
+  const coverage = createQuery(() => coverageQuery(galaxy))
+  const matched = $derived(coverage.data ? hasSpectrum(coverage.data) : false)
+  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
 </script>
 
 <PatchFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">
-  {#if survey && spectrum.data}
+  {#if matched && spectrum.data}
     <SpectrumChart
       spectrum={spectrum.data}
-      label={`${SURVEYS[survey]?.label ?? survey} spectrum of galaxy ${galaxy}`}
+      label={`${SURVEYS[SPECTRUM_SURVEY].label} spectrum of galaxy ${galaxy}`}
       class="absolute inset-0"
     />
-  {:else if coverage.data && !survey}
+  {:else if coverage.data && !matched}
     <p class="absolute inset-0 grid place-content-center text-xs text-muted-foreground">
       No spectrum
     </p>

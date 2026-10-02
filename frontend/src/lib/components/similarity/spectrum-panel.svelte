@@ -3,8 +3,7 @@
   import PatchFrame from '$lib/components/common/patch-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
-  import { spectrumSurvey } from '$lib/data/spectra'
-  import { getMeta } from '$lib/state/app.svelte'
+  import { hasSpectrum } from '$lib/data/spectra'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -17,13 +16,12 @@
 
   let { galaxy, map, selected, onselect }: Props = $props()
 
-  const meta = getMeta()
   const similarity = getSimilarity()
 
-  const coverage = createQuery(() => coverageQuery(meta, galaxy))
-  const survey = $derived(coverage.data ? spectrumSurvey(coverage.data) : null)
-  const spectrum = createQuery(() => spectrumQuery(meta, galaxy, survey))
-  const tokens = createQuery(() => spectrumTokensQuery(meta, galaxy, map ? null : survey))
+  const coverage = createQuery(() => coverageQuery(galaxy))
+  const matched = $derived(coverage.data ? hasSpectrum(coverage.data) : false)
+  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
+  const tokens = createQuery(() => spectrumTokensQuery(matched && !map ? galaxy : null))
 
   const cells = $derived(map ?? tokens.data ?? null)
   const palette = $derived(
@@ -33,7 +31,7 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <span class="text-sm font-medium">{map ? 'Spectrum' : 'Spectrum Tokens'}</span>
+  <span class="text-sm font-medium">Spectrum Tokens</span>
 
   <PatchFrame busy={coverage.isPending || spectrum.isFetching || tokens.isFetching} class="bg-card">
     {#if spectrum.data && cells && palette}
@@ -50,7 +48,7 @@
           : `Spectrum of galaxy ${galaxy}`}
         class={onselect ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
       />
-    {:else if coverage.data && !survey}
+    {:else if coverage.data && !matched}
       <p class="absolute inset-0 grid place-content-center text-xs text-muted-foreground">
         No spectrum
       </p>

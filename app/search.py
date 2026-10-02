@@ -24,7 +24,6 @@ from .config import (
     TRAIN_GALAXIES,
     GalaxyIndex,
     artifact,
-    staged,
 )
 
 
@@ -62,10 +61,7 @@ def source(role: str) -> ds.Dataset:
 
 @cache
 def with_spectrum() -> np.ndarray:
-    table = source("tokens").to_table(columns=["galaxy", *SPECTRUM_SURVEYS])
-    galaxies = table.column("galaxy").to_numpy()
-    if not np.array_equal(galaxies, np.arange(len(galaxies))):
-        raise ValueError(f"{artifact('tokens')} is not in galaxy order")
+    table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
     return np.logical_or.reduce(
         [
             pc.is_valid(table.column(survey)).to_numpy(zero_copy_only=False)
@@ -122,11 +118,10 @@ def span_maps(
 ) -> np.ndarray:
     maps = np.full((len(order), N_SPANS), np.nan, dtype=np.float32)
     has = with_spectrum()[order]
-    if has.any():
-        rows = index.reconstruct_batch(
-            (starts()[order[has]][:, None] + N_PATCHES + np.arange(N_SPANS)).reshape(-1)
-        )
-        maps[has] = score_maps(rows, direction, width=N_SPANS)
+    rows = index.reconstruct_batch(
+        (starts()[order[has]][:, None] + N_PATCHES + np.arange(N_SPANS)).reshape(-1)
+    )
+    maps[has] = score_maps(rows, direction, width=N_SPANS)
     return maps
 
 
@@ -186,7 +181,7 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 
 @cache
 def index() -> faiss.Index:
-    loaded = faiss.read_index(str(artifact("encoded_index")), faiss.IO_FLAG_MMAP)
+    loaded = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
     loaded.make_direct_map()
     loaded.nprobe = NPROBE
     return loaded
@@ -200,7 +195,7 @@ def generate_index() -> None:
         galaxies, min(TRAIN_GALAXIES, galaxies), replace=False
     )
     training = blocks(dataset.take(sample, columns=columns))
-    nlist = max(1, min(NLIST, len(training) // MIN_TRAIN_PER_CENTROID))
+    nlist = min(NLIST, len(training) // MIN_TRAIN_PER_CENTROID)
     built = faiss.index_factory(DIM, f"IVF{nlist},SQfp16", faiss.METRIC_INNER_PRODUCT)
     built.train(training)
     del training
@@ -208,5 +203,4 @@ def generate_index() -> None:
     for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
         built.add(blocks(batch))
 
-    faiss.write_index(built, str(staged("encoded_index")))
-    staged("encoded_index").replace(artifact("encoded_index"))
+    faiss.write_index(built, str(artifact("search_index")))

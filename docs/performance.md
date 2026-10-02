@@ -73,23 +73,23 @@ Warm, same client:
 | `/galaxies/{g}/tokens`    | 158 ms | 169 ms |
 | `/galaxies/{g}/coverage`  | 163 ms | 237 ms |
 
-`/meta` is cached in-process and the image is an array lookup into `cutouts.parquet`, so these sit at the request floor and their compute is negligible next to it. What the floor itself is made of is **unmeasured**.
+`/meta` is cached in-process and the image is an array lookup into `images.parquet`, so these sit at the request floor and their compute is negligible next to it. What the floor itself is made of is **unmeasured**.
 
 ## Artifact sizes
 
 `Content-Length` of `HEAD /artifacts/{role}`:
 
-| Artifact          | Size         | Notes                                   |
-| ----------------- | ------------ | --------------------------------------- |
-| `encoded`         | **22.97 GB** | wired to a "Download embeddings" button |
-| `encoded_index`   | **17.19 GB** | memory-mapped on every container start  |
-| `codebook`        | **2.70 GB**  | same shape as `encoded`, 8.5× smaller   |
-| `cutouts`         | **215 MB**   | read into memory at startup             |
-| `full_points`     | **180 MB**   | downloaded into the browser on "Full"   |
-| `spectra`         | **123 MB**   | read into memory at startup             |
-| `tokens`          | **7.0 MB**   |                                         |
-| `parametric_umap` | **923 KB**   | not read at serve time                  |
-| `mean_points`     | **259 KB**   | downloaded on first paint               |
+| Artifact          | Size         | Notes                                                                                   |
+| ----------------- | ------------ | --------------------------------------------------------------------------------------- |
+| `encoded`         | **22.97 GB** | wired to a "Download encoded embeddings" button                                         |
+| `search_index`    | **17.19 GB** | memory-mapped on every container start                                                  |
+| `codebook`        | **2.70 GB**  | same shape as `encoded`, 8.5× smaller; wired to a "Download codebook embeddings" button |
+| `images`          | **215 MB**   | read into memory at startup                                                             |
+| `full_points`     | **180 MB**   | downloaded into the browser on "Full"                                                   |
+| `spectra`         | **123 MB**   | read into memory at startup                                                             |
+| `tokens`          | **7.0 MB**   | wired to a "Download tokens" button                                                     |
+| `parametric_umap` | **923 KB**   | not read at serve time                                                                  |
+| `mean_points`     | **259 KB**   | downloaded on first paint                                                               |
 
 Loading the 17.19 GB index takes 6.0 s. `read_index` memory-maps its inverted lists and `make_direct_map()` reads every list's ids.
 
@@ -104,7 +104,7 @@ The startup loads, timed in a separate container of the same spec, add up to 7.9
 | Load      | Time   |
 | --------- | ------ |
 | `index`   | 6.01 s |
-| `cutouts` | 1.37 s |
+| `images`  | 1.37 s |
 | `spectra` | 0.44 s |
 | `starts`  | 0.03 s |
 | `labels`  | 0.01 s |
@@ -122,7 +122,7 @@ Current design targets COSMOS scale. Where it stops:
 | Index size                   | 17.19 GB            | when the pages queries touch outgrow the 64 GiB limit (68.72 GB, or 68.72 / 17.19 = 4.0× the index); how far below that is unmeasured |
 | Cold start                   | 19.5 s              | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
 | `full_points` in the browser | 180 MB              | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
-| Cutouts in memory            | 215 MB              | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
+| Images in memory             | 215 MB              | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
 | Exact-search reference       | whole corpus in RAM | already fixture-only; production recall is unmeasured                                                                                 |
 | Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap                                             |
 

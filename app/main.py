@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from .config import (
     ANCHOR,
@@ -34,75 +34,53 @@ from .config import (
     artifact,
     galaxy_count,
 )
-from .cutouts import cutout, cutouts
+from .images import image, images
 from .search import Query as SearchQuery
-from .search import index, search, source, starts, with_spectrum
+from .search import index, search, source, starts
 from .spectra import spectra, spectrum
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
 
+SPECTRUM_SURVEY: SpectrumSurvey = "desi"
+
 
 @cache
-def labels() -> tuple[int, list[int], int]:
-    points = pq.read_table(artifact("mean_points"), columns=["galaxy", "category"])
-    category = points["category"]
+def labels() -> tuple[list[int], int]:
+    category = pq.read_table(artifact("mean_points"), columns=["category"])["category"]
     labelled = np.asarray(category.drop_null())
     return (
-        len(category),
         np.bincount(labelled, minlength=N_MORPHOLOGIES).tolist(),
         category.null_count,
     )
 
 
 class SpectrumGrid(BaseModel):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "description": (
-                "Where spectral token `i` sits, in Ångström.\n\n"
-                "From `origin + i * width` to `origin + (i + 1) * width`."
-            )
-        }
-    )
-
     origin: float
     width: float
 
 
 class Meta(BaseModel):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "description": "What the frontend needs before it can render anything."
-        }
-    )
-
     author: str
     id: str
     revision: str
     galaxies: int
     grid: int
     spectrum: SpectrumGrid
-    embeddings: str
-    mean_points: str
-    full_points: str
     morphologies: list[int]
     unlabelled: int
 
 
 class Survey(BaseModel):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "description": "Whether one galaxy was crossmatched into one survey."
-        }
-    )
-
     survey: str
     matched: bool
 
 
-class Detail(BaseModel):
-    model_config = ConfigDict(json_schema_extra={"description": "An error body."})
+class Galaxy(BaseModel):
+    coverage: list[Survey]
 
+
+class Detail(BaseModel):
     detail: str
 
 
@@ -149,22 +127,12 @@ class RevalidatedRoute(APIRoute):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    galaxies = labels()[0]
-    for role, load in (
-        ("cutouts", cutouts),
-        ("spectra", spectra),
-        ("tokens", with_spectrum),
-    ):
-        stored = len(load())
-        if stored != galaxies:
-            raise ValueError(f"{stored} {role} for {galaxies} galaxies")
-
-    stored = index().ntotal
-    vectors = galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
-    if stored != vectors:
-        raise ValueError(f"{stored} vectors in encoded_index for {vectors} in tokens")
-    starts()
     galaxy_count()
+    labels()
+    images()
+    spectra()
+    index()
+    starts()
     yield
 
 
@@ -193,20 +161,16 @@ app.add_middleware(
 
 @app.get(
     "/meta",
-    description="Dataset identity, size, patch grid, artifact roles and label counts.",
 )
 def get_meta() -> Meta:
-    galaxies, morphologies, unlabelled = labels()
+    morphologies, unlabelled = labels()
     return Meta(
         author=DATASET_AUTHOR,
         id=DATASET_NAME,
         revision=DATASET_REVISION,
-        galaxies=galaxies,
+        galaxies=galaxy_count(),
         grid=GRID,
         spectrum=SpectrumGrid(origin=SPECTRUM_ORIGIN, width=SPECTRUM_TOKEN_WIDTH),
-        embeddings="encoded",
-        mean_points="mean_points",
-        full_points="full_points",
         morphologies=morphologies,
         unlabelled=unlabelled,
     )
@@ -216,7 +180,6 @@ def get_meta() -> Meta:
     "/artifacts/{role}",
     response_class=FileResponse,
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
-    description="Download a build artifact by role.",
 )
 def get_artifact(role: str, request: Request) -> Response:
     try:
@@ -242,26 +205,24 @@ def head_artifact(role: str, request: Request) -> Response:
 
 
 @app.get(
-    "/galaxies/{galaxy}/image.png",
+    "/galaxy/{galaxy}/image",
     response_class=Response,
     responses={
         200: {
             "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}
         }
     },
-    description="The galaxy's anchor-survey cutout as a PNG.",
 )
 def get_image(galaxy: GalaxyIndex) -> Response:
-    return Response(cutout(galaxy), media_type="image/png")
+    return Response(image(galaxy), media_type="image/png")
 
 
 @app.get(
-    "/galaxies/{galaxy}/tokens",
+    "/galaxy/{galaxy}/image/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
-    description="The galaxy's anchor image token ids, as raw little-endian uint32.",
 )
-def get_tokens(galaxy: GalaxyIndex) -> Response:
+def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     table = source("tokens").to_table(
         columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
     )
@@ -273,66 +234,59 @@ def get_tokens(galaxy: GalaxyIndex) -> Response:
 
 
 @app.get(
-    "/galaxies/{galaxy}/spectra/{survey}",
+    "/galaxy/{galaxy}/spectrum",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}, **NOT_FOUND},
-    description="The galaxy's spectrum from one survey, as Arrow IPC.",
 )
-def get_spectrum(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
-    table = spectrum(galaxy, survey)
+def get_spectrum(galaxy: GalaxyIndex) -> Response:
+    table = spectrum(galaxy, SPECTRUM_SURVEY)
     if table is None:
-        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
+        raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
     return arrow(table)
 
 
 @app.get(
-    "/galaxies/{galaxy}/spectra/{survey}/tokens",
+    "/galaxy/{galaxy}/spectrum/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
-    description="The galaxy's spectrum token ids from one survey, as raw uint32.",
 )
-def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     table = source("tokens").to_table(
-        columns=[survey], filter=ds.field("galaxy") == galaxy
+        columns=[SPECTRUM_SURVEY], filter=ds.field("galaxy") == galaxy
     )
-    cell = table.column(survey)[0]
+    cell = table.column(SPECTRUM_SURVEY)[0]
     if not cell.is_valid:
-        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
+        raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
     return Response(
         np.asarray(cell.values)[1:].tobytes(), media_type="application/octet-stream"
     )
 
 
 @app.get(
-    "/galaxies/{galaxy}/coverage",
-    description="Which surveys the galaxy was crossmatched into.",
+    "/galaxy/{galaxy}",
 )
-def get_coverage(galaxy: GalaxyIndex) -> list[Survey]:
+def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
     table = source("tokens").to_table(
         columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
     )
-    return [
-        Survey(survey=survey, matched=table.column(survey)[0].is_valid)
-        for survey in TOKEN_SURVEYS
-    ] + [
-        Survey(survey=survey, matched=bool(table.column(survey)[0].as_py()))
-        for survey in FLAG_SURVEYS
-    ]
+    return Galaxy(
+        coverage=[
+            Survey(survey=survey, matched=table.column(survey)[0].is_valid)
+            for survey in TOKEN_SURVEYS
+        ]
+        + [
+            Survey(survey=survey, matched=bool(table.column(survey)[0].as_py()))
+            for survey in FLAG_SURVEYS
+        ]
+    )
 
 
 @app.get(
-    "/similarity",
+    "/search",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
-    description=(
-        "Galaxies ranked against the mean of the query tokens, as Arrow IPC.\n\n"
-        "One record batch of four columns: the galaxy index, its best token score,\n"
-        "a fixed-size list of one score per image patch, and one per spectral span\n"
-        "or null for a galaxy without a spectrum. Row 0 is always the query galaxy\n"
-        "itself."
-    ),
 )
-def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
+def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
     galaxies, scores, values, spans = search(query, index=index())
 
     item = pa.field("item", pa.float32(), nullable=False)
@@ -342,15 +296,7 @@ def get_similarity(query: Annotated[SearchQuery, Query()]) -> Response:
             pa.field("score", pa.float32(), nullable=False),
             pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
             pa.field("spectrum", pa.list_(item, N_SPANS)),
-        ],
-        metadata={
-            "revision": DATASET_REVISION,
-            "galaxy": str(query.galaxy),
-            "patches": ",".join(map(str, query.patches)),
-            "spans": ",".join(map(str, query.spans)),
-            "n_patches": str(N_PATCHES),
-            "n_spans": str(N_SPANS),
-        },
+        ]
     )
     batch = pa.record_batch(
         [

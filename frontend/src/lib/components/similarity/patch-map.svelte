@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { SIMILARITY } from '$lib/labels'
   import PatchPanel from './patch-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
 
@@ -13,7 +12,7 @@
 </script>
 
 <PatchPanel
-  label={SIMILARITY.label}
+  label="Image Tokens"
   {values}
   grid={similarity.grid}
   color={similarity.imageHeat}

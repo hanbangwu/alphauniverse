@@ -22,7 +22,7 @@ from app.config import (
     points,
     store_schema,
 )
-from app.cutouts import encode, write_cutouts
+from app.images import encode, write_images
 from app.search import generate_index, source, starts, with_spectrum
 from app.spectra import write_spectra
 
@@ -143,7 +143,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     _store("encoded", embeddings, galaxies, flags)
     _store("tokens", tokens, galaxies, flags)
 
-    write_cutouts([encode(fromarray(frame)) for frame in _frames(seed, galaxies)])
+    write_images([encode(fromarray(frame)) for frame in _frames(seed, galaxies)])
     write_spectra(_spectra(seed, galaxies))
 
     category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labelled)

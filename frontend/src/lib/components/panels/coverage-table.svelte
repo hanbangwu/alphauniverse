@@ -3,7 +3,6 @@
   import * as Table from '$lib/components/ui/table'
   import { coverageQuery } from '$lib/data/queries'
   import { SURVEYS } from '$lib/labels'
-  import { getMeta } from '$lib/state/app.svelte'
   import CheckIcon from '@lucide/svelte/icons/check'
   import MinusIcon from '@lucide/svelte/icons/minus'
   import { createQuery } from '@tanstack/svelte-query'
@@ -14,12 +13,9 @@
 
   let { galaxy }: Props = $props()
 
-  const meta = getMeta()
-
-  const coverage = createQuery(() => coverageQuery(meta, galaxy))
+  const coverage = createQuery(() => coverageQuery(galaxy))
 
   const surveys = $derived(coverage.data ?? [])
-  const matched = $derived(surveys.filter((survey) => survey.matched).length)
 </script>
 
 <div class="flex flex-col gap-1">
@@ -27,10 +23,6 @@
     <span class="text-xs tracking-wider text-muted-foreground uppercase">Crossmatches</span>
     {#if coverage.isPending}
       <Spinner class="size-3 self-center text-muted-foreground" />
-    {:else}
-      <span class="text-xs text-muted-foreground tabular-nums">
-        {matched} / {surveys.length}
-      </span>
     {/if}
   </div>
 

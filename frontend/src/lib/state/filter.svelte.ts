@@ -1,5 +1,4 @@
 import type { Meta } from '$lib/api'
-import { must } from '$lib/invariant'
 import { MORPHOLOGIES } from '$lib/labels'
 import { IndexListField } from './fields.svelte'
 import type { MosaicState } from './mosaic.svelte'
@@ -24,7 +23,7 @@ export class FilterState {
   get classes(): MorphologyClass[] {
     return [...this.meta.morphologies, this.meta.unlabelled].map((count, index) => ({
       index,
-      label: must(MORPHOLOGIES[index], `name for morphology ${index}`),
+      label: MORPHOLOGIES[index],
       count
     }))
   }
