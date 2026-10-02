@@ -16,8 +16,17 @@ import faiss
 import httpx
 import modal
 import numpy as np
+import pyarrow.compute as pc
+import pyarrow.parquet as pq
 
-from app.config import ARTIFACTS, DATASET_REVISION, N_PATCHES, galaxy_count
+from app.config import (
+    ARTIFACTS,
+    DATASET_REVISION,
+    N_PATCHES,
+    N_SPANS,
+    SPECTRUM_SURVEYS,
+    galaxy_count,
+)
 from app.cutouts import cutouts
 from app.main import labels
 from app.search import (
@@ -28,6 +37,7 @@ from app.search import (
     rank,
     score_maps,
     span_maps,
+    spectrum_cells,
     starts,
     vectors,
 )
@@ -37,6 +47,7 @@ from modal_app import app, fastapi_app, serving_image
 image = serving_image.add_local_python_source("modal_app")
 
 PATCHES = 4
+SPANS = 4
 MATCHES = (8, 32, 128)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
 SOURCES = ["app", "scripts", "modal_app.py"]
@@ -144,11 +155,49 @@ def client(url: str, runs: int) -> dict[str, Any]:
             )
             for matches in MATCHES
         }
+        warm = {label: time_it(runs, call) for label, call in calls.items()}
+
+        cells = pq.read_table(
+            io.BytesIO(session.get("/artifacts/tokens").raise_for_status().content),
+            columns=list(SPECTRUM_SURVEYS),
+        )
+        observed = {
+            survey: np.flatnonzero(
+                pc.is_valid(cells.column(survey)).to_numpy(zero_copy_only=False)
+            )
+            for survey in SPECTRUM_SURVEYS
+        }
+        spectral_galaxies = np.flatnonzero(
+            pc.is_valid(spectrum_cells(cells)).to_numpy(zero_copy_only=False)
+        )
+
+        def spectrum(survey: str, route: str) -> None:
+            get(f"/galaxies/{rng.choice(observed[survey])}/spectra/{survey}{route}")
+
+        def span_similarity(patch_count: int) -> None:
+            get(
+                "/similarity",
+                galaxy=int(rng.choice(spectral_galaxies)),
+                p=rng.choice(N_PATCHES, patch_count, replace=False).tolist(),
+                s=rng.choice(N_SPANS, SPANS, replace=False).tolist(),
+            )
+
+        spectral_calls = {
+            f"{name} {survey}": (
+                lambda survey=survey, route=route: spectrum(survey, route)
+            )
+            for survey in SPECTRUM_SURVEYS
+            for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
+        } | {
+            "similarity spans": lambda: span_similarity(0),
+            "similarity patches and spans": lambda: span_similarity(PATCHES),
+        }
         return {
             "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
-            "warm": {label: time_it(runs, call) for label, call in calls.items()},
+            "warm": warm
+            | {label: time_it(runs, call) for label, call in spectral_calls.items()},
             "artifact_bytes": {role: size(role) for role in ARTIFACTS},
         }
 
