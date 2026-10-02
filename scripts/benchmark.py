@@ -34,14 +34,12 @@ from app.search import (
 )
 from app.spectra import spectra
 from modal_app import (
-    CACHE_PATH,
     SERVING_CPU,
     SERVING_MAX_CONTAINERS,
     SERVING_MAX_INPUTS,
     SERVING_MEMORY,
     SERVING_SCALEDOWN_WINDOW,
     app,
-    cache_volume,
     fastapi_app,
     serving_image,
 )
@@ -233,7 +231,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     image=image,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
-    volumes={CACHE_PATH: cache_volume},
+    volumes=fastapi_app.spec.volumes,
     timeout=6 * 60 * 60,
 )
 def paired(sources: dict[str, bytes], order: list[str], runs: int) -> dict[str, Any]:
@@ -269,11 +267,11 @@ def git(*arguments: str) -> str:
     return subprocess.check_output(["git", *arguments], text=True).strip()
 
 
-def attempt(call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+def attempt(part: str, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
         return call()
     except Exception as failure:
-        logger.exception("a part of the benchmark failed")
+        logger.exception("the %s part of the benchmark failed", part)
         return {"error": f"{type(failure).__name__}: {failure}"}
 
 
@@ -299,6 +297,7 @@ def main(runs: int = 30) -> None:
             )
         except subprocess.CalledProcessError:
             notes.append(f"best {stored['commit']} is not in this clone")
+            stored = None
         else:
             if stored_code not in code:
                 commits["best"] = stored["commit"]
@@ -321,12 +320,15 @@ def main(runs: int = 30) -> None:
             "scaledown_window_s": SERVING_SCALEDOWN_WINDOW,
         },
         "client": spec(client),
-        "requests": attempt(lambda: client.remote(fastapi_app.get_web_url(), runs)),
+        "requests": attempt(
+            "requests", lambda: client.remote(fastapi_app.get_web_url(), runs)
+        ),
         "stages": attempt(
+            "stages",
             lambda: (
                 paired.remote(sources, names + names[::-1], runs)
                 | {"locked_dependencies": "after"}
-            )
+            ),
         ),
     }
     means = {
@@ -342,7 +344,8 @@ def main(runs: int = 30) -> None:
             "total_p50_ms": round(means[best], 3),
         }
     elif stored:
-        report["best"] = stored
+        report["best"] = {"commit": stored["commit"]}
+        notes.append("no version timed fully, so best keeps the stored commit")
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
     print(f"wrote {REPORT}")
