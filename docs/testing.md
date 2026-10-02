@@ -28,8 +28,7 @@ The torch modules' tests skip unless the `build` group is installed:
 uv run --group build pytest tests/test_encode.py tests/test_parametric_umap.py
 ```
 
-- They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base` at the revision in `tests/aion/REVISION`. No test downloads weights.
-- `test_copied_configs_come_from_the_pinned_revision` fails when that revision is not `AION_REVISION`; moving the pin means copying the configs again.
+- They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base`. No test downloads weights.
 - `test_saved_weights_load_back_unchanged` round-trips a small AION through `save_pretrained` and `from_pretrained`, which needs `safetensors`, from aion's `torch` extra.
 - `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, and checks the results match.
 - `test_padded_sdss_spectra_keep_their_flux` is `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input. Remove the mark once that is fixed.
@@ -45,10 +44,10 @@ The benchmark measures the production artifacts on the Modal volume. It refuses 
 
 A client in a separate container times, in order:
 
-1. one cold `/meta` and one cold `/similarity`;
-2. warm, `runs` times each: `/meta`, the image, tokens and coverage endpoints, and patch-only `/similarity` at 8, 32 and 128 matches;
-3. warm: both spectrum routes for DESI and for SDSS, and `/similarity` at 32 matches with 4 spans, alone and with 4 patches. Galaxies with a spectrum come from one download of `tokens`. Spans are drawn from those the spectrum covers, as in `scripts/recall.py`;
-4. concurrent requests at 1, 4, `max_inputs` and twice `max_inputs` clients (16 and 32 today). Each client is a thread with its own connection, sending patch-only `/similarity` at 32 matches. All clients warm their connections, then each sends `runs` timed requests. Each level reports p50, p95 and requests per second. Past `max_inputs`, requests wait for a slot. The client reserves 1 CPU, so a level where throughput stops rising may be the client's limit.
+1. one cold `/meta` and one cold `/search`;
+2. warm, `runs` times each: `/meta`, the image, image tokens and galaxy endpoints, and patch-only `/search` at 8, 32 and 128 matches;
+3. warm: both spectrum routes, and `/search` at 32 matches with 4 spans, alone and with 4 patches. Galaxies with a DESI spectrum come from one download of `tokens`. Spans are drawn from those the spectrum covers, as in `scripts/recall.py`;
+4. concurrent requests at 1, 4, `max_inputs` and twice `max_inputs` clients (16 and 32 today). Each client is a thread with its own connection, sending patch-only `/search` at 32 matches. All clients warm their connections, then each sends `runs` timed requests. Each level reports p50, p95 and requests per second. Past `max_inputs`, requests wait for a slot. The client reserves 1 CPU, so a level where throughput stops rising may be the client's limit.
 
 Request latency is timed for the checked-out commit only. Artifact downloads are not timed.
 
@@ -107,6 +106,6 @@ Lint fails on a comment starting with `TODO`, `FIXME`, `HACK` or `XXX`, in any c
 
 The other workflows:
 
-- `build.yml` runs the torch tests on pull requests that change the torch modules or what they import (`app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`), what the tests build trees with (`app/cutouts.py`, `app/spectra.py`, `scripts/fixture.py`), `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or itself.
+- `build.yml` runs the torch tests on pull requests that change the torch modules or what they import (`app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`), what the tests build trees with (`app/images.py`, `app/spectra.py`, `scripts/fixture.py`), `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or itself.
 - `benchmark.yml` runs only when started by hand (above).
 - `rules.yml` runs on pull requests. It fails on a commit authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot, and on one committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.

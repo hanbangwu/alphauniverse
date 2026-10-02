@@ -11,7 +11,6 @@ from tqdm import tqdm
 from umap.umap_ import find_ab_params, fuzzy_simplicial_set
 
 from .config import (
-    DATASET_ID,
     DATASET_REVISION,
     DIM,
     FLAG_SURVEYS,
@@ -24,7 +23,6 @@ from .config import (
     artifact,
     device,
     points,
-    staged,
 )
 from .dataset import dataset
 from .search import source
@@ -55,13 +53,14 @@ class ParametricUMAP(nn.Module):
 
     @torch.inference_mode()
     def transform(self, values: np.ndarray) -> np.ndarray:
-        fitted = next(self.parameters()).device
         rows = torch.from_numpy(values)
-        projected = [self(chunk.to(fitted)).cpu() for chunk in torch.split(rows, 4096)]
+        projected = [
+            self(chunk.to(device())).cpu() for chunk in torch.split(rows, 4096)
+        ]
         return torch.cat(projected).numpy()
 
 
-def fit_parametric_umap(sampled: np.ndarray) -> None:
+def fit_parametric_umap(sampled: np.ndarray) -> ParametricUMAP:
     import wandb
 
     strengths, _, _ = fuzzy_simplicial_set(
@@ -135,18 +134,14 @@ def fit_parametric_umap(sampled: np.ndarray) -> None:
 
             run.log({"epoch": epoch, "train/loss": total.item() / steps})
 
-    model.eval()
-    weights = staged("parametric_umap")
-    weights.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"dim": rows.shape[1], "state": model.state_dict()}, weights)
+    torch.save(
+        {"dim": rows.shape[1], "state": model.state_dict()}, artifact("parametric_umap")
+    )
+    return model.eval()
 
 
-def _stream(
-    counts: dict[str, int],
-) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     for survey in TOKEN_SURVEYS:
-        if not counts[survey]:
-            continue
         scanner = source("encoded").scanner(
             columns=["galaxy", survey],
             batch_size=CHUNK,
@@ -165,7 +160,7 @@ def _stream(
 
 
 def generate_projections() -> None:
-    data = dataset(DATASET_ID, DATASET_REVISION)
+    data = dataset()
     raw = np.asarray(data[FLAG_SURVEYS["gz10"]], dtype=np.float64)
     category = pa.array(np.nan_to_num(raw).astype(dtype=np.uint8), mask=np.isnan(raw))
     count = len(category)
@@ -197,9 +192,8 @@ def generate_projections() -> None:
     held = np.zeros(count, dtype=np.int64)
     taken: list[np.ndarray] = []
     seen = 0
-    for galaxies, offsets, values in tqdm(_stream(counts), desc="scan"):
-        live = np.diff(offsets) > 0
-        sums[galaxies[live]] += np.add.reduceat(values, offsets[:-1][live])
+    for galaxies, offsets, values in tqdm(_stream(), desc="scan"):
+        sums[galaxies] += np.add.reduceat(values, offsets[:-1])
         held[galaxies] += np.diff(offsets)
         window = chosen[
             np.searchsorted(chosen, seen) : np.searchsorted(chosen, seen + len(values))
@@ -212,26 +206,20 @@ def generate_projections() -> None:
 
     sampled = np.concatenate(taken)
     taken.clear()
-    fit_parametric_umap(sampled)
+    model = fit_parametric_umap(sampled)
     del sampled
-
-    saved = torch.load(staged("parametric_umap"), map_location="cpu")
-    model = ParametricUMAP(saved["dim"])
-    model.load_state_dict(saved["state"])
-    model.to(device()).eval()
 
     pq.write_table(
         points(galaxy, model.transform(mean), category),
-        staged("mean_points"),
+        artifact("mean_points"),
         compression="zstd",
     )
 
-    with pq.ParquetWriter(staged("full_points"), POINTS, compression="zstd") as writer:
-        for galaxies, offsets, values in tqdm(_stream(counts), desc="project"):
+    with pq.ParquetWriter(
+        artifact("full_points"), POINTS, compression="zstd"
+    ) as writer:
+        for galaxies, offsets, values in tqdm(_stream(), desc="project"):
             owner = np.repeat(galaxies, np.diff(offsets))
             writer.write_table(
                 points(owner, model.transform(values), category.take(owner))
             )
-
-    for role in ("parametric_umap", "mean_points", "full_points"):
-        staged(role).replace(artifact(role))

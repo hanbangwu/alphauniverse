@@ -12,11 +12,11 @@
   import { createQuery } from '@tanstack/svelte-query'
 
   const app = getApp()
-  const { meta, view, mosaic } = app
+  const { view, mosaic } = app
 
   const points = createQuery(() => app.meanPoints)
   const morphology = createQuery(() =>
-    morphologyQuery(mosaic, meta, points.data ?? null, view.galaxy.value)
+    morphologyQuery(mosaic, points.data ?? null, view.galaxy.value)
   )
 </script>
 
@@ -43,7 +43,7 @@
       </Button>
 
       <div class="flex items-baseline justify-between text-sm">
-        <span class="font-medium">Row #{galaxy}</span>
+        <span class="font-medium">Galaxy #{galaxy}</span>
         {#if morphology.isPending}
           <Spinner class="size-3 self-center text-muted-foreground" />
         {:else}

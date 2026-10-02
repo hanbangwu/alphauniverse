@@ -1,8 +1,35 @@
+<script lang="ts" module>
+  import GalaxyTooltip from './galaxy-tooltip.svelte'
+  import type { DataPoint } from 'embedding-atlas'
+  import { mount, unmount } from 'svelte'
+
+  interface TooltipProps {
+    tooltip: DataPoint
+  }
+
+  class Tooltip {
+    #props: TooltipProps
+    #component: ReturnType<typeof mount>
+
+    constructor(target: HTMLDivElement, props: TooltipProps) {
+      this.#props = $state(props)
+      this.#component = mount(GalaxyTooltip, { target, props: this.#props })
+    }
+
+    update(props: TooltipProps): void {
+      this.#props.tooltip = props.tooltip
+    }
+
+    destroy(): void {
+      void unmount(this.#component)
+    }
+  }
+</script>
+
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
   import { getApp } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
-  import type { DataPoint } from 'embedding-atlas'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
   import { mode } from 'mode-watcher'
 
@@ -37,6 +64,7 @@
         {height}
         config={{ colorScheme: mode.current }}
         theme={{ statusBar: false }}
+        customTooltip={Tooltip}
         onSelection={(picked: DataPoint[] | null) => {
           const galaxy = picked?.at(-1)?.identifier
           view.select(galaxy === undefined ? null : Number(galaxy))

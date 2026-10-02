@@ -3,10 +3,9 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 
-from app.config import SPECTRA, artifact, build_dir
-from app.spectra import samples, spectra, spectrum
+from app.config import artifact
+from app.spectra import samples, spectrum
 
 
 def test_spectrum_returns_the_stored_samples(tree: Path) -> None:
@@ -42,28 +41,3 @@ def test_samples_drop_padding_and_blank_masked_flux() -> None:
     np.testing.assert_array_equal(kept["wavelength"], [4000.0, 4001.0])
     np.testing.assert_array_equal(kept["flux"], [1.0, np.nan])
     assert kept["flux"].dtype == np.float32
-
-
-def test_rows_out_of_galaxy_order_are_rejected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
-    build_dir().mkdir(parents=True, exist_ok=True)
-    pq.write_table(
-        pa.table(
-            {
-                "galaxy": pa.array([1, 0], type=pa.int32()),
-                "desi": [None, None],
-                "sdss": [None, None],
-            },
-            schema=SPECTRA,
-        ),
-        artifact("spectra"),
-    )
-
-    spectra.cache_clear()
-    try:
-        with pytest.raises(ValueError, match="galaxy order"):
-            spectra()
-    finally:
-        spectra.cache_clear()

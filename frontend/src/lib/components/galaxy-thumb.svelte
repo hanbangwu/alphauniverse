@@ -13,7 +13,7 @@
   let failed = $state<number | null>(null)
 
   const src = $derived(
-    client.buildUrl<GetImageData>({ url: '/galaxies/{galaxy}/image.png', path: { galaxy } })
+    client.buildUrl<GetImageData>({ url: '/galaxy/{galaxy}/image', path: { galaxy } })
   )
 </script>
 

@@ -1,7 +1,6 @@
 import type { Meta } from '$lib/api'
 import { morphologyColors } from '$lib/color'
 import { type PointsQuery, pointsQuery } from '$lib/data/queries'
-import { checkMorphologies } from '$lib/labels'
 import { FilterState } from './filter.svelte'
 import { MaskState } from './mask.svelte'
 import { MosaicState } from './mosaic.svelte'
@@ -19,8 +18,7 @@ export class AppState {
   readonly mosaic = new MosaicState()
 
   constructor(readonly meta: Meta) {
-    checkMorphologies(meta.morphologies.length)
-    this.view = new ViewState(meta)
+    this.view = new ViewState()
     this.search = new SearchState()
     this.filters = new FilterState(meta, this.mosaic)
   }
@@ -34,11 +32,11 @@ export class AppState {
   }
 
   get meanPoints(): PointsQuery {
-    return pointsQuery(this.mosaic, this.meta, this.meta.mean_points)
+    return pointsQuery(this.mosaic, 'mean_points')
   }
 
   get fullPoints(): PointsQuery {
-    return pointsQuery(this.mosaic, this.meta, this.meta.full_points, this.view.full)
+    return pointsQuery(this.mosaic, 'full_points', this.view.full)
   }
 
   start(): void {

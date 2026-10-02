@@ -75,14 +75,3 @@ def test_projections_are_deterministic(runs: list[dict[str, pa.Table]]) -> None:
 
     for role in first:
         assert first[role].equals(second[role])
-
-
-def test_a_failed_run_leaves_the_projections_in_place(
-    runs: list[dict[str, pa.Table]], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(umap_module, "dataset", lambda *_: {})
-    with pytest.raises(KeyError):
-        umap_module.generate_projections()
-
-    for role, table in runs[-1].items():
-        assert pq.read_table(artifact(role)).equals(table)

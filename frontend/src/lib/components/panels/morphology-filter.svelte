@@ -13,7 +13,7 @@
         type="button"
         disabled={count === 0}
         onclick={() => filters.morphologies.toggle(index)}
-        class="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-sm transition hover:bg-muted/40 disabled:opacity-30"
+        class="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-sm transition hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-30"
         class:opacity-40={filters.active && !filters.morphologies.has(index)}
         class:font-medium={filters.morphologies.has(index)}
       >

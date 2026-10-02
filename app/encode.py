@@ -47,11 +47,8 @@ from tqdm import tqdm
 
 from .config import (
     AION_REPOSITORY,
-    AION_REVISION,
     ANCHOR,
     CROP_PIXELS,
-    DATASET_ID,
-    DATASET_REVISION,
     DIM,
     FLAG_SURVEYS,
     HSC,
@@ -59,9 +56,7 @@ from .config import (
     STORES,
     TOKEN_SURVEYS,
     artifact,
-    build_dir,
     device,
-    staged,
     store_schema,
 )
 from .dataset import dataset
@@ -102,21 +97,14 @@ HSC_SCALARS = (
 def codec(modality: type[Modality]) -> Codec:
     return (
         MODALITY_CODEC_MAPPING[modality]
-        .from_pretrained(AION_REPOSITORY, modality=modality, revision=AION_REVISION)
+        .from_pretrained(AION_REPOSITORY, modality=modality)
         .to(device())
-        .requires_grad_(False)
     )
 
 
 @cache
 def model() -> AION:
-    network = (
-        AION.from_pretrained(AION_REPOSITORY, revision=AION_REVISION)
-        .to(device())
-        .eval()
-    )
-    network.requires_grad_(False)
-    return network
+    return AION.from_pretrained(AION_REPOSITORY).to(device()).eval()
 
 
 def image(
@@ -162,6 +150,7 @@ def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
     )
 
 
+@torch.inference_mode()
 def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
     groups = {
         ANCHOR: {
@@ -199,19 +188,19 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
     return groups
 
 
+@torch.inference_mode()
 def encode(
     groups: dict[str, dict[str, torch.Tensor]],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     tokens = {key: slot for group in groups.values() for key, slot in group.items()}
-    with torch.no_grad():
-        encoder_tokens, encoder_embeddings, encoder_mask, modality_mask = (
-            model().embed_inputs(
-                tokens,
-                num_encoder_tokens=sum(slot.shape[1] for slot in tokens.values()),
-            )
+    encoder_tokens, encoder_embeddings, encoder_mask, modality_mask = (
+        model().embed_inputs(
+            tokens,
+            num_encoder_tokens=sum(slot.shape[1] for slot in tokens.values()),
         )
-        with torch.autocast(device_type=device().type, dtype=torch.float16):
-            context = model()._encode(encoder_tokens, encoder_embeddings, encoder_mask)
+    )
+    with torch.autocast(device_type=device().type, dtype=torch.float16):
+        context = model()._encode(encoder_tokens, encoder_embeddings, encoder_mask)
 
     return (
         context[0].cpu().numpy(),
@@ -238,9 +227,7 @@ def by_survey(
 
 
 def generate_embeddings() -> None:
-    build_dir().mkdir(parents=True, exist_ok=True)
-
-    data = dataset(DATASET_ID, DATASET_REVISION)
+    data = dataset()
     count = len(data)
 
     batches: dict[str, dict[str, list]] = {
@@ -253,7 +240,7 @@ def generate_embeddings() -> None:
     for role in STORES:
         schemas[role] = store_schema(role)
         writers[role] = pq.ParquetWriter(
-            staged(role), schemas[role], compression="zstd"
+            artifact(role), schemas[role], compression="zstd"
         )
 
     for galaxy in tqdm(range(count), desc="encode"):
@@ -326,5 +313,3 @@ def generate_embeddings() -> None:
 
     for writer in writers.values():
         writer.close()
-    for role in STORES:
-        staged(role).replace(artifact(role))

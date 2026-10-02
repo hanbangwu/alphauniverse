@@ -30,12 +30,11 @@ from app.config import (
     N_PATCHES,
     N_SPANS,
     SPECTRUM_ORIGIN,
-    SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_WIDTH,
     galaxy_count,
 )
-from app.cutouts import cutouts
-from app.main import labels
+from app.images import images
+from app.main import SPECTRUM_SURVEY, labels
 from app.search import (
     Query,
     candidates,
@@ -98,7 +97,7 @@ def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
 
 def timed_requests(session: httpx.Client, batch: list[dict[str, Any]]) -> list[float]:
     def ask(params: dict[str, Any]) -> None:
-        session.get("/similarity", params=params).raise_for_status()
+        session.get("/search", params=params).raise_for_status()
 
     return [elapsed(partial(ask, params)) for params in batch]
 
@@ -172,7 +171,7 @@ def client(url: str, runs: int) -> dict[str, Any]:
             }
 
         def similarity(matches: int) -> None:
-            get("/similarity", **parameters(matches))
+            get("/search", **parameters(matches))
 
         cold_meta = round(elapsed(lambda: get("/meta")), 3)
         galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
@@ -184,9 +183,9 @@ def client(url: str, runs: int) -> dict[str, Any]:
 
         calls = {
             "meta": lambda: get("/meta"),
-            "image": lambda: get(f"/galaxies/{galaxy()}/image.png"),
-            "tokens": lambda: get(f"/galaxies/{galaxy()}/tokens"),
-            "coverage": lambda: get(f"/galaxies/{galaxy()}/coverage"),
+            "image": lambda: get(f"/galaxy/{galaxy()}/image"),
+            "tokens": lambda: get(f"/galaxy/{galaxy()}/image/tokens"),
+            "coverage": lambda: get(f"/galaxy/{galaxy()}"),
         } | {
             f"similarity matches={matches}": (
                 lambda matches=matches: similarity(matches)
@@ -219,22 +218,18 @@ def client(url: str, runs: int) -> dict[str, Any]:
 
         cells = pq.read_table(
             io.BytesIO(session.get("/artifacts/tokens").raise_for_status().content),
-            columns=list(SPECTRUM_SURVEYS),
+            columns=[SPECTRUM_SURVEY],
         )
-        present = {
-            survey: pc.is_valid(cells.column(survey)).to_numpy(zero_copy_only=False)
-            for survey in SPECTRUM_SURVEYS
-        }
-        holders = {survey: np.flatnonzero(mask) for survey, mask in present.items()}
-        spectral_galaxies = np.flatnonzero(np.logical_or.reduce(list(present.values())))
+        holders = np.flatnonzero(
+            pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy(zero_copy_only=False)
+        )
 
-        def spectrum(survey: str, route: str) -> None:
-            get(f"/galaxies/{rng.choice(holders[survey])}/spectra/{survey}{route}")
+        def spectrum(route: str) -> None:
+            get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
         def span_query(patch_count: int) -> dict[str, Any]:
-            galaxy = int(rng.choice(spectral_galaxies))
-            survey = next(name for name in SPECTRUM_SURVEYS if present[name][galaxy])
-            response = session.get(f"/galaxies/{galaxy}/spectra/{survey}")
+            galaxy = int(rng.choice(holders))
+            response = session.get(f"/galaxy/{galaxy}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
             spans = observed_spans(table.column("wavelength").to_numpy())
             return {
@@ -246,13 +241,10 @@ def client(url: str, runs: int) -> dict[str, Any]:
 
         def span_similarity(patch_count: int) -> Callable[[], None]:
             batch = iter([span_query(patch_count) for _ in range(runs + 1)])
-            return lambda: get("/similarity", **next(batch))
+            return lambda: get("/search", **next(batch))
 
         spectral_calls = {
-            f"{name} {survey}": (
-                lambda survey=survey, route=route: spectrum(survey, route)
-            )
-            for survey in SPECTRUM_SURVEYS
+            name: lambda route=route: spectrum(route)
             for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
         } | {
             "similarity spans matches=32": span_similarity(0),
@@ -310,7 +302,7 @@ def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = {
         load.__name__: round(elapsed(load), 3)
-        for load in (labels, cutouts, spectra, index, starts)
+        for load in (labels, images, spectra, index, starts)
     }
     built = index()
 

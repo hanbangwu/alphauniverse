@@ -1,4 +1,3 @@
-import type { Meta } from '$lib/api'
 import { DETAIL_VIEWS, type DetailView, POINT_SETS, type PointSet } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField } from './fields.svelte'
@@ -12,7 +11,7 @@ export class ViewState {
   readonly spans = new IndexListField()
   readonly explorer = new Field(false)
 
-  constructor(private readonly meta: Meta) {
+  constructor() {
     this.pointSet = new EnumField(optionsOver(POINT_SETS), POINT_SETS)
     this.detail = new EnumField(optionsOver(DETAIL_VIEWS), DETAIL_VIEWS)
   }
@@ -22,7 +21,7 @@ export class ViewState {
   }
 
   get table(): string {
-    return this.full ? this.meta.full_points : this.meta.mean_points
+    return this.full ? 'full_points' : 'mean_points'
   }
 
   select(galaxy: number | null): void {

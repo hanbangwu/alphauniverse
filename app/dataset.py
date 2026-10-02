@@ -2,7 +2,9 @@ from functools import cache
 
 from datasets import Dataset, load_dataset
 
+from .config import DATASET_ID, DATASET_REVISION
+
 
 @cache
-def dataset(dataset_id: str, dataset_revision: str) -> Dataset:
-    return load_dataset(dataset_id, split="train", revision=dataset_revision)
+def dataset() -> Dataset:
+    return load_dataset(DATASET_ID, split="train", revision=DATASET_REVISION)

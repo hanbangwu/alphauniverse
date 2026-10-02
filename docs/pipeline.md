@@ -1,8 +1,8 @@
 # Build pipeline
 
-Five Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. Cutouts and spectra read the source dataset and can run at any point. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
+Five Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. Images and spectra read the source dataset and can run at any point. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
-Each job writes an artifact to a `.partial` file beside it and replaces the artifact with that file only once it is complete, so a failed run leaves the previous artifact in place. A job that writes several artifacts replaces them one after another as it finishes.
+Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
 `generate_embeddings` and `generate_projections` need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
 
@@ -16,7 +16,7 @@ The script is outside the deployed pipeline and needs `lsdb`, which is not a pro
 
 For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
 
-The model and every codec load from `polymathic-ai/aion-base` at the commit `AION_REVISION` in `app/config.py`, so a push to that repository changes nothing here until the pin moves.
+The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
 Galaxies are encoded one at a time and written in batches of 1024 rows.
 
@@ -30,7 +30,7 @@ gz10, provabgs:      bool
 
 - **`encoded`**: the encoder's contextualised output. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
 - **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
-- **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings. The serving app will not start if it is out of order or holds a different number of galaxies than `mean_points`.
+- **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings.
 
 Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spans.
 
@@ -38,9 +38,9 @@ Within an image cell the patches come first and the survey's scalars follow. A s
 
 Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches** (the scalars are sliced off), then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity.
 
-A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both. The serving app will not start if the index holds a different number of vectors than the layout gives; that check counts vectors, so a `tokens` and an `encoded` that disagree only on which galaxies have a spectrum still pass.
+A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
-## `generate_cutouts`
+## `generate_images`
 
 Centre-crops every galaxy's anchor image to `CROP_PIXELS` square and PNG-encodes it, in dataset row order:
 
@@ -49,7 +49,7 @@ galaxy: int32
 png:    large_binary
 ```
 
-Row `g` is galaxy `g`: the app looks a cutout up by row position, not by the `galaxy` column, so it checks the order on load. The serving app will not start without this artifact, or if it is out of order or holds a different number of galaxies than `mean_points`.
+Row `g` is galaxy `g`: the app looks an image up by row position, not by the `galaxy` column. The serving app will not start without this artifact.
 
 ## `generate_spectra`
 
@@ -60,7 +60,7 @@ galaxy:     int32
 desi, sdss: struct<wavelength: list<float32>, flux: list<float32>>   -- null where unmatched
 ```
 
-Wavelength is in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux. Row order is checked on load as for cutouts, and the serving app will not start without this artifact either.
+Wavelength is in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux. The app looks a spectrum up by row position as for images, and will not start without this artifact either.
 
 ## `generate_projections`
 
@@ -73,7 +73,7 @@ dim:   int         -- input width, DIM
 state: state_dict  -- ParametricUMAP weights
 ```
 
-Nothing reads it at serve time. The job saves it to its `.partial` file first and reloads it from there to project. Then it writes two point sets, both in the `POINTS` schema (`app/config.py`):
+Nothing reads it at serve time. The job then projects with the trained model and writes two point sets, both in the `POINTS` schema (`app/config.py`):
 
 ```
 galaxy: int32 not null

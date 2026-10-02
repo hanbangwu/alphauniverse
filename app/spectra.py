@@ -4,16 +4,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from .config import (
-    DATASET_ID,
-    DATASET_REVISION,
-    SPECTRA,
-    SPECTRUM,
-    SPECTRUM_SURVEYS,
-    artifact,
-    build_dir,
-    staged,
-)
+from .config import SPECTRA, SPECTRUM, SPECTRUM_SURVEYS, artifact
 
 
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
@@ -25,7 +16,6 @@ def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
 
 
 def write_spectra(cells: dict[str, list[dict[str, np.ndarray] | None]]) -> None:
-    build_dir().mkdir(parents=True, exist_ok=True)
     galaxies = len(next(iter(cells.values())))
     pq.write_table(
         pa.table(
@@ -38,16 +28,15 @@ def write_spectra(cells: dict[str, list[dict[str, np.ndarray] | None]]) -> None:
             },
             schema=SPECTRA,
         ),
-        staged("spectra"),
+        artifact("spectra"),
         compression="zstd",
     )
-    staged("spectra").replace(artifact("spectra"))
 
 
 def generate_spectra() -> None:
     from .dataset import dataset
 
-    table = dataset(DATASET_ID, DATASET_REVISION).data
+    table = dataset().data
     write_spectra(
         {
             survey: [
@@ -61,11 +50,7 @@ def generate_spectra() -> None:
 
 @cache
 def spectra() -> pa.Table:
-    table = pq.read_table(artifact("spectra"))
-    galaxies = table.column("galaxy").to_numpy()
-    if not np.array_equal(galaxies, np.arange(len(galaxies))):
-        raise ValueError(f"{artifact('spectra')} is not in galaxy order")
-    return table
+    return pq.read_table(artifact("spectra"))
 
 
 def spectrum(galaxy: int, survey: str) -> pa.Table | None:

@@ -1,6 +1,6 @@
-import type { GetSimilarityData } from '$lib/api'
+import type { GetSearchData } from '$lib/api'
 
-export type SimilarityQuery = GetSimilarityData['query']
+export type SimilarityQuery = GetSearchData['query']
 
 export type Extent = readonly [number, number]
 

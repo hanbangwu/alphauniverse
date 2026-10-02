@@ -1,9 +1,9 @@
-import { zGetSimilarityQuery } from '$lib/api/zod.gen'
+import { zGetSearchQuery } from '$lib/api/zod.gen'
 import { must } from '$lib/invariant'
 import type { Labels } from '$lib/labels'
 import * as z from 'zod'
 
-export type Param = keyof typeof zGetSimilarityQuery.shape
+export type Param = keyof typeof zGetSearchQuery.shape
 
 export interface Range {
   minimum: number
@@ -16,10 +16,10 @@ export interface Options<T extends string> {
   fallback: T
 }
 
-const DEFAULTS: Record<string, unknown> = zGetSimilarityQuery.parse({ galaxy: 0, p: [0] })
+const DEFAULTS: Record<string, unknown> = zGetSearchQuery.parse({ galaxy: 0, p: [0] })
 
 export function rangeOf(name: Param): Range {
-  let schema: unknown = zGetSimilarityQuery.shape[name]
+  let schema: unknown = zGetSearchQuery.shape[name]
   while (schema instanceof z.ZodDefault || schema instanceof z.ZodOptional) {
     schema = schema.unwrap()
   }

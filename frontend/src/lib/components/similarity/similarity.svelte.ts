@@ -39,9 +39,9 @@ export class Similarity {
     this.galaxy = galaxy
     this.grid = app.meta.grid
 
-    this.#tokenMap = createQuery(() => tokensQuery(app.meta, galaxy))
+    this.#tokenMap = createQuery(() => tokensQuery(galaxy))
     this.draft = $derived(app.search.request(galaxy, app.view.patches.value, app.view.spans.value))
-    this.#result = createQuery(() => similarityQuery(app.meta, this.#submitted))
+    this.#result = createQuery(() => similarityQuery(this.#submitted))
 
     this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
@@ -57,10 +57,6 @@ export class Similarity {
     this.spectrumMap = $derived(this.spectrumMaps ? this.spectrumMapAt(0) : null)
     this.tokens = $derived(this.#tokenMap.data ?? null)
     this.palette = $derived(this.tokens ? tokenColors(this.tokens) : null)
-  }
-
-  get fetching(): boolean {
-    return this.#result.isFetching
   }
 
   get stale(): boolean {

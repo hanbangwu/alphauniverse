@@ -15,7 +15,7 @@
 
 <div class="flex flex-1 flex-col gap-2">
   <span class="text-sm font-medium">
-    Row #{galaxy}{score === undefined ? '' : `: ${similarity.score(score)}`}
+    Galaxy #{galaxy}{score === undefined ? '' : `: ${similarity.score(score)}`}
   </span>
   <PatchFrame>
     <GalaxyThumb {galaxy} />

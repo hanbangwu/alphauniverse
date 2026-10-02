@@ -8,7 +8,6 @@
     "/meta": {
       "get": {
         "summary": "Get Meta",
-        "description": "Dataset identity, size, patch grid, artifact roles and label counts.",
         "operationId": "get_meta",
         "responses": {
           "200": {
@@ -27,7 +26,6 @@
     "/artifacts/{role}": {
       "get": {
         "summary": "Get Artifact",
-        "description": "Download a build artifact by role.",
         "operationId": "get_artifact",
         "parameters": [
           {
@@ -75,10 +73,9 @@
         }
       }
     },
-    "/galaxies/{galaxy}/image.png": {
+    "/galaxy/{galaxy}/image": {
       "get": {
         "summary": "Get Image",
-        "description": "The galaxy's anchor-survey cutout as a PNG.",
         "operationId": "get_image",
         "parameters": [
           {
@@ -117,11 +114,10 @@
         }
       }
     },
-    "/galaxies/{galaxy}/tokens": {
+    "/galaxy/{galaxy}/image/tokens": {
       "get": {
-        "summary": "Get Tokens",
-        "description": "The galaxy's anchor image token ids, as raw little-endian uint32.",
-        "operationId": "get_tokens",
+        "summary": "Get Image Tokens",
+        "operationId": "get_image_tokens",
         "parameters": [
           {
             "name": "galaxy",
@@ -159,10 +155,9 @@
         }
       }
     },
-    "/galaxies/{galaxy}/spectra/{survey}": {
+    "/galaxy/{galaxy}/spectrum": {
       "get": {
         "summary": "Get Spectrum",
-        "description": "The galaxy's spectrum from one survey, as Arrow IPC.",
         "operationId": "get_spectrum",
         "parameters": [
           {
@@ -173,19 +168,6 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
-            }
-          },
-          {
-            "name": "survey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "desi",
-                "sdss"
-              ],
-              "type": "string",
-              "title": "Survey"
             }
           }
         ],
@@ -224,10 +206,9 @@
         }
       }
     },
-    "/galaxies/{galaxy}/spectra/{survey}/tokens": {
+    "/galaxy/{galaxy}/spectrum/tokens": {
       "get": {
         "summary": "Get Spectrum Tokens",
-        "description": "The galaxy's spectrum token ids from one survey, as raw uint32.",
         "operationId": "get_spectrum_tokens",
         "parameters": [
           {
@@ -238,19 +219,6 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
-            }
-          },
-          {
-            "name": "survey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "desi",
-                "sdss"
-              ],
-              "type": "string",
-              "title": "Survey"
             }
           }
         ],
@@ -289,11 +257,10 @@
         }
       }
     },
-    "/galaxies/{galaxy}/coverage": {
+    "/galaxy/{galaxy}": {
       "get": {
-        "summary": "Get Coverage",
-        "description": "Which surveys the galaxy was crossmatched into.",
-        "operationId": "get_coverage",
+        "summary": "Get Galaxy",
+        "operationId": "get_galaxy",
         "parameters": [
           {
             "name": "galaxy",
@@ -312,11 +279,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Survey"
-                  },
-                  "title": "Response Get Coverage"
+                  "$ref": "#/components/schemas/Galaxy"
                 }
               }
             }
@@ -334,11 +297,10 @@
         }
       }
     },
-    "/similarity": {
+    "/search": {
       "get": {
-        "summary": "Get Similarity",
-        "description": "Galaxies ranked against the mean of the query tokens, as Arrow IPC.\n\nOne record batch of four columns: the galaxy index, its best token score,\na fixed-size list of one score per image patch, and one per spectral span\nor null for a galaxy without a spectrum. Row 0 is always the query galaxy\nitself.",
-        "operationId": "get_similarity",
+        "summary": "Get Search",
+        "operationId": "get_search",
         "parameters": [
           {
             "name": "galaxy",
@@ -434,8 +396,23 @@
         "required": [
           "detail"
         ],
-        "title": "Detail",
-        "description": "An error body."
+        "title": "Detail"
+      },
+      "Galaxy": {
+        "properties": {
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/Survey"
+            },
+            "type": "array",
+            "title": "Coverage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "coverage"
+        ],
+        "title": "Galaxy"
       },
       "HTTPValidationError": {
         "properties": {
@@ -475,18 +452,6 @@
           "spectrum": {
             "$ref": "#/components/schemas/SpectrumGrid"
           },
-          "embeddings": {
-            "type": "string",
-            "title": "Embeddings"
-          },
-          "mean_points": {
-            "type": "string",
-            "title": "Mean Points"
-          },
-          "full_points": {
-            "type": "string",
-            "title": "Full Points"
-          },
           "morphologies": {
             "items": {
               "type": "integer"
@@ -507,14 +472,10 @@
           "galaxies",
           "grid",
           "spectrum",
-          "embeddings",
-          "mean_points",
-          "full_points",
           "morphologies",
           "unlabelled"
         ],
-        "title": "Meta",
-        "description": "What the frontend needs before it can render anything."
+        "title": "Meta"
       },
       "SpectrumGrid": {
         "properties": {
@@ -532,8 +493,7 @@
           "origin",
           "width"
         ],
-        "title": "SpectrumGrid",
-        "description": "Where spectral token `i` sits, in \u00c5ngstr\u00f6m.\n\nFrom `origin + i * width` to `origin + (i + 1) * width`."
+        "title": "SpectrumGrid"
       },
       "Survey": {
         "properties": {
@@ -551,8 +511,7 @@
           "survey",
           "matched"
         ],
-        "title": "Survey",
-        "description": "Whether one galaxy was crossmatched into one survey."
+        "title": "Survey"
       },
       "ValidationError": {
         "properties": {

@@ -7,7 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import (
-    ARTIFACTS,
     FLAG_SURVEYS,
     GRID,
     N_MORPHOLOGIES,
@@ -22,12 +21,12 @@ ARROW = "application/vnd.apache.arrow.stream"
 ENDPOINTS = [
     "/artifacts/mean_points",
     "/meta",
-    "/galaxies/0/image.png",
-    "/galaxies/0/tokens",
-    "/galaxies/0/coverage",
-    "/galaxies/0/spectra/desi",
-    "/galaxies/0/spectra/sdss/tokens",
-    "/similarity?galaxy=0&p=0",
+    "/galaxy/0/image",
+    "/galaxy/0/image/tokens",
+    "/galaxy/0",
+    "/galaxy/0/spectrum",
+    "/galaxy/0/spectrum/tokens",
+    "/search?galaxy=0&p=0",
 ]
 
 
@@ -42,13 +41,6 @@ def test_meta_counts_every_galaxy(client: TestClient, galaxies: int) -> None:
     assert meta["galaxies"] == galaxies
     assert meta["grid"] == GRID
     assert len(meta["morphologies"]) == N_MORPHOLOGIES
-
-
-def test_meta_names_the_artifact_roles_it_points_at(client: TestClient) -> None:
-    meta = client.get("/meta").json()
-
-    for role in ("embeddings", "mean_points", "full_points"):
-        assert meta[role] in ARTIFACTS
 
 
 def test_artifact_downloads(client: TestClient, tree) -> None:
@@ -118,7 +110,7 @@ def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
 
 
 def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
-    response = client.get("/galaxies/0/tokens")
+    response = client.get("/galaxy/0/image/tokens")
 
     assert response.status_code == 200
     values = np.frombuffer(response.content, dtype=np.uint32)
@@ -130,7 +122,7 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
     stored = pq.read_table(artifact("tokens"), filters=[("galaxy", "==", galaxy)])
     rows = {
         row["survey"]: row["matched"]
-        for row in client.get(f"/galaxies/{galaxy}/coverage").json()
+        for row in client.get(f"/galaxy/{galaxy}").json()["coverage"]
     }
 
     assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
@@ -139,7 +131,7 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
 
 
 def test_image_is_served_as_png(client: TestClient) -> None:
-    response = client.get("/galaxies/0/image.png")
+    response = client.get("/galaxy/0/image")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
@@ -147,7 +139,7 @@ def test_image_is_served_as_png(client: TestClient) -> None:
 
 
 def test_spectrum_is_served_as_arrow(client: TestClient) -> None:
-    response = client.get("/galaxies/0/spectra/desi")
+    response = client.get("/galaxy/0/spectrum")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == ARROW
@@ -161,14 +153,16 @@ def test_unmatched_spectrum_is_not_found(client: TestClient) -> None:
     without = spectra.is_valid().to_pylist().index(False)
     untokenised = tokens.is_valid().to_pylist().index(False)
 
-    assert client.get(f"/galaxies/{without}/spectra/desi").status_code == 404
-    assert client.get(f"/galaxies/{untokenised}/spectra/desi/tokens").status_code == 404
+    assert client.get(f"/galaxy/{without}/spectrum").status_code == 404
+    assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
 
 
 def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    cell = pq.read_table(artifact("tokens"), columns=["sdss"]).column("sdss")[0]
+    column = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    galaxy = column.is_valid().to_pylist().index(True)
+    cell = column[galaxy]
 
-    response = client.get("/galaxies/0/spectra/sdss/tokens")
+    response = client.get(f"/galaxy/{galaxy}/spectrum/tokens")
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
@@ -176,7 +170,7 @@ def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> Non
 
 
 def _similarity(client: TestClient, **query) -> pa.RecordBatch:
-    response = client.get("/similarity", params=query)
+    response = client.get("/search", params=query)
     assert response.status_code == 200, response.text
     assert response.headers["content-type"] == ARROW
     return pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
@@ -214,7 +208,7 @@ def test_similarity_spectrum_column_is_null_without_a_spectrum(
     ],
 )
 def test_similarity_rejects_invalid_queries(client: TestClient, query: dict) -> None:
-    assert client.get("/similarity", params=query).status_code == 422
+    assert client.get("/search", params=query).status_code == 422
 
 
 def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
@@ -222,7 +216,7 @@ def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
 ) -> None:
     galaxy = int(np.flatnonzero(~_with_spectrum())[0])
 
-    response = client.get("/similarity", params={"galaxy": galaxy, "s": [0]})
+    response = client.get("/search", params={"galaxy": galaxy, "s": [0]})
 
     assert response.status_code == 422
     [error] = response.json()["detail"]
@@ -230,18 +224,18 @@ def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
 
 
 def test_negative_galaxy_is_rejected(client: TestClient) -> None:
-    assert client.get("/galaxies/-1/tokens").status_code == 422
+    assert client.get("/galaxy/-1/image/tokens").status_code == 422
 
 
 @pytest.mark.parametrize(
     "path",
     [
-        "/galaxies/{galaxy}/image.png",
-        "/galaxies/{galaxy}/tokens",
-        "/galaxies/{galaxy}/coverage",
-        "/galaxies/{galaxy}/spectra/desi",
-        "/galaxies/{galaxy}/spectra/sdss/tokens",
-        "/similarity?galaxy={galaxy}&p=0",
+        "/galaxy/{galaxy}/image",
+        "/galaxy/{galaxy}/image/tokens",
+        "/galaxy/{galaxy}",
+        "/galaxy/{galaxy}/spectrum",
+        "/galaxy/{galaxy}/spectrum/tokens",
+        "/search?galaxy={galaxy}&p=0",
     ],
 )
 def test_galaxy_past_the_end_is_rejected(

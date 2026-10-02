@@ -29,7 +29,6 @@ DATASET_ID = f"{DATASET_AUTHOR}/{DATASET_NAME}"
 DATASET_REVISION = "e250e43c35e63523ee3940c9543302c29ca56437"
 
 AION_REPOSITORY = "polymathic-ai/aion-base"
-AION_REVISION = "40541618104bab0fa85c8af68daeb867a720bb8c"
 
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / ".cache"
 
@@ -80,8 +79,8 @@ MIN_TRAIN_PER_CENTROID = 39
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
-    "encoded_index": "faiss",
-    "cutouts": "parquet",
+    "search_index": "faiss",
+    "images": "parquet",
     "spectra": "parquet",
     "codebook": "parquet",
     "tokens": "parquet",
@@ -91,9 +90,7 @@ ARTIFACTS: dict[str, str] = {
 }
 
 
-CUTOUTS = pa.schema(
-    [pa.field("galaxy", pa.int32()), pa.field("png", pa.large_binary())]
-)
+IMAGES = pa.schema([pa.field("galaxy", pa.int32()), pa.field("png", pa.large_binary())])
 
 SPECTRUM = pa.struct(
     [
@@ -155,11 +152,6 @@ def build_dir() -> Path:
 
 def artifact(role: str) -> Path:
     return build_dir() / f"{role}.{ARTIFACTS[role]}"
-
-
-def staged(role: str) -> Path:
-    path = artifact(role)
-    return path.with_name(f"{path.name}.partial")
 
 
 @cache

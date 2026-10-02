@@ -2,7 +2,7 @@
 paths:
   - "app/main.py"
   - "app/search.py"
-  - "app/cutouts.py"
+  - "app/images.py"
   - "app/spectra.py"
   - "app/config.py"
   - "modal_app.py"
