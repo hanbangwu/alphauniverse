@@ -10,6 +10,12 @@ on:
         options:
           - benchmark
           - recall
+      runs:
+        description: The benchmark's --runs; empty keeps its default
+        type: string
+      per_kind:
+        description: Recall's --per-kind; empty keeps its default
+        type: string
 
 env:
   UV_LOCKED: "1"
@@ -22,6 +28,8 @@ jobs:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
       SCRIPT: ${{ inputs.script }}
+      RUNS: ${{ inputs.runs }}
+      PER_KIND: ${{ inputs.per_kind }}
       REPORT: docs/benchmarks/${{ inputs.script == 'benchmark' && 'latest' || 'recall' }}.json
 
     steps:
@@ -31,7 +39,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Run on Modal
-        run: uv run --python 3.12 modal run -m "scripts.$SCRIPT"
+        run: uv run --python 3.12 modal run -m "scripts.$SCRIPT" ${RUNS:+--runs "$RUNS"} ${PER_KIND:+--per-kind "$PER_KIND"}
 
       - name: Report
         run: |
