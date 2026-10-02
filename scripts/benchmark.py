@@ -8,6 +8,8 @@ import tarfile
 import tempfile
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from functools import partial
 from itertools import pairwise
@@ -18,8 +20,20 @@ import faiss
 import httpx
 import modal
 import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.parquet as pq
 
-from app.config import ARTIFACTS, DATASET_REVISION, N_PATCHES, galaxy_count
+from app.config import (
+    ARTIFACTS,
+    DATASET_REVISION,
+    N_PATCHES,
+    N_SPANS,
+    SPECTRUM_ORIGIN,
+    SPECTRUM_SURVEYS,
+    SPECTRUM_TOKEN_WIDTH,
+    galaxy_count,
+)
 from app.cutouts import cutouts
 from app.main import labels
 from app.search import (
@@ -50,7 +64,9 @@ image = serving_image.add_local_python_source("modal_app")
 logger = logging.getLogger(__name__)
 
 PATCHES = 4
+SPANS = 4
 MATCHES = (8, 32, 128)
+CLIENTS = (1, 4, SERVING_MAX_INPUTS, 2 * SERVING_MAX_INPUTS)
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/latest.json")
@@ -67,14 +83,24 @@ def elapsed(call: Callable[[], Any]) -> float:
     return (time.perf_counter() - start) * 1000
 
 
-def time_it(runs: int, call: Callable[[], Any]) -> dict[str, float]:
-    call()
-    samples = [elapsed(call) for _ in range(runs)]
+def summary(samples: list[float]) -> dict[str, Any]:
     return {
-        "runs": runs,
+        "runs": len(samples),
         "p50_ms": round(float(np.percentile(samples, 50)), 3),
         "p95_ms": round(float(np.percentile(samples, 95)), 3),
     }
+
+
+def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
+    call()
+    return summary([elapsed(call) for _ in range(runs)])
+
+
+def timed_requests(session: httpx.Client, batch: list[dict[str, Any]]) -> list[float]:
+    def ask(params: dict[str, Any]) -> None:
+        session.get("/similarity", params=params).raise_for_status()
+
+    return [elapsed(partial(ask, params)) for params in batch]
 
 
 def queries(count: int, patch_count: int, matches: int) -> list[Query]:
@@ -90,6 +116,14 @@ def queries(count: int, patch_count: int, matches: int) -> list[Query]:
         )
         for _ in range(count)
     ]
+
+
+def observed_spans(wavelength: np.ndarray) -> np.ndarray:
+    first, last = np.floor(
+        (np.array([wavelength.min(), wavelength.max()]) - SPECTRUM_ORIGIN)
+        / SPECTRUM_TOKEN_WIDTH
+    ).astype(int)
+    return np.arange(max(first, 0), min(last, N_SPANS - 1) + 1)
 
 
 def spec(function: modal.Function) -> dict[str, Any]:
@@ -130,13 +164,15 @@ def client(url: str, runs: int) -> dict[str, Any]:
             response = session.head(f"/artifacts/{role}").raise_for_status()
             return int(response.headers["content-length"])
 
+        def parameters(matches: int) -> dict[str, Any]:
+            return {
+                "galaxy": galaxy(),
+                "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                "matches": matches,
+            }
+
         def similarity(matches: int) -> None:
-            get(
-                "/similarity",
-                galaxy=galaxy(),
-                p=rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
-                matches=matches,
-            )
+            get("/similarity", **parameters(matches))
 
         cold_meta = round(elapsed(lambda: get("/meta")), 3)
         galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
@@ -157,11 +193,80 @@ def client(url: str, runs: int) -> dict[str, Any]:
             )
             for matches in MATCHES
         }
+        warm = {label: time_it(runs, call) for label, call in calls.items()}
+
+        def concurrent(clients: int) -> dict[str, Any]:
+            batches = [
+                [parameters(32) for _ in range(runs + 1)] for _ in range(clients)
+            ]
+            with ExitStack() as stack, ThreadPoolExecutor(clients) as pool:
+                sessions = [
+                    stack.enter_context(httpx.Client(base_url=url, timeout=None))
+                    for _ in batches
+                ]
+                list(
+                    pool.map(timed_requests, sessions, [batch[:1] for batch in batches])
+                )
+                begin = time.perf_counter()
+                timed = list(
+                    pool.map(timed_requests, sessions, [batch[1:] for batch in batches])
+                )
+                seconds = time.perf_counter() - begin
+            samples = [sample for client_samples in timed for sample in client_samples]
+            return summary(samples) | {
+                "requests_per_s": round(len(samples) / seconds, 2)
+            }
+
+        cells = pq.read_table(
+            io.BytesIO(session.get("/artifacts/tokens").raise_for_status().content),
+            columns=list(SPECTRUM_SURVEYS),
+        )
+        present = {
+            survey: pc.is_valid(cells.column(survey)).to_numpy(zero_copy_only=False)
+            for survey in SPECTRUM_SURVEYS
+        }
+        holders = {survey: np.flatnonzero(mask) for survey, mask in present.items()}
+        spectral_galaxies = np.flatnonzero(np.logical_or.reduce(list(present.values())))
+
+        def spectrum(survey: str, route: str) -> None:
+            get(f"/galaxies/{rng.choice(holders[survey])}/spectra/{survey}{route}")
+
+        def span_query(patch_count: int) -> dict[str, Any]:
+            galaxy = int(rng.choice(spectral_galaxies))
+            survey = next(name for name in SPECTRUM_SURVEYS if present[name][galaxy])
+            response = session.get(f"/galaxies/{galaxy}/spectra/{survey}")
+            table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
+            spans = observed_spans(table.column("wavelength").to_numpy())
+            return {
+                "galaxy": galaxy,
+                "p": rng.choice(N_PATCHES, patch_count, replace=False).tolist(),
+                "s": rng.choice(spans, SPANS, replace=False).tolist(),
+                "matches": 32,
+            }
+
+        def span_similarity(patch_count: int) -> Callable[[], None]:
+            batch = iter([span_query(patch_count) for _ in range(runs + 1)])
+            return lambda: get("/similarity", **next(batch))
+
+        spectral_calls = {
+            f"{name} {survey}": (
+                lambda survey=survey, route=route: spectrum(survey, route)
+            )
+            for survey in SPECTRUM_SURVEYS
+            for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
+        } | {
+            "similarity spans matches=32": span_similarity(0),
+            "similarity patches and spans matches=32": span_similarity(PATCHES),
+        }
         return {
             "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
-            "warm": {label: time_it(runs, call) for label, call in calls.items()},
+            "warm": warm
+            | {label: time_it(runs, call) for label, call in spectral_calls.items()},
+            "concurrency": {
+                f"clients={clients}": concurrent(clients) for clients in CLIENTS
+            },
             "artifact_bytes": {role: size(role) for role in ARTIFACTS},
         }
 
