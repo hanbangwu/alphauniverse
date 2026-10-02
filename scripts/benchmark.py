@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -34,9 +35,19 @@ from app.search import (
     vectors,
 )
 from app.spectra import spectra
-from modal_app import app, fastapi_app, serving_image
+from modal_app import (
+    SERVING_CPU,
+    SERVING_MAX_CONTAINERS,
+    SERVING_MAX_INPUTS,
+    SERVING_MEMORY,
+    SERVING_SCALEDOWN_WINDOW,
+    app,
+    fastapi_app,
+    serving_image,
+)
 
 image = serving_image.add_local_python_source("modal_app")
+logger = logging.getLogger(__name__)
 
 PATCHES = 4
 MATCHES = (8, 32, 128)
@@ -240,8 +251,8 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
 
 @app.function(
     image=image,
-    cpu=fastapi_app.spec.cpu,
-    memory=fastapi_app.spec.memory,
+    cpu=SERVING_CPU,
+    memory=SERVING_MEMORY,
     volumes=fastapi_app.spec.volumes,
     timeout=6 * 60 * 60,
 )
@@ -278,6 +289,14 @@ def git(*arguments: str) -> str:
     return subprocess.check_output(["git", *arguments], text=True).strip()
 
 
+def attempt(part: str, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return call()
+    except Exception as failure:
+        logger.exception("the %s part of the benchmark failed", part)
+        return {"error": f"{type(failure).__name__}: {failure}"}
+
+
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
     if git("status", "--porcelain"):
@@ -300,6 +319,7 @@ def main(runs: int = 30) -> None:
             )
         except subprocess.CalledProcessError:
             notes.append(f"best {stored['commit']} is not in this clone")
+            stored = None
         else:
             if stored_code not in code:
                 commits["best"] = stored["commit"]
@@ -314,15 +334,28 @@ def main(runs: int = 30) -> None:
         "notes": notes,
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "server": spec(fastapi_app),
+        "server": {
+            "cpu": SERVING_CPU,
+            "memory_mb": SERVING_MEMORY,
+            "max_inputs": SERVING_MAX_INPUTS,
+            "max_containers": SERVING_MAX_CONTAINERS,
+            "scaledown_window_s": SERVING_SCALEDOWN_WINDOW,
+        },
         "client": spec(client),
-        "requests": client.remote(fastapi_app.get_web_url(), runs),
-        "stages": paired.remote(sources, names + names[::-1], runs)
-        | {"locked_dependencies": "after"},
+        "requests": attempt(
+            "requests", lambda: client.remote(fastapi_app.get_web_url(), runs)
+        ),
+        "stages": attempt(
+            "stages",
+            lambda: (
+                paired.remote(sources, names + names[::-1], runs)
+                | {"locked_dependencies": "after"}
+            ),
+        ),
     }
     means = {
         name: float(np.mean([entry["total_p50_ms"] for entry in rounds]))
-        for name, rounds in report["stages"]["rounds"].items()
+        for name, rounds in report["stages"].get("rounds", {}).items()
         if all("error" not in entry for entry in rounds)
     }
     if means:
@@ -332,6 +365,9 @@ def main(runs: int = 30) -> None:
             "commit": commits[best],
             "total_p50_ms": round(means[best], 3),
         }
+    elif stored:
+        report["best"] = {"commit": stored["commit"]}
+        notes.append("no version timed fully, so best keeps the stored commit")
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
     print(f"wrote {REPORT}")
