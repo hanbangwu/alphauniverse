@@ -8,6 +8,7 @@ import tempfile
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -172,30 +173,18 @@ def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
     return times, len(rows)
 
 
-class SearchCounter:
-    def __init__(self, index: faiss.Index) -> None:
-        self.index = index
-        self.searches = 0
-
-    def search(self, *arguments: Any, **options: Any) -> Any:
-        self.searches += 1
-        return self.index.search(*arguments, **options)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.index, name)
-
-
-def looking_further(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
+def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
     batch = queries(runs + 1, PATCHES, matches)
-    pending = iter(batch)
-    timing = time_it(runs, lambda: search(next(pending), index=built))
-    counter = SearchCounter(built)
-    searches = []
+    search(batch[0], index=built)
+    samples, searches = [], []
     for query in batch[1:]:
-        counter.searches = 0
-        candidates(query, centroid(query, index=built), index=counter)
-        searches.append(counter.searches)
-    return timing | {
+        faiss.cvar.indexIVF_stats.reset()
+        samples.append(elapsed(partial(search, query, index=built)))
+        searches.append(faiss.cvar.indexIVF_stats.nq)
+    return {
+        "runs": runs,
+        "p50_ms": round(float(np.percentile(samples, 50)), 3),
+        "p95_ms": round(float(np.percentile(samples, 95)), 3),
         "looked_further": round(float(np.mean(np.greater(searches, 1))), 4),
         "most_searches": max(searches),
     }
@@ -244,7 +233,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
             for name, values in samples.items()
         },
         "searches": {
-            f"matches={asked}": looking_further(runs, asked, built) for asked in MATCHES
+            f"matches={asked}": whole_searches(runs, asked, built) for asked in MATCHES
         },
     }
 
