@@ -1,0 +1,46 @@
+name: Benchmark
+run-name: ${{ inputs.script }} on ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Measurement to run on Modal
+        type: choice
+        options:
+          - benchmark
+          - recall
+
+env:
+  UV_LOCKED: "1"
+
+jobs:
+  measure:
+    name: ${{ inputs.script }}
+    runs-on: ubuntu-latest
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      SCRIPT: ${{ inputs.script }}
+      REPORT: docs/benchmarks/${{ inputs.script == 'benchmark' && 'latest' || 'recall' }}.json
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Run on Modal
+        run: uv run --python 3.12 modal run -m "scripts.$SCRIPT"
+
+      - name: Report
+        run: |
+          {
+            echo '```json'
+            cat "$REPORT"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.REPORT }}
