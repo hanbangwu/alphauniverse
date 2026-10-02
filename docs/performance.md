@@ -1,17 +1,19 @@
 # Performance
 
-Every figure here comes from one run of `scripts/benchmark.py`:
+Every figure here comes from one run of `scripts/benchmark.py`, whose report is `docs/benchmarks/latest.json`:
 
-| Run              |                                                             |
-| ---------------- | ----------------------------------------------------------- |
-| Date             | 2026-09-24                                                  |
-| Commit           | `1d1d4b8`                                                   |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                  |
-| Server           | `fastapi_app`: 8 CPU, 8 GiB requested, 64 GiB limit         |
-| Client           | 1 CPU, separate container                                   |
-| Stage container  | server spec; 24 CPUs visible, faiss and OpenMP at 8 threads |
-| Cold runs        | one request, or one query, per figure                       |
-| Warm runs        | 30 per figure, after one discarded warm-up                  |
+| Run              |                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-02                                                                                                       |
+| Commit           | `b3077c5`, both versions                                                                                         |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                       |
+| Started by       | the Benchmark workflow, run 37010805704                                                                          |
+| Server           | `fastapi_app`: 8 CPU, 8 GiB requested, 64 GiB limit; `max_inputs=16`, `max_containers=1`, `scaledown_window=300` |
+| Client           | 1 CPU, separate container; 17 CPUs visible, faiss at 1 thread; AMD family 25, model 1                            |
+| Stage container  | server spec; 24 CPUs visible, faiss and OpenMP at 8 threads; AMD family 25, model 1                              |
+| Cold runs        | one request, or one query, per figure                                                                            |
+| Warm runs        | 30 per figure, after one discarded warm-up                                                                       |
+| Stage rounds     | 4, mirrored, two per version                                                                                     |
 
 Latency is measured by the client, so it includes Modal's ingress and no one's home network. **Unmeasured** marks a figure read off the code.
 
@@ -21,59 +23,80 @@ What a first visitor to an idle site waits for:
 
 | Step                                              | Cost                        |
 | ------------------------------------------------- | --------------------------- |
-| Container start + startup loads, blocking `/meta` | **19.5 s**                  |
-| Startup loads, of which the index is 6.0 s        | 7.9 s                       |
-| First `/similarity` after that                    | 0.64 s                      |
-| Everything warm after that                        | 0.15–0.49 s p50 per request |
+| Container start + startup loads, blocking `/meta` | **16.8 s**                  |
+| Startup loads, of which the index is 12.5 s       | 14.1 s                      |
+| First `/search` after that                        | 0.42 s                      |
+| Everything warm after that                        | 0.10–0.45 s p50 per request |
 
-**A cold visit is about 20 s of blank page**: `+layout.server.ts` awaits `/meta` during SSR, and nothing renders until it returns.
+**A cold visit is about 17 s of blank page**: `+layout.server.ts` awaits `/meta` during SSR, and nothing renders until it returns.
 
-Cold start dominates, not the search: the nearest-neighbour search is 22% of `search()`, which is 51 ms of a request.
+Cold start dominates, not the search: the nearest-neighbour search is 21% of `search()`, which is 98 ms of a request.
 
 ## Query latency
 
-`/similarity` with 4 patches, warm:
+`/search`, warm, 32 matches unless stated:
 
-| Matches | p50    | p95    |
-| ------- | ------ | ------ |
-| 8       | 204 ms | 231 ms |
-| 32      | 263 ms | 269 ms |
-| 128     | 489 ms | 761 ms |
+| Query                  | p50    | p95    |
+| ---------------------- | ------ | ------ |
+| 4 patches, 8 matches   | 145 ms | 177 ms |
+| 4 patches              | 208 ms | 223 ms |
+| 4 patches, 128 matches | 454 ms | 508 ms |
+| 4 spans                | 280 ms | 330 ms |
+| 4 patches and 4 spans  | 234 ms | 278 ms |
 
-**`matches` sets the cost**: each match is rescored from 576 reconstructed vectors, while the patch count changes only one averaging step, so the run holds patches at 4. Over the ~148 ms floor every request pays ([Other endpoints](#other-endpoints)), 32 matches add 263 − 148 = 115 ms at p50, and 128 add 489 − 148 = 341 ms.
+**`matches` sets the cost**: each match is rescored from 576 reconstructed vectors, while the patch count changes only one averaging step, so the run holds patches at 4. Over the ~104 ms floor every request pays ([Other endpoints](#other-endpoints)), 32 matches add 208 − 104 = 104 ms at p50, and 128 add 454 − 104 = 350 ms.
 
-The first `/similarity` to a fresh container takes **0.64 s**, of which `search()` is 72 ms in the stage container; where the rest goes is **unmeasured**.
+Span queries draw spans a galaxy's DESI spectrum covers, from galaxies that have one.
+
+The first `/search` to a fresh container takes **0.42 s**, of which `search()` is 128 ms in the stage container; where the rest goes is **unmeasured**.
 
 ## Stages of `search()`
 
-4 patches, 32 matches. The first query runs right after the index loads; warm is the p50 over the 30 that follow:
+4 patches, 32 matches. The first query runs right after the index loads, in the first round; warm is the p50 over the 30 that follow, averaged over the version's two rounds:
 
 | Stage         | First query | Warm p50    | Warm share |
 | ------------- | ----------- | ----------- | ---------- |
-| `centroid`    | 9.80 ms     | 0.65 ms     | 1.3 %      |
-| `candidates`  | 11.1 ms     | 11.4 ms     | 22.2 %     |
-| **`vectors`** | 42.8 ms     | **38.2 ms** | **74.7 %** |
-| `score_maps`  | 1.39 ms     | 0.73 ms     | 1.4 %      |
-| `span_maps`   | 6.40 ms     | 0.06 ms     | 0.1 %      |
-| `rank`        | 0.19 ms     | 0.16 ms     | 0.3 %      |
-| Total         | 71.8 ms     | 51.1 ms     |            |
+| `centroid`    | 22.1 ms     | 0.88 ms     | 0.9 %      |
+| `candidates`  | 17.0 ms     | 20.9 ms     | 21.3 %     |
+| **`vectors`** | 72.9 ms     | **74.4 ms** | **76.0 %** |
+| `score_maps`  | 3.14 ms     | 1.31 ms     | 1.3 %      |
+| `span_maps`   | 12.6 ms     | 0.22 ms     | 0.2 %      |
+| `rank`        | 0.26 ms     | 0.20 ms     | 0.2 %      |
+| Total         | 128.0 ms    | 97.8 ms     |            |
 
-`vectors` reconstructs 33 × 576 = 19,008 patch vectors in 38.2 ms, **2.0 µs each**: `reconstruct_batch` walks the IVF direct map one vector at a time, a list lookup and a decode call each, not a contiguous read.
+`vectors` reconstructs 33 × 576 = 19,008 patch vectors in 74.4 ms, **3.9 µs each**: `reconstruct_batch` walks the IVF direct map one vector at a time, a list lookup and a decode call each, not a contiguous read.
 
 `vectors` is faiss-parallel and the `score_maps` GEMV contends with its threads, so stage figures compare only between runs with the same thread configuration.
+
+Both versions ran the same code, so the spread between rounds is noise: the four rounds' warm totals span 96.9–98.8 ms, 1.9 ms or 1.9% of their 98.1 ms mean. A difference between versions smaller than that is within round-to-round variation on this host.
 
 ## Other endpoints
 
 Warm, same client:
 
-| Endpoint                  | p50    | p95    |
-| ------------------------- | ------ | ------ |
-| `/meta`                   | 148 ms | 153 ms |
-| `/galaxies/{g}/image.png` | 148 ms | 157 ms |
-| `/galaxies/{g}/tokens`    | 158 ms | 169 ms |
-| `/galaxies/{g}/coverage`  | 163 ms | 237 ms |
+| Endpoint                      | p50    | p95    |
+| ----------------------------- | ------ | ------ |
+| `/meta`                       | 104 ms | 120 ms |
+| `/galaxy/{g}/image`           | 102 ms | 120 ms |
+| `/galaxy/{g}/image/tokens`    | 108 ms | 117 ms |
+| `/galaxy/{g}`                 | 109 ms | 125 ms |
+| `/galaxy/{g}/spectrum`        | 108 ms | 128 ms |
+| `/galaxy/{g}/spectrum/tokens` | 109 ms | 127 ms |
 
-`/meta` is cached in-process and the image is an array lookup, so these sit at the request floor. What the floor is made of is **unmeasured**.
+`/meta` is built from cached labels and the image is an array lookup, so these sit at the request floor. What the floor is made of is **unmeasured**.
+
+## Concurrency
+
+Each client is a thread with its own connection, sending `/search` with 4 patches at 32 matches:
+
+| Clients | p50    | p95    | Requests/s |
+| ------- | ------ | ------ | ---------- |
+| 1       | 228 ms | 312 ms | 4.17       |
+| 4       | 382 ms | 500 ms | 10.34      |
+| 16      | 1.51 s | 2.14 s | 10.63      |
+| 32      | 2.91 s | 3.86 s | 10.77      |
+
+**Throughput stops rising at about 10.5 requests/s**, from 4 clients up, and latency grows with the queue: 32 clients / 10.77 requests/s = 2.97 s, against a p50 of 2.91 s. Modal's request log for the run shows server execution rising to 0.45–1.9 s per `/search` at 32 clients, so the server, not the 1-CPU client, sets the ceiling.
 
 ## Artifact sizes
 
@@ -95,21 +118,22 @@ Warm, same client:
 
 ## Cold start
 
-A request to a fresh container took **19.5 s**, against 0.15 s warm. With `max_containers=1` no second container can answer instead.
+A request to a fresh container took **16.8 s**, against 0.10 s warm. With `max_containers=1` no second container can answer instead.
 
-The startup loads, timed in a separate container of the same spec, add up to 7.9 s:
+The startup loads, timed in a separate container of the same spec, add up to 14.1 s in its first round:
 
-| Load      | Time   |
-| --------- | ------ |
-| `index`   | 6.01 s |
-| `images`  | 1.37 s |
-| `spectra` | 0.44 s |
-| `starts`  | 0.03 s |
-| `labels`  | 0.01 s |
+| Load      | First round | Later rounds |
+| --------- | ----------- | ------------ |
+| `index`   | 12.45 s     | 0.16–0.18 s  |
+| `spectra` | 0.78 s      | 0.45–0.46 s  |
+| `images`  | 0.60 s      | 0.18–0.19 s  |
+| `starts`  | 0.17 s      | 0.01 s       |
+| `labels`  | 0.09 s      | 0.01 s       |
+| Total     | 14.09 s     | 0.83–0.84 s  |
 
-`faiss.read_index` memory-maps the 17.19 GB index (`IO_FLAG_MMAP`), so pages fault in as queries touch them, and `make_direct_map()` reads every list's ids. The other 19.5 − 7.9 = 11.6 s of a cold request is **unmeasured**.
+Later rounds run in the same container, so the files are already in its page cache. `faiss.read_index` memory-maps the 17.19 GB index (`IO_FLAG_MMAP`), so pages fault in as queries touch them, and `make_direct_map()` reads every list's ids. The other 16.8 − 14.1 = 2.7 s of a cold request is **unmeasured**.
 
-With `scaledown_window=5*60`, any visitor arriving more than five minutes after the last waits the full 20 s, so on a low-traffic site a cold start is the usual case.
+With `scaledown_window=300`, any visitor arriving more than five minutes after the last waits the full 17 s, so on a low-traffic site a cold start is the usual case.
 
 ## Scaling ceilings
 
@@ -118,10 +142,10 @@ The design targets COSMOS scale. Where it stops:
 | Ceiling                      | Now                 | Breaks at                                                                                                                             |
 | ---------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Index size                   | 17.19 GB            | when the pages queries touch outgrow the 64 GiB limit (68.72 GB, or 68.72 / 17.19 = 4.0× the index); how far below that is unmeasured |
-| Cold start                   | 19.5 s              | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
+| Cold start                   | 16.8 s              | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
 | `full_points` in the browser | 180 MB              | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
 | Images in memory             | 215 MB              | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
 | Exact-search reference       | whole corpus in RAM | when it outgrows the recall job's 128 GiB; its peak memory and production recall are unmeasured until `scripts/recall.py` runs        |
-| Serving capacity             | one container       | past 16 concurrent inputs (`max_inputs=16`), unmeasured; `max_containers=1` is a hard cap                                             |
+| Serving capacity             | one container       | `/search` levels off at about 10.5 requests/s from 4 concurrent clients; `max_containers=1` is a hard cap                             |
 
 Check these before a change assumes they are not there.
