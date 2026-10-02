@@ -3,6 +3,7 @@ import resource
 import subprocess
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, NamedTuple
 
 import modal
@@ -41,6 +42,7 @@ image = build_image.add_local_python_source("modal_app")
 
 MATCHES = Query.model_fields["matches"].default
 SPANS = 4
+REPORT = Path("docs/benchmarks/recall.json")
 
 
 class Corpus(NamedTuple):
@@ -180,4 +182,6 @@ def main(per_kind: int = 100) -> None:
         "job": spec(measure),
         **measure.remote(per_kind),
     }
-    print(json.dumps(report, indent=2))
+    REPORT.parent.mkdir(exist_ok=True)
+    REPORT.write_text(json.dumps(report, indent=2) + "\n")
+    print(f"wrote {REPORT}")
