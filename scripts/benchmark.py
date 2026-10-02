@@ -33,7 +33,18 @@ from app.search import (
     vectors,
 )
 from app.spectra import spectra
-from modal_app import app, fastapi_app, serving_image
+from modal_app import (
+    CACHE_PATH,
+    SERVING_CPU,
+    SERVING_MAX_CONTAINERS,
+    SERVING_MAX_INPUTS,
+    SERVING_MEMORY,
+    SERVING_SCALEDOWN_WINDOW,
+    app,
+    cache_volume,
+    fastapi_app,
+    serving_image,
+)
 
 image = serving_image.add_local_python_source("modal_app")
 logger = logging.getLogger(__name__)
@@ -220,9 +231,9 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
 
 @app.function(
     image=image,
-    cpu=fastapi_app.spec.cpu,
-    memory=fastapi_app.spec.memory,
-    volumes=fastapi_app.spec.volumes,
+    cpu=SERVING_CPU,
+    memory=SERVING_MEMORY,
+    volumes={CACHE_PATH: cache_volume},
     timeout=6 * 60 * 60,
 )
 def paired(sources: dict[str, bytes], order: list[str], runs: int) -> dict[str, Any]:
@@ -302,7 +313,13 @@ def main(runs: int = 30) -> None:
         "notes": notes,
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "server": spec(fastapi_app),
+        "server": {
+            "cpu": SERVING_CPU,
+            "memory_mb": SERVING_MEMORY,
+            "max_inputs": SERVING_MAX_INPUTS,
+            "max_containers": SERVING_MAX_CONTAINERS,
+            "scaledown_window_s": SERVING_SCALEDOWN_WINDOW,
+        },
         "client": spec(client),
         "requests": attempt(lambda: client.remote(fastapi_app.get_web_url(), runs)),
         "stages": attempt(
