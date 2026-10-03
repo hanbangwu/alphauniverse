@@ -63,10 +63,7 @@ def source(role: str) -> ds.Dataset:
 def with_spectrum() -> np.ndarray:
     table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
     return np.logical_or.reduce(
-        [
-            pc.is_valid(table.column(survey)).to_numpy(zero_copy_only=False)
-            for survey in SPECTRUM_SURVEYS
-        ]
+        [pc.is_valid(table.column(survey)).to_numpy() for survey in SPECTRUM_SURVEYS]
     )
 
 

@@ -220,9 +220,7 @@ def client(url: str, runs: int) -> dict[str, Any]:
             io.BytesIO(session.get("/artifacts/tokens").raise_for_status().content),
             columns=[SPECTRUM_SURVEY],
         )
-        holders = np.flatnonzero(
-            pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy(zero_copy_only=False)
-        )
+        holders = np.flatnonzero(pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy())
 
         def spectrum(route: str) -> None:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
