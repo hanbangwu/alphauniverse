@@ -1,6 +1,5 @@
 import json
 import resource
-import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +34,7 @@ from scripts.benchmark import (
     PATCHES,
     SPANS,
     environment,
+    git,
     observed_spans,
     queries,
     spec,
@@ -59,7 +59,7 @@ def corpus() -> Corpus:
     return Corpus(
         patches(cells.column(ANCHOR).combine_chunks()),
         spectral(spectra.drop_null()),
-        np.flatnonzero(pc.is_valid(spectra).to_numpy(zero_copy_only=False)),
+        np.flatnonzero(pc.is_valid(spectra).to_numpy()),
     )
 
 
@@ -158,7 +158,14 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     ]
 
 
-def recall(per_kind: int) -> dict[str, Any]:
+@app.function(
+    image=image,
+    cpu=generate_index.spec.cpu,
+    memory=generate_index.spec.memory,
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume.with_mount_options(read_only=True)},
+)
+def measure(per_kind: int) -> dict[str, Any]:
     start = time.perf_counter()
     reference = corpus()
     loaded = time.perf_counter() - start
@@ -216,23 +223,10 @@ def recall(per_kind: int) -> dict[str, Any]:
     }
 
 
-@app.function(
-    image=image,
-    cpu=generate_index.spec.cpu,
-    memory=generate_index.spec.memory,
-    timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume.with_mount_options(read_only=True)},
-)
-def measure(per_kind: int) -> dict[str, Any]:
-    return recall(per_kind)
-
-
 @app.local_entrypoint()
 def main(per_kind: int = 100) -> None:
     report = {
-        "commit": subprocess.check_output(
-            ["git", "describe", "--always", "--dirty"], text=True
-        ).strip(),
+        "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "job": spec(measure),
