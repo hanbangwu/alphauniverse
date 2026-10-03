@@ -21,7 +21,7 @@ export class FilterState {
   ) {}
 
   get classes(): MorphologyClass[] {
-    return [...this.meta.morphologies, this.meta.unlabelled].map((count, index) => ({
+    return this.meta.morphologies.map((count, index) => ({
       index,
       label: MORPHOLOGIES[index],
       count

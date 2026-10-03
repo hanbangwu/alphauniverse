@@ -1,30 +1,24 @@
 import argparse
 import os
-from collections.abc import Iterator
 from pathlib import Path
 
 import faiss
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from PIL.Image import fromarray
 
 from app.config import (
     ANCHOR,
-    CROP_PIXELS,
     DIM,
     N_MORPHOLOGIES,
     N_PATCHES,
-    SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
     build_dir,
     points,
     store_schema,
 )
-from app.images import encode, write_images
 from app.search import generate_index, source, starts, with_spectrum
-from app.spectra import write_spectra
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_PATCHES + 12,
@@ -37,41 +31,10 @@ STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
 
 CLUSTERS = 64
 NOISE = 0.05
-SOURCE_PIXELS = CROP_PIXELS + 32
-PIXEL_NOISE = 4
-SAMPLES = 512
-MASKED = 4
-
-
-def _frames(seed: int, galaxies: int) -> Iterator[np.ndarray]:
-    rng = np.random.default_rng(seed + 1)
-    ramp = np.linspace(0, 255, SOURCE_PIXELS, dtype=np.float32)
-    base = (ramp[:, None, None] + ramp[None, :, None]) / 2
-    for _ in range(galaxies):
-        offset = rng.integers(0, 256)
-        noise = rng.integers(0, PIXEL_NOISE, (SOURCE_PIXELS, SOURCE_PIXELS, 3))
-        yield ((base + offset + noise) % 256).astype(np.uint8)
 
 
 def covered(survey: str, galaxy: int) -> bool:
     return galaxy % STRIDE[survey] == 0
-
-
-def _spectra(seed: int, galaxies: int) -> dict[str, list[dict[str, np.ndarray] | None]]:
-    rng = np.random.default_rng(seed + 2)
-    wavelength = np.linspace(3600, 9800, SAMPLES, dtype=np.float32)
-    cells: dict[str, list[dict[str, np.ndarray] | None]] = {
-        survey: [] for survey in SPECTRUM_SURVEYS
-    }
-    for galaxy in range(galaxies):
-        for survey in SPECTRUM_SURVEYS:
-            if not covered(survey, galaxy):
-                cells[survey].append(None)
-                continue
-            flux = rng.standard_normal(SAMPLES).astype(np.float32)
-            flux[rng.choice(SAMPLES, MASKED, replace=False)] = np.nan
-            cells[survey].append({"wavelength": wavelength, "flux": flux})
-    return cells
 
 
 def _cells(
@@ -145,9 +108,6 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
     _store("encoded", embeddings, galaxies, flags)
     _store("tokens", tokens, galaxies, flags)
-
-    write_images([encode(fromarray(frame)) for frame in _frames(seed, galaxies)])
-    write_spectra(_spectra(seed, galaxies))
 
     category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labelled)
 

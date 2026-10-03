@@ -1,6 +1,6 @@
 # Build pipeline
 
-Five Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. Images and spectra read the source dataset and can run at any point. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
+Three Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
 Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
@@ -11,6 +11,12 @@ Each job writes its artifacts in place, so a failed run leaves them incomplete; 
 `hanbangwu/alphauniverse-cosmos` is built by `scripts/alphauniverse_cosmos.py`: Legacy Survey DR10 south, cut to a √2° box on the COSMOS field, left-joined against five catalogues with LSDB and pushed to the Hub. The README lists the surveys and their token counts.
 
 The script is outside the deployed pipeline and needs `lsdb`, which is not a project dependency: run it with `uv run --with datasets --with lsdb`.
+
+The serving app reads images, spectra and GZ10 labels from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
+
+- **Image**: the anchor survey's `rgb` cutout, centre-cropped to `CROP_PIXELS` square and PNG-encoded on each request.
+- **Spectrum**: wavelength in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux.
+- **Labels**: `/meta`'s morphology counts, a count of `gz10_label` over every row, computed on the first request.
 
 ## `generate_embeddings`
 
@@ -40,28 +46,6 @@ Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the ancho
 
 A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
-## `generate_images`
-
-Centre-crops every galaxy's anchor image to `CROP_PIXELS` square and PNG-encodes it, in dataset row order:
-
-```
-galaxy: int32
-png:    large_binary
-```
-
-Row `g` is galaxy `g`: the app looks an image up by row position, not by the `galaxy` column. The serving app will not start without this artifact.
-
-## `generate_spectra`
-
-Copies every galaxy's DESI and SDSS spectra out of the dataset, in row order:
-
-```
-galaxy:     int32
-desi, sdss: struct<wavelength: list<float32>, flux: list<float32>>   -- null where unmatched
-```
-
-Wavelength is in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux. The app looks a spectrum up by row position as for images, and will not start without this artifact either.
-
 ## `generate_projections`
 
 Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (500,000) embeddings uniformly from the whole store. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on that sample: UMAP's fuzzy simplicial set over the sample weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. The second pass projects every embedding.
@@ -81,7 +65,7 @@ x, y:   float32 not null
 category: uint8   -- GZ10 morphology, null where unlabelled
 ```
 
-- **`mean_points`**: one row per galaxy, from its mean embedding. Small, loaded on first paint, and the source of `/meta`'s label counts.
+- **`mean_points`**: one row per galaxy, from its mean embedding. Small, and loaded on first paint.
 - **`full_points`**: one row per embedding, every modality in the same space; loaded only when the user asks for it. Written survey by survey, so its galaxy column is not monotonic.
 
 Training logs to Weights & Biases under `WANDB_MODE`. `modal_app.py` sets it to `offline`, so runs are written to the volume and not uploaded (for now).

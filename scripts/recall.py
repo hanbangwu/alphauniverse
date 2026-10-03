@@ -16,11 +16,12 @@ from app.config import (
     DATASET_REVISION,
     N_PATCHES,
     N_SPANS,
-    NPROBE,
-    PROBE,
     SPECTRUM_SURVEYS,
 )
+from app.dataset import spectrum
 from app.search import (
+    NPROBE,
+    PROBE,
     Query,
     index,
     patches,
@@ -29,7 +30,6 @@ from app.search import (
     spectral,
     spectrum_cells,
 )
-from app.spectra import spectra
 from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
 from scripts.benchmark import (
     PATCHES,
@@ -91,6 +91,12 @@ def exact_ranking(
     return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
 
 
+def wavelength(galaxy: int) -> np.ndarray:
+    tables = (spectrum(galaxy, survey) for survey in SPECTRUM_SURVEYS)
+    found = next(table for table in tables if table is not None)
+    return found.column("wavelength").to_numpy()
+
+
 def spectrum_coverage() -> dict[str, np.ndarray]:
     table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
     held = {
@@ -104,12 +110,10 @@ def spectrum_coverage() -> dict[str, np.ndarray]:
     }
 
 
-def observed_mask() -> np.ndarray:
-    cells = spectrum_cells(spectra())
-    mask = np.zeros((len(cells), N_SPANS), dtype=bool)
-    for galaxy in np.flatnonzero(pc.is_valid(cells).to_numpy()):
-        wavelength = np.asarray(cells[int(galaxy)]["wavelength"].values)
-        mask[galaxy, observed_spans(wavelength)] = True
+def observed_mask(holders: np.ndarray) -> np.ndarray:
+    mask = np.zeros((len(holders), N_SPANS), dtype=bool)
+    for galaxy in np.flatnonzero(holders):
+        mask[galaxy, observed_spans(wavelength(int(galaxy)))] = True
     return mask
 
 
@@ -135,7 +139,6 @@ def match_counts(
 
 def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     rng = np.random.default_rng(1)
-    cells = spectrum_cells(spectra())
     return [
         Query(
             galaxy=int(galaxy),
@@ -145,7 +148,7 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
             s=tuple(
                 int(span)
                 for span in rng.choice(
-                    observed_spans(np.asarray(cells[int(galaxy)]["wavelength"].values)),
+                    observed_spans(wavelength(int(galaxy))),
                     SPANS,
                     replace=False,
                 )
@@ -161,7 +164,7 @@ def recall(per_kind: int) -> dict[str, Any]:
     loaded = time.perf_counter() - start
     built = index()
     coverage = spectrum_coverage()
-    observed = observed_mask()
+    observed = observed_mask(~coverage["none"])
     paired = with_spans(per_kind, np.flatnonzero(coverage["desi"]))
 
     measured = {}

@@ -9,7 +9,7 @@ uv run ruff check app scripts tests modal_app.py
 uv run ruff format app scripts tests modal_app.py
 ```
 
-Tests need no Modal, GPU or network. `tests/conftest.py` builds one synthetic tree per session with `scripts/fixture.py`, in the production schemas:
+Tests need no Modal, GPU or network. `tests/test_dataset.py` replaces `dataset()` with a two-row `Dataset`; `/meta` and the image and spectrum endpoints are untested. `tests/conftest.py` builds one synthetic tree per session with `scripts/fixture.py`, in the production schemas:
 
 - Embeddings cluster around fixed random centres. Uniform noise in 768 dimensions is nearly orthogonal, which would make every ranking arbitrary.
 - The 2-d points come from one fixed random projection in place of the trained parametric UMAP, so the default suite needs no torch. One projection serves both point sets, as the projector does in production.
@@ -29,7 +29,6 @@ uv run --group build pytest tests/test_encode.py tests/test_parametric_umap.py
 ```
 
 - They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base`. No test downloads weights.
-- `test_saved_weights_load_back_unchanged` round-trips a small AION through `save_pretrained` and `from_pretrained`, which needs `safetensors`, from aion's `torch` extra.
 - `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, and checks the results match.
 - `test_padded_sdss_spectra_keep_their_flux` is `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input. Remove the mark once that is fixed.
 
@@ -111,6 +110,6 @@ Lint fails on a comment starting with `TODO`, `FIXME`, `HACK` or `XXX`, in any c
 
 The other workflows:
 
-- `build.yml` runs the torch tests on pull requests that change the torch modules or what they import (`app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`), what the tests build trees with (`app/images.py`, `app/spectra.py`, `scripts/fixture.py`), `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or itself.
+- `build.yml` runs the torch tests on pull requests that change the torch modules or what they import (`app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`), what the tests build trees with (`scripts/fixture.py`), `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or itself.
 - `benchmark.yml` runs only when started by hand (above).
 - `rules.yml` runs on pull requests. It fails on a commit authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot, and on one committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.

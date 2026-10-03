@@ -14,4 +14,4 @@ paths:
 # Pipeline
 
 - A pull request that changes what a `generate_*` job writes names the jobs that must be rerun, in order, before the change can deploy.
-- A change to an artifact's schema updates its schema in `docs/pipeline.md`, its loader's checks and `scripts/fixture.py` together.
+- A change to an artifact's schema updates its schema in `docs/pipeline.md` and `scripts/fixture.py` together.

@@ -144,7 +144,7 @@ Each client is a thread with its own connection, sending `/search` with 4 patche
 
 ## Artifact sizes
 
-`Content-Length` of `HEAD /artifacts/{role}`:
+`Content-Length` of `HEAD /artifacts/{role}`, which served every role when this was measured; the benchmark now measures only `/projections/{projection}` and `/downloads/{role}`:
 
 | Artifact          | Size         | Notes                                                                                   |
 | ----------------- | ------------ | --------------------------------------------------------------------------------------- |

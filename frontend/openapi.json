@@ -23,16 +23,65 @@
         }
       }
     },
-    "/artifacts/{role}": {
+    "/projections/{projection}": {
       "get": {
-        "summary": "Get Artifact",
-        "operationId": "get_artifact",
+        "summary": "Get Projections",
+        "operationId": "get_projections",
+        "parameters": [
+          {
+            "name": "projection",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "mean",
+                "full"
+              ],
+              "type": "string",
+              "title": "Projection"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/downloads/{role}": {
+      "get": {
+        "summary": "Download Artifact",
+        "operationId": "download_artifact",
         "parameters": [
           {
             "name": "role",
             "in": "path",
             "required": true,
             "schema": {
+              "enum": [
+                "encoded",
+                "codebook",
+                "tokens"
+              ],
               "type": "string",
               "title": "Role"
             }
@@ -50,15 +99,45 @@
               }
             }
           },
-          "404": {
+          "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Not Found"
+            }
+          }
+        }
+      }
+    },
+    "/galaxy/{galaxy}": {
+      "get": {
+        "summary": "Get Galaxy",
+        "operationId": "get_galaxy",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Galaxy"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -183,16 +262,6 @@
               }
             }
           },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Detail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -230,56 +299,6 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
-                }
-              }
-            }
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Detail"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/galaxy/{galaxy}": {
-      "get": {
-        "summary": "Get Galaxy",
-        "operationId": "get_galaxy",
-        "parameters": [
-          {
-            "name": "galaxy",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Galaxy"
                 }
               }
             }
@@ -385,32 +404,41 @@
   },
   "components": {
     "schemas": {
-      "Detail": {
-        "properties": {
-          "detail": {
-            "type": "string",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "required": [
-          "detail"
-        ],
-        "title": "Detail"
-      },
       "Galaxy": {
         "properties": {
-          "coverage": {
-            "items": {
-              "$ref": "#/components/schemas/Survey"
-            },
-            "type": "array",
-            "title": "Coverage"
+          "ls": {
+            "type": "boolean",
+            "title": "Ls"
+          },
+          "hsc": {
+            "type": "boolean",
+            "title": "Hsc"
+          },
+          "desi": {
+            "type": "boolean",
+            "title": "Desi"
+          },
+          "sdss": {
+            "type": "boolean",
+            "title": "Sdss"
+          },
+          "gz10": {
+            "type": "boolean",
+            "title": "Gz10"
+          },
+          "provabgs": {
+            "type": "boolean",
+            "title": "Provabgs"
           }
         },
         "type": "object",
         "required": [
-          "coverage"
+          "ls",
+          "hsc",
+          "desi",
+          "sdss",
+          "gz10",
+          "provabgs"
         ],
         "title": "Galaxy"
       },
@@ -437,10 +465,6 @@
             "type": "string",
             "title": "Id"
           },
-          "revision": {
-            "type": "string",
-            "title": "Revision"
-          },
           "galaxies": {
             "type": "integer",
             "title": "Galaxies"
@@ -449,8 +473,13 @@
             "type": "integer",
             "title": "Grid"
           },
-          "spectrum": {
-            "$ref": "#/components/schemas/SpectrumGrid"
+          "spectrum_origin": {
+            "type": "number",
+            "title": "Spectrum Origin"
+          },
+          "spectrum_width": {
+            "type": "number",
+            "title": "Spectrum Width"
           },
           "morphologies": {
             "items": {
@@ -458,60 +487,19 @@
             },
             "type": "array",
             "title": "Morphologies"
-          },
-          "unlabelled": {
-            "type": "integer",
-            "title": "Unlabelled"
           }
         },
         "type": "object",
         "required": [
           "author",
           "id",
-          "revision",
           "galaxies",
           "grid",
-          "spectrum",
-          "morphologies",
-          "unlabelled"
+          "spectrum_origin",
+          "spectrum_width",
+          "morphologies"
         ],
         "title": "Meta"
-      },
-      "SpectrumGrid": {
-        "properties": {
-          "origin": {
-            "type": "number",
-            "title": "Origin"
-          },
-          "width": {
-            "type": "number",
-            "title": "Width"
-          }
-        },
-        "type": "object",
-        "required": [
-          "origin",
-          "width"
-        ],
-        "title": "SpectrumGrid"
-      },
-      "Survey": {
-        "properties": {
-          "survey": {
-            "type": "string",
-            "title": "Survey"
-          },
-          "matched": {
-            "type": "boolean",
-            "title": "Matched"
-          }
-        },
-        "type": "object",
-        "required": [
-          "survey",
-          "matched"
-        ],
-        "title": "Survey"
       },
       "ValidationError": {
         "properties": {
