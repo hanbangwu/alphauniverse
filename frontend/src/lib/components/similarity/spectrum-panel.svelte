@@ -27,7 +27,6 @@
   const palette = $derived(
     map ? similarity.spectrumHeat : tokens.data ? tokenColors(tokens.data) : null
   )
-  const caption = $derived(map ? similarity.score : (value: number) => `token ${value}`)
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
@@ -40,7 +39,7 @@
         values={cells}
         color={palette}
         opacity={map ? undefined : tokenAlpha}
-        title={caption}
+        title={map ? similarity.score : similarity.caption}
         {selected}
         {onselect}
         label={onselect
