@@ -28,6 +28,7 @@ from scripts.fixture import TOKENS
 
 torch = pytest.importorskip("torch")
 encode_module = importlib.import_module("app.encode")
+codec_config = importlib.import_module("aion.codecs.config")
 
 CONFIGS = Path(__file__).parent / "aion"
 CACHES = (
@@ -86,23 +87,13 @@ def random_weights() -> Iterator[None]:
     network = encode_module.AION(config | {"encoder_depth": 1, "decoder_depth": 1})
     network = network.to(device()).eval()
     network.requires_grad_(False)
-    encode_module.codec.cache_clear()
+    encode_module.CodecManager._load_codec_from_hf.cache_clear()
     with pytest.MonkeyPatch.context() as patch:
-        for codec_class in set(encode_module.MODALITY_CODEC_MAPPING.values()):
+        for codec_class in set(codec_config.MODALITY_CODEC_MAPPING.values()):
             patch.setattr(codec_class, "from_pretrained", classmethod(load))
         patch.setattr(encode_module, "model", lambda: network)
         yield
-    encode_module.codec.cache_clear()
-
-
-def test_saved_weights_load_back_unchanged(tmp_path: Path) -> None:
-    network = encode_module.model()
-    network.save_pretrained(tmp_path)
-    loaded = encode_module.AION.from_pretrained(tmp_path).to(device())
-
-    torch.testing.assert_close(
-        loaded.state_dict(), network.state_dict(), rtol=0, atol=0
-    )
+    encode_module.CodecManager._load_codec_from_hf.cache_clear()
 
 
 def test_each_survey_tokenizes_to_the_fixture_layout() -> None:

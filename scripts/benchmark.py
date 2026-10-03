@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from functools import partial
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import faiss
 import httpx
@@ -25,16 +25,17 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from app.config import (
-    ARTIFACTS,
     DATASET_REVISION,
     N_PATCHES,
     N_SPANS,
     SPECTRUM_ORIGIN,
     SPECTRUM_TOKEN_WIDTH,
+    Download,
+    Projection,
     galaxy_count,
 )
-from app.images import images
-from app.main import SPECTRUM_SURVEY, labels
+from app.dataset import dataset, labels
+from app.main import SPECTRUM_SURVEY
 from app.search import (
     Query,
     candidates,
@@ -47,7 +48,6 @@ from app.search import (
     starts,
     vectors,
 )
-from app.spectra import spectra
 from modal_app import (
     SERVING_CPU,
     SERVING_MAX_CONTAINERS,
@@ -159,8 +159,8 @@ def client(url: str, runs: int) -> dict[str, Any]:
         def get(path: str, **params: Any) -> None:
             session.get(path, params=params).raise_for_status()
 
-        def size(role: str) -> int:
-            response = session.head(f"/artifacts/{role}").raise_for_status()
+        def size(path: str) -> int:
+            response = session.head(path).raise_for_status()
             return int(response.headers["content-length"])
 
         def parameters(matches: int) -> dict[str, Any]:
@@ -217,7 +217,7 @@ def client(url: str, runs: int) -> dict[str, Any]:
             }
 
         cells = pq.read_table(
-            io.BytesIO(session.get("/artifacts/tokens").raise_for_status().content),
+            io.BytesIO(session.get("/downloads/tokens").raise_for_status().content),
             columns=[SPECTRUM_SURVEY],
         )
         holders = np.flatnonzero(
@@ -259,7 +259,11 @@ def client(url: str, runs: int) -> dict[str, Any]:
             "concurrency": {
                 f"clients={clients}": concurrent(clients) for clients in CLIENTS
             },
-            "artifact_bytes": {role: size(role) for role in ARTIFACTS},
+            "artifact_bytes": {
+                f"{projection}_points": size(f"/projections/{projection}")
+                for projection in get_args(Projection)
+            }
+            | {role: size(f"/downloads/{role}") for role in get_args(Download)},
         }
 
 
@@ -302,7 +306,7 @@ def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = {
         load.__name__: round(elapsed(load), 3)
-        for load in (labels, images, spectra, index, starts)
+        for load in (dataset, labels, index, starts)
     }
     built = index()
 

@@ -9,16 +9,13 @@ GALAXIES = 12
 
 
 def _forget() -> None:
-    from app import config, images, main, search, spectra
+    from app import config, search
 
     config.galaxy_count.cache_clear()
     search.source.cache_clear()
     search.index.cache_clear()
     search.with_spectrum.cache_clear()
     search.starts.cache_clear()
-    main.labels.cache_clear()
-    images.images.cache_clear()
-    spectra.spectra.cache_clear()
 
 
 @pytest.fixture(scope="session")
