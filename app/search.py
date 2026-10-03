@@ -62,7 +62,7 @@ def source(role: str) -> ds.Dataset:
 @cache
 def with_spectrum() -> np.ndarray:
     table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
-    return pc.is_valid(spectrum_cells(table)).to_numpy(zero_copy_only=False)
+    return pc.is_valid(spectrum_cells(table)).to_numpy()
 
 
 def layout(has: np.ndarray) -> np.ndarray:
@@ -182,7 +182,6 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 def index() -> faiss.Index:
     loaded = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
     loaded.make_direct_map()
-    loaded.nprobe = NPROBE
     return loaded
 
 

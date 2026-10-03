@@ -59,7 +59,7 @@ def corpus() -> Corpus:
     return Corpus(
         patches(cells.column(ANCHOR).combine_chunks()),
         spectral(spectra.drop_null()),
-        np.flatnonzero(pc.is_valid(spectra).to_numpy(zero_copy_only=False)),
+        np.flatnonzero(pc.is_valid(spectra).to_numpy()),
     )
 
 
