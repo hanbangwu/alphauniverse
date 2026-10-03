@@ -103,20 +103,32 @@ def spectrum_coverage() -> dict[str, np.ndarray]:
     }
 
 
-def shares(
+def observed_mask() -> np.ndarray:
+    cells = spectrum_cells(spectra())
+    mask = np.zeros((len(cells), N_SPANS), dtype=bool)
+    for galaxy in np.flatnonzero(pc.is_valid(cells).to_numpy()):
+        wavelength = np.asarray(cells[int(galaxy)]["wavelength"].values)
+        mask[galaxy, observed_spans(wavelength)] = True
+    return mask
+
+
+def match_counts(
     coverage: dict[str, np.ndarray],
+    observed: np.ndarray,
     galaxies: np.ndarray,
     patch_maps: np.ndarray,
     span_maps: np.ndarray,
 ) -> dict[str, Any]:
     spanned = coverage["desi"][galaxies]
-    best_is_span = span_maps[spanned].max(axis=1) > patch_maps[spanned].max(axis=1)
+    spectral = span_maps[spanned]
+    best_is_span = spectral.max(axis=1) > patch_maps[spanned].max(axis=1)
+    inside = observed[galaxies[spanned], spectral.argmax(axis=1)]
     return {
         "matches_with": {
-            name: round(float(np.mean(held[galaxies])), 4)
-            for name, held in coverage.items()
+            name: int(held[galaxies].sum()) for name, held in coverage.items()
         },
-        "best_is_span": round(float(np.mean(best_is_span)), 4),
+        "best_is_span": int(best_is_span.sum()),
+        "best_span_observed": int(inside[best_is_span].sum()),
     }
 
 
@@ -148,6 +160,7 @@ def recall(per_kind: int) -> dict[str, Any]:
     loaded = time.perf_counter() - start
     built = index()
     coverage = spectrum_coverage()
+    observed = observed_mask()
     paired = with_spans(per_kind, np.flatnonzero(coverage["desi"]))
 
     measured = {}
@@ -177,7 +190,11 @@ def recall(per_kind: int) -> dict[str, Any]:
             "min": round(float(np.min(fractions)), 4),
             "all_found": round(float(np.mean(np.equal(fractions, 1))), 4),
             "short_of_matches": round(float(np.mean(short)), 4),
-            **shares(coverage, *(np.concatenate(part) for part in zip(*matched))),
+            **match_counts(
+                coverage,
+                observed,
+                *(np.concatenate(part) for part in zip(*matched)),
+            ),
         }
 
     return {
