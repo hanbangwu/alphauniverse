@@ -1,46 +1,14 @@
 import { getGalaxy, getImageTokens, getSearch, getSpectrum, getSpectrumTokens } from '$lib/api'
-import type { Galaxy } from '$lib/api'
 import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
-import type { Spectrum } from './spectra'
-import type { DataTag, DefaultError, QueryKey } from '@tanstack/query-core'
-import {
-  type UndefinedInitialDataOptions,
-  keepPreviousData,
-  queryOptions,
-  skipToken
-} from '@tanstack/svelte-query'
+import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
 import { type Float32, tableFromIPC } from 'apache-arrow'
 
-export type QueryFor<TData, TKey extends QueryKey> = UndefinedInitialDataOptions<
-  TData,
-  DefaultError,
-  TData,
-  TKey
-> & { queryKey: DataTag<TKey, TData, DefaultError> }
-
-export type TokensQuery = QueryFor<Uint32Array<ArrayBuffer>, readonly ['tokens', number | null]>
-export type CoverageQuery = QueryFor<Galaxy, readonly ['coverage', number | null]>
-export type SpectrumQuery = QueryFor<Spectrum, readonly ['spectrum', number | null]>
-export type SpectrumTokensQuery = QueryFor<
-  Uint32Array<ArrayBuffer>,
-  readonly ['spectrum', number | null, 'tokens']
->
-export type PointsQuery = QueryFor<string, readonly ['points', Projection]>
-export type MorphologyQuery = QueryFor<
-  number | null,
-  readonly ['morphology', string | null, number | null]
->
-export type SimilarityResultQuery = QueryFor<
-  SimilarityResult,
-  readonly ['similarity', SimilarityQuery | null]
->
-
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
-export function tokensQuery(galaxy: number | null): TokensQuery {
+export function tokensQuery(galaxy: number | null) {
   return queryOptions({
     queryKey: ['tokens', galaxy] as const,
     queryFn:
@@ -54,7 +22,7 @@ export function tokensQuery(galaxy: number | null): TokensQuery {
   })
 }
 
-export function coverageQuery(galaxy: number | null): CoverageQuery {
+export function coverageQuery(galaxy: number | null) {
   return queryOptions({
     queryKey: ['coverage', galaxy] as const,
     queryFn:
@@ -68,7 +36,7 @@ export function coverageQuery(galaxy: number | null): CoverageQuery {
   })
 }
 
-export function spectrumQuery(galaxy: number | null): SpectrumQuery {
+export function spectrumQuery(galaxy: number | null) {
   return queryOptions({
     queryKey: ['spectrum', galaxy] as const,
     queryFn:
@@ -88,7 +56,7 @@ export function spectrumQuery(galaxy: number | null): SpectrumQuery {
   })
 }
 
-export function spectrumTokensQuery(galaxy: number | null): SpectrumTokensQuery {
+export function spectrumTokensQuery(galaxy: number | null) {
   return queryOptions({
     queryKey: ['spectrum', galaxy, 'tokens'] as const,
     queryFn:
@@ -102,11 +70,7 @@ export function spectrumTokensQuery(galaxy: number | null): SpectrumTokensQuery 
   })
 }
 
-export function pointsQuery(
-  mosaic: MosaicState,
-  projection: Projection,
-  enabled = true
-): PointsQuery {
+export function pointsQuery(mosaic: MosaicState, projection: Projection, enabled = true) {
   return queryOptions({
     queryKey: ['points', projection] as const,
     queryFn: () => mosaic.load(projection),
@@ -115,11 +79,7 @@ export function pointsQuery(
   })
 }
 
-export function morphologyQuery(
-  mosaic: MosaicState,
-  table: string | null,
-  galaxy: number | null
-): MorphologyQuery {
+export function morphologyQuery(mosaic: MosaicState, table: string | null, galaxy: number | null) {
   return queryOptions({
     queryKey: ['morphology', table, galaxy] as const,
     queryFn:
@@ -138,13 +98,13 @@ export function morphologyQuery(
   })
 }
 
-export function similarityQuery(request: SimilarityQuery | null): SimilarityResultQuery {
+export function similarityQuery(request: SimilarityQuery | null) {
   return queryOptions({
     queryKey: ['similarity', request] as const,
     queryFn:
       request === null
         ? skipToken
-        : async ({ signal }) => {
+        : async ({ signal }): Promise<SimilarityResult> => {
             const { data } = await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
             return {
