@@ -23,8 +23,7 @@ export default defineConfig(
       'no-warning-comments': [
         'error',
         { terms: ['todo', 'fixme', 'hack', 'xxx'], decoration: ['*'] }
-      ],
-      'svelte/no-navigation-without-resolve': ['error', { ignoreReplaceState: true }]
+      ]
     }
   },
   {
