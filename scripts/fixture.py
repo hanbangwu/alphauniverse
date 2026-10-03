@@ -3,11 +3,11 @@ import os
 from collections.abc import Iterator
 from pathlib import Path
 
+import faiss
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from PIL.Image import fromarray
-from sklearn.preprocessing import normalize
 
 from app.config import (
     ANCHOR,
@@ -124,7 +124,9 @@ def _store(
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
-    return normalize(rows) @ basis
+    unit = rows.copy()
+    faiss.normalize_L2(unit)
+    return unit @ basis
 
 
 def build(galaxies: int, seed: int = 0) -> Path:
@@ -132,7 +134,8 @@ def build(galaxies: int, seed: int = 0) -> Path:
     target.mkdir(parents=True, exist_ok=True)
 
     rng = np.random.default_rng(seed)
-    centres = normalize(rng.standard_normal((CLUSTERS, DIM)))
+    centres = rng.standard_normal((CLUSTERS, DIM)).astype(np.float32)
+    faiss.normalize_L2(centres)
 
     embeddings, tokens = _cells(rng, centres, galaxies)
 

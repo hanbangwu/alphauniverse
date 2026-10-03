@@ -7,7 +7,6 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sklearn.preprocessing import normalize
 
 from .config import (
     ANCHOR,
@@ -89,7 +88,9 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
             start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
         )
     )
-    return normalize(index.reconstruct_batch(ids).mean(axis=0, keepdims=True))
+    direction = index.reconstruct_batch(ids).mean(axis=0, keepdims=True)
+    faiss.normalize_L2(direction)
+    return direction
 
 
 def candidates(
@@ -154,7 +155,9 @@ def search(
 
 def rows(cells: pa.Array, start: int, stop: int | None) -> np.ndarray:
     flat = pc.list_flatten(pc.list_flatten(pc.list_slice(cells, start, stop)))
-    return normalize(np.asarray(flat, dtype=np.float32).reshape(-1, DIM), copy=False)
+    embeddings = np.asarray(flat, dtype=np.float32).reshape(-1, DIM)
+    faiss.normalize_L2(embeddings)
+    return embeddings
 
 
 def patches(cells: pa.Array) -> np.ndarray:

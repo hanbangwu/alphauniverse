@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import faiss
 import modal
 import numpy as np
 import pyarrow.compute as pc
-from sklearn.preprocessing import normalize
 
 from app.config import (
     ANCHOR,
@@ -76,7 +76,8 @@ def exact_ranking(
         query_rows.append(
             reference.span_rows[owners == query.galaxy][np.asarray(query.spans)]
         )
-    direction = normalize(np.concatenate(query_rows).mean(axis=0, keepdims=True))
+    direction = np.concatenate(query_rows).mean(axis=0, keepdims=True)
+    faiss.normalize_L2(direction)
     patch_maps = (reference.patch_rows @ direction.T).reshape(-1, N_PATCHES)
     spectral_maps = np.full((len(patch_maps), N_SPANS), np.nan, dtype=np.float32)
     spectral_maps[reference.spectrum_galaxies] = (
