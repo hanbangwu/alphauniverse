@@ -393,6 +393,19 @@ def attempt(part: str, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         return {"error": f"{type(failure).__name__}: {failure}"}
 
 
+def provenance() -> dict[str, str]:
+    return {
+        "revision": DATASET_REVISION,
+        "date": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+
+
+def write(path: Path, report: dict[str, Any]) -> None:
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n")
+    print(f"wrote {path}")
+
+
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
     if git("status", "--porcelain"):
@@ -428,8 +441,7 @@ def main(runs: int = 30) -> None:
         "commit": git("describe", "--always"),
         "commits": commits,
         "notes": notes,
-        "revision": DATASET_REVISION,
-        "date": datetime.now(UTC).isoformat(timespec="seconds"),
+        **provenance(),
         "server": {
             "cpu": SERVING_CPU,
             "memory_mb": SERVING_MEMORY,
@@ -464,6 +476,4 @@ def main(runs: int = 30) -> None:
     elif stored:
         report["best"] = {"commit": stored["commit"]}
         notes.append("no version timed fully, so best keeps the stored commit")
-    REPORT.parent.mkdir(exist_ok=True)
-    REPORT.write_text(json.dumps(report, indent=2) + "\n")
-    print(f"wrote {REPORT}")
+    write(REPORT, report)
