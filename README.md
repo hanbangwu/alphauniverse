@@ -8,7 +8,7 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 - **Explore the embedding space** - Every galaxy appears as a point in a parametric UMAP projection. There are two views: **mean**, one point per galaxy from its average embedding; and **full**, one point per embedding (all modalities share one map). Hovering or selecting a point shows the galaxy's morphology and image.
 - **Inspect a galaxy** - Selecting a point shows its Legacy Survey image or its DESI spectrum, its morphology label, and which surveys it was crossmatched into.
-- **Search by token** - Search on a selected galaxy shows the token behind each of its 576 image patches and each span of its spectrum. Click patches, spans, or both, or select them with the arrow keys and Enter, then press Search to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and of its span scores where it has a spectrum; thresholding the patch heatmap gives zero-shot segmentation.
+- **Search by token** - Search on a selected galaxy shows the token behind each of its 576 image patches and each span of its spectrum. Click patches, spans, or both, or select them with the arrow keys and Enter or Space, then press Search to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and of its span scores where it has a spectrum; thresholding the patch heatmap gives zero-shot segmentation.
 
 ## Data
 
