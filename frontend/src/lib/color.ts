@@ -7,7 +7,7 @@ import { defaultCategoryColors } from 'embedding-atlas'
 export type RGB = [number, number, number]
 export type Scheme = 'light' | 'dark'
 
-export function toRGB(value: string): RGB {
+function toRGB(value: string): RGB {
   const { r, g, b } = rgb(value)
   return [r, g, b]
 }
