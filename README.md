@@ -69,5 +69,5 @@ cd frontend && bun run check         # regenerates src/lib/api and typechecks
 
 - [`docs/architecture.md`](docs/architecture.md): how the pieces fit together
 - [`docs/pipeline.md`](docs/pipeline.md): the build stages and artifact schemas
-- [`docs/performance.md`](docs/performance.md): cost model, measurements, ceilings
-- [`docs/testing.md`](docs/testing.md): tests, benchmarks and CI
+- [`docs/benchmarks.md`](docs/benchmarks.md): benchmarks, measurements, ceilings
+- [`docs/testing.md`](docs/testing.md): tests and CI

@@ -9,7 +9,7 @@
 | `scripts/`     | Dataset build, OpenAPI export, test fixtures, benchmarks |
 | `tests/`       | pytest suite                                             |
 | `frontend/`    | Svelte app                                               |
-| `docs/`        | Architecture, pipeline, performance, and testing notes   |
+| `docs/`        | Architecture, pipeline, benchmark, and testing notes     |
 
 ## Commands
 
@@ -18,8 +18,9 @@ uv run pytest                                       # tests
 uv run ruff check app scripts tests modal_app.py    # lint
 uv run ruff format app scripts tests modal_app.py   # format
 uv run python -m scripts.fixture                    # build fixture tree
-uv run modal run -m scripts.benchmark               # measure the serving path on Modal
-uv run modal run -m scripts.recall                  # measure production recall on Modal
+uv run modal run -m scripts.benchmarks.search_performance   # time search() on Modal
+uv run modal run -m scripts.benchmarks.backend_performance  # time the HTTP endpoints on Modal
+uv run modal run -m scripts.benchmarks.search_quality       # measure recall on Modal
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
 
 cd frontend
