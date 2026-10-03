@@ -76,9 +76,7 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
 
 @pytest.fixture(scope="module", autouse=True)
 def random_weights() -> Iterator[None]:
-    def load(
-        codec_class: type, repository: str, modality: type, revision: str
-    ) -> object:
+    def load(codec_class: type, repository: str, modality: type) -> object:
         torch.manual_seed(0)
         path = CONFIGS / "codecs" / modality.name / "config.json"
         return codec_class(**json.loads(path.read_text())).eval()
@@ -122,13 +120,14 @@ def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
     reason="trailing lambda = -1 padding zeroes the SDSS codec input (#50)",
 )
 def test_padded_sdss_spectra_keep_their_flux() -> None:
-    first, second = (
-        encode_module.spectrum(
-            encode_module.SDSSSpectrum,
-            spectrum(np.random.default_rng(seed), 3800, 200),
+    with torch.inference_mode():
+        first, second = (
+            encode_module.spectrum(
+                encode_module.SDSSSpectrum,
+                spectrum(np.random.default_rng(seed), 3800, 200),
+            )
+            for seed in (1, 2)
         )
-        for seed in (1, 2)
-    )
 
     assert not torch.equal(first, second)
 
