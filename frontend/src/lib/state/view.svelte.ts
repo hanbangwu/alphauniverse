@@ -20,10 +20,6 @@ export class ViewState {
     return this.pointSet.value === 'full'
   }
 
-  get table(): string {
-    return this.full ? 'full_points' : 'mean_points'
-  }
-
   select(galaxy: number | null): void {
     if (galaxy !== this.galaxy.value) {
       this.patches.reset()
