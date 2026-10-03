@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from tqdm import tqdm
+from umap import UMAP
 from umap.umap_ import find_ab_params, fuzzy_simplicial_set
 
 from .config import (
@@ -31,7 +32,6 @@ BATCH = 1024
 CHUNK = 128
 EPOCHS = 10
 LEARNING_RATE = 1e-3
-NEIGHBORS = 16
 MIN_DIST = 0.1
 NEGATIVES = 5
 SAMPLE = 500_000
@@ -64,13 +64,13 @@ def fit_parametric_umap(sampled: np.ndarray) -> ParametricUMAP:
     import wandb
 
     strengths, _, _ = fuzzy_simplicial_set(
-        sampled, n_neighbors=NEIGHBORS, random_state=SEED, metric="cosine"
+        sampled, n_neighbors=UMAP().n_neighbors, random_state=SEED, metric="cosine"
     )
     edges = strengths.tocoo()
     rows = torch.as_tensor(sampled, device=device())
     heads = torch.as_tensor(edges.row, dtype=torch.int64, device=device())
     tails = torch.as_tensor(edges.col, dtype=torch.int64, device=device())
-    strength = torch.as_tensor(edges.data, dtype=torch.float32, device=device())
+    strength = torch.as_tensor(edges.data, device=device())
     steps = len(strength) // BATCH
 
     a, b = find_ab_params(1.0, MIN_DIST)
@@ -95,7 +95,6 @@ def fit_parametric_umap(sampled: np.ndarray) -> ParametricUMAP:
             "learning_rate": LEARNING_RATE,
             "epochs": EPOCHS,
             "batch_size": BATCH,
-            "n_neighbors": NEIGHBORS,
             "min_dist": MIN_DIST,
             "negatives": NEGATIVES,
             "sample": SAMPLE,
@@ -158,29 +157,28 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
             )
 
 
+def embedding_count() -> int:
+    metadata = pq.read_metadata(artifact("encoded"))
+    columns = (
+        metadata.row_group(group).column(leaf)
+        for group in range(metadata.num_row_groups)
+        for leaf in range(metadata.num_columns)
+        if "." in metadata.schema.column(leaf).path
+    )
+    return (
+        sum(column.num_values - column.statistics.null_count for column in columns)
+        // DIM
+    )
+
+
 def generate_projections() -> None:
-    data = dataset()
-    raw = np.asarray(data[FLAG_SURVEYS["gz10"]], dtype=np.float64)
-    category = pa.array(np.nan_to_num(raw).astype(dtype=np.uint8), mask=np.isnan(raw))
+    category = (
+        dataset().data.column(FLAG_SURVEYS["gz10"]).cast(pa.uint8()).combine_chunks()
+    )
     count = len(category)
     galaxy = np.arange(count, dtype=np.int32)
 
-    metadata = pq.read_metadata(artifact("encoded"))
-    counts: dict[str, int] = {}
-    for leaf in range(len(metadata.schema)):
-        survey, _, nested = metadata.schema.column(leaf).path.partition(".")
-        if not nested:
-            continue
-        chunks = [
-            metadata.row_group(group).column(leaf)
-            for group in range(metadata.num_row_groups)
-        ]
-        counts[survey] = (
-            sum(chunk.num_values for chunk in chunks)
-            - sum(chunk.statistics.null_count for chunk in chunks)
-        ) // DIM
-
-    population = sum(counts.values())
+    population = embedding_count()
     chosen = np.sort(
         np.random.default_rng(SEED).choice(
             population, min(SAMPLE, population), replace=False

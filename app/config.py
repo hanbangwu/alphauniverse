@@ -25,10 +25,8 @@ def device() -> torch.device:
 
 DATASET_AUTHOR = "hanbangwu"
 DATASET_NAME = "alphauniverse-cosmos"
-DATASET_ID = f"{DATASET_AUTHOR}/{DATASET_NAME}"
 DATASET_REVISION = "e250e43c35e63523ee3940c9543302c29ca56437"
 
-AION_REPOSITORY = "polymathic-ai/aion-base"
 
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / ".cache"
 
@@ -40,6 +38,7 @@ GRID = 24
 N_PATCHES = GRID**2
 
 SPECTRUM_ORIGIN = 3500.0
+SPECTRUM_SURVEY: SpectrumSurvey = "desi"
 SPECTRUM_TOKEN_WIDTH = 32 * 0.8
 N_SPANS = 8704 // 32
 
@@ -70,38 +69,18 @@ RGB_COLUMN = f"rgb{LS}"
 
 N_MORPHOLOGIES = 10
 
-NLIST = 16384
-NPROBE = 64
-PROBE = 2048
-TRAIN_GALAXIES = 2048
-BATCH = 256
-MIN_TRAIN_PER_CENTROID = 39
-
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
     "search_index": "faiss",
-    "images": "parquet",
-    "spectra": "parquet",
     "codebook": "parquet",
     "tokens": "parquet",
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
 }
+Projection = Literal["mean", "full"]
+Download = Literal["encoded", "codebook", "tokens"]
 
-
-IMAGES = pa.schema([pa.field("galaxy", pa.int32()), pa.field("png", pa.large_binary())])
-
-SPECTRUM = pa.struct(
-    [
-        pa.field("wavelength", pa.list_(pa.float32())),
-        pa.field("flux", pa.list_(pa.float32())),
-    ]
-)
-SPECTRA = pa.schema(
-    [pa.field("galaxy", pa.int32())]
-    + [pa.field(survey, SPECTRUM) for survey in SPECTRUM_SURVEYS]
-)
 
 STORES = ("encoded", "codebook", "tokens")
 

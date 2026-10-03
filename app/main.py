@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import asynccontextmanager
-from functools import cache
 from io import BytesIO
 from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.dataset as ds
-import pyarrow.parquet as pq
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -20,71 +18,48 @@ from .config import (
     ANCHOR,
     DATASET_AUTHOR,
     DATASET_NAME,
-    DATASET_REVISION,
     FLAG_SURVEYS,
     GRID,
-    N_MORPHOLOGIES,
     N_PATCHES,
     N_SPANS,
     SPECTRUM_ORIGIN,
+    SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
     TOKEN_SURVEYS,
+    Download,
     GalaxyIndex,
-    SpectrumSurvey,
+    Projection,
     artifact,
     galaxy_count,
 )
-from .images import image, images
+from .dataset import image, labels, spectrum
 from .search import Query as SearchQuery
 from .search import index, search, source, starts
-from .spectra import spectra, spectrum
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
-
-SPECTRUM_SURVEY: SpectrumSurvey = "desi"
-
-
-@cache
-def labels() -> tuple[list[int], int]:
-    category = pq.read_table(artifact("mean_points"), columns=["category"])["category"]
-    labelled = np.asarray(category.drop_null())
-    return (
-        np.bincount(labelled, minlength=N_MORPHOLOGIES).tolist(),
-        category.null_count,
-    )
-
-
-class SpectrumGrid(BaseModel):
-    origin: float
-    width: float
+    from pathlib import Path
 
 
 class Meta(BaseModel):
     author: str
     id: str
-    revision: str
     galaxies: int
     grid: int
-    spectrum: SpectrumGrid
+    spectrum_origin: float
+    spectrum_width: float
     morphologies: list[int]
-    unlabelled: int
-
-
-class Survey(BaseModel):
-    survey: str
-    matched: bool
 
 
 class Galaxy(BaseModel):
-    coverage: list[Survey]
+    ls: bool
+    hsc: bool
+    desi: bool
+    sdss: bool
+    gz10: bool
+    provabgs: bool
 
 
-class Detail(BaseModel):
-    detail: str
-
-
-NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"model": Detail}}
 BINARY_OCTET: dict[str, Any] = {
     "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
 }
@@ -128,9 +103,6 @@ class RevalidatedRoute(APIRoute):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
-    labels()
-    images()
-    spectra()
     index()
     starts()
     yield
@@ -163,29 +135,21 @@ app.add_middleware(
     "/meta",
 )
 def get_meta() -> Meta:
-    morphologies, unlabelled = labels()
     return Meta(
         author=DATASET_AUTHOR,
         id=DATASET_NAME,
-        revision=DATASET_REVISION,
         galaxies=galaxy_count(),
         grid=GRID,
-        spectrum=SpectrumGrid(origin=SPECTRUM_ORIGIN, width=SPECTRUM_TOKEN_WIDTH),
-        morphologies=morphologies,
-        unlabelled=unlabelled,
+        spectrum_origin=SPECTRUM_ORIGIN,
+        spectrum_width=SPECTRUM_TOKEN_WIDTH,
+        morphologies=labels(),
     )
 
 
-@app.get(
-    "/artifacts/{role}",
-    response_class=FileResponse,
-    responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
-)
-def get_artifact(role: str, request: Request) -> Response:
+def file(path: Path, request: Request) -> Response:
     try:
-        path = artifact(role)
         stat_result = path.stat()
-    except (KeyError, OSError) as exception:
+    except OSError as exception:
         raise HTTPException(404, str(exception)) from exception
 
     response = FileResponse(
@@ -199,9 +163,45 @@ def get_artifact(role: str, request: Request) -> Response:
     return response
 
 
-@app.head("/artifacts/{role}", include_in_schema=False)
-def head_artifact(role: str, request: Request) -> Response:
-    return get_artifact(role, request)
+@app.get(
+    "/projections/{projection}",
+    response_class=FileResponse,
+    responses={200: {"content": BINARY_OCTET}},
+)
+def get_projections(projection: Projection, request: Request) -> Response:
+    return file(artifact(f"{projection}_points"), request)
+
+
+@app.head("/projections/{projection}", include_in_schema=False)
+def head_projections(projection: Projection, request: Request) -> Response:
+    return get_projections(projection, request)
+
+
+@app.get(
+    "/downloads/{role}",
+    response_class=FileResponse,
+    responses={200: {"content": BINARY_OCTET}},
+)
+def download_artifact(role: Download, request: Request) -> Response:
+    return file(artifact(role), request)
+
+
+@app.head("/downloads/{role}", include_in_schema=False)
+def head_download_artifact(role: Download, request: Request) -> Response:
+    return download_artifact(role, request)
+
+
+@app.get(
+    "/galaxy/{galaxy}",
+)
+def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
+    table = source("tokens").to_table(
+        columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
+    )
+    return Galaxy(
+        **{survey: table.column(survey)[0].is_valid for survey in TOKEN_SURVEYS},
+        **{survey: bool(table.column(survey)[0].as_py()) for survey in FLAG_SURVEYS},
+    )
 
 
 @app.get(
@@ -236,7 +236,7 @@ def get_image_tokens(galaxy: GalaxyIndex) -> Response:
 @app.get(
     "/galaxy/{galaxy}/spectrum",
     response_class=Response,
-    responses={200: {"content": ARROW_STREAM}, **NOT_FOUND},
+    responses={200: {"content": ARROW_STREAM}},
 )
 def get_spectrum(galaxy: GalaxyIndex) -> Response:
     table = spectrum(galaxy, SPECTRUM_SURVEY)
@@ -248,7 +248,7 @@ def get_spectrum(galaxy: GalaxyIndex) -> Response:
 @app.get(
     "/galaxy/{galaxy}/spectrum/tokens",
     response_class=Response,
-    responses={200: {"content": BINARY_OCTET}, **NOT_FOUND},
+    responses={200: {"content": BINARY_OCTET}},
 )
 def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     table = source("tokens").to_table(
@@ -259,25 +259,6 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
         raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
     return Response(
         np.asarray(cell.values)[1:].tobytes(), media_type="application/octet-stream"
-    )
-
-
-@app.get(
-    "/galaxy/{galaxy}",
-)
-def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
-    table = source("tokens").to_table(
-        columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
-    )
-    return Galaxy(
-        coverage=[
-            Survey(survey=survey, matched=table.column(survey)[0].is_valid)
-            for survey in TOKEN_SURVEYS
-        ]
-        + [
-            Survey(survey=survey, matched=bool(table.column(survey)[0].as_py()))
-            for survey in FLAG_SURVEYS
-        ]
     )
 
 

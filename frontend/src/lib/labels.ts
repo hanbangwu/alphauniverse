@@ -1,3 +1,5 @@
+import type { Galaxy } from '$lib/api'
+
 export interface Label {
   label: string
 }
@@ -8,7 +10,7 @@ export type Choice<T extends string> = Label & { value: T }
 
 export const SIMILARITY = { short: 'cos sim' } as const
 
-export const SURVEYS: Labels<string> = {
+export const SURVEYS: Labels<keyof Galaxy> = {
   ls: { label: 'Legacy Survey DR10' },
   hsc: { label: 'HSC PDR3' },
   desi: { label: 'DESI EDR SV3' },

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Galaxy } from '$lib/api'
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
   import { coverageQuery } from '$lib/data/queries'
@@ -14,8 +15,6 @@
   let { galaxy }: Props = $props()
 
   const coverage = createQuery(() => coverageQuery(galaxy))
-
-  const surveys = $derived(coverage.data ?? [])
 </script>
 
 <div class="flex flex-col gap-1">
@@ -26,7 +25,7 @@
     {/if}
   </div>
 
-  {#if surveys.length > 0}
+  {#if coverage.data}
     <Table.Root class="text-xs">
       <Table.Header>
         <Table.Row class="hover:bg-transparent">
@@ -35,12 +34,12 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each surveys as { survey, matched } (survey)}
+        {#each Object.entries(SURVEYS) as [survey, { label }] (survey)}
           <Table.Row class="last:border-0">
-            <Table.Cell class="px-0 py-1.5">{SURVEYS[survey]?.label ?? survey}</Table.Cell>
+            <Table.Cell class="px-0 py-1.5">{label}</Table.Cell>
             <Table.Cell class="px-0 py-1.5">
               <div class="flex justify-end">
-                {#if matched}
+                {#if coverage.data[survey as keyof Galaxy]}
                   <CheckIcon class="size-3.5" aria-label="matched" />
                 {:else}
                   <MinusIcon class="size-3.5 text-muted-foreground/50" aria-label="not matched" />

@@ -6,8 +6,7 @@ import pyarrow.parquet as pq
 import torch
 import torchvision.transforms.functional as F
 from aion import AION
-from aion.codecs import Codec
-from aion.codecs.config import MODALITY_CODEC_MAPPING
+from aion.codecs import CodecManager
 from aion.modalities import (
     HSCAG,
     HSCAI,
@@ -38,7 +37,6 @@ from aion.modalities import (
     LegacySurveyShapeE1,
     LegacySurveyShapeE2,
     LegacySurveyShapeR,
-    Modality,
     Scalar,
     SDSSSpectrum,
     Spectrum,
@@ -46,10 +44,8 @@ from aion.modalities import (
 from tqdm import tqdm
 
 from .config import (
-    AION_REPOSITORY,
     ANCHOR,
     CROP_PIXELS,
-    DIM,
     FLAG_SURVEYS,
     HSC,
     LS,
@@ -93,18 +89,13 @@ HSC_SCALARS = (
 )
 
 
-@cache
-def codec(modality: type[Modality]) -> Codec:
-    return (
-        MODALITY_CODEC_MAPPING[modality]
-        .from_pretrained(AION_REPOSITORY, modality=modality)
-        .to(device())
-    )
+def codec() -> CodecManager:
+    return CodecManager(device=device())
 
 
 @cache
 def model() -> AION:
-    return AION.from_pretrained(AION_REPOSITORY).to(device()).eval()
+    return AION.from_pretrained("polymathic-ai/aion-base").to(device()).eval()
 
 
 def image(
@@ -116,8 +107,8 @@ def image(
     flux = np.asarray([[by_band[band] for band in bands]], dtype=np.float32)
     crop = F.center_crop(torch.from_numpy(flux), output_size=[CROP_PIXELS, CROP_PIXELS])
     return (
-        codec(modality)
-        .encode(modality(flux=crop.to(device()), bands=bands))
+        codec()
+        .encode(modality(flux=crop.to(device()), bands=bands))[modality.token_key]
         .reshape(1, -1)
     )
 
@@ -135,17 +126,17 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
         )
         for argument, (field, dtype) in fields.items()
     }
-    return codec(modality).encode(modality(**samples)).reshape(1, -1)
+    return codec().encode(modality(**samples))[modality.token_key].reshape(1, -1)
 
 
 def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
     return (
-        codec(modality)
+        codec()
         .encode(
             modality(
                 value=torch.as_tensor([value], dtype=torch.float32, device=device())
             )
-        )
+        )[modality.token_key]
         .reshape(1, -1)
     )
 
@@ -228,28 +219,24 @@ def by_survey(
 
 def generate_embeddings() -> None:
     data = dataset()
-    count = len(data)
-
-    batches: dict[str, dict[str, list]] = {
-        role: {key: [] for key in ("galaxy", *TOKEN_SURVEYS, *FLAG_SURVEYS)}
+    schemas = {role: store_schema(role) for role in STORES}
+    writers = {
+        role: pq.ParquetWriter(artifact(role), schemas[role], compression="zstd")
         for role in STORES
     }
+    rows: dict[str, list[dict]] = {role: [] for role in STORES}
 
-    schemas: dict[str, pa.Schema] = {}
-    writers: dict[str, pq.ParquetWriter] = {}
-    for role in STORES:
-        schemas[role] = store_schema(role)
-        writers[role] = pq.ParquetWriter(
-            artifact(role), schemas[role], compression="zstd"
-        )
-
-    for galaxy in tqdm(range(count), desc="encode"):
+    for galaxy in tqdm(range(len(data)), desc="encode"):
         row = data[galaxy]
         groups = tokenize(row)
         context, codebook, modality_mask = encode(groups)
         cells = {
-            "encoded": by_survey(context, groups, modality_mask),
-            "codebook": by_survey(codebook, groups, modality_mask),
+            role: {
+                survey: list(vectors.astype(np.float16))
+                for survey, vectors in by_survey(values, groups, modality_mask).items()
+            }
+            for role, values in (("encoded", context), ("codebook", codebook))
+        } | {
             "tokens": {
                 survey: np.concatenate(
                     [
@@ -264,40 +251,16 @@ def generate_embeddings() -> None:
             survey: row[column] is not None for survey, column in FLAG_SURVEYS.items()
         }
         for role in STORES:
-            batch = batches[role]
-            batch["galaxy"].append(galaxy)
-            for survey in TOKEN_SURVEYS:
-                batch[survey].append(cells[role].get(survey))
-            for survey in FLAG_SURVEYS:
-                batch[survey].append(flags[survey])
-            if len(batch["galaxy"]) < 1024 and galaxy < count - 1:
-                continue
-
-            dtype, width = (np.uint32, None) if role == "tokens" else (np.float16, DIM)
-            columns: dict[str, pa.Array] = {}
-            for survey in TOKEN_SURVEYS:
-                entries = batch[survey]
-                valid = [entry for entry in entries if entry is not None]
-                values = pa.array(
-                    np.concatenate(valid).reshape(-1) if valid else np.empty(0, dtype)
+            rows[role].append({"galaxy": galaxy, **cells[role], **flags})
+            if len(rows[role]) == 1024:
+                writers[role].write_table(
+                    pa.Table.from_pylist(rows[role], schema=schemas[role])
                 )
-                offsets = pa.array(
-                    np.cumsum(
-                        [0, *(0 if entry is None else len(entry) for entry in entries)]
-                    ),
-                    type=pa.int32(),
-                    mask=np.array([*(entry is None for entry in entries), False]),
-                )
-                columns[survey] = pa.ListArray.from_arrays(
-                    offsets,
-                    values
-                    if width is None
-                    else pa.FixedSizeListArray.from_arrays(values, width),
-                )
+                rows[role].clear()
 
-            writers[role].write_table(pa.table(batch | columns, schema=schemas[role]))
-            for values in batch.values():
-                values.clear()
-
-    for writer in writers.values():
-        writer.close()
+    for role in STORES:
+        if rows[role]:
+            writers[role].write_table(
+                pa.Table.from_pylist(rows[role], schema=schemas[role])
+            )
+        writers[role].close()

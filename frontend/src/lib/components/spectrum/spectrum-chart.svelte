@@ -60,7 +60,7 @@
     label
   }: Props = $props()
 
-  const grid = getMeta().spectrum
+  const meta = getMeta()
 
   let box = $state<HTMLElement | null>(null)
   let chart = $state.raw<ECharts | null>(null)
@@ -76,7 +76,7 @@
     if (!values || !color) return []
     const chosen = new Set(selected)
     return Array.from(values, (value, index): Areas[number] => {
-      const [low, high] = spanOf(grid, index)
+      const [low, high] = spanOf(meta, index)
       const [r, g, b] = color(value)
       const picked = chosen.has(index)
       return [
@@ -98,7 +98,7 @@
       number,
       number
     ]
-    const index = spanAt(grid, wavelength)
+    const index = spanAt(meta, wavelength)
     const value = values?.[index]
     return [
       `${wavelength.toFixed(1)} Å`,
@@ -177,7 +177,7 @@
     if (!chart || !values) return
     const point = [event.offsetX, event.offsetY]
     if (!chart.containPixel('grid', point)) return
-    const index = spanAt(grid, chart.convertFromPixel('grid', point)[0])
+    const index = spanAt(meta, chart.convertFromPixel('grid', point)[0])
     if (index < 0 || index >= values.length) return
     onselect?.(
       selected.includes(index) ? selected.filter((value) => value !== index) : [...selected, index]

@@ -1,5 +1,6 @@
 import { getGalaxy, getImageTokens, getSearch, getSpectrum, getSpectrumTokens } from '$lib/api'
-import type { Survey } from '$lib/api'
+import type { Galaxy } from '$lib/api'
+import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
 import type { Spectrum } from './spectra'
@@ -21,13 +22,13 @@ export type QueryFor<TData, TKey extends QueryKey> = UndefinedInitialDataOptions
 > & { queryKey: DataTag<TKey, TData, DefaultError> }
 
 export type TokensQuery = QueryFor<Uint32Array<ArrayBuffer>, readonly ['tokens', number | null]>
-export type CoverageQuery = QueryFor<Survey[], readonly ['coverage', number | null]>
+export type CoverageQuery = QueryFor<Galaxy, readonly ['coverage', number | null]>
 export type SpectrumQuery = QueryFor<Spectrum, readonly ['spectrum', number | null]>
 export type SpectrumTokensQuery = QueryFor<
   Uint32Array<ArrayBuffer>,
   readonly ['spectrum', number | null, 'tokens']
 >
-export type PointsQuery = QueryFor<string, readonly ['points', string]>
+export type PointsQuery = QueryFor<string, readonly ['points', Projection]>
 export type MorphologyQuery = QueryFor<
   number | null,
   readonly ['morphology', string | null, number | null]
@@ -61,7 +62,7 @@ export function coverageQuery(galaxy: number | null): CoverageQuery {
         ? skipToken
         : async () => {
             const { data } = await getGalaxy({ path: { galaxy }, throwOnError: true })
-            return data.coverage
+            return data
           },
     ...FOREVER
   })
@@ -101,10 +102,14 @@ export function spectrumTokensQuery(galaxy: number | null): SpectrumTokensQuery 
   })
 }
 
-export function pointsQuery(mosaic: MosaicState, role: string, enabled = true): PointsQuery {
+export function pointsQuery(
+  mosaic: MosaicState,
+  projection: Projection,
+  enabled = true
+): PointsQuery {
   return queryOptions({
-    queryKey: ['points', role] as const,
-    queryFn: () => mosaic.load(role),
+    queryKey: ['points', projection] as const,
+    queryFn: () => mosaic.load(projection),
     enabled,
     ...FOREVER
   })
