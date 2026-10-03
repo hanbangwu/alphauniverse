@@ -76,24 +76,43 @@ From one run of `scripts/recall.py`, whose report is `docs/benchmarks/recall.jso
 
 | Run              |                                                                                                                                |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Date             | 2026-10-02                                                                                                                     |
-| Commit           | `9b2e182`, the same code as `b3077c5`                                                                                          |
+| Date             | 2026-10-03                                                                                                                     |
+| Commit           | `1dec658`                                                                                                                      |
 | Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                                     |
-| Started by       | the Benchmark workflow, run 37046901562                                                                                        |
+| Started by       | the Benchmark workflow, run 37131608378                                                                                        |
 | Job              | build image: 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
 | Queries          | 100 per kind, 32 matches, `search()` at `PROBE=2048` and `NPROBE=64`                                                           |
 
-A query's recall is the share of the exact search's 32 galaxies that `search()` also returns:
+The first kind draws its galaxies from all galaxies. The other three share one draw of 100 galaxies with a DESI spectrum and the same 4 patches and 4 spans per galaxy, so they differ only in the query's modality.
 
-| Query                 | Mean  | Lowest | All 32 found | Fewer than 32 returned |
-| --------------------- | ----- | ------ | ------------ | ---------------------- |
-| 4 patches             | 98.0% | 65.6%  | 74%          | 0%                     |
-| 4 spans               | 96.8% | 71.9%  | 67%          | 0%                     |
-| 4 patches and 4 spans | 94.8% | 68.8%  | 52%          | 2%                     |
+A query's recall is the share of the exact search's 32 galaxies that `search()` also returns; galaxies `search()` does not return count as misses:
 
-Galaxies `search()` does not return count as misses, so the 2% of combined queries that came back short also lose recall.
+| Query                 | Drawn from | Mean  | Lowest | All 32 found | Fewer than 32 returned |
+| --------------------- | ---------- | ----- | ------ | ------------ | ---------------------- |
+| 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%                     |
+| 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%                     |
+| 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%                     |
+| 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%                     |
 
-Loading every patch and span embedding took 71.8 s of the 171.3 s run, and the job's memory peaked at **86.93 GB**.
+Loading every patch and span embedding took 67.1 s of the 211.9 s run, and the job's memory peaked at **86.84 GB**.
+
+### What the matches hold
+
+Of the 17,369 galaxies, 4,007 (23.1%) have a DESI spectrum, 29 (0.2%) only an SDSS spectrum, and 13,333 (76.8%) neither. Each kind's 100 queries return 3,200 matches. A DESI match is won by a span when its best span scores above its best patch:
+
+| Query                 | Drawn from | With DESI     | SDSS only | Neither       | DESI matches won by a span |
+| --------------------- | ---------- | ------------- | --------- | ------------- | -------------------------- |
+| 4 patches             | all        | 413 (12.9%)   | 0         | 2,787 (87.1%) | 0 of 413                   |
+| 4 patches             | DESI       | 1,221 (38.2%) | 5 (0.2%)  | 1,974 (61.7%) | 0 of 1,221                 |
+| 4 spans               | DESI       | 3,126 (97.7%) | 0         | 74 (2.3%)     | 3,071 of 3,126 (98.2%)     |
+| 4 patches and 4 spans | DESI       | 1,337 (41.8%) | 1 (0.03%) | 1,862 (58.2%) | 499 of 1,337 (37.3%)       |
+
+- **Span queries return galaxies with spectra and match them on spans**: 97.7% of their matches have a DESI spectrum, against 38.2% for patch queries from the same galaxies, and 98.2% of those are won by a span. 2.3% of their matches have no spectrum.
+- **No patch query's match is won by a span**: 0 of 1,634 DESI matches (413 + 1,221).
+- **Combined queries match much as patch queries do** (41.8% with DESI, against 38.2%), and spans win 37.3% of their DESI matches.
+- Patch queries from DESI galaxies return DESI galaxies at 38.2%, against 12.9% from all galaxies, so kinds compare only within the paired draw.
+- Every winning span lies inside its spectrum's observed wavelength range (3,071 of 3,071 and 499 of 499): in these queries no span encoded without data wins a match.
+- SDSS-only matches stay at or below their 0.2% share of all galaxies (at most 5 of 3,200): in these queries the all-zero SDSS encodings (#117) draw no more matches than their share.
 
 ## Other endpoints
 
@@ -170,7 +189,7 @@ The design targets COSMOS scale. Where it stops:
 | Cold start                   | 16.8 s        | when it exceeds a proxy or browser timeout; which one, and at what length, is unmeasured                                              |
 | `full_points` in the browser | 180 MB        | when decoding it outgrows DuckDB-WASM's memory, a limit that is unmeasured                                                            |
 | Images in memory             | 215 MB        | grows linearly with the galaxy count; where it breaks is unmeasured                                                                   |
-| Exact-search reference       | 86.93 GB peak | when it outgrows the recall job's 128 GiB (137.44 GB); it uses 86.93 / 137.44 = 63% of that                                           |
+| Exact-search reference       | 86.84 GB peak | when it outgrows the recall job's 128 GiB (137.44 GB); it uses 86.84 / 137.44 = 63% of that                                           |
 | Serving capacity             | one container | `/search` levels off at about 10.5 requests/s from 4 concurrent clients; `max_containers=1` is a hard cap                             |
 
 Check these before a change assumes they are not there.
