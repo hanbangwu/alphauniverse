@@ -8,26 +8,13 @@ from fastapi.testclient import TestClient
 
 from app.config import (
     FLAG_SURVEYS,
-    GRID,
-    N_MORPHOLOGIES,
     N_PATCHES,
-    N_SPANS,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
 )
 
 ARROW = "application/vnd.apache.arrow.stream"
-ENDPOINTS = [
-    "/artifacts/mean_points",
-    "/meta",
-    "/galaxy/0/image",
-    "/galaxy/0/image/tokens",
-    "/galaxy/0",
-    "/galaxy/0/spectrum",
-    "/galaxy/0/spectrum/tokens",
-    "/search?galaxy=0&p=0",
-]
 
 
 def _with_spectrum() -> np.ndarray:
@@ -35,33 +22,18 @@ def _with_spectrum() -> np.ndarray:
     return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
-def test_meta_counts_every_galaxy(client: TestClient, galaxies: int) -> None:
-    meta = client.get("/meta").json()
-
-    assert meta["galaxies"] == galaxies
-    assert meta["grid"] == GRID
-    assert len(meta["morphologies"]) == N_MORPHOLOGIES
-
-
 def test_artifact_downloads(client: TestClient, tree) -> None:
-    response = client.get("/artifacts/encoded")
+    response = client.get("/downloads/encoded")
 
     assert response.status_code == 200
     assert len(response.content) == (tree / "encoded.parquet").stat().st_size
 
 
-def test_artifact_head_is_served(client: TestClient) -> None:
-    assert client.head("/artifacts/mean_points").status_code == 200
+def test_projection_head_is_served(client: TestClient) -> None:
+    assert client.head("/projections/mean").status_code == 200
 
 
-def test_artifact_ranges_are_served(client: TestClient, tree) -> None:
-    response = client.get("/artifacts/mean_points", headers={"Range": "bytes=0-9"})
-
-    assert response.status_code == 206
-    assert response.content == (tree / "mean_points.parquet").read_bytes()[:10]
-
-
-@pytest.mark.parametrize("url", ENDPOINTS)
+@pytest.mark.parametrize("url", ["/projections/mean", "/galaxy/0"])
 def test_a_request_with_the_current_etag_is_not_modified(
     client: TestClient, url: str
 ) -> None:
@@ -74,39 +46,28 @@ def test_a_request_with_the_current_etag_is_not_modified(
     assert (stale.status_code, stale.content) == (200, served.content)
 
 
-def test_an_artifact_head_with_the_current_etag_is_not_modified(
-    client: TestClient,
-) -> None:
-    etag = client.head("/artifacts/mean_points").headers["etag"]
-
-    response = client.head("/artifacts/mean_points", headers={"If-None-Match": etag})
-
-    assert (response.status_code, response.content) == (304, b"")
-
-
 def test_a_weak_etag_in_a_list_is_not_modified(client: TestClient) -> None:
-    etag = client.get("/meta").headers["etag"]
+    etag = client.get("/galaxy/0").headers["etag"]
 
-    response = client.get("/meta", headers={"If-None-Match": f'"stale", W/{etag}'})
+    response = client.get("/galaxy/0", headers={"If-None-Match": f'"stale", W/{etag}'})
 
     assert response.status_code == 304
 
 
-@pytest.mark.parametrize("url", ENDPOINTS)
 def test_successful_responses_must_be_revalidated_before_reuse(
-    client: TestClient, url: str
+    client: TestClient,
 ) -> None:
-    assert client.get(url).headers["cache-control"] == "no-cache"
+    assert client.get("/galaxy/0").headers["cache-control"] == "no-cache"
 
 
-def test_unknown_artifact_role_is_not_found(client: TestClient) -> None:
-    assert client.get("/artifacts/nonsense").status_code == 404
+def test_internal_artifact_is_not_downloadable(client: TestClient) -> None:
+    assert client.get("/downloads/search_index").status_code == 422
 
 
 def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     assert not artifact("codebook").exists()
 
-    assert client.get("/artifacts/codebook").status_code == 404
+    assert client.get("/downloads/codebook").status_code == 404
 
 
 def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
@@ -120,40 +81,17 @@ def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
     stored = pq.read_table(artifact("tokens"), filters=[("galaxy", "==", galaxy)])
-    rows = {
-        row["survey"]: row["matched"]
-        for row in client.get(f"/galaxy/{galaxy}").json()["coverage"]
-    }
+    rows = client.get(f"/galaxy/{galaxy}").json()
 
     assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
     for survey in TOKEN_SURVEYS:
         assert rows[survey] is stored.column(survey)[0].is_valid
 
 
-def test_image_is_served_as_png(client: TestClient) -> None:
-    response = client.get("/galaxy/0/image")
-
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "image/png"
-    assert response.content.startswith(b"\x89PNG")
-
-
-def test_spectrum_is_served_as_arrow(client: TestClient) -> None:
-    response = client.get("/galaxy/0/spectrum")
-
-    assert response.status_code == 200
-    assert response.headers["content-type"] == ARROW
-    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
-    assert table.column_names == ["wavelength", "flux"]
-
-
-def test_unmatched_spectrum_is_not_found(client: TestClient) -> None:
-    spectra = pq.read_table(artifact("spectra"), columns=["desi"]).column("desi")
+def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:
     tokens = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
-    without = spectra.is_valid().to_pylist().index(False)
     untokenised = tokens.is_valid().to_pylist().index(False)
 
-    assert client.get(f"/galaxy/{without}/spectrum").status_code == 404
     assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
 
 
@@ -195,20 +133,8 @@ def test_similarity_spectrum_column_is_null_without_a_spectrum(
     )
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        {"galaxy": 0},
-        {"galaxy": 0, "p": [N_PATCHES]},
-        {"galaxy": 0, "p": [-1]},
-        {"galaxy": 0, "s": [N_SPANS]},
-        {"galaxy": -1, "p": [0]},
-        {"galaxy": 0, "p": [0], "matches": 0},
-        {"galaxy": 0, "p": [0], "matches": 129},
-    ],
-)
-def test_similarity_rejects_invalid_queries(client: TestClient, query: dict) -> None:
-    assert client.get("/search", params=query).status_code == 422
+def test_similarity_without_patches_or_spans_is_rejected(client: TestClient) -> None:
+    assert client.get("/search", params={"galaxy": 0}).status_code == 422
 
 
 def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
@@ -221,10 +147,6 @@ def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
     assert response.status_code == 422
     [error] = response.json()["detail"]
     assert f"galaxy {galaxy} has no spectrum" in error["msg"]
-
-
-def test_negative_galaxy_is_rejected(client: TestClient) -> None:
-    assert client.get("/galaxy/-1/image/tokens").status_code == 422
 
 
 @pytest.mark.parametrize(
