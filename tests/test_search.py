@@ -21,14 +21,13 @@ from app.search import (
     starts,
     with_spectrum,
 )
-from scripts.fixture import build
+from scripts.fixture import build, forget
 from scripts.recall import (
     Corpus,
     corpus,
     exact_ranking,
 )
 
-CACHES = (source, index, with_spectrum, starts)
 SCORE_TOLERANCE = 1e-4
 
 
@@ -133,9 +132,6 @@ def test_ids_stay_contiguous_across_add_batches(
     monkeypatch.setattr(search_module, "BATCH", 1)
 
     galaxies = 9
-    for cache in CACHES:
-        cache.cache_clear()
-
     try:
         build(galaxies)
 
@@ -150,5 +146,4 @@ def test_ids_stay_contiguous_across_add_batches(
 
         np.testing.assert_allclose(stored, expected, atol=1e-3)
     finally:
-        for cache in CACHES:
-            cache.cache_clear()
+        forget()
