@@ -2,11 +2,13 @@ from pathlib import Path
 
 import faiss
 import numpy as np
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
 from app import search as search_module
 from app.config import (
+    DIM,
     N_PATCHES,
     N_SPANS,
     NLIST,
@@ -271,6 +273,13 @@ def test_match_counts_count_spectra_and_best_tokens(built: faiss.Index) -> None:
         "best_is_span": len(winners),
         "best_span_observed": inside,
     }
+
+
+def test_embeddings_that_are_not_finite_are_rejected() -> None:
+    cells = pa.array([[[np.inf] * DIM]], type=pa.list_(pa.list_(pa.float16(), DIM)))
+
+    with pytest.raises(ValueError, match="finite"):
+        patches(cells)
 
 
 def test_ids_stay_contiguous_across_add_batches(
