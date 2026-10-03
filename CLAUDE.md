@@ -35,12 +35,12 @@ bun run lint                                        # prettier + eslint
 - One functional change per branch per pull request. The unit is the logical function, not the line count: a documentation pass can run to thousands of lines and still be one change, while two unrelated fixes in one diff are two and make the pull request hard to review.
 - A pull request is a series of commits, each one small nominal goal. Before writing code, list the goals and the decisions they need, each with options and a recommendation, in the pull request's issue, and wait for agreement.
 - Implement the agreed goals one commit each, then stop before the pull request leaves draft. List choices made while carrying out a goal under "Decisions" in the pull request.
-- Run `/code-review` before opening the pull request, not after, and fix what it finds; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
+- Run `/simplify`, then `/code-review`, before opening the pull request, not after, and fix what they find; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
 - Before opening a pull request that changes code, check `README.md` and `docs/` for anything it makes stale and update them in the same pull request.
 - A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
 - Every issue and pull request carries GitHub's default labels, and no others: `bug` for wrong behaviour; `enhancement` for features, performance, tests, CI and refactors; `documentation` when docs or instructions are the main change; `question` while it waits on an answer; `duplicate` or `wontfix` when it closes for either reason.
 - A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. A minor bug fix, a test-only change or a docs change can then merge without the other maintainer's review; anything bigger, and anything that touches `frontend/`, waits for their review.
-- A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/code-review`, Copilot review, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
+- A change that touches only instructions and documentation (`CLAUDE.md`, `.claude/rules/`, `README.md`, `docs/`) needs no issue, goal list, `/simplify`, `/code-review`, Copilot review, draft stage or second review: open it ready for review, and a maintainer merges it once CI passes.
 - Claude monitors every pull request it opens, light path included, until it merges or closes: CI, comments and merge conflicts, with a check-in about an hour out.
 - Once a pull request is ready for review, push to it only when a maintainer asks, to fix a failing check that Claude's own changes caused, or to address Copilot's review comments as long as no maintainer has pushed commits of their own to the branch. Leave a check broken by anyone else's change as it is unless a maintainer asks. Post other review findings, and later findings of your own, as a comment with the proposed fix, and wait. An emergency is production down or a secret exposed; even then, comment first and put the fix in a new pull request.
 - A pull request's branch is deleted once it merges.
@@ -61,7 +61,9 @@ bun run lint                                        # prettier + eslint
 
 - Write the minimum code that is correct and clear.
 - Prefer removing to adding; deleting a concept is better than adding a flag.
-- Use library APIs the way their documentation intends, and read the docs when unsure. Don't hand-roll what a library provides.
+- Before writing code, check in order and stop at the first that serves: the change is not needed; the codebase already does it; the standard library does it; the platform does it (the browser, Svelte, FastAPI, pyarrow, faiss); an installed dependency does it. Only then write the minimum new code.
+- Use library APIs the way their documentation intends, and read the docs when unsure.
+- Leanness never removes validation of request input, handling that prevents data loss, security checks or accessibility.
 - Report when an empirical test contradicts documentation; neither outranks the other.
 - Use full words for variable names (no abbreviations like `q` for `queue`).
 - Leave parameters at their defaults unless there is an explicit, significant reason not to.
@@ -77,3 +79,4 @@ bun run lint                                        # prettier + eslint
 - No em dashes, in files, commit messages, pull requests, issues or comments. An en dash in a numeric range is fine.
 - Prefer literal phrasing to metaphor and flourish: "a parameter worth varying", not "a dial worth turning".
 - Write docs, rules, issues, pull requests and comments spartan: what is true now, in the fewest words that stay exact. Cut restatement, hedges, background the reader does not need, and lists of what did not change.
+- Replies in a session lead with the answer, then the reason, then the next step: one idea per sentence, numbers and negations exact. Warnings and irreversible actions get full sentences.
