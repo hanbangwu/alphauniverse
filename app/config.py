@@ -124,7 +124,7 @@ POINTS = pa.schema(
         pa.field("galaxy", pa.int32(), nullable=False),
         pa.field("x", pa.float32(), nullable=False),
         pa.field("y", pa.float32(), nullable=False),
-        pa.field("category", pa.uint8(), nullable=True),
+        pa.field("category", pa.uint8()),
     ]
 )
 

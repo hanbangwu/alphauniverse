@@ -23,8 +23,8 @@ def write_images(pngs: list[bytes]) -> None:
     pq.write_table(
         pa.table(
             {
-                "galaxy": pa.array(np.arange(len(pngs)), type=pa.int32()),
-                "png": pa.array(pngs, type=pa.large_binary()),
+                "galaxy": np.arange(len(pngs)),
+                "png": pngs,
             },
             schema=IMAGES,
         ),

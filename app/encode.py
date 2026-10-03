@@ -295,19 +295,7 @@ def generate_embeddings() -> None:
                     else pa.FixedSizeListArray.from_arrays(values, width),
                 )
 
-            writers[role].write_table(
-                pa.table(
-                    {
-                        "galaxy": pa.array(batch["galaxy"], type=pa.int32()),
-                        **columns,
-                        **{
-                            survey: pa.array(batch[survey], type=pa.bool_())
-                            for survey in FLAG_SURVEYS
-                        },
-                    },
-                    schema=schemas[role],
-                )
-            )
+            writers[role].write_table(pa.table(batch | columns, schema=schemas[role]))
             for values in batch.values():
                 values.clear()
 

@@ -4,7 +4,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from .config import SPECTRA, SPECTRUM, SPECTRUM_SURVEYS, artifact
+from .config import SPECTRA, SPECTRUM_SURVEYS, artifact
 
 
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
@@ -18,16 +18,7 @@ def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
 def write_spectra(cells: dict[str, list[dict[str, np.ndarray] | None]]) -> None:
     galaxies = len(next(iter(cells.values())))
     pq.write_table(
-        pa.table(
-            {
-                "galaxy": pa.array(np.arange(galaxies), type=pa.int32()),
-                **{
-                    survey: pa.array(cells[survey], type=SPECTRUM)
-                    for survey in SPECTRUM_SURVEYS
-                },
-            },
-            schema=SPECTRA,
-        ),
+        pa.table(cells | {"galaxy": np.arange(galaxies)}, schema=SPECTRA),
         artifact("spectra"),
         compression="zstd",
     )
