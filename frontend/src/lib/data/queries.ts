@@ -4,8 +4,10 @@ import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
 import type { Spectrum } from './spectra'
-import type { DataTag, DefaultError, QueryKey } from '@tanstack/query-core'
 import {
+  type DataTag,
+  type DefaultError,
+  type QueryKey,
   type UndefinedInitialDataOptions,
   keepPreviousData,
   queryOptions,

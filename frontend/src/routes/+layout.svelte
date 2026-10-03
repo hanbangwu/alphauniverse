@@ -2,8 +2,7 @@
   import favicon from '$lib/assets/favicon.svg'
   import { AppState, setApp } from '$lib/state/app.svelte'
   import './layout.css'
-  import { QueryClient } from '@tanstack/query-core'
-  import { QueryClientProvider } from '@tanstack/svelte-query'
+  import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query'
   import { ModeWatcher } from 'mode-watcher'
   import { untrack } from 'svelte'
 
