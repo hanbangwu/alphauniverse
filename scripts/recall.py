@@ -1,6 +1,5 @@
 import json
 import resource
-import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +34,7 @@ from scripts.benchmark import (
     PATCHES,
     SPANS,
     environment,
+    git,
     observed_spans,
     queries,
     spec,
@@ -226,9 +226,7 @@ def measure(per_kind: int) -> dict[str, Any]:
 @app.local_entrypoint()
 def main(per_kind: int = 100) -> None:
     report = {
-        "commit": subprocess.check_output(
-            ["git", "describe", "--always", "--dirty"], text=True
-        ).strip(),
+        "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "job": spec(measure),
