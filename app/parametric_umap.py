@@ -81,7 +81,6 @@ def fit_parametric_umap(sampled: np.ndarray) -> ParametricUMAP:
 
     torch.manual_seed(SEED)
     model = ParametricUMAP(rows.shape[1]).to(device())
-    model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     with wandb.init(

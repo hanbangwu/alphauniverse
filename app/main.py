@@ -226,7 +226,7 @@ def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     table = source("tokens").to_table(
         columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
     )
-    cell = table.column(ANCHOR).combine_chunks()[0]
+    cell = table.column(ANCHOR)[0]
     return Response(
         np.asarray(cell.values)[:N_PATCHES].tobytes(),
         media_type="application/octet-stream",
