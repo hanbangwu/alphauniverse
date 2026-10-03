@@ -30,11 +30,11 @@
 
 <script lang="ts">
   import { type RGB, SELECTED, chartInk } from '$lib/color'
-  import { TOOLTIP } from '$lib/components/common/chart.svelte'
+  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spanAt, spanOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
-  import { type ECharts, type ElementEvent, init } from 'echarts/core'
+  import type { ECharts, ElementEvent } from 'echarts/core'
   import { mode } from 'mode-watcher'
 
   interface Props {
@@ -62,9 +62,6 @@
   }: Props = $props()
 
   const meta = getMeta()
-
-  let box = $state<HTMLElement | null>(null)
-  let chart = $state.raw<ECharts | null>(null)
 
   const interactive = $derived(Boolean(ontoggle))
   const ink = $derived(chartInk(mode.current ?? 'light'))
@@ -152,29 +149,11 @@
     ]
   })
 
-  $effect(() => {
-    if (!box) return
-    const instance = init(box)
-    const observer = new ResizeObserver(() => instance.resize())
-    observer.observe(box)
-    instance.getZr().on('click', pick)
-    chart = instance
-    return () => {
-      observer.disconnect()
-      instance.dispose()
-      chart = null
-    }
-  })
-
-  $effect(() => {
-    chart?.setOption(option)
-  })
-
-  function pick(event: ElementEvent): void {
-    if (!chart || !values) return
+  function pick(instance: ECharts, event: ElementEvent): void {
+    if (!values) return
     const point = [event.offsetX, event.offsetY]
-    if (!chart.containPixel('grid', point)) return
-    const index = spanAt(meta, chart.convertFromPixel('grid', point)[0])
+    if (!instance.containPixel('grid', point)) return
+    const index = spanAt(meta, instance.convertFromPixel('grid', point)[0])
     if (index < 0 || index >= values.length) return
     ontoggle?.(index)
   }
@@ -182,7 +161,10 @@
 
 <svelte:element
   this={interactive ? 'button' : 'div'}
-  bind:this={box}
+  {@attach chart(
+    () => option,
+    (instance) => instance.getZr().on('click', (event) => pick(instance, event))
+  )}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}

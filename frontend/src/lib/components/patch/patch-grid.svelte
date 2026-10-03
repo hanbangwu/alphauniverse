@@ -16,14 +16,12 @@
 
 <script lang="ts">
   import { type RGB, SELECTED } from '$lib/color'
-  import { TOOLTIP } from '$lib/components/common/chart.svelte'
+  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
-    CustomSeriesRenderItemReturn,
-    ECElementEvent
+    CustomSeriesRenderItemReturn
   } from 'echarts'
-  import { type ECharts, init } from 'echarts/core'
 
   interface Props {
     values: ArrayLike<number>
@@ -48,9 +46,6 @@
     class: className,
     label
   }: Props = $props()
-
-  let box = $state<HTMLElement | null>(null)
-  let chart = $state.raw<ECharts | null>(null)
 
   const interactive = $derived(Boolean(ontoggle))
 
@@ -95,33 +90,14 @@
       : undefined,
     series: [{ type: 'custom', data: cells, renderItem: cell }]
   })
-
-  $effect(() => {
-    if (!box) return
-    const instance = init(box)
-    const observer = new ResizeObserver(() => instance.resize())
-    observer.observe(box)
-    instance.on('click', pick)
-    chart = instance
-    return () => {
-      observer.disconnect()
-      instance.dispose()
-      chart = null
-    }
-  })
-
-  $effect(() => {
-    chart?.setOption(option)
-  })
-
-  function pick({ dataIndex }: ECElementEvent): void {
-    ontoggle?.(dataIndex)
-  }
 </script>
 
 <svelte:element
   this={interactive ? 'button' : 'div'}
-  bind:this={box}
+  {@attach chart(
+    () => option,
+    (instance) => instance.on('click', ({ dataIndex }) => ontoggle?.(dataIndex))
+  )}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}
