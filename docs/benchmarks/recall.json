@@ -1,7 +1,7 @@
 {
-  "commit": "9b2e182",
+  "commit": "1dec658",
   "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
-  "date": "2026-10-02T18:21:58+00:00",
+  "date": "2026-10-03T14:59:31+00:00",
   "job": {
     "cpu": 16,
     "memory_mb": [
@@ -24,9 +24,14 @@
   "probe": 2048,
   "nprobe": 64,
   "matches": 32,
-  "corpus_load_s": 71.8,
-  "total_s": 171.3,
-  "peak_rss_gb": 86.93,
+  "corpus_load_s": 67.1,
+  "total_s": 211.9,
+  "peak_rss_gb": 86.84,
+  "galaxies": {
+    "desi": 4007,
+    "sdss_only": 29,
+    "none": 13333
+  },
   "recall": {
     "patches": {
       "queries": 100,
@@ -35,25 +40,62 @@
       "mean": 0.9803,
       "min": 0.6562,
       "all_found": 0.74,
-      "short_of_matches": 0.0
+      "short_of_matches": 0.0,
+      "matches_with": {
+        "desi": 413,
+        "sdss_only": 0,
+        "none": 2787
+      },
+      "best_is_span": 0,
+      "best_span_observed": 0
+    },
+    "paired_patches": {
+      "queries": 100,
+      "patches": 4,
+      "spans": 0,
+      "mean": 0.9666,
+      "min": 0.7188,
+      "all_found": 0.63,
+      "short_of_matches": 0.0,
+      "matches_with": {
+        "desi": 1221,
+        "sdss_only": 5,
+        "none": 1974
+      },
+      "best_is_span": 0,
+      "best_span_observed": 0
     },
     "spans": {
       "queries": 100,
       "patches": 0,
       "spans": 4,
-      "mean": 0.9678,
-      "min": 0.7188,
-      "all_found": 0.67,
-      "short_of_matches": 0.0
+      "mean": 0.9669,
+      "min": 0.5312,
+      "all_found": 0.7,
+      "short_of_matches": 0.0,
+      "matches_with": {
+        "desi": 3126,
+        "sdss_only": 0,
+        "none": 74
+      },
+      "best_is_span": 3071,
+      "best_span_observed": 3071
     },
     "both": {
       "queries": 100,
       "patches": 4,
       "spans": 4,
-      "mean": 0.9484,
-      "min": 0.6875,
-      "all_found": 0.52,
-      "short_of_matches": 0.02
+      "mean": 0.9434,
+      "min": 0.4375,
+      "all_found": 0.47,
+      "short_of_matches": 0.0,
+      "matches_with": {
+        "desi": 1337,
+        "sdss_only": 1,
+        "none": 1862
+      },
+      "best_is_span": 499,
+      "best_span_observed": 499
     }
   }
 }

@@ -22,7 +22,11 @@ from app.search import (
     with_spectrum,
 )
 from scripts.fixture import build
-from scripts.recall import Corpus, corpus, exact_ranking
+from scripts.recall import (
+    Corpus,
+    corpus,
+    exact_ranking,
+)
 
 CACHES = (source, index, with_spectrum, starts)
 SCORE_TOLERANCE = 1e-4

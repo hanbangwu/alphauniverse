@@ -29,7 +29,6 @@ from app.search import (
     source,
     spectral,
     spectrum_cells,
-    with_spectrum,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
 from scripts.benchmark import (
@@ -97,14 +96,53 @@ def wavelength(galaxy: int) -> np.ndarray:
     return found.column("wavelength").to_numpy()
 
 
-def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
-    rng = np.random.default_rng(seed)
+def spectrum_coverage() -> dict[str, np.ndarray]:
+    table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
+    held = {
+        survey: pc.is_valid(table.column(survey)).to_numpy()
+        for survey in SPECTRUM_SURVEYS
+    }
+    return {
+        "desi": held["desi"],
+        "sdss_only": held["sdss"] & ~held["desi"],
+        "none": ~(held["desi"] | held["sdss"]),
+    }
+
+
+def observed_mask(holders: np.ndarray) -> np.ndarray:
+    mask = np.zeros((len(holders), N_SPANS), dtype=bool)
+    for galaxy in np.flatnonzero(holders):
+        mask[galaxy, observed_spans(wavelength(int(galaxy)))] = True
+    return mask
+
+
+def match_counts(
+    coverage: dict[str, np.ndarray],
+    observed: np.ndarray,
+    galaxies: np.ndarray,
+    patch_maps: np.ndarray,
+    span_maps: np.ndarray,
+) -> dict[str, Any]:
+    spanned = coverage["desi"][galaxies]
+    spectral = span_maps[spanned]
+    best_is_span = spectral.max(axis=1) > patch_maps[spanned].max(axis=1)
+    inside = observed[galaxies[spanned], spectral.argmax(axis=1)]
+    return {
+        "matches_with": {
+            name: int(held[galaxies].sum()) for name, held in coverage.items()
+        },
+        "best_is_span": int(best_is_span.sum()),
+        "best_span_observed": int(inside[best_is_span].sum()),
+    }
+
+
+def with_spans(count: int, holders: np.ndarray) -> list[Query]:
+    rng = np.random.default_rng(1)
     return [
         Query(
             galaxy=int(galaxy),
             p=tuple(
-                int(patch)
-                for patch in rng.choice(N_PATCHES, patch_count, replace=False)
+                int(patch) for patch in rng.choice(N_PATCHES, PATCHES, replace=False)
             ),
             s=tuple(
                 int(span)
@@ -115,7 +153,7 @@ def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
                 )
             ),
         )
-        for galaxy in rng.choice(np.flatnonzero(with_spectrum()), count)
+        for galaxy in rng.choice(holders, count, replace=False)
     ]
 
 
@@ -124,19 +162,29 @@ def recall(per_kind: int) -> dict[str, Any]:
     reference = corpus()
     loaded = time.perf_counter() - start
     built = index()
+    coverage = spectrum_coverage()
+    observed = observed_mask(~coverage["none"])
+    paired = with_spans(per_kind, np.flatnonzero(coverage["desi"]))
 
     measured = {}
     for kind, batch in (
         ("patches", queries(per_kind, PATCHES, MATCHES)),
-        ("spans", with_spans(per_kind, 0, seed=1)),
-        ("both", with_spans(per_kind, PATCHES, seed=2)),
+        (
+            "paired_patches",
+            [query.model_copy(update={"spans": ()}) for query in paired],
+        ),
+        ("spans", [query.model_copy(update={"patches": ()}) for query in paired]),
+        ("both", paired),
     ):
-        fractions, short = [], []
+        fractions, short, matched = [], [], []
         for query in batch:
             expected = exact_ranking(query, reference)[0][1:]
-            found = search(query, index=built)[0][1:]
+            found, _, patch_maps, span_maps = (
+                part[1:] for part in search(query, index=built)
+            )
             fractions.append(len(np.intersect1d(found, expected)) / len(expected))
             short.append(len(found) < len(expected))
+            matched.append((found, patch_maps, span_maps))
         measured[kind] = {
             "queries": len(batch),
             "patches": len(batch[0].patches),
@@ -145,6 +193,11 @@ def recall(per_kind: int) -> dict[str, Any]:
             "min": round(float(np.min(fractions)), 4),
             "all_found": round(float(np.mean(np.equal(fractions, 1))), 4),
             "short_of_matches": round(float(np.mean(short)), 4),
+            **match_counts(
+                coverage,
+                observed,
+                *(np.concatenate(part) for part in zip(*matched)),
+            ),
         }
 
     return {
@@ -157,6 +210,7 @@ def recall(per_kind: int) -> dict[str, Any]:
         "peak_rss_gb": round(
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 / 1e9, 2
         ),
+        "galaxies": {name: int(held.sum()) for name, held in coverage.items()},
         "recall": measured,
     }
 
