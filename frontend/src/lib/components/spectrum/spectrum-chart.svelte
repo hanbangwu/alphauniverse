@@ -7,20 +7,11 @@
     type GridComponentOption,
     MarkAreaComponent,
     type MarkAreaComponentOption,
-    TooltipComponent,
     type TooltipComponentOption
   } from 'echarts/components'
   import { type ComposeOption, use } from 'echarts/core'
-  import { CanvasRenderer } from 'echarts/renderers'
 
-  use([
-    LineChart,
-    GridComponent,
-    TooltipComponent,
-    DataZoomInsideComponent,
-    MarkAreaComponent,
-    CanvasRenderer
-  ])
+  use([LineChart, GridComponent, DataZoomInsideComponent, MarkAreaComponent])
 
   type Option = ComposeOption<
     LineSeriesOption | GridComponentOption | TooltipComponentOption | DataZoomComponentOption

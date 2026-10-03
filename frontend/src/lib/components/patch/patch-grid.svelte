@@ -3,13 +3,11 @@
   import {
     GridComponent,
     type GridComponentOption,
-    TooltipComponent,
     type TooltipComponentOption
   } from 'echarts/components'
   import { type ComposeOption, use } from 'echarts/core'
-  import { CanvasRenderer } from 'echarts/renderers'
 
-  use([CustomChart, GridComponent, TooltipComponent, CanvasRenderer])
+  use([CustomChart, GridComponent])
 
   type Option = ComposeOption<CustomSeriesOption | GridComponentOption | TooltipComponentOption>
 </script>

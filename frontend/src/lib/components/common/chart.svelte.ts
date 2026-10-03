@@ -1,6 +1,9 @@
-import type { TooltipComponentOption } from 'echarts/components'
-import { type ECharts, type EChartsCoreOption, init } from 'echarts/core'
+import { TooltipComponent, type TooltipComponentOption } from 'echarts/components'
+import { type ECharts, type EChartsCoreOption, init, use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
 import type { Attachment } from 'svelte/attachments'
+
+use([TooltipComponent, CanvasRenderer])
 
 export const TOOLTIP: TooltipComponentOption = {
   confine: true,
