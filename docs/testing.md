@@ -15,11 +15,12 @@ Tests need no Modal, GPU or network. `tests/conftest.py` builds one synthetic tr
 - The 2-d points come from one fixed random projection in place of the trained parametric UMAP, so the default suite needs no torch. One projection serves both point sets, as the projector does in production.
 - `codebook` and `parametric_umap` are left out: nothing served reads them, and their absence exercises the 404 path.
 
-Three tests in `tests/test_search.py` check what the shared tree cannot show:
+Four tests in `tests/test_search.py` check what the shared tree cannot show:
 
 - `test_approximate_ranking_agrees_with_exact` compares `search()` with `exact_ranking` in `scripts/recall.py`: the same search without the candidate step, a brute force over every token's float32 embedding in place of the index's fp16 copies. It asks for fewer matches than the corpus holds, so the candidate step must choose. It checks the galaxies, their order, each score and each patch and span map (null where the galaxy has no spectrum) to within `SCORE_TOLERANCE`, after asserting that the exact scores are more than twice that apart. On production data the two need not agree; `scripts/recall.py` measures how often they do.
 - `test_ids_stay_contiguous_across_add_batches` builds its own index with one galaxy per `add()` call, galaxies without a spectrum included, since the shared tree goes in with one call. A reordered or dropped batch would silently shift every galaxy id.
 - `test_rank_keeps_the_query_first_and_each_row_together` calls `rank()` on arrays built in the test, since on the shared tree `candidates()` already returns galaxies in ranked order.
+- `test_a_search_that_finds_too_few_looks_further` changes `PROBE` and `NPROBE` so that the first search falls short, since at their defaults it finds every galaxy on the shared tree. It asks for one vector over one list, 2048 vectors over one list, and one vector over every list, so that the vectors, the lists, or both must widen.
 
 The torch modules' tests skip unless the `build` group is installed:
 
@@ -51,6 +52,8 @@ A client in a separate container times, in order:
 Request latency is timed for the checked-out commit only. Artifact downloads are not timed.
 
 A container with the server's spec times the startup loads and the stages of `search()`, first query and warm, for up to three versions on one host: the checked-out commit (after), `origin/main` (before), and the stored report's best version unless its code matches one of those. Each version is a `git archive` of `app/`, `scripts/` and `modal_app.py`, running its own `stages` in a subprocess with the checked-out commit's locked dependencies. The order is mirrored: after, before, best, then back. After goes first, so its first round has the cold page cache. A failed round is reported with its error.
+
+Each version's `stages` also times `search()` whole at 8, 32 and 128 matches, on the same patch-only queries, under `searches`. For each it reports p50 and p95, the share of queries that searched the index more than once (`looked_further`), and the most searches one query took, counted by faiss's `indexIVF_stats` on the timed call. These times are separate from `total_p50_ms`, which still picks the best version. A version from before this measurement reports the stages only.
 
 The report goes to `docs/benchmarks/latest.json`, replacing the last one; commit it before the next run. It records the commits, each round's dataset revision, the date, the server's CPU, memory and concurrency settings (`max_inputs`, `max_containers`, `scaledown_window`, from `modal_app.py`), the client's Modal spec, the thread configuration and each container's CPU identity. It names the best version: the lowest `total_p50_ms` (the sum of warm stage medians at 32 matches), averaged over its rounds, among versions whose rounds all succeeded.
 

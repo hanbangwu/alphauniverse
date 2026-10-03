@@ -9,6 +9,8 @@ from app import search as search_module
 from app.config import (
     N_PATCHES,
     N_SPANS,
+    NLIST,
+    PROBE,
     SPECTRUM_SURVEYS,
     artifact,
 )
@@ -177,6 +179,22 @@ def test_asking_for_every_galaxy_returns_every_galaxy(
     found, _, _, _ = search(query, index=built)
 
     assert sorted(found.tolist()) == list(range(galaxies))
+
+
+@pytest.mark.parametrize("matches", [3, 32])
+@pytest.mark.parametrize(("nearest", "lists"), [(1, 1), (PROBE, 1), (1, NLIST)])
+def test_a_search_that_finds_too_few_looks_further(
+    built: faiss.Index,
+    monkeypatch: pytest.MonkeyPatch,
+    nearest: int,
+    lists: int,
+    matches: int,
+) -> None:
+    monkeypatch.setattr(search_module, "PROBE", nearest)
+    monkeypatch.setattr(search_module, "NPROBE", lists)
+    found, _, _, _ = search(Query(galaxy=0, p=(64, 65), matches=matches), index=built)
+
+    assert len(set(found.tolist())) == len(found) == min(matches, len(starts()) - 1) + 1
 
 
 @pytest.mark.parametrize(

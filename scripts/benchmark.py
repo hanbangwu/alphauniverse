@@ -42,6 +42,7 @@ from app.search import (
     index,
     rank,
     score_maps,
+    search,
     span_maps,
     starts,
     vectors,
@@ -280,6 +281,23 @@ def stage_times(query: Query, built: faiss.Index) -> tuple[list[float], int]:
     return times, len(rows)
 
 
+def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
+    batch = queries(runs + 1, PATCHES, matches)
+    search(batch[0], index=built)
+    samples, searches = [], []
+    for query in batch[1:]:
+        faiss.cvar.indexIVF_stats.reset()
+        samples.append(elapsed(partial(search, query, index=built)))
+        searches.append(faiss.cvar.indexIVF_stats.nq)
+    return {
+        "runs": runs,
+        "p50_ms": round(float(np.percentile(samples, 50)), 3),
+        "p95_ms": round(float(np.percentile(samples, 95)), 3),
+        "looked_further": round(float(np.mean(np.greater(searches, 1))), 4),
+        "most_searches": max(searches),
+    }
+
+
 @app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = {
@@ -321,6 +339,9 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
                 "share": round(float(np.median(values)) / total, 4),
             }
             for name, values in samples.items()
+        },
+        "searches": {
+            f"matches={asked}": whole_searches(runs, asked, built) for asked in MATCHES
         },
     }
 
