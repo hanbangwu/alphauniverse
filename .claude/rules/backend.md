@@ -2,8 +2,7 @@
 paths:
   - "app/main.py"
   - "app/search.py"
-  - "app/images.py"
-  - "app/spectra.py"
+  - "app/dataset.py"
   - "app/config.py"
   - "modal_app.py"
 ---

@@ -50,7 +50,7 @@ A client in a separate container times, in order:
 
 Request latency is timed for the checked-out commit only. Artifact downloads are not timed.
 
-A container with the server's spec times the startup loads and the stages of `search()`, first query and warm, for up to three versions on one host: the checked-out commit (after), `origin/main` (before), and the stored report's best version unless its code matches one of those. Each version is a `git archive` of `app/`, `scripts/` and `modal_app.py`, running its own `stages` in a subprocess with the checked-out commit's locked dependencies. The order is mirrored: after, before, best, then back. After goes first, so its first round has the cold page cache. A failed round is reported with its error.
+A container with the server's spec times the loads a cold `/meta` waits for (`dataset`, `labels`, `index`, `starts`) and the stages of `search()`, first query and warm, for up to three versions on one host: the checked-out commit (after), `origin/main` (before), and the stored report's best version unless its code matches one of those. Each version is a `git archive` of `app/`, `scripts/` and `modal_app.py`, running its own `stages` in a subprocess with the checked-out commit's locked dependencies. The order is mirrored: after, before, best, then back. After goes first, so its first round has the cold page cache. A failed round is reported with its error.
 
 Each version's `stages` also times `search()` whole at 8, 32 and 128 matches, on the same patch-only queries, under `searches`. For each it reports p50 and p95, the share of queries that searched the index more than once (`looked_further`), and the most searches one query took, counted by faiss's `indexIVF_stats` on the timed call. These times are separate from `total_p50_ms`, which still picks the best version. A version from before this measurement reports the stages only.
 
@@ -80,7 +80,7 @@ Nothing starts either script automatically. With write access, start the Benchma
 - `benchmark` or `recall`;
 - optionally `runs`, passed to the benchmark as `--runs`, or `per_kind`, passed to recall as `--per-kind`. The other script's input is ignored, and an empty one keeps the default.
 
-The job runs with full history and the deploy job's Modal token. The report appears in the run's summary and log, and as its artifact, the JSON file itself. Commit it by hand: the Rules job rejects commits by a bot. GitHub stops a job after six hours, which leaves no report; how long a run takes is not yet measured.
+The job runs with full history and the deploy job's Modal token. The report appears in the run's summary and log, and as its artifact, the JSON file itself; the job does not commit it. GitHub stops a job after six hours, which leaves no report; how long a run takes is not yet measured.
 
 Read `docs/performance.md` before drawing a conclusion from a run.
 
@@ -112,4 +112,3 @@ The other workflows:
 
 - `build.yml` runs the torch tests on pull requests that change the torch modules or what they import (`app/encode.py`, `app/parametric_umap.py`, `app/config.py`, `app/dataset.py`, `app/search.py`), what the tests build trees with (`scripts/fixture.py`), `pyproject.toml`, `uv.lock`, those tests, `tests/aion/` or itself.
 - `benchmark.yml` runs only when started by hand (above).
-- `rules.yml` runs on pull requests. It fails on a commit authored by `noreply@anthropic.com`, a GitHub `[bot]` account or Copilot, and on one committed by `noreply@anthropic.com` without a `Co-Authored-By` trailer naming that address.

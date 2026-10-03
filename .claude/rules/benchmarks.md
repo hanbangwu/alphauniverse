@@ -12,7 +12,7 @@ paths:
 
 - A benchmark measures only the production artifacts (on Modal).
 - If the code under test needs artifacts the volume does not hold yet, name the `generate_*` jobs that build them, in order, and wait for a maintainer to ask for that build: they write to the volume the deployed app serves from.
-- A run times the `search()` stages of the checked-out commit, the head of `main`, and the stored report's best version when it is neither, in one container, so they compare on the same host. Compare versions only within one report, and startup loads only round by round, since they depend on which version loaded the artifacts first. Request latency is timed for the checked-out commit only.
+- A run times the `search()` stages of the checked-out commit, the head of `main`, and the stored report's best version when it is neither, in one container, so they compare on the same host. Compare versions only within one report, and loads only round by round, since they depend on which version loaded the artifacts first. Request latency is timed for the checked-out commit only.
 - A pull request that records a run may compare its versions in the description, from that run's report.
 - Each version's subprocess calls that version's `stages(runs)` through Modal's `.local()`, so its name, its first argument and the `total_p50_ms` it returns stay as they are.
 - A change expected to affect performance lists a benchmark run among the goals in its issue, and agreeing to the goals is a maintainer asking for that run. Otherwise a benchmark or recall run happens only when a maintainer asks. It is started by hand, locally or from the Benchmark workflow, never by a push, a pull request or a schedule.
