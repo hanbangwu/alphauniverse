@@ -154,7 +154,14 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     ]
 
 
-def recall(per_kind: int) -> dict[str, Any]:
+@app.function(
+    image=image,
+    cpu=generate_index.spec.cpu,
+    memory=generate_index.spec.memory,
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume.with_mount_options(read_only=True)},
+)
+def measure(per_kind: int) -> dict[str, Any]:
     start = time.perf_counter()
     reference = corpus()
     loaded = time.perf_counter() - start
@@ -210,17 +217,6 @@ def recall(per_kind: int) -> dict[str, Any]:
         "galaxies": {name: int(held.sum()) for name, held in coverage.items()},
         "recall": measured,
     }
-
-
-@app.function(
-    image=image,
-    cpu=generate_index.spec.cpu,
-    memory=generate_index.spec.memory,
-    timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume.with_mount_options(read_only=True)},
-)
-def measure(per_kind: int) -> dict[str, Any]:
-    return recall(per_kind)
 
 
 @app.local_entrypoint()

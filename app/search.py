@@ -77,10 +77,6 @@ def starts() -> np.ndarray:
     return np.arange(len(has)) * N_PATCHES + before * N_SPANS
 
 
-def owners(ids: np.ndarray) -> np.ndarray:
-    return np.searchsorted(starts(), ids, side="right") - 1
-
-
 def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
     start = starts()[query.galaxy]
     ids = np.concatenate(
@@ -101,7 +97,8 @@ def candidates(
             direction, nearest, params=faiss.SearchParametersIVF(nprobe=lists)
         )[1][0]
         returned = ids[ids >= 0]
-        found, first = np.unique(owners(returned), return_index=True)
+        owners = np.searchsorted(starts(), returned, side="right") - 1
+        found, first = np.unique(owners, return_index=True)
         ranked = found[np.argsort(first)]
         others = ranked[ranked != query.galaxy][: query.matches]
         if len(others) == query.matches or (
