@@ -31,8 +31,16 @@ from app.search import (
     vectors,
     with_spectrum,
 )
+from scripts.benchmark import observed_spans
 from scripts.fixture import build
-from scripts.recall import Corpus, corpus, exact_ranking
+from scripts.recall import (
+    Corpus,
+    corpus,
+    exact_ranking,
+    match_counts,
+    observed_mask,
+    spectrum_coverage,
+)
 
 CACHES = (source, index, with_spectrum, starts)
 SCORE_TOLERANCE = 1e-4
@@ -224,6 +232,45 @@ def test_approximate_ranking_agrees_with_exact(
     np.testing.assert_allclose(
         spectral_maps, expected_spectral_maps[:-1], atol=SCORE_TOLERANCE
     )
+
+
+def test_match_counts_count_spectra_and_best_tokens(built: faiss.Index) -> None:
+    query = Query(galaxy=0, s=(1,), matches=11)
+    galaxies, _, patch_maps, spectral_maps = (
+        part[1:] for part in search(query, index=built)
+    )
+    tokens = pq.read_table(
+        artifact("tokens"), columns=list(SPECTRUM_SURVEYS)
+    ).to_pylist()
+    held = [
+        {survey for survey, cell in tokens[galaxy].items() if cell is not None}
+        for galaxy in galaxies
+    ]
+    counts = {
+        "desi": sum("desi" in surveys for surveys in held),
+        "sdss_only": held.count({"sdss"}),
+        "none": held.count(set()),
+    }
+    spanned = [row for row, surveys in enumerate(held) if "desi" in surveys]
+    winners = [
+        row for row in spanned if spectral_maps[row].max() > patch_maps[row].max()
+    ]
+    spectra = pq.read_table(artifact("spectra"), columns=["desi"]).column("desi")
+    inside = sum(
+        spectral_maps[row].argmax()
+        in observed_spans(np.asarray(spectra[int(galaxies[row])]["wavelength"].values))
+        for row in winners
+    )
+
+    assert all(counts.values())
+    assert 0 < inside < len(winners)
+    assert match_counts(
+        spectrum_coverage(), observed_mask(), galaxies, patch_maps, spectral_maps
+    ) == {
+        "matches_with": counts,
+        "best_is_span": len(winners),
+        "best_span_observed": inside,
+    }
 
 
 def test_ids_stay_contiguous_across_add_batches(
