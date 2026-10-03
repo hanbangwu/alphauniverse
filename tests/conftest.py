@@ -30,7 +30,6 @@ def tree(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     os.environ["ALPHAUNIVERSE_CACHE"] = str(tmp_path_factory.mktemp("artifacts"))
     _forget()
     target = build(GALAXIES)
-    _forget()
     yield target
     _forget()
 

@@ -138,8 +138,6 @@ def test_ids_stay_contiguous_across_add_batches(
 
     try:
         build(galaxies)
-        for cache in CACHES:
-            cache.cache_clear()
 
         built = index()
         assert built.ntotal == galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
