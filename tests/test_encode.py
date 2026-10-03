@@ -176,8 +176,6 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
 
     try:
         encode_module.generate_embeddings()
-        for cache in CACHES:
-            cache.cache_clear()
 
         for role in STORES:
             assert pq.read_schema(artifact(role)).equals(store_schema(role))

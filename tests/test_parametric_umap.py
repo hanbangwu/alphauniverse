@@ -40,8 +40,6 @@ def runs(
             cache.cache_clear()
         try:
             build(len(LABELS))
-            for cache in CACHES:
-                cache.cache_clear()
             tables = []
             for _ in range(2):
                 for role in PROJECTIONS:
