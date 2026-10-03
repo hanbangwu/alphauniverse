@@ -30,6 +30,7 @@
 
 <script lang="ts">
   import { type RGB, SELECTED, chartInk } from '$lib/color'
+  import { TOOLTIP } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spanAt, spanOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
@@ -132,13 +133,9 @@
     },
     tooltip: interactive
       ? {
+          ...TOOLTIP,
           trigger: 'axis',
-          confine: true,
           formatter: describe,
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          borderWidth: 0,
-          padding: [2, 6],
-          textStyle: { color: '#fff', fontFamily: 'monospace', fontSize: 10 },
           axisPointer: { lineStyle: { color: ink.muted } }
         }
       : undefined,

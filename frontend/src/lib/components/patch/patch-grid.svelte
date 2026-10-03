@@ -16,6 +16,7 @@
 
 <script lang="ts">
   import { type RGB, SELECTED } from '$lib/color'
+  import { TOOLTIP } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
@@ -84,16 +85,12 @@
     yAxis: { type: 'value', min: 0, max: grid, inverse: true, show: false },
     tooltip: title
       ? {
+          ...TOOLTIP,
           trigger: 'item',
-          confine: true,
           formatter: (params) => {
             const { dataIndex } = Array.isArray(params) ? params[0] : params
             return title(values[dataIndex], dataIndex)
-          },
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          borderWidth: 0,
-          padding: [2, 6],
-          textStyle: { color: '#fff', fontFamily: 'monospace', fontSize: 10 }
+          }
         }
       : undefined,
     series: [{ type: 'custom', data: cells, renderItem: cell }]
