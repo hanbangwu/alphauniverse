@@ -17,7 +17,7 @@
 uv run pytest                                       # tests
 uv run ruff check app scripts tests modal_app.py    # lint
 uv run ruff format app scripts tests modal_app.py   # format
-uv run python -m scripts.fixture --galaxies 12      # build fixture tree
+uv run python -m scripts.fixture                    # build fixture tree
 uv run modal run -m scripts.benchmark               # measure the serving path on Modal
 uv run modal run -m scripts.recall                  # measure production recall on Modal
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
@@ -36,7 +36,7 @@ bun run lint                                        # prettier + eslint
 - A pull request is a series of commits, each one small nominal goal. Before writing code, list the goals and the decisions they need, each with options and a recommendation, in the pull request's issue, and wait for agreement.
 - Implement the agreed goals one commit each, then stop before the pull request leaves draft. List choices made while carrying out a goal under "Decisions" in the pull request.
 - Run `/simplify`, then `/code-review`, before opening the pull request, not after, and fix what they find; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
-- Before opening a pull request that changes code, check `README.md` and `docs/` for anything it makes stale and update them in the same pull request.
+- A pull request that changes code updates, in the same pull request, anything it makes stale in `README.md`, `docs/`, `CLAUDE.md` and `.claude/rules/`. Claude checks this before opening one, and on every pull request it reviews or finds merged that changes code without touching those files; it proposes what it finds in a docs pull request.
 - A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
 - Every issue and pull request carries GitHub's default labels, and no others: `bug` for wrong behaviour; `enhancement` for features, performance, tests, CI and refactors; `documentation` when docs or instructions are the main change; `question` while it waits on an answer; `duplicate` or `wontfix` when it closes for either reason.
 - A pull request Claude prepares stays a draft until the person who ran the session has read it; only they mark it ready for review. A minor bug fix, a test-only change or a docs change can then merge without the other maintainer's review; anything bigger, and anything that touches `frontend/`, waits for their review.
