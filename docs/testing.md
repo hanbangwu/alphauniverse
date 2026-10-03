@@ -66,7 +66,12 @@ uv run modal run -m scripts.recall
 uv run modal run -m scripts.recall --per-kind 50
 ```
 
-`scripts/recall.py` measures how often `search()` returns the galaxies an exact search ranks highest. A container on the build image, with the build jobs' CPU and memory and the volume read-only, loads every patch and span embedding. It then runs `--per-kind` queries (100 by default) of each kind, each kind with its own seed: 4 patches, 4 spans, and both, at 32 matches. Spans are drawn as in the benchmark. A query's recall is the share of `exact_ranking`'s 32 galaxies that `search()`, at the served `PROBE` and `NPROBE`, also returns. Each kind reports its mean, its minimum, the share of queries that found all 32, and the share where `search()` returned fewer than 32. The report adds the commit, dataset revision, date, Modal spec, thread configuration, corpus load time, total time and peak memory. It goes to `docs/benchmarks/recall.json`; commit it before the next run.
+`scripts/recall.py` measures how often `search()` returns the galaxies an exact search ranks highest. A container on the build image, with the build jobs' CPU and memory and the volume read-only, loads every patch and span embedding. It then runs `--per-kind` queries (100 by default) of each kind, at 32 matches:
+
+- `patches`: the benchmark's patch-only queries, 4 patches of a galaxy drawn from all galaxies.
+- `paired_patches`, `spans` and `both`: one draw of distinct galaxies with a DESI spectrum, each with 4 patches and 4 spans drawn as in the benchmark, queried with the patches, the spans, and both.
+
+A query's recall is the share of `exact_ranking`'s 32 galaxies that `search()`, at the served `PROBE` and `NPROBE`, also returns. Each kind reports its mean, its minimum, the share of queries that found all 32, and the share where `search()` returned fewer than 32. Over the matches `search()` returns for a kind's queries, it also reports the share with a DESI spectrum, with only an SDSS spectrum, and with neither (`matches_with`), and, among those with a DESI spectrum, the share whose best span scores above its best patch (`best_is_span`). The report also counts the galaxies in each of the three under `galaxies`, and records the commit, dataset revision, date, Modal spec, thread configuration, corpus load time, total time and peak memory. It goes to `docs/benchmarks/recall.json`; commit it before the next run.
 
 ### From GitHub Actions
 
