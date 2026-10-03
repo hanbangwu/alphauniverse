@@ -1,18 +1,16 @@
+import { must } from '$lib/invariant'
 import type { Choice, Labels } from '$lib/labels'
 import { Field } from './field.svelte'
-import type { Options } from './schema'
 
 export class EnumField<T extends string> extends Field<T> {
   readonly members: readonly T[]
   readonly choices: readonly Choice<T>[]
 
-  constructor(
-    options: Options<T>,
-    private readonly labels: Labels<T>
-  ) {
-    super(options.fallback)
-    this.members = options.members
-    this.choices = options.members.map((value) => ({ value, ...labels[value] }))
+  constructor(private readonly labels: Labels<T>) {
+    const members = Object.keys(labels) as T[]
+    super(must(members[0], 'a first member to fall back to'))
+    this.members = members
+    this.choices = members.map((value) => ({ value, ...labels[value] }))
   }
 
   get label(): string {
