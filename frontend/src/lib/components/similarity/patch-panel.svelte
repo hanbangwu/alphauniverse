@@ -51,7 +51,9 @@
   <div
     role="presentation"
     onpointerenter={() => onhover?.(true)}
-    onpointerleave={() => onhover?.(false)}
+    onpointerleave={({ currentTarget }) => onhover?.(currentTarget.matches(':has(:focus-visible)'))}
+    onfocusout={({ currentTarget }) => onhover?.(currentTarget.matches(':hover'))}
+    onkeydown={() => onhover?.(true)}
   >
     <PatchFrame {busy}>
       {#if values && color}
