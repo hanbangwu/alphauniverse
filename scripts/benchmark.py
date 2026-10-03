@@ -293,10 +293,7 @@ def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any
         faiss.cvar.indexIVF_stats.reset()
         samples.append(elapsed(partial(search, query, index=built)))
         searches.append(faiss.cvar.indexIVF_stats.nq)
-    return {
-        "runs": runs,
-        "p50_ms": round(float(np.percentile(samples, 50)), 3),
-        "p95_ms": round(float(np.percentile(samples, 95)), 3),
+    return summary(samples) | {
         "looked_further": round(float(np.mean(np.greater(searches, 1))), 4),
         "most_searches": max(searches),
     }
