@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 CACHE_PATH = "/cache"
 WANDB_MODE = "offline"
 SERVING_CPU = 8
-SERVING_MEMORY = (8 * 1024, 64 * 1024)
+SERVING_MEMORY = (8 * 1024, 32 * 1024)
 SERVING_MAX_INPUTS = 16
 SERVING_MAX_CONTAINERS = 1
 SERVING_SCALEDOWN_WINDOW = 5 * 60
@@ -26,12 +26,6 @@ environment = {
     "WANDB_MODE": WANDB_MODE,
 }
 
-serving_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .uv_sync(extra_options="--no-dev")
-    .env(environment)
-    .add_local_python_source("app")
-)
 
 build_image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -59,6 +53,22 @@ def generate_embeddings() -> None:
 
 @app.function(
     image=build_image,
+    gpu="L4",
+    cpu=16,
+    memory=(32 * 1024, 128 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_projections() -> None:
+    from app.config import build_dir
+    from app.parametric_umap import generate_projections
+
+    build_dir().mkdir(parents=True, exist_ok=True)
+    generate_projections()
+
+
+@app.function(
+    image=build_image,
     cpu=16,
     memory=(32 * 1024, 128 * 1024),
     timeout=3 * 60 * 60,
@@ -72,50 +82,12 @@ def generate_index() -> None:
     generate_index()
 
 
-@app.function(
-    image=serving_image,
-    cpu=1,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
+serving_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .uv_sync(extra_options="--no-dev")
+    .env(environment | {"HF_HUB_OFFLINE": "1"})
+    .add_local_python_source("app")
 )
-def generate_images() -> None:
-    from app.config import build_dir
-    from app.images import generate_images
-
-    build_dir().mkdir(parents=True, exist_ok=True)
-    generate_images()
-
-
-@app.function(
-    image=serving_image,
-    cpu=1,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_spectra() -> None:
-    from app.config import build_dir
-    from app.spectra import generate_spectra
-
-    build_dir().mkdir(parents=True, exist_ok=True)
-    generate_spectra()
-
-
-@app.function(
-    image=build_image,
-    gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_projections() -> None:
-    from app.config import build_dir
-    from app.parametric_umap import generate_projections
-
-    build_dir().mkdir(parents=True, exist_ok=True)
-    generate_projections()
 
 
 @app.function(

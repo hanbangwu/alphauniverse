@@ -11,20 +11,20 @@ from sklearn.preprocessing import normalize
 
 from .config import (
     ANCHOR,
-    BATCH,
     DIM,
-    MIN_TRAIN_PER_CENTROID,
     N_PATCHES,
     N_SPANS,
-    NLIST,
-    NPROBE,
-    PROBE,
     SEED,
     SPECTRUM_SURVEYS,
-    TRAIN_GALAXIES,
     GalaxyIndex,
     artifact,
 )
+
+BATCH = 256
+NLIST = 16384
+NPROBE = 64
+PROBE = 2048
+TRAIN_GALAXIES = 2048
 
 
 class Query(BaseModel):
@@ -62,23 +62,21 @@ def source(role: str) -> ds.Dataset:
 @cache
 def with_spectrum() -> np.ndarray:
     table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
-    return np.logical_or.reduce(
-        [
-            pc.is_valid(table.column(survey)).to_numpy(zero_copy_only=False)
-            for survey in SPECTRUM_SURVEYS
-        ]
-    )
+    return pc.is_valid(spectrum_cells(table)).to_numpy(zero_copy_only=False)
 
 
-@cache
-def starts() -> np.ndarray:
-    has = with_spectrum()
+def layout(has: np.ndarray) -> np.ndarray:
     before = np.concatenate(([0], np.cumsum(has)[:-1]))
     return np.arange(len(has)) * N_PATCHES + before * N_SPANS
 
 
-def owners(ids: np.ndarray) -> np.ndarray:
-    return np.searchsorted(starts(), ids, side="right") - 1
+@cache
+def starts() -> np.ndarray:
+    return layout(with_spectrum())
+
+
+def positions(first: np.ndarray, width: int) -> np.ndarray:
+    return (first[:, None] + np.arange(width)).reshape(-1)
 
 
 def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
@@ -101,7 +99,9 @@ def candidates(
             direction, nearest, params=faiss.SearchParametersIVF(nprobe=lists)
         )[1][0]
         returned = ids[ids >= 0]
-        found, first = np.unique(owners(returned), return_index=True)
+        found, first = np.unique(
+            np.searchsorted(starts(), returned, side="right") - 1, return_index=True
+        )
         ranked = found[np.argsort(first)]
         others = ranked[ranked != query.galaxy][: query.matches]
         if len(others) == query.matches or (
@@ -112,9 +112,7 @@ def candidates(
 
 
 def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:
-    return index.reconstruct_batch(
-        (starts()[order][:, None] + np.arange(N_PATCHES)).reshape(-1)
-    )
+    return index.reconstruct_batch(positions(starts()[order], N_PATCHES))
 
 
 def score_maps(rows: np.ndarray, direction: np.ndarray, *, width: int) -> np.ndarray:
@@ -126,9 +124,7 @@ def span_maps(
 ) -> np.ndarray:
     maps = np.full((len(order), N_SPANS), np.nan, dtype=np.float32)
     has = with_spectrum()[order]
-    rows = index.reconstruct_batch(
-        (starts()[order[has]][:, None] + N_PATCHES + np.arange(N_SPANS)).reshape(-1)
-    )
+    rows = index.reconstruct_batch(positions(starts()[order[has]] + N_PATCHES, N_SPANS))
     maps[has] = score_maps(rows, direction, width=N_SPANS)
     return maps
 
@@ -136,9 +132,7 @@ def span_maps(
 def rank(
     order: np.ndarray, scored: np.ndarray, spectral: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    scores = np.maximum(
-        scored.max(axis=1), np.nan_to_num(spectral, nan=-np.inf).max(axis=1)
-    )
+    scores = np.fmax(scored.max(axis=1), np.fmax.reduce(spectral, axis=1))
     by_score = np.concatenate(([0], 1 + np.argsort(-scores[1:], kind="stable")))
     return order[by_score], scores[by_score], scored[by_score], spectral[by_score]
 
@@ -172,19 +166,16 @@ def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array:
 def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
     spectra = spectrum_cells(batch)
     has = pc.is_valid(spectra).to_numpy(zero_copy_only=False)
-    patch_blocks = patches(batch.column(ANCHOR)).reshape(-1, N_PATCHES, DIM)
-    span_blocks = iter(
-        spectral(spectra.drop_null()).reshape(-1, N_SPANS, DIM) if has.any() else ()
+    first = layout(has)
+    built = np.empty(
+        (len(has) * N_PATCHES + has.sum() * N_SPANS, DIM), dtype=np.float32
     )
-    return np.concatenate(
-        [
-            block
-            for galaxy, patch_block in enumerate(patch_blocks)
-            for block in (
-                (patch_block, next(span_blocks)) if has[galaxy] else (patch_block,)
-            )
-        ]
-    )
+    built[positions(first, N_PATCHES)] = patches(batch.column(ANCHOR))
+    if has.any():
+        built[positions(first[has] + N_PATCHES, N_SPANS)] = spectral(
+            spectra.drop_null()
+        )
+    return built
 
 
 @cache
@@ -203,7 +194,9 @@ def generate_index() -> None:
         galaxies, min(TRAIN_GALAXIES, galaxies), replace=False
     )
     training = blocks(dataset.take(sample, columns=columns))
-    nlist = min(NLIST, len(training) // MIN_TRAIN_PER_CENTROID)
+    nlist = min(
+        NLIST, len(training) // faiss.ClusteringParameters().min_points_per_centroid
+    )
     built = faiss.index_factory(DIM, f"IVF{nlist},SQfp16", faiss.METRIC_INNER_PRODUCT)
     built.train(training)
     del training

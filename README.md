@@ -36,7 +36,7 @@ uv run python -m scripts.fixture                                   # writes .cac
 ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py  # serves 127.0.0.1:8000
 ```
 
-The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it.
+The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it. `/meta`, images and spectra read the dataset itself, so they fail unless it is in the local Hugging Face cache.
 
 ### Frontend
 
@@ -53,8 +53,6 @@ The dev build calls the API at `http://127.0.0.1:8000`, so start the local API f
 ```sh
 uv run modal run modal_app.py::generate_embeddings   # encode dataset
 uv run modal run modal_app.py::generate_index        # build the search index
-uv run modal run modal_app.py::generate_images       # crop and encode the images
-uv run modal run modal_app.py::generate_spectra      # extract the spectra
 uv run modal run modal_app.py::generate_projections  # fit and apply the projection
 ```
 

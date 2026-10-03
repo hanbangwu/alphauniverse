@@ -16,11 +16,12 @@ from app.config import (
     DATASET_REVISION,
     N_PATCHES,
     N_SPANS,
-    NPROBE,
-    PROBE,
     SPECTRUM_SURVEYS,
 )
+from app.dataset import spectrum
 from app.search import (
+    NPROBE,
+    PROBE,
     Query,
     index,
     patches,
@@ -30,7 +31,6 @@ from app.search import (
     spectrum_cells,
     with_spectrum,
 )
-from app.spectra import spectra
 from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
 from scripts.benchmark import (
     PATCHES,
@@ -91,9 +91,14 @@ def exact_ranking(
     return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
 
 
+def wavelength(galaxy: int) -> np.ndarray:
+    tables = (spectrum(galaxy, survey) for survey in SPECTRUM_SURVEYS)
+    found = next(table for table in tables if table is not None)
+    return found.column("wavelength").to_numpy()
+
+
 def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
     rng = np.random.default_rng(seed)
-    cells = spectrum_cells(spectra())
     return [
         Query(
             galaxy=int(galaxy),
@@ -104,7 +109,7 @@ def with_spans(count: int, patch_count: int, seed: int) -> list[Query]:
             s=tuple(
                 int(span)
                 for span in rng.choice(
-                    observed_spans(np.asarray(cells[int(galaxy)]["wavelength"].values)),
+                    observed_spans(wavelength(int(galaxy))),
                     SPANS,
                     replace=False,
                 )

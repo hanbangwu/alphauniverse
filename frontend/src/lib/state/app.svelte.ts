@@ -28,15 +28,15 @@ export class AppState {
   }
 
   get swatches(): string[] | null {
-    return mode.current ? morphologyColors(this.meta.morphologies.length, mode.current) : null
+    return mode.current ? morphologyColors(this.meta.morphologies.length - 1, mode.current) : null
   }
 
   get meanPoints(): PointsQuery {
-    return pointsQuery(this.mosaic, 'mean_points')
+    return pointsQuery(this.mosaic, 'mean')
   }
 
   get fullPoints(): PointsQuery {
-    return pointsQuery(this.mosaic, 'full_points', this.view.full)
+    return pointsQuery(this.mosaic, 'full', this.view.full)
   }
 
   start(): void {

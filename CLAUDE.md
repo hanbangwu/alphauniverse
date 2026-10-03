@@ -55,7 +55,8 @@ bun run lint                                        # prettier + eslint
 - Nothing runs on Modal (`modal run`, `modal serve`, `modal deploy`) unless a maintainer asks, and no load or cold-start traffic goes to the deployed app unless asked. Deploys happen only through CI on `main`.
 - Working notes (scratch analysis, session logs, write-ups) are not committed; they live outside the repository.
 - Ask when unsure about anything: a new file or not, leanness versus performance, installing a library. Ask before editing, not midway.
-- If two rules conflict, stop and ask.
+- If multiple rules conflict, stop and ask.
+- When regenerating generated files like `openapi.json` or `package.json`, prefer running commands rather than direct edits.
 
 ## Code
 
