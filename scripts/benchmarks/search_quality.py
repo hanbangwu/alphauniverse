@@ -56,7 +56,7 @@ def corpus() -> Corpus:
     cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
     spectra = spectrum_cells(cells)
     return Corpus(
-        patches(cells.column(ANCHOR).combine_chunks()),
+        patches(cells.column(ANCHOR)),
         spectral(spectra.drop_null()),
         np.flatnonzero(pc.is_valid(spectra).to_numpy()),
     )

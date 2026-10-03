@@ -139,20 +139,20 @@ def search(
     return rank(order, scored, span_maps(order, direction, index=index))
 
 
-def rows(cells: pa.Array, start: int, stop: int | None) -> np.ndarray:
+def rows(cells: pa.Array | pa.ChunkedArray, start: int, stop: int | None) -> np.ndarray:
     flat = pc.list_flatten(pc.list_flatten(pc.list_slice(cells, start, stop)))
     return normalize(np.asarray(flat, dtype=np.float32).reshape(-1, DIM), copy=False)
 
 
-def patches(cells: pa.Array) -> np.ndarray:
+def patches(cells: pa.Array | pa.ChunkedArray) -> np.ndarray:
     return rows(cells, 0, N_PATCHES)
 
 
-def spectral(cells: pa.Array) -> np.ndarray:
+def spectral(cells: pa.Array | pa.ChunkedArray) -> np.ndarray:
     return rows(cells, 1, None)
 
 
-def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array:
+def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array | pa.ChunkedArray:
     return pc.coalesce(*(batch.column(survey) for survey in SPECTRUM_SURVEYS))
 
 

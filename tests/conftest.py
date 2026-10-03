@@ -8,30 +8,17 @@ from fastapi.testclient import TestClient
 GALAXIES = 12
 
 
-def _forget() -> None:
-    from app import config, search
-
-    config.galaxy_count.cache_clear()
-    search.source.cache_clear()
-    search.index.cache_clear()
-    search.with_spectrum.cache_clear()
-    search.starts.cache_clear()
-
-
 @pytest.fixture(scope="session")
 def galaxies() -> int:
     return GALAXIES
 
 
 @pytest.fixture(scope="session")
-def tree(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+def tree(tmp_path_factory: pytest.TempPathFactory) -> Path:
     from scripts.fixture import build
 
     os.environ["ALPHAUNIVERSE_CACHE"] = str(tmp_path_factory.mktemp("artifacts"))
-    _forget()
-    target = build(GALAXIES)
-    yield target
-    _forget()
+    return build(GALAXIES)
 
 
 @pytest.fixture(scope="session")
