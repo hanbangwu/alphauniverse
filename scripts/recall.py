@@ -1,7 +1,5 @@
-import json
 import resource
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -12,7 +10,6 @@ from sklearn.preprocessing import normalize
 
 from app.config import (
     ANCHOR,
-    DATASET_REVISION,
     N_PATCHES,
     N_SPANS,
     SPECTRUM_SURVEYS,
@@ -36,8 +33,10 @@ from scripts.benchmark import (
     environment,
     git,
     observed_spans,
+    provenance,
     queries,
     spec,
+    write,
 )
 
 app = modal.App("alphauniverse-recall")
@@ -226,11 +225,8 @@ def measure(per_kind: int) -> dict[str, Any]:
 def main(per_kind: int = 100) -> None:
     report = {
         "commit": git("describe", "--always", "--dirty"),
-        "revision": DATASET_REVISION,
-        "date": datetime.now(UTC).isoformat(timespec="seconds"),
+        **provenance(),
         "job": spec(measure),
         **measure.remote(per_kind),
     }
-    REPORT.parent.mkdir(exist_ok=True)
-    REPORT.write_text(json.dumps(report, indent=2) + "\n")
-    print(f"wrote {REPORT}")
+    write(REPORT, report)
