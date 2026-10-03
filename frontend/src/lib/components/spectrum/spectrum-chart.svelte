@@ -43,7 +43,7 @@
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
-    onselect?: (indices: number[]) => void
+    ontoggle?: (index: number) => void
     class?: string
     label: string
   }
@@ -55,7 +55,7 @@
     opacity = () => 1,
     title,
     selected = [],
-    onselect,
+    ontoggle,
     class: className,
     label
   }: Props = $props()
@@ -65,7 +65,7 @@
   let box = $state<HTMLElement | null>(null)
   let chart = $state.raw<ECharts | null>(null)
 
-  const interactive = $derived(Boolean(onselect))
+  const interactive = $derived(Boolean(ontoggle))
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
   const points = $derived(
@@ -179,9 +179,7 @@
     if (!chart.containPixel('grid', point)) return
     const index = spanAt(meta, chart.convertFromPixel('grid', point)[0])
     if (index < 0 || index >= values.length) return
-    onselect?.(
-      selected.includes(index) ? selected.filter((value) => value !== index) : [...selected, index]
-    )
+    ontoggle?.(index)
   }
 </script>
 

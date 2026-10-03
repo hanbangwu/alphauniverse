@@ -31,7 +31,7 @@
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
-    onselect?: (indices: number[]) => void
+    ontoggle?: (index: number) => void
     class?: string
     label: string
   }
@@ -43,7 +43,7 @@
     opacity = () => 1,
     title,
     selected = [],
-    onselect,
+    ontoggle,
     class: className,
     label
   }: Props = $props()
@@ -51,7 +51,7 @@
   let box = $state<HTMLElement | null>(null)
   let chart = $state.raw<ECharts | null>(null)
 
-  const interactive = $derived(Boolean(onselect))
+  const interactive = $derived(Boolean(ontoggle))
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
 
@@ -118,11 +118,7 @@
   })
 
   function pick({ dataIndex }: ECElementEvent): void {
-    onselect?.(
-      selected.includes(dataIndex)
-        ? selected.filter((value) => value !== dataIndex)
-        : [...selected, dataIndex]
-    )
+    ontoggle?.(dataIndex)
   }
 </script>
 
