@@ -15,7 +15,7 @@ uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, defaul
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
-- Each run replaces its report; commit it before the next run.
+- A pull request posts its run's report on the pull request and commits none; after a round, a docs pull request reruns the scripts on `main` and commits their reports.
 - Figures compare only within one run: not across runs, machines or thread layouts.
 - **Unmeasured** marks a figure read off the code.
 
