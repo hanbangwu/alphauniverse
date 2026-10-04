@@ -13,7 +13,6 @@ from app.config import (
 )
 from app.search import (
     NLIST,
-    PROBE,
     Query,
     index,
     patches,
@@ -83,8 +82,8 @@ def test_rank_keeps_the_query_first_and_each_row_together() -> None:
 
 
 @pytest.mark.parametrize("matches", [3, 32])
-@pytest.mark.parametrize(("nearest", "lists"), [(1, 1), (PROBE, 1), (1, NLIST)])
-def test_a_search_returns_at_most_the_matches_asked_for(
+@pytest.mark.parametrize(("nearest", "lists"), [(1, 1), (NLIST, 1), (1, NLIST)])
+def test_a_search_that_finds_too_few_looks_further(
     built: faiss.Index,
     monkeypatch: pytest.MonkeyPatch,
     nearest: int,
@@ -96,7 +95,7 @@ def test_a_search_returns_at_most_the_matches_asked_for(
     found, _, _, _ = search(Query(galaxy=0, p=(64, 65), matches=matches), index=built)
 
     assert found[0] == 0
-    assert len(set(found.tolist())) == len(found) <= matches + 1
+    assert len(set(found.tolist())) == len(found) == min(matches, len(starts()) - 1) + 1
 
 
 @pytest.mark.parametrize(

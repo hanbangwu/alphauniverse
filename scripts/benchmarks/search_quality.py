@@ -143,17 +143,19 @@ def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
         ("spans", [query.model_copy(update={"patches": ()}) for query in paired]),
         ("both", paired),
     ):
-        fractions, short = [], []
+        fractions, searches = [], []
         for query in batch:
             expected = exact_ranking(query, reference)[0][1:]
+            faiss.cvar.indexIVF_stats.reset()
             found = search(query, index=built)[0][1:]
+            searches.append(faiss.cvar.indexIVF_stats.nq)
             fractions.append(len(np.intersect1d(found, expected)) / len(expected))
-            short.append(len(found) < len(expected))
         measured[kind] = {
             "mean": round(float(np.mean(fractions)), 4),
             "min": round(float(np.min(fractions)), 4),
             "all_found": round(float(np.mean(np.equal(fractions, 1))), 4),
-            "short_of_matches": round(float(np.mean(short)), 4),
+            "looked_further": round(float(np.mean(np.greater(searches, 1))), 4),
+            "most_searches": max(searches),
         }
 
     return {
