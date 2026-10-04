@@ -34,7 +34,7 @@ ls, hsc, desi, sdss: list<fixed_size_list<float16, 768>>   -- null where unmatch
 gz10, provabgs:      bool
 ```
 
-- **`encoded`**: the encoder's contextualised output. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
+- **`encoded`**: what AION's `_encode` returns, the context its decoder reads. That is the encoder's output after `encoder_norm`, mapped by the linear `decoder_proj_context`, with each token's position and modality embeddings added back. Those added embeddings depend only on the token's modality and position, so every galaxy shares them. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
 - **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
 - **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings.
 
