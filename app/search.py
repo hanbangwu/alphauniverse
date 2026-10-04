@@ -1,3 +1,5 @@
+import os
+import threading
 from functools import cache
 from typing import Annotated, Self
 
@@ -21,6 +23,10 @@ from .config import (
 )
 
 BATCH = 256
+REUSE = bool(os.environ.get("EXPERIMENT_REUSE"))
+PARALLEL_MODE = int(os.environ.get("EXPERIMENT_PARALLEL_MODE", "0"))
+NO_PREFETCH = bool(os.environ.get("EXPERIMENT_NO_PREFETCH"))
+buffers = threading.local()
 NLIST = 16384
 NPROBE = 64
 PROBE = 2048
@@ -104,8 +110,17 @@ def candidates(
     return np.concatenate(([query.galaxy], others)).astype(np.int32)
 
 
+def reconstructed(ids: np.ndarray, index: faiss.Index) -> np.ndarray:
+    if not REUSE:
+        return index.reconstruct_batch(ids)
+    held = getattr(buffers, "rows", None)
+    if held is None or len(held) < len(ids):
+        held = buffers.rows = np.empty((len(ids), DIM), dtype=np.float32)
+    return index.reconstruct_batch(ids, held[: len(ids)])
+
+
 def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:
-    return index.reconstruct_batch(positions(starts()[order], N_PATCHES))
+    return reconstructed(positions(starts()[order], N_PATCHES), index)
 
 
 def score_maps(rows: np.ndarray, direction: np.ndarray, *, width: int) -> np.ndarray:
@@ -175,6 +190,9 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 def index() -> faiss.Index:
     loaded = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
     loaded.make_direct_map()
+    loaded.parallel_mode = PARALLEL_MODE
+    if NO_PREFETCH:
+        faiss.downcast_InvertedLists(loaded.invlists).prefetch_nthread = 0
     return loaded
 
 

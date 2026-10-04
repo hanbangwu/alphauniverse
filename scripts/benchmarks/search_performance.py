@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import resource
 import subprocess
 import sys
@@ -52,6 +53,24 @@ image = serving_image.add_local_python_source("modal_app")
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
+QUIET = {"OPENBLAS_NUM_THREADS": "1", "OMP_WAIT_POLICY": "PASSIVE"}
+VARIANTS = {
+    "blas1": {"OPENBLAS_NUM_THREADS": "1"},
+    "passive": {"OMP_WAIT_POLICY": "PASSIVE"},
+    "quiet": QUIET,
+    "quiet_omp4": QUIET | {"OMP_NUM_THREADS": "4"},
+    "quiet_omp1": QUIET | {"OMP_NUM_THREADS": "1"},
+    "parallel_mode": {"EXPERIMENT_PARALLEL_MODE": "1"},
+    "no_prefetch": {"EXPERIMENT_NO_PREFETCH": "1"},
+    "reuse": {"EXPERIMENT_REUSE": "1"},
+    "pycache": {"PYTHONPYCACHEPREFIX": "/tmp/pycache"},
+    "combined": QUIET
+    | {
+        "EXPERIMENT_PARALLEL_MODE": "1",
+        "EXPERIMENT_NO_PREFETCH": "1",
+        "EXPERIMENT_REUSE": "1",
+    },
+}
 REPORT = Path("docs/benchmarks/search_performance.json")
 ENTRY = (
     "import json, sys, time\n"
@@ -197,12 +216,13 @@ def benchmark_search_performance(
         with tarfile.open(fileobj=io.BytesIO(source)) as bundle:
             bundle.extractall(root / name, filter="data")
 
-    rounds: dict[str, list[dict[str, Any]]] = {name: [] for name in sources}
+    rounds: dict[str, list[dict[str, Any]]] = {name: [] for name in order}
     for position, name in enumerate(order):
         try:
             completed = subprocess.run(
                 [sys.executable, "-c", ENTRY, str(runs)],
-                cwd=root / name,
+                cwd=root / (name if name in sources else "after"),
+                env=os.environ | VARIANTS.get(name, {}),
                 capture_output=True,
                 text=True,
                 check=True,
@@ -245,7 +265,7 @@ def main(runs: int = 30) -> None:
         else:
             if stored_code not in code:
                 commits["best"] = stored["commit"]
-    names = list(commits)
+    names = [*commits, *VARIANTS]
     sources = {
         name: subprocess.check_output(["git", "archive", commit, *SOURCES])
         for name, commit in commits.items()
@@ -265,7 +285,7 @@ def main(runs: int = 30) -> None:
     means = {
         name: float(np.mean([entry["total_p50_ms"] for entry in rounds]))
         for name, rounds in report["stages"]["rounds"].items()
-        if all("error" not in entry for entry in rounds)
+        if name in commits and all("error" not in entry for entry in rounds)
     }
     if means:
         best = min(means, key=means.__getitem__)
