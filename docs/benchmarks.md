@@ -174,22 +174,20 @@ A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force ov
 
 ### Last run
 
-| Run              |                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Date             | 2026-10-03                                                                                                        |
-| Commit           | `5c65e2d-dirty`: uncommitted changes on top of `5c65e2d`                                                          |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                        |
-| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
-| Queries          | 100 per kind, `PROBE=2048`, `NPROBE=64`                                                                           |
+| Run              |                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-04                                                                                                       |
+| Commit           | `6aa4197`                                                                                                        |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                       |
+| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 1 |
+| Queries          | 100 per kind, `PROBE=2048`, `NPROBE=64`                                                                          |
 
-The run predates `looked_further` and `most_searches`; its last column is the share they replaced.
-
-| Query                 | Drawn from | Mean  | Lowest | All 32 found | Fewer than 32 returned |
-| --------------------- | ---------- | ----- | ------ | ------------ | ---------------------- |
-| 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%                     |
-| 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%                     |
-| 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%                     |
-| 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%                     |
+| Query                 | Drawn from | Mean  | Lowest | All 32 found | Searched again | Most searches |
+| --------------------- | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
+| 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
+| 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
+| 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
+| 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
 ## Scaling ceilings
 
