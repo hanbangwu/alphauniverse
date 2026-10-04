@@ -115,6 +115,6 @@ export function similarityQuery(request: SimilarityQuery | null) {
             }
           },
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000
+    staleTime: Infinity
   })
 }
