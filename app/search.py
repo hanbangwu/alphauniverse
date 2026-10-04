@@ -191,6 +191,8 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 def index() -> faiss.Index:
     loaded = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
     loaded.make_direct_map()
+    loaded.parallel_mode = 1
+    faiss.downcast_InvertedLists(loaded.invlists).prefetch_nthread = 0
     return loaded
 
 
