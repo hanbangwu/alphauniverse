@@ -17,10 +17,11 @@ Tests need no Modal, GPU or network. `tests/test_dataset.py` replaces `dataset()
 - The 2-d points come from one fixed random projection in place of the trained parametric UMAP, so the default suite needs no torch. One projection serves both point sets, as the projector does in production.
 - `codebook` and `parametric_umap` are left out: nothing served reads them, and their absence exercises the 404 path.
 
-Four tests in `tests/test_search.py` check what the shared tree cannot show:
+Five tests in `tests/test_search.py` check what the shared tree cannot show:
 
 - `test_approximate_ranking_agrees_with_exact` compares `search()` with `exact_ranking` in `scripts/benchmarks/search_quality.py`: the same search without the candidate step, a brute force over every token's float32 embedding in place of the index's fp16 copies. It asks for fewer matches than the corpus holds, so the candidate step must choose. It checks the galaxies, their order, each score and each patch and span map (null where the galaxy has no spectrum) to within `SCORE_TOLERANCE`, after asserting that the exact scores are more than twice that apart. On production data the two need not agree; `search_quality` measures how often they do.
 - `test_ids_stay_contiguous_across_add_batches` builds its own index with one galaxy per `add()` call, galaxies without a spectrum included, since the shared tree goes in with one call. A reordered or dropped batch would silently shift every galaxy id.
+- `test_embeddings_that_are_not_finite_are_rejected` passes `patches()` a cell of infinities, which the shared tree never holds. `faiss.normalize_L2` would turn them into NaN silently.
 - `test_rank_keeps_the_query_first_and_each_row_together` calls `rank()` on arrays built in the test, since on the shared tree `candidates()` already returns galaxies in ranked order.
 - `test_a_search_returns_at_most_the_matches_asked_for` changes `PROBE` and `NPROBE` so that the search can fall short, since at their defaults it finds every galaxy on the shared tree. It asks for one vector over one list, 2048 vectors over one list, and one vector over every list, and checks that the answer starts with the query galaxy and holds at most `matches` other galaxies, none twice.
 
