@@ -3,10 +3,12 @@
   import favicon from '$lib/assets/favicon.svg'
   import AppRoot from '$lib/components/app-root.svelte'
   import { Spinner } from '$lib/components/ui/spinner'
-  import { metaQuery } from '$lib/data/queries'
+  import { metaQuery, pointsQuery } from '$lib/data/queries'
+  import { MosaicState } from '$lib/state/mosaic.svelte'
   import './layout.css'
   import { QueryClient, QueryClientProvider, createQuery } from '@tanstack/svelte-query'
   import { ModeWatcher } from 'mode-watcher'
+  import { onMount } from 'svelte'
 
   let { children } = $props()
 
@@ -15,6 +17,9 @@
     () => metaQuery,
     () => queries
   )
+  const mosaic = new MosaicState()
+
+  onMount(() => void queries.prefetchQuery(pointsQuery(mosaic, 'mean')))
 </script>
 
 <svelte:head>
@@ -28,7 +33,7 @@
 <QueryClientProvider client={queries}>
   <div class="h-dvh overflow-hidden">
     {#if meta.data}
-      <AppRoot meta={meta.data}>
+      <AppRoot meta={meta.data} {mosaic}>
         {@render children()}
       </AppRoot>
     {:else if meta.isError}
