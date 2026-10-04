@@ -31,8 +31,9 @@ from .config import (
     Projection,
     artifact,
     galaxy_count,
+    labels,
 )
-from .dataset import image, labels, spectrum
+from .dataset import image, spectrum
 from .search import Query as SearchQuery
 from .search import index, search, source, starts
 
@@ -103,6 +104,7 @@ class RevalidatedRoute(APIRoute):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
+    labels()
     index()
     starts()
     yield

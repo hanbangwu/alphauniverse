@@ -16,6 +16,7 @@ from app.config import (
     artifact,
     build_dir,
     galaxy_count,
+    labels,
     points,
     store_schema,
 )
@@ -92,7 +93,7 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
 
 
 def forget() -> None:
-    for cached in (galaxy_count, source, index, with_spectrum, starts):
+    for cached in (galaxy_count, labels, source, index, with_spectrum, starts):
         cached.cache_clear()
 
 

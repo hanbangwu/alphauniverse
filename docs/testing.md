@@ -11,7 +11,7 @@ uv run ruff check app scripts tests modal_app.py
 uv run ruff format app scripts tests modal_app.py
 ```
 
-Tests need no Modal, GPU or network. `tests/test_dataset.py` replaces `dataset()` with a two-row `Dataset`; `/meta` and the image and spectrum endpoints are untested. `tests/conftest.py` builds one synthetic tree per session with `scripts/fixture.py`, in the production schemas:
+Tests need no Modal, GPU or network. `tests/test_dataset.py` replaces `dataset()` with a two-row `Dataset`; the image and spectrum endpoints are untested. `tests/conftest.py` builds one synthetic tree per session with `scripts/fixture.py`, in the production schemas:
 
 - Embeddings cluster around fixed random centres. Uniform noise in 768 dimensions is nearly orthogonal, which would make every ranking arbitrary.
 - The 2-d points come from one fixed random projection in place of the trained parametric UMAP, so the default suite needs no torch. One projection serves both point sets, as the projector does in production.
