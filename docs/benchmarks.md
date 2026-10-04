@@ -73,7 +73,7 @@ Figures are after's. Warm figures average its two rounds.
 | `starts`  | 0.02 s      | 0.02 s       |
 | Total     | 7.51 s      | 0.54–0.58 s  |
 
-`faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
+`faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids unless the file stores the map.
 
 **Stages**, 4 patches, 32 matches:
 
