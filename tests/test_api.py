@@ -30,15 +30,13 @@ def test_artifact_downloads(client: TestClient, tree) -> None:
     assert len(response.content) == (tree / "encoded.parquet").stat().st_size
 
 
-def test_meta_reports_the_galaxy_count_and_a_count_per_morphology(
-    client: TestClient, galaxies: int
+def test_meta_reports_a_count_per_morphology_without_the_dataset(
+    client: TestClient,
 ) -> None:
     response = client.get("/meta")
 
     assert response.status_code == 200
-    meta = response.json()
-    assert meta["galaxies"] == galaxies
-    assert len(meta["morphologies"]) == N_MORPHOLOGIES + 1
+    assert len(response.json()["morphologies"]) == N_MORPHOLOGIES + 1
 
 
 def test_projection_head_is_served(client: TestClient) -> None:
