@@ -36,7 +36,7 @@ uv run python -m scripts.fixture                                   # writes .cac
 ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py  # serves 127.0.0.1:8000
 ```
 
-The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it. `/meta`, images and spectra read the Hugging Face dataset itself: the first such request downloads it into the local Hugging Face cache (24.33 GB at the pinned revision), and with `HF_HUB_OFFLINE=1` they fail unless it is already there.
+The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it. Images and spectra read the Hugging Face dataset itself: the first such request downloads it into the local Hugging Face cache (24.33 GB at the pinned revision), and with `HF_HUB_OFFLINE=1` they fail unless it is already there.
 
 ### Frontend
 

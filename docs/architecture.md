@@ -35,7 +35,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `full_points`     | one 2-d point per embedding                | `/projections/full`                                                     |
 | `parametric_umap` | the trained projector's weights            | nothing at serve time                                                   |
 
-`docs/pipeline.md` has the schemas. `/meta`, `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead.
+`docs/pipeline.md` has the schemas. `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead.
 
 ## The serving app
 

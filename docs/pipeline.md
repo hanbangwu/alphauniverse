@@ -12,11 +12,10 @@ Each job writes its artifacts in place, so a failed run leaves them incomplete; 
 
 The script is outside the deployed pipeline and needs `lsdb`, which is not a project dependency: run it with `uv run --with datasets --with lsdb`.
 
-The serving app reads images, spectra and GZ10 labels from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
+The serving app reads images and spectra from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
 
 - **Image**: the anchor survey's `rgb` cutout, centre-cropped to `CROP_PIXELS` square and PNG-encoded on each request.
 - **Spectrum**: wavelength in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux.
-- **Labels**: `/meta`'s morphology counts, a count of `gz10_label` over every row, computed on the first request.
 
 ## `generate_embeddings`
 
@@ -65,7 +64,7 @@ x, y:   float32 not null
 category: uint8   -- GZ10 morphology, null where unlabelled
 ```
 
-- **`mean_points`**: one row per galaxy, from its mean embedding. Small, and loaded on first paint.
+- **`mean_points`**: one row per galaxy, from its mean embedding. Small, loaded on first paint, and the source of `/meta`'s morphology counts, unlabelled galaxies last.
 - **`full_points`**: one row per embedding, every modality in the same space; loaded only when the user asks for it. Written survey by survey, so its galaxy column is not monotonic.
 
 Training logs to Weights & Biases under `WANDB_MODE`. `modal_app.py` sets it to `offline`, so runs are written to the volume and not uploaded (for now).
