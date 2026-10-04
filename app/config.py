@@ -138,6 +138,14 @@ def galaxy_count() -> int:
     return pq.read_metadata(artifact("mean_points")).num_rows
 
 
+@cache
+def labels() -> list[int]:
+    category = pq.read_table(artifact("mean_points"), columns=["category"])["category"]
+    return np.bincount(
+        np.asarray(category.fill_null(N_MORPHOLOGIES)), minlength=N_MORPHOLOGIES + 1
+    ).tolist()
+
+
 def stored_galaxy(galaxy: int) -> int:
     if galaxy >= galaxy_count():
         raise ValueError(f"should be less than {galaxy_count()}, the galaxy count")

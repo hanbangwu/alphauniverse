@@ -15,8 +15,8 @@ from typing import Any
 import faiss
 import numpy as np
 
-from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count
-from app.dataset import dataset, labels
+from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count, labels
+from app.dataset import dataset
 from app.search import (
     Query,
     candidates,

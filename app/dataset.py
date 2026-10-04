@@ -11,8 +11,6 @@ from .config import (
     DATASET_AUTHOR,
     DATASET_NAME,
     DATASET_REVISION,
-    FLAG_SURVEYS,
-    N_MORPHOLOGIES,
     RGB_COLUMN,
     SPECTRUM_SURVEYS,
     SpectrumSurvey,
@@ -54,11 +52,3 @@ def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
     if not cell.is_valid:
         return None
     return pa.table(samples(cell))
-
-
-@cache
-def labels() -> list[int]:
-    category = dataset().data.column(FLAG_SURVEYS["gz10"])
-    return np.bincount(
-        np.asarray(category.fill_null(N_MORPHOLOGIES)), minlength=N_MORPHOLOGIES + 1
-    ).tolist()
