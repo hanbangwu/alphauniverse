@@ -39,9 +39,13 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 
 A container with the server's spec runs, per version:
 
-1. the loads a cold `/meta` waits for: `dataset`, `labels`, `index`, `starts`;
-2. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
-3. `search()` whole at 8, 32 and 128 matches.
+1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
+2. `read_index` and `make_direct_map`, `index()`'s two faiss calls timed on a separate copy, so in the first round they take the index's cold reads;
+3. the loads a cold `/meta` waits for: `galaxy_count`, `dataset`, `labels`, `index`, `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
+4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
+5. `search()` whole at 8, 32 and 128 matches.
+
+The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks, and system time includes the sandbox's fault handling. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
 
 Versions are the checked-out commit (after), `origin/main` (before), and the stored report's best unless its code matches one of those. Each is a `git archive` of `app/`, `scripts/` and `modal_app.py`, run in a subprocess with after's locked dependencies, in mirrored order: after, before, best, then back. After's first round has the cold page cache. A failed round records its error.
 

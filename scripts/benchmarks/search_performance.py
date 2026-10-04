@@ -1,5 +1,6 @@
 import io
 import json
+import resource
 import subprocess
 import sys
 import tarfile
@@ -14,7 +15,7 @@ from typing import Any
 import faiss
 import numpy as np
 
-from app.config import DATASET_REVISION, N_PATCHES
+from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count
 from app.dataset import dataset, labels
 from app.search import (
     Query,
@@ -49,34 +50,78 @@ from scripts.benchmarks.common import (
 image = serving_image.add_local_python_source("modal_app")
 
 STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
+KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
 ENTRY = (
-    "import json, sys\n"
+    "import json, sys, time\n"
+    "start = time.perf_counter()\n"
+    "import app.main\n"
+    "import_ms = round((time.perf_counter() - start) * 1000, 3)\n"
     "from app.config import DATASET_REVISION\n"
     "try:\n"
     "    from scripts.benchmarks.search_performance import stages\n"
     "except ModuleNotFoundError:\n"
     "    from scripts.benchmark import stages\n"
-    "print(json.dumps(stages.local(int(sys.argv[1])) | {'revision': DATASET_REVISION}))"
+    "print(json.dumps(stages.local(int(sys.argv[1]))"
+    " | {'revision': DATASET_REVISION, 'import_ms': import_ms}))"
 )
 
 
-def stage_times(query: Query, built: faiss.Index) -> list[float]:
-    marks = [time.perf_counter()]
+def mark() -> tuple[float, float, float]:
+    used = resource.getrusage(resource.RUSAGE_SELF)
+    return time.perf_counter(), used.ru_utime, used.ru_stime
+
+
+def usages(
+    names: list[str], marks: list[tuple[float, float, float]]
+) -> dict[str, dict[str, float]]:
+    return {
+        name: {
+            kind: (end - begin) * 1000
+            for kind, begin, end in zip(KINDS, start, stop, strict=True)
+        }
+        for name, (start, stop) in zip(names, pairwise(marks), strict=True)
+    }
+
+
+def rounded(usage: dict[str, float]) -> dict[str, float]:
+    return {kind: round(milliseconds, 3) for kind, milliseconds in usage.items()}
+
+
+def index_split() -> dict[str, dict[str, float]]:
+    marks = [mark()]
+    separate = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
+    marks.append(mark())
+    separate.make_direct_map()
+    marks.append(mark())
+    return usages(["read_index", "make_direct_map"], marks)
+
+
+def load_times() -> dict[str, dict[str, float]]:
+    loads = (galaxy_count, dataset, labels, index, starts)
+    marks = [mark()]
+    for load in loads:
+        load()
+        marks.append(mark())
+    return usages([load.__name__ for load in loads], marks)
+
+
+def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]:
+    marks = [mark()]
     direction = centroid(query, index=built)
-    marks.append(time.perf_counter())
+    marks.append(mark())
     order = candidates(query, direction, index=built)
-    marks.append(time.perf_counter())
+    marks.append(mark())
     rows = vectors(order, index=built)
-    marks.append(time.perf_counter())
+    marks.append(mark())
     scored = score_maps(rows, direction, width=N_PATCHES)
-    marks.append(time.perf_counter())
+    marks.append(mark())
     spectral_scores = span_maps(order, direction, index=built)
-    marks.append(time.perf_counter())
+    marks.append(mark())
     rank(order, scored, spectral_scores)
-    marks.append(time.perf_counter())
-    return [(end - begin) * 1000 for begin, end in pairwise(marks)]
+    marks.append(mark())
+    return usages(STAGES, marks)
 
 
 def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
@@ -89,40 +134,49 @@ def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any
 
 @app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
-    loads = {
-        load.__name__: round(elapsed(load), 3)
-        for load in (dataset, labels, index, starts)
-    }
+    split = index_split()
+    loads = load_times()
     built = index()
 
     batch = queries(runs + 1, PATCHES, matches)
     cold = stage_times(batch[0], built)
-    samples: dict[str, list[float]] = {name: [] for name in STAGES}
+    samples: dict[str, list[dict[str, float]]] = {name: [] for name in STAGES}
 
     for query in batch[1:]:
-        for name, milliseconds in zip(STAGES, stage_times(query, built), strict=True):
-            samples[name].append(milliseconds)
+        for name, usage in stage_times(query, built).items():
+            samples[name].append(usage)
 
-    total = sum(float(np.median(values)) for values in samples.values())
+    medians = {
+        name: float(np.median([usage["wall"] for usage in values]))
+        for name, values in samples.items()
+    }
+    means = {
+        name: {
+            kind: float(np.mean([usage[kind] for usage in values])) for kind in KINDS
+        }
+        for name, values in samples.items()
+    }
+    total = sum(medians.values())
     return {
         "environment": environment(),
-        "load_ms": loads,
+        "load_ms": {name: round(usage["wall"], 3) for name, usage in loads.items()},
         "runs": runs,
         "matches": matches,
         "cold_stages_ms": {
-            name: round(milliseconds, 3)
-            for name, milliseconds in zip(STAGES, cold, strict=True)
+            name: round(usage["wall"], 3) for name, usage in cold.items()
         },
         "total_p50_ms": round(total, 3),
         "stages": {
-            name: {
-                "p50_ms": round(float(np.median(values)), 3),
-                "share": round(float(np.median(values)) / total, 4),
-            }
-            for name, values in samples.items()
+            name: {"p50_ms": round(median, 3), "share": round(median / total, 4)}
+            for name, median in medians.items()
         },
         "searches": {
             f"matches={asked}": whole_searches(runs, asked, built) for asked in MATCHES
+        },
+        "usage_ms": {
+            "index_split": {name: rounded(usage) for name, usage in split.items()},
+            "loads": {name: rounded(usage) for name, usage in loads.items()},
+            "stages": {name: rounded(mean) for name, mean in means.items()},
         },
     }
 
