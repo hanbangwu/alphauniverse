@@ -41,7 +41,7 @@ A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
 2. `read_index` and `make_direct_map`, `index()`'s two faiss calls timed on a separate copy, so in the first round they take the index's cold reads;
-3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `tokens`, `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
+3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `tokens` (which `starts` loads), `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
 4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
 5. `search()` whole at 8, 32 and 128 matches.
 
