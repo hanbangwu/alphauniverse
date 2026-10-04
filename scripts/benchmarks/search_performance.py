@@ -15,7 +15,7 @@ from typing import Any
 import faiss
 import numpy as np
 
-from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count, labels
+from app.config import DATASET_REVISION, N_PATCHES, galaxy_count, labels
 from app.search import (
     Query,
     candidates,
@@ -24,6 +24,7 @@ from app.search import (
     rank,
     score_maps,
     search,
+    search_vectors,
     span_maps,
     starts,
     tokens,
@@ -89,17 +90,8 @@ def rounded(usage: dict[str, float]) -> dict[str, float]:
     return {kind: round(milliseconds, 3) for kind, milliseconds in usage.items()}
 
 
-def index_split() -> dict[str, dict[str, float]]:
-    marks = [mark()]
-    separate = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
-    marks.append(mark())
-    separate.make_direct_map()
-    marks.append(mark())
-    return usages(["read_index", "make_direct_map"], marks)
-
-
 def load_times() -> dict[str, dict[str, float]]:
-    loads = (galaxy_count, labels, index, tokens, starts)
+    loads = (galaxy_count, labels, index, search_vectors, tokens, starts)
     marks = [mark()]
     for load in loads:
         load()
@@ -109,15 +101,15 @@ def load_times() -> dict[str, dict[str, float]]:
 
 def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]:
     marks = [mark()]
-    direction = centroid(query, index=built)
+    direction = centroid(query)
     marks.append(mark())
     order = candidates(query, direction, index=built)
     marks.append(mark())
-    rows = vectors(order, index=built)
+    rows = vectors(order)
     marks.append(mark())
     scored = score_maps(rows, direction, width=N_PATCHES)
     marks.append(mark())
-    spectral_scores = span_maps(order, direction, index=built)
+    spectral_scores = span_maps(order, direction)
     marks.append(mark())
     rank(order, scored, spectral_scores)
     marks.append(mark())
@@ -134,7 +126,6 @@ def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any
 
 @app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
-    split = index_split()
     loads = load_times()
     built = index()
 
@@ -174,7 +165,6 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
             f"matches={asked}": whole_searches(runs, asked, built) for asked in MATCHES
         },
         "usage_ms": {
-            "index_split": {name: rounded(usage) for name, usage in split.items()},
             "loads": {name: rounded(usage) for name, usage in loads.items()},
             "stages": {name: rounded(mean) for name, mean in means.items()},
         },

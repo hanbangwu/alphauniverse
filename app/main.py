@@ -34,7 +34,7 @@ from .config import (
 )
 from .dataset import image, spectrum
 from .search import Query as SearchQuery
-from .search import index, search, starts, tokens
+from .search import index, search, search_vectors, starts, tokens
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
@@ -105,6 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
     labels()
     index()
+    search_vectors()
     starts()
     yield
 

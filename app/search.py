@@ -24,6 +24,7 @@ NLIST = 16384
 NPROBE = 64
 PROBE = 2048
 TRAIN_GALAXIES = 2048
+DECODER = faiss.IndexScalarQuantizer(DIM, faiss.ScalarQuantizer.QT_fp16)
 
 
 class Query(BaseModel):
@@ -82,7 +83,11 @@ def positions(first: np.ndarray, width: int) -> np.ndarray:
     return (first[:, None] + np.arange(width)).reshape(-1)
 
 
-def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
+def decoded(ids: np.ndarray) -> np.ndarray:
+    return DECODER.sa_decode(search_vectors()[ids].view(np.uint8))
+
+
+def centroid(query: Query) -> np.ndarray:
     start = starts()[query.galaxy]
     ids = np.concatenate(
         (
@@ -90,7 +95,7 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
             start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
         )
     )
-    direction = index.reconstruct_batch(ids).mean(axis=0, keepdims=True)
+    direction = decoded(ids).mean(axis=0, keepdims=True)
     faiss.normalize_L2(direction)
     return direction
 
@@ -116,20 +121,18 @@ def candidates(
         nearest, lists = 2 * nearest, 2 * lists
 
 
-def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:
-    return index.reconstruct_batch(positions(starts()[order], N_PATCHES))
+def vectors(order: np.ndarray) -> np.ndarray:
+    return decoded(positions(starts()[order], N_PATCHES))
 
 
 def score_maps(rows: np.ndarray, direction: np.ndarray, *, width: int) -> np.ndarray:
     return (rows @ direction.T).reshape(-1, width)
 
 
-def span_maps(
-    order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
-) -> np.ndarray:
+def span_maps(order: np.ndarray, direction: np.ndarray) -> np.ndarray:
     maps = np.full((len(order), N_SPANS), np.nan, dtype=np.float32)
     has = with_spectrum()[order]
-    rows = index.reconstruct_batch(positions(starts()[order[has]] + N_PATCHES, N_SPANS))
+    rows = decoded(positions(starts()[order[has]] + N_PATCHES, N_SPANS))
     maps[has] = score_maps(rows, direction, width=N_SPANS)
     return maps
 
@@ -145,10 +148,10 @@ def rank(
 def search(
     query: Query, *, index: faiss.Index
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    direction = centroid(query, index=index)
+    direction = centroid(query)
     order = candidates(query, direction, index=index)
-    scored = score_maps(vectors(order, index=index), direction, width=N_PATCHES)
-    return rank(order, scored, span_maps(order, direction, index=index))
+    scored = score_maps(vectors(order), direction, width=N_PATCHES)
+    return rank(order, scored, span_maps(order, direction))
 
 
 def rows(cells: pa.Array | pa.ChunkedArray, start: int, stop: int | None) -> np.ndarray:
@@ -190,10 +193,14 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 @cache
 def index() -> faiss.Index:
     loaded = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
-    loaded.make_direct_map()
     loaded.parallel_mode = 1
     faiss.downcast_InvertedLists(loaded.invlists).prefetch_nthread = 0
     return loaded
+
+
+@cache
+def search_vectors() -> np.ndarray:
+    return np.load(artifact("search_vectors"), mmap_mode="r")
 
 
 def generate_index() -> None:
@@ -211,7 +218,11 @@ def generate_index() -> None:
     built.train(training)
     del training
 
+    stored = []
     for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
-        built.add(blocks(batch))
+        block = blocks(batch)
+        built.add(block)
+        stored.append(block.astype(np.float16))
 
     faiss.write_index(built, str(artifact("search_index")))
+    np.save(artifact("search_vectors"), np.concatenate(stored))

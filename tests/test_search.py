@@ -18,6 +18,7 @@ from app.search import (
     patches,
     rank,
     search,
+    search_vectors,
     source,
     starts,
     with_spectrum,
@@ -144,10 +145,10 @@ def test_ids_stay_contiguous_across_add_batches(
     try:
         build(galaxies)
 
-        built = index()
-        assert built.ntotal == galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
+        expected_total = galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
+        assert index().ntotal == len(search_vectors()) == expected_total
 
-        stored = built.reconstruct_batch(starts() + 7)
+        stored = search_vectors()[starts() + 7]
         rows = patches(source("encoded").to_table(columns=["ls"]).column("ls"))
         expected = rows[np.arange(galaxies) * N_PATCHES + 7]
 
