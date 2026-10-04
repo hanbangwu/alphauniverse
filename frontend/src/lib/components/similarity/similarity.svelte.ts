@@ -39,7 +39,7 @@ export class Similarity {
     this.galaxy = galaxy
     this.grid = app.meta.grid
 
-    this.#tokenMap = createQuery(() => tokensQuery(galaxy))
+    this.#tokenMap = createQuery(() => tokensQuery(app.view.explorer.value ? galaxy : null))
     this.draft = $derived(app.search.request(galaxy, app.view.patches.value, app.view.spans.value))
     this.#result = createQuery(() => similarityQuery(this.#submitted))
 
