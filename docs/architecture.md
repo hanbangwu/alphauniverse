@@ -85,7 +85,7 @@ App-wide state is plain classes under `src/lib/state/`, held in a `runed` contex
 - `Field<T>` and its subclasses wrap a `$state` value with normalisation (sorting and deduping index lists), so components never validate.
 - The match count is kept as the typed text. `SearchState` checks it against bounds that `state/schema.ts` reads from the generated zod schema, so they come from the API contract.
 
-The layout fetches `/meta` in the browser and shows a spinner until it returns, while DuckDB-WASM loads the `mean` points. After that, two data paths, deliberately separate:
+The layout fetches `/meta` in the browser through TanStack Query, cached forever, and shows a spinner until it returns. DuckDB-WASM starts loading the `mean` points at the same time. Data then takes two paths, deliberately separate:
 
 - **Row-level data** (tokens, coverage, spectra, similarity) goes through the generated client into TanStack Query. It is cached forever, except similarity, which goes stale after 5 minutes.
 - **The point sets** skip the JSON endpoints. DuckDB-WASM reads the parquet artifact from `/projections/{projection}` into a table, and Mosaic pushes the morphology filter into SQL so filtering the projection never round-trips to the server.

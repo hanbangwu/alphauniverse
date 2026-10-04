@@ -33,7 +33,7 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 | First `/search` after that       | 0.74 s                      |
 | Everything warm after that       | 0.18–0.50 s p50 per request |
 
-**A cold visit waits about 18 s behind a spinner** for `/meta`. Cold start dominates, not the search.
+**A cold visit shows a spinner until `/meta` returns**, 17.6 s after the browser sends it. Cold start dominates, not the search.
 
 ## `search_performance`
 

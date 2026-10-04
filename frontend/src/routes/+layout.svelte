@@ -8,7 +8,7 @@
   import './layout.css'
   import { QueryClient, QueryClientProvider, createQuery } from '@tanstack/svelte-query'
   import { ModeWatcher } from 'mode-watcher'
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy } from 'svelte'
 
   let { children } = $props()
 
@@ -19,7 +19,10 @@
   )
   const mosaic = new MosaicState()
 
-  onMount(() => void queries.prefetchQuery(pointsQuery(mosaic, 'mean')))
+  createQuery(
+    () => pointsQuery(mosaic, 'mean', browser),
+    () => queries
+  )
   onDestroy(() => mosaic.destroy())
 </script>
 
@@ -39,7 +42,7 @@
       </AppRoot>
     {:else if meta.isError}
       <p role="alert" class="grid h-full place-content-center text-sm text-muted-foreground">
-        Could not reach the server. Reload the page to try again.
+        The server is unavailable. Reload the page to try again.
       </p>
     {:else}
       <div class="grid h-full place-content-center">
