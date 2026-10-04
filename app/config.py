@@ -71,7 +71,7 @@ N_MORPHOLOGIES = 10
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
-    "search_index": "faiss",
+    "candidate_index": "faiss",
     "search_vectors": "npy",
     "codebook": "parquet",
     "tokens": "parquet",

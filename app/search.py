@@ -192,7 +192,7 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
 
 @cache
 def index() -> faiss.Index:
-    loaded = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
+    loaded = faiss.read_index(str(artifact("candidate_index")), faiss.IO_FLAG_MMAP)
     loaded.parallel_mode = 1
     faiss.downcast_InvertedLists(loaded.invlists).prefetch_nthread = 0
     return loaded
@@ -214,7 +214,7 @@ def generate_index() -> None:
     nlist = min(
         NLIST, len(training) // faiss.ClusteringParameters().min_points_per_centroid
     )
-    built = faiss.index_factory(DIM, f"IVF{nlist},SQfp16", faiss.METRIC_INNER_PRODUCT)
+    built = faiss.index_factory(DIM, f"IVF{nlist},SQ8", faiss.METRIC_INNER_PRODUCT)
     built.train(training)
     del training
 
@@ -224,5 +224,5 @@ def generate_index() -> None:
         built.add(block)
         stored.append(block.astype(np.float16))
 
-    faiss.write_index(built, str(artifact("search_index")))
+    faiss.write_index(built, str(artifact("candidate_index")))
     np.save(artifact("search_vectors"), np.concatenate(stored))
