@@ -7,7 +7,9 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       treeshake: {
-        moduleSideEffects: [{ test: /\/node_modules\/embedding-atlas\//, sideEffects: false }]
+        moduleSideEffects: [
+          { test: /[\\/]node_modules[\\/]embedding-atlas[\\/]/, sideEffects: false }
+        ]
       }
     }
   },
