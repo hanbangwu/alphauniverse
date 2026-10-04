@@ -8,7 +8,6 @@ import { SearchState } from './search.svelte'
 import { ViewState } from './view.svelte'
 import { mode } from 'mode-watcher'
 import { Context } from 'runed'
-import { onDestroy } from 'svelte'
 
 export class AppState {
   readonly view: ViewState
@@ -43,7 +42,6 @@ export class AppState {
 
   start(): void {
     this.filters.start()
-    onDestroy(() => this.mosaic.destroy())
   }
 }
 

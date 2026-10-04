@@ -8,7 +8,7 @@
   import './layout.css'
   import { QueryClient, QueryClientProvider, createQuery } from '@tanstack/svelte-query'
   import { ModeWatcher } from 'mode-watcher'
-  import { onMount } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
 
   let { children } = $props()
 
@@ -20,6 +20,7 @@
   const mosaic = new MosaicState()
 
   onMount(() => void queries.prefetchQuery(pointsQuery(mosaic, 'mean')))
+  onDestroy(() => mosaic.destroy())
 </script>
 
 <svelte:head>
