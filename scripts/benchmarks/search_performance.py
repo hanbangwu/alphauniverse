@@ -7,6 +7,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 from itertools import pairwise
@@ -54,22 +55,11 @@ STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 QUIET = {"OPENBLAS_NUM_THREADS": "1", "OMP_WAIT_POLICY": "PASSIVE"}
+LEVERS = {"EXPERIMENT_PARALLEL_MODE": "1", "EXPERIMENT_NO_PREFETCH": "1"}
 VARIANTS = {
-    "blas1": {"OPENBLAS_NUM_THREADS": "1"},
-    "passive": {"OMP_WAIT_POLICY": "PASSIVE"},
     "quiet": QUIET,
-    "quiet_omp4": QUIET | {"OMP_NUM_THREADS": "4"},
-    "quiet_omp1": QUIET | {"OMP_NUM_THREADS": "1"},
-    "parallel_mode": {"EXPERIMENT_PARALLEL_MODE": "1"},
-    "no_prefetch": {"EXPERIMENT_NO_PREFETCH": "1"},
-    "reuse": {"EXPERIMENT_REUSE": "1"},
-    "pycache": {"PYTHONPYCACHEPREFIX": "/tmp/pycache"},
-    "combined": QUIET
-    | {
-        "EXPERIMENT_PARALLEL_MODE": "1",
-        "EXPERIMENT_NO_PREFETCH": "1",
-        "EXPERIMENT_REUSE": "1",
-    },
+    "levers": LEVERS,
+    "levers_quiet": QUIET | LEVERS,
 }
 REPORT = Path("docs/benchmarks/search_performance.json")
 ENTRY = (
@@ -143,6 +133,25 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
     return usages(STAGES, marks)
 
 
+def concurrent_searches(threads: int, runs: int, built: faiss.Index) -> dict[str, Any]:
+    drawn = queries(threads * (runs + 1), PATCHES, 32)
+    batches = [drawn[thread::threads] for thread in range(threads)]
+
+    def serve(batch: list[Query]) -> list[float]:
+        return [elapsed(partial(search, query, index=built)) for query in batch]
+
+    with ThreadPoolExecutor(threads) as pool:
+        list(pool.map(serve, [batch[:1] for batch in batches]))
+        start = mark()
+        timed = list(pool.map(serve, [batch[1:] for batch in batches]))
+        spent = usages(["all"], [start, mark()])["all"]
+    samples = [sample for thread_samples in timed for sample in thread_samples]
+    return summary(samples) | {
+        "searches_per_s": round(len(samples) / spent["wall"] * 1000, 2),
+        "cpu_ms_per_search": round((spent["user"] + spent["system"]) / len(samples), 3),
+    }
+
+
 def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
     batch = queries(runs + 1, PATCHES, matches)
     search(batch[0], index=built)
@@ -191,6 +200,10 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
         },
         "searches": {
             f"matches={asked}": whole_searches(runs, asked, built) for asked in MATCHES
+        },
+        "concurrency": {
+            f"threads={threads}": concurrent_searches(threads, runs, built)
+            for threads in (1, 4, 16)
         },
         "usage_ms": {
             "index_split": {name: rounded(usage) for name, usage in split.items()},
