@@ -145,13 +145,17 @@ def test_ids_stay_contiguous_across_add_batches(
     try:
         build(galaxies)
 
+        built = index()
+        built.make_direct_map()
         expected_total = galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
-        assert index().ntotal == len(search_vectors()) == expected_total
+        assert built.ntotal == len(search_vectors()) == expected_total
 
-        stored = search_vectors()[starts() + 7]
         rows = patches(source("encoded").to_table(columns=["ls"]).column("ls"))
         expected = rows[np.arange(galaxies) * N_PATCHES + 7]
 
-        np.testing.assert_allclose(stored, expected, atol=1e-3)
+        np.testing.assert_allclose(search_vectors()[starts() + 7], expected, atol=1e-3)
+        np.testing.assert_allclose(
+            built.reconstruct_batch(starts() + 7), expected, atol=1e-2
+        )
     finally:
         forget()
