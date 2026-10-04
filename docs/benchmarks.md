@@ -179,6 +179,8 @@ A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force ov
 | Machine          | 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
 | Queries          | 100 per kind, `PROBE=2048`, `NPROBE=64`                                                                           |
 
+The run predates `looked_further` and `most_searches`; its last column is the share they replaced.
+
 | Query                 | Drawn from | Mean  | Lowest | All 32 found | Fewer than 32 returned |
 | --------------------- | ---------- | ----- | ------ | ------------ | ---------------------- |
 | 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%                     |
