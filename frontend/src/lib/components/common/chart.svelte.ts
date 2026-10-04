@@ -18,16 +18,26 @@ export function chart(
   listen: (instance: ECharts) => void
 ): Attachment<HTMLElement> {
   return (element) => {
-    const instance = init(element)
-    const observer = new ResizeObserver(() => instance.resize())
+    let visible = $state(false)
+    let instance: ECharts | null = null
+    const viewport = new IntersectionObserver((entries) => {
+      visible = entries.at(-1)!.isIntersecting
+    })
+    const observer = new ResizeObserver(() => instance?.resize())
+    viewport.observe(element)
     observer.observe(element)
-    listen(instance)
     $effect(() => {
+      if (!visible) return
+      if (!instance) {
+        instance = init(element)
+        listen(instance)
+      }
       instance.setOption(option())
     })
     return () => {
+      viewport.disconnect()
       observer.disconnect()
-      instance.dispose()
+      instance?.dispose()
     }
   }
 }
