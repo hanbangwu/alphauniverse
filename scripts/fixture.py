@@ -20,7 +20,7 @@ from app.config import (
     points,
     store_schema,
 )
-from app.search import generate_index, index, source, starts, with_spectrum
+from app.search import generate_index, index, source, starts, tokens, with_spectrum
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_PATCHES + 12,
@@ -95,7 +95,7 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
 
 
 def forget() -> None:
-    for cached in (galaxy_count, labels, source, index, with_spectrum, starts):
+    for cached in (galaxy_count, labels, source, index, tokens, with_spectrum, starts):
         cached.cache_clear()
 
 
