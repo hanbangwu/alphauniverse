@@ -5,7 +5,7 @@ Two halves, connected only by files on disk: the build pipeline, Modal jobs that
 ```
 hanbangwu/alphauniverse-cosmos (Hugging Face)
 └── generate_embeddings       GPU ─▶ encoded · codebook · tokens
-    ├── generate_index        CPU ─▶ search_index
+    ├── generate_index        CPU ─▶ candidate_index · search_vectors
     └── generate_projections  GPU ─▶ mean_points · full_points · parametric_umap
 
         every artifact and the cached dataset, on the Modal volume at /cache
@@ -30,7 +30,8 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `encoded`         | one row per galaxy, embeddings per survey  | index build, projections, `/downloads/{role}`                           |
 | `codebook`        | same, the encoder's input embeddings       | `/downloads/{role}`                                                     |
 | `tokens`          | same, token ids                            | startup, `/search`, the token and galaxy endpoints, `/downloads/{role}` |
-| `search_index`    | faiss IVF over patches and spectral tokens | `/search`                                                               |
+| `candidate_index` | faiss IVF over patches and spectral tokens | `/search`                                                               |
+| `search_vectors`  | the same vectors as float16, in id order   | `/search`                                                               |
 | `mean_points`     | one 2-d point per galaxy                   | `/meta`, `/projections/mean`                                            |
 | `full_points`     | one 2-d point per embedding                | `/projections/full`                                                     |
 | `parametric_umap` | the trained projector's weights            | nothing at serve time                                                   |
@@ -59,7 +60,7 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 
 A query is one or more image patches and spectral spans of one galaxy. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map.
 
-The search reads vectors back from the index by id, in the layout `docs/pipeline.md` gives:
+The search reads vectors by id from `search_vectors`, in the layout `docs/pipeline.md` gives, and asks the index only for candidates:
 
 1. The query's vectors are averaged and normalised into one direction.
 2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`. If they hold fewer galaxies, the search runs again with both numbers doubled, until there are enough or it has probed every list for every vector. The lists probed are set per search, so the index that concurrent requests share is not changed. faiss scans them on its threads and starts no prefetch threads.

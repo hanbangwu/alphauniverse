@@ -40,12 +40,11 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
-2. `read_index` and `make_direct_map`, the two calls `index()` loads with, timed on a separate copy, so in the first round they take the index's cold reads;
-3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `tokens` (which `starts` loads), `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
-4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
-5. `search()` whole at 8, 32 and 128 matches.
+2. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `search_vectors`, `tokens` (which `starts` loads), `starts`;
+3. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
+4. `search()` whole at 8, 32 and 128 matches.
 
-The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. Cold reads are charged to user time: in the last run's first round, `make_direct_map` took 8,465 ms of wall time and 8,310 ms of user CPU, none of system. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
+The loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. Cold reads are charged to user time: in the last run's first round, `make_direct_map` took 8,465 ms of wall time and 8,310 ms of user CPU, none of system. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
 
 Versions are the checked-out commit (after), `origin/main` (before), and the stored report's best unless its code matches one of those. Each is a `git archive` of `app/`, `scripts/` and `modal_app.py`, run in a subprocess with after's locked dependencies, in mirrored order: after, before, best, then back. After's first round has the cold page cache. A failed round records its error.
 
@@ -76,7 +75,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 | `tokens`          | 56.3 ms     | 38.2–60.2 ms  |
 | `starts`          | 4.6 ms      | 3.8–5.8 ms    |
 
-`read_index` and `make_direct_map` are step 2's split, which takes the cold reads; `index` then finds those pages. `faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
+`read_index` and `make_direct_map` are that run's separate timing of the two calls `index()` then loaded with, which took the cold reads; `index` then found those pages. `make_direct_map()` read every list's ids.
 
 **Stages**, 4 patches, 32 matches:
 
@@ -90,7 +89,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 | `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
 | Total         | 131.0 ms    | 87.2 ms     |            |
 
-- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 patch vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
+- **`vectors` dominates**: in that run it reconstructed 33 × 576 = 19,008 patch vectors from the index in 79.8 ms, 4.2 µs each. `reconstruct_batch` walked the IVF direct map one vector at a time, not a contiguous read.
 - `candidates` and `vectors` are faiss-parallel and `score_maps` contends with their threads, so stage figures compare only at the same thread configuration.
 
 **Whole `search()`**, 4 patches, warm p50:
@@ -135,7 +134,7 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 | 4 spans                | 299 ms | 320 ms |
 | 4 patches and 4 spans  | 286 ms | 307 ms |
 
-`matches` sets the cost: each match is rescored from 576 reconstructed vectors. Over the 179 ms `/meta` floor, 32 matches add 276 − 179 = 97 ms at p50, and 128 add 501 − 179 = 322 ms.
+`matches` sets the cost: each match is rescored from 576 vectors. Over the 179 ms `/meta` floor, 32 matches add 276 − 179 = 97 ms at p50, and 128 add 501 − 179 = 322 ms.
 
 **Other endpoints**, warm:
 
