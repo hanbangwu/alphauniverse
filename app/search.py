@@ -59,9 +59,13 @@ def source(role: str) -> ds.Dataset:
 
 
 @cache
+def tokens() -> pa.Table:
+    return source("tokens").to_table()
+
+
+@cache
 def with_spectrum() -> np.ndarray:
-    table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
-    return pc.is_valid(spectrum_cells(table)).to_numpy()
+    return pc.is_valid(spectrum_cells(tokens())).to_numpy()
 
 
 def layout(has: np.ndarray) -> np.ndarray:

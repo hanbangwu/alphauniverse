@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import (
+    ANCHOR,
     FLAG_SURVEYS,
     N_MORPHOLOGIES,
     N_PATCHES,
@@ -80,12 +81,17 @@ def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     assert client.get("/downloads/codebook").status_code == 404
 
 
-def test_tokens_are_one_uint32_per_patch(client: TestClient) -> None:
-    response = client.get("/galaxy/0/image/tokens")
+def test_image_tokens_are_that_galaxys_stored_patch_tokens(
+    client: TestClient, galaxies: int
+) -> None:
+    galaxy = galaxies - 1
+    cell = pq.read_table(artifact("tokens"), columns=[ANCHOR]).column(ANCHOR)[galaxy]
+
+    response = client.get(f"/galaxy/{galaxy}/image/tokens")
 
     assert response.status_code == 200
-    values = np.frombuffer(response.content, dtype=np.uint32)
-    assert values.shape == (N_PATCHES,)
+    served = np.frombuffer(response.content, dtype=np.uint32)
+    np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_PATCHES])
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])

@@ -20,7 +20,7 @@ from app.config import (
     points,
     store_schema,
 )
-from app.search import generate_index, index, source, starts, with_spectrum
+from app.search import generate_index, index, source, starts, tokens, with_spectrum
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_PATCHES + 12,
@@ -45,7 +45,7 @@ def _cells(
     embeddings: dict[str, list[np.ndarray | None]] = {
         survey: [] for survey in TOKEN_SURVEYS
     }
-    tokens: dict[str, list[np.ndarray | None]] = {
+    token_cells: dict[str, list[np.ndarray | None]] = {
         survey: [] for survey in TOKEN_SURVEYS
     }
 
@@ -53,14 +53,14 @@ def _cells(
         for survey, count in TOKENS.items():
             if not covered(survey, galaxy):
                 embeddings[survey].append(None)
-                tokens[survey].append(None)
+                token_cells[survey].append(None)
                 continue
             assigned = rng.integers(len(centres), size=count)
             rows = centres[assigned] + NOISE * rng.standard_normal((count, DIM))
             embeddings[survey].append(rows.astype(np.float16))
-            tokens[survey].append(assigned.astype(np.uint32))
+            token_cells[survey].append(assigned.astype(np.uint32))
 
-    return embeddings, tokens
+    return embeddings, token_cells
 
 
 def _store(
@@ -95,7 +95,7 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
 
 
 def forget() -> None:
-    for cached in (galaxy_count, labels, source, index, with_spectrum, starts):
+    for cached in (galaxy_count, labels, source, index, tokens, with_spectrum, starts):
         cached.cache_clear()
 
 
@@ -107,14 +107,14 @@ def build(galaxies: int, seed: int = 0) -> Path:
     centres = rng.standard_normal((CLUSTERS, DIM)).astype(np.float32)
     faiss.normalize_L2(centres)
 
-    embeddings, tokens = _cells(rng, centres, galaxies)
+    embeddings, token_cells = _cells(rng, centres, galaxies)
 
     rows = np.arange(galaxies)
     labelled = rows % 10 != 0
     flags = {"gz10": labelled, "provabgs": rows % 3 != 0}
 
     _store("encoded", embeddings, galaxies, flags)
-    _store("tokens", tokens, galaxies, flags)
+    _store("tokens", token_cells, galaxies, flags)
 
     category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labelled)
 
