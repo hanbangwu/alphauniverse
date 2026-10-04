@@ -63,13 +63,17 @@ KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
 ENTRY = (
-    "import json, sys\n"
+    "import json, sys, time\n"
+    "start = time.perf_counter()\n"
+    "import app.main\n"
+    "imported = {'import_ms': round((time.perf_counter() - start) * 1000, 3)}\n"
     "from app.config import DATASET_REVISION\n"
     "try:\n"
     "    from scripts.benchmarks.search_performance import stages\n"
     "except ModuleNotFoundError:\n"
     "    from scripts.benchmark import stages\n"
-    "print(json.dumps(stages.local(int(sys.argv[1])) | {'revision': DATASET_REVISION}))"
+    "result = stages.local(int(sys.argv[1])) | {'revision': DATASET_REVISION}\n"
+    "print(json.dumps(result | imported))"
 )
 
 
