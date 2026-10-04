@@ -167,7 +167,7 @@ A container on the build image, with the build jobs' CPU, memory and volume, loa
 - `patches`: 4 patches of a galaxy drawn from all galaxies.
 - `paired_patches`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 patches and 4 spans inside its observed range, queried with the patches, the spans, and both.
 
-A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force over float32 embeddings) that `search()` returns at the served `PROBE` and `NPROBE`. Each kind reports the mean, the minimum, the share that found all 32, and the share that returned fewer than 32.
+A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force over float32 embeddings) that `search()` returns at the served `PROBE` and `NPROBE`. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
 
 ### Last run
 
