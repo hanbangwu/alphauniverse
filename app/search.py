@@ -94,22 +94,15 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
 def candidates(
     query: Query, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
-    nearest, lists = PROBE, NPROBE
-    while True:
-        ids = index.search(
-            direction, nearest, params=faiss.SearchParametersIVF(nprobe=lists)
-        )[1][0]
-        returned = ids[ids >= 0]
-        found, first = np.unique(
-            np.searchsorted(starts(), returned, side="right") - 1, return_index=True
-        )
-        ranked = found[np.argsort(first)]
-        others = ranked[ranked != query.galaxy][: query.matches]
-        if len(others) == query.matches or (
-            lists >= index.nlist and len(returned) < nearest
-        ):
-            return np.concatenate(([query.galaxy], others)).astype(np.int32)
-        nearest, lists = 2 * nearest, 2 * lists
+    ids = index.search(
+        direction, PROBE, params=faiss.SearchParametersIVF(nprobe=NPROBE)
+    )[1][0]
+    found, first = np.unique(
+        np.searchsorted(starts(), ids[ids >= 0], side="right") - 1, return_index=True
+    )
+    ranked = found[np.argsort(first)]
+    others = ranked[ranked != query.galaxy][: query.matches]
+    return np.concatenate(([query.galaxy], others)).astype(np.int32)
 
 
 def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:
@@ -147,7 +140,7 @@ def search(
     return rank(order, scored, span_maps(order, direction, index=index))
 
 
-def rows(cells: pa.Array, start: int, stop: int | None) -> np.ndarray:
+def rows(cells: pa.Array | pa.ChunkedArray, start: int, stop: int | None) -> np.ndarray:
     flat = pc.list_flatten(pc.list_flatten(pc.list_slice(cells, start, stop)))
     embeddings = np.asarray(flat, dtype=np.float32).reshape(-1, DIM)
     if not np.isfinite(embeddings).all():
@@ -156,15 +149,15 @@ def rows(cells: pa.Array, start: int, stop: int | None) -> np.ndarray:
     return embeddings
 
 
-def patches(cells: pa.Array) -> np.ndarray:
+def patches(cells: pa.Array | pa.ChunkedArray) -> np.ndarray:
     return rows(cells, 0, N_PATCHES)
 
 
-def spectral(cells: pa.Array) -> np.ndarray:
+def spectral(cells: pa.Array | pa.ChunkedArray) -> np.ndarray:
     return rows(cells, 1, None)
 
 
-def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array:
+def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array | pa.ChunkedArray:
     return pc.coalesce(*(batch.column(survey) for survey in SPECTRUM_SURVEYS))
 
 

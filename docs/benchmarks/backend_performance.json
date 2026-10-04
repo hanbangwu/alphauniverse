@@ -1,0 +1,118 @@
+{
+  "commit": "ff2ee6a",
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-10-03T21:57:32+00:00",
+  "server": {
+    "cpu": 8,
+    "memory_mb": [
+      8192,
+      32768
+    ],
+    "max_inputs": 16,
+    "max_containers": 1,
+    "scaledown_window_s": 300
+  },
+  "client": {
+    "cpu": 1,
+    "memory_mb": null,
+    "gpu": null
+  },
+  "requests": {
+    "environment": {
+      "cpu": {
+        "vendor_id": "AuthenticAMD",
+        "cpu family": "25",
+        "model": "17",
+        "model name": "unknown"
+      },
+      "cpu_count": 17,
+      "faiss_threads": 1,
+      "omp_num_threads": "1"
+    },
+    "cold_meta_ms": 19002.506,
+    "cold_similarity_ms": 226.382,
+    "warm": {
+      "meta": {
+        "runs": 30,
+        "p50_ms": 50.876,
+        "p95_ms": 59.006
+      },
+      "image": {
+        "runs": 30,
+        "p50_ms": 52.826,
+        "p95_ms": 61.855
+      },
+      "tokens": {
+        "runs": 30,
+        "p50_ms": 59.114,
+        "p95_ms": 69.115
+      },
+      "coverage": {
+        "runs": 30,
+        "p50_ms": 60.776,
+        "p95_ms": 73.957
+      },
+      "similarity matches=8": {
+        "runs": 30,
+        "p50_ms": 96.555,
+        "p95_ms": 111.226
+      },
+      "similarity matches=32": {
+        "runs": 30,
+        "p50_ms": 161.286,
+        "p95_ms": 174.148
+      },
+      "similarity matches=128": {
+        "runs": 30,
+        "p50_ms": 404.591,
+        "p95_ms": 450.935
+      },
+      "spectrum": {
+        "runs": 30,
+        "p50_ms": 56.732,
+        "p95_ms": 66.557
+      },
+      "spectrum tokens": {
+        "runs": 30,
+        "p50_ms": 52.192,
+        "p95_ms": 58.156
+      },
+      "similarity spans matches=32": {
+        "runs": 30,
+        "p50_ms": 190.95,
+        "p95_ms": 201.807
+      },
+      "similarity patches and spans matches=32": {
+        "runs": 30,
+        "p50_ms": 167.563,
+        "p95_ms": 192.285
+      }
+    },
+    "concurrency": {
+      "clients=1": {
+        "runs": 30,
+        "p50_ms": 160.889,
+        "p95_ms": 180.643,
+        "requests_per_s": 6.16
+      },
+      "clients=4": {
+        "runs": 120,
+        "p50_ms": 300.123,
+        "p95_ms": 391.317,
+        "requests_per_s": 13.0
+      },
+      "clients=16": {
+        "runs": 480,
+        "p50_ms": 1336.925,
+        "p95_ms": 1915.807,
+        "requests_per_s": 11.62
+      },
+      "clients=32": {
+        "runs": 960,
+        "p50_ms": 2558.872,
+        "p95_ms": 3223.518,
+        "requests_per_s": 12.3
+      }
+    }
+  }
+}

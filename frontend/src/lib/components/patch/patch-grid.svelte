@@ -3,26 +3,23 @@
   import {
     GridComponent,
     type GridComponentOption,
-    TooltipComponent,
     type TooltipComponentOption
   } from 'echarts/components'
   import { type ComposeOption, use } from 'echarts/core'
-  import { CanvasRenderer } from 'echarts/renderers'
 
-  use([CustomChart, GridComponent, TooltipComponent, CanvasRenderer])
+  use([CustomChart, GridComponent])
 
   type Option = ComposeOption<CustomSeriesOption | GridComponentOption | TooltipComponentOption>
 </script>
 
 <script lang="ts">
   import { type RGB, SELECTED } from '$lib/color'
+  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
-    CustomSeriesRenderItemReturn,
-    ECElementEvent
+    CustomSeriesRenderItemReturn
   } from 'echarts'
-  import { type ECharts, init } from 'echarts/core'
 
   interface Props {
     values: ArrayLike<number>
@@ -31,7 +28,7 @@
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
-    onselect?: (indices: number[]) => void
+    ontoggle?: (index: number) => void
     class?: string
     label: string
   }
@@ -43,15 +40,12 @@
     opacity = () => 1,
     title,
     selected = [],
-    onselect,
+    ontoggle,
     class: className,
     label
   }: Props = $props()
 
-  let box = $state<HTMLElement | null>(null)
-  let chart = $state.raw<ECharts | null>(null)
-
-  const interactive = $derived(Boolean(onselect))
+  const interactive = $derived(Boolean(ontoggle))
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
 
@@ -84,51 +78,24 @@
     yAxis: { type: 'value', min: 0, max: grid, inverse: true, show: false },
     tooltip: title
       ? {
+          ...TOOLTIP,
           trigger: 'item',
-          confine: true,
           formatter: (params) => {
             const { dataIndex } = Array.isArray(params) ? params[0] : params
             return title(values[dataIndex], dataIndex)
-          },
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          borderWidth: 0,
-          padding: [2, 6],
-          textStyle: { color: '#fff', fontFamily: 'monospace', fontSize: 10 }
+          }
         }
       : undefined,
     series: [{ type: 'custom', data: cells, renderItem: cell }]
   })
-
-  $effect(() => {
-    if (!box) return
-    const instance = init(box)
-    const observer = new ResizeObserver(() => instance.resize())
-    observer.observe(box)
-    instance.on('click', pick)
-    chart = instance
-    return () => {
-      observer.disconnect()
-      instance.dispose()
-      chart = null
-    }
-  })
-
-  $effect(() => {
-    chart?.setOption(option)
-  })
-
-  function pick({ dataIndex }: ECElementEvent): void {
-    onselect?.(
-      selected.includes(dataIndex)
-        ? selected.filter((value) => value !== dataIndex)
-        : [...selected, dataIndex]
-    )
-  }
 </script>
 
 <svelte:element
   this={interactive ? 'button' : 'div'}
-  bind:this={box}
+  {@attach chart(
+    () => option,
+    (instance) => instance.on('click', ({ dataIndex }) => ontoggle?.(dataIndex))
+  )}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}

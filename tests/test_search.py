@@ -23,14 +23,13 @@ from app.search import (
     starts,
     with_spectrum,
 )
-from scripts.fixture import build
-from scripts.recall import (
+from scripts.benchmarks.search_quality import (
     Corpus,
     corpus,
     exact_ranking,
 )
+from scripts.fixture import build, forget
 
-CACHES = (source, index, with_spectrum, starts)
 SCORE_TOLERANCE = 1e-4
 
 
@@ -85,7 +84,7 @@ def test_rank_keeps_the_query_first_and_each_row_together() -> None:
 
 @pytest.mark.parametrize("matches", [3, 32])
 @pytest.mark.parametrize(("nearest", "lists"), [(1, 1), (PROBE, 1), (1, NLIST)])
-def test_a_search_that_finds_too_few_looks_further(
+def test_a_search_returns_at_most_the_matches_asked_for(
     built: faiss.Index,
     monkeypatch: pytest.MonkeyPatch,
     nearest: int,
@@ -96,7 +95,8 @@ def test_a_search_that_finds_too_few_looks_further(
     monkeypatch.setattr(search_module, "NPROBE", lists)
     found, _, _, _ = search(Query(galaxy=0, p=(64, 65), matches=matches), index=built)
 
-    assert len(set(found.tolist())) == len(found) == min(matches, len(starts()) - 1) + 1
+    assert found[0] == 0
+    assert len(set(found.tolist())) == len(found) <= matches + 1
 
 
 @pytest.mark.parametrize(
@@ -142,24 +142,16 @@ def test_ids_stay_contiguous_across_add_batches(
     monkeypatch.setattr(search_module, "BATCH", 1)
 
     galaxies = 9
-    for cache in CACHES:
-        cache.cache_clear()
-
     try:
         build(galaxies)
-        for cache in CACHES:
-            cache.cache_clear()
 
         built = index()
         assert built.ntotal == galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
 
         stored = built.reconstruct_batch(starts() + 7)
-        rows = patches(
-            source("encoded").to_table(columns=["ls"]).column("ls").combine_chunks()
-        )
+        rows = patches(source("encoded").to_table(columns=["ls"]).column("ls"))
         expected = rows[np.arange(galaxies) * N_PATCHES + 7]
 
         np.testing.assert_allclose(stored, expected, atol=1e-3)
     finally:
-        for cache in CACHES:
-            cache.cache_clear()
+        forget()

@@ -28,7 +28,7 @@
     galaxy={similarity.galaxy}
     title={similarity.imageMap ? similarity.score : similarity.caption}
     selected={view.patches.value}
-    onselect={(indices) => (view.patches.value = indices)}
+    ontoggle={(index) => view.patches.toggle(index)}
     busy={similarity.tokens === null}
     onhover={(value) => (hovered = value)}
     imageOpacity={similarity.imageMap || hovered ? undefined : tokenAlpha(false)}
@@ -64,6 +64,6 @@
     galaxy={similarity.galaxy}
     map={similarity.spectrumMap}
     selected={view.spans.value}
-    onselect={(indices) => (view.spans.value = indices)}
+    ontoggle={(index) => view.spans.toggle(index)}
   />
 </div>

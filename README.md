@@ -21,7 +21,7 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 | DESI EDR SV3       | spectrum | 273               |
 | SDSS               | spectrum | 273               |
 
-Every token carries a 768-d embedding, in two flavours: **encoded**, the encoder's contextualised output, and **codebook**, the encoder's input embedding of the token id, before any context.
+Every token carries a 768-d embedding, in two flavours: **encoded**, the contextualised encoding AION's decoder reads, and **codebook**, the encoder's input embedding of the token id, before any context.
 
 ## Running
 
@@ -36,7 +36,7 @@ uv run python -m scripts.fixture                                   # writes .cac
 ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py  # serves 127.0.0.1:8000
 ```
 
-The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it. `/meta`, images and spectra read the dataset itself, so they fail unless it is in the local Hugging Face cache.
+The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it. Images and spectra read the Hugging Face dataset itself: the first such request downloads it into the local Hugging Face cache (24.33 GB at the pinned revision), and with `HF_HUB_OFFLINE=1` they fail unless it is already there.
 
 ### Frontend
 
@@ -69,5 +69,5 @@ cd frontend && bun run check         # regenerates src/lib/api and typechecks
 
 - [`docs/architecture.md`](docs/architecture.md): how the pieces fit together
 - [`docs/pipeline.md`](docs/pipeline.md): the build stages and artifact schemas
-- [`docs/performance.md`](docs/performance.md): cost model, measurements, ceilings
-- [`docs/testing.md`](docs/testing.md): tests, benchmarks and CI
+- [`docs/benchmarks.md`](docs/benchmarks.md): benchmarks, measurements, ceilings
+- [`docs/testing.md`](docs/testing.md): tests and CI

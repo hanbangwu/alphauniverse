@@ -1,7 +1,6 @@
 import { DETAIL_VIEWS, type DetailView, POINT_SETS, type PointSet } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField } from './fields.svelte'
-import { optionsOver } from './schema'
 
 export class ViewState {
   readonly pointSet: EnumField<PointSet>
@@ -12,8 +11,8 @@ export class ViewState {
   readonly explorer = new Field(false)
 
   constructor() {
-    this.pointSet = new EnumField(optionsOver(POINT_SETS), POINT_SETS)
-    this.detail = new EnumField(optionsOver(DETAIL_VIEWS), DETAIL_VIEWS)
+    this.pointSet = new EnumField(POINT_SETS)
+    this.detail = new EnumField(DETAIL_VIEWS)
   }
 
   get full(): boolean {

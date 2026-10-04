@@ -4,8 +4,6 @@ paths:
   - "app/parametric_umap.py"
   - "app/dataset.py"
   - "app/search.py"
-  - "app/images.py"
-  - "app/spectra.py"
   - "modal_app.py"
   - "pyproject.toml"
   - "scripts/alphauniverse_cosmos.py"

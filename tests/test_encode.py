@@ -7,7 +7,6 @@ import numpy as np
 import pyarrow.parquet as pq
 import pytest
 
-from app import search as search_module
 from app.config import (
     ANCHOR,
     CROP_PIXELS,
@@ -24,19 +23,13 @@ from app.config import (
     store_schema,
 )
 from app.search import blocks, source
-from scripts.fixture import TOKENS
+from scripts.fixture import TOKENS, forget
 
 torch = pytest.importorskip("torch")
 encode_module = importlib.import_module("app.encode")
 codec_config = importlib.import_module("aion.codecs.config")
 
 CONFIGS = Path(__file__).parent / "aion"
-CACHES = (
-    search_module.source,
-    search_module.index,
-    search_module.with_spectrum,
-    search_module.starts,
-)
 
 
 def image(rng: np.random.Generator, bands: list[str]) -> dict[str, list]:
@@ -162,13 +155,10 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
     build_dir().mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
-    for cache in CACHES:
-        cache.cache_clear()
+    forget()
 
     try:
         encode_module.generate_embeddings()
-        for cache in CACHES:
-            cache.cache_clear()
 
         for role in STORES:
             assert pq.read_schema(artifact(role)).equals(store_schema(role))
@@ -178,5 +168,4 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
             DIM,
         )
     finally:
-        for cache in CACHES:
-            cache.cache_clear()
+        forget()

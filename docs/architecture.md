@@ -35,7 +35,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `full_points`     | one 2-d point per embedding                | `/projections/full`                                                     |
 | `parametric_umap` | the trained projector's weights            | nothing at serve time                                                   |
 
-`docs/pipeline.md` has the schemas. `/meta`, `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead.
+`docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead.
 
 ## The serving app
 
@@ -57,12 +57,12 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 
 ## Similarity search
 
-A query is one or more image patches and spectral spans of one galaxy. The answer is the query galaxy, then `matches` other galaxies, or all of them if the dataset holds fewer, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map.
+A query is one or more image patches and spectral spans of one galaxy. The answer is the query galaxy, then at most `matches` other galaxies, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map.
 
 The search reads vectors back from the index by id, in the layout `docs/pipeline.md` gives:
 
 1. The query's vectors are averaged and normalised into one direction.
-2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`. If there are too few, the search runs again with both numbers doubled, until there are enough, or until it has probed every list and got back fewer vectors than it asked for. The lists probed are set per search, so the index that concurrent requests share is not changed.
+2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`. If they hold fewer galaxies, the answer has fewer. The lists probed are set per search, so the index that concurrent requests share is not changed.
 3. Every patch and span of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
 4. A galaxy's score is its best token score over both maps. The candidates are sorted by it, after the query galaxy.
 

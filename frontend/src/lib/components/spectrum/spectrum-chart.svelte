@@ -7,20 +7,11 @@
     type GridComponentOption,
     MarkAreaComponent,
     type MarkAreaComponentOption,
-    TooltipComponent,
     type TooltipComponentOption
   } from 'echarts/components'
   import { type ComposeOption, use } from 'echarts/core'
-  import { CanvasRenderer } from 'echarts/renderers'
 
-  use([
-    LineChart,
-    GridComponent,
-    TooltipComponent,
-    DataZoomInsideComponent,
-    MarkAreaComponent,
-    CanvasRenderer
-  ])
+  use([LineChart, GridComponent, DataZoomInsideComponent, MarkAreaComponent])
 
   type Option = ComposeOption<
     LineSeriesOption | GridComponentOption | TooltipComponentOption | DataZoomComponentOption
@@ -30,10 +21,11 @@
 
 <script lang="ts">
   import { type RGB, SELECTED, chartInk } from '$lib/color'
+  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spanAt, spanOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
-  import { type ECharts, type ElementEvent, init } from 'echarts/core'
+  import type { ECharts, ElementEvent } from 'echarts/core'
   import { mode } from 'mode-watcher'
 
   interface Props {
@@ -43,7 +35,7 @@
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
-    onselect?: (indices: number[]) => void
+    ontoggle?: (index: number) => void
     class?: string
     label: string
   }
@@ -55,17 +47,14 @@
     opacity = () => 1,
     title,
     selected = [],
-    onselect,
+    ontoggle,
     class: className,
     label
   }: Props = $props()
 
   const meta = getMeta()
 
-  let box = $state<HTMLElement | null>(null)
-  let chart = $state.raw<ECharts | null>(null)
-
-  const interactive = $derived(Boolean(onselect))
+  const interactive = $derived(Boolean(ontoggle))
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
   const points = $derived(
@@ -132,13 +121,9 @@
     },
     tooltip: interactive
       ? {
+          ...TOOLTIP,
           trigger: 'axis',
-          confine: true,
           formatter: describe,
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          borderWidth: 0,
-          padding: [2, 6],
-          textStyle: { color: '#fff', fontFamily: 'monospace', fontSize: 10 },
           axisPointer: { lineStyle: { color: ink.muted } }
         }
       : undefined,
@@ -155,39 +140,22 @@
     ]
   })
 
-  $effect(() => {
-    if (!box) return
-    const instance = init(box)
-    const observer = new ResizeObserver(() => instance.resize())
-    observer.observe(box)
-    instance.getZr().on('click', pick)
-    chart = instance
-    return () => {
-      observer.disconnect()
-      instance.dispose()
-      chart = null
-    }
-  })
-
-  $effect(() => {
-    chart?.setOption(option)
-  })
-
-  function pick(event: ElementEvent): void {
-    if (!chart || !values) return
+  function pick(instance: ECharts, event: ElementEvent): void {
+    if (!values) return
     const point = [event.offsetX, event.offsetY]
-    if (!chart.containPixel('grid', point)) return
-    const index = spanAt(meta, chart.convertFromPixel('grid', point)[0])
+    if (!instance.containPixel('grid', point)) return
+    const index = spanAt(meta, instance.convertFromPixel('grid', point)[0])
     if (index < 0 || index >= values.length) return
-    onselect?.(
-      selected.includes(index) ? selected.filter((value) => value !== index) : [...selected, index]
-    )
+    ontoggle?.(index)
   }
 </script>
 
 <svelte:element
   this={interactive ? 'button' : 'div'}
-  bind:this={box}
+  {@attach chart(
+    () => option,
+    (instance) => instance.getZr().on('click', (event) => pick(instance, event))
+  )}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}

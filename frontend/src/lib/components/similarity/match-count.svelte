@@ -10,7 +10,7 @@
 
 <label
   class="flex items-center gap-2 text-sm font-medium"
-  title="How many galaxies the search returns."
+  title="The most galaxies the search returns."
 >
   Show top
   <Input

@@ -15,10 +15,12 @@ from app.config import (
     TOKEN_SURVEYS,
     artifact,
     build_dir,
+    galaxy_count,
+    labels,
     points,
     store_schema,
 )
-from app.search import generate_index, source, starts, with_spectrum
+from app.search import generate_index, index, source, starts, with_spectrum
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_PATCHES + 12,
@@ -92,6 +94,11 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return unit @ basis
 
 
+def forget() -> None:
+    for cached in (galaxy_count, labels, source, index, with_spectrum, starts):
+        cached.cache_clear()
+
+
 def build(galaxies: int, seed: int = 0) -> Path:
     target = build_dir()
     target.mkdir(parents=True, exist_ok=True)
@@ -129,11 +136,9 @@ def build(galaxies: int, seed: int = 0) -> Path:
         compression="zstd",
     )
 
-    for cached in (source, with_spectrum, starts):
-        cached.cache_clear()
+    forget()
     generate_index()
-    for cached in (source, with_spectrum, starts):
-        cached.cache_clear()
+    forget()
     return target
 
 

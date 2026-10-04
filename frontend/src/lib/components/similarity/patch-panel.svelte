@@ -15,7 +15,7 @@
     title?: (value: number, index: number) => string
     describe?: string
     selected?: number[]
-    onselect?: (indices: number[]) => void
+    ontoggle?: (index: number) => void
     busy?: boolean
     onhover?: (hovered: boolean) => void
     imageOpacity?: number
@@ -33,7 +33,7 @@
     title,
     describe,
     selected,
-    onselect,
+    ontoggle,
     busy = false,
     onhover,
     imageOpacity,
@@ -62,9 +62,9 @@
           {opacity}
           {title}
           {selected}
-          {onselect}
+          {ontoggle}
           label={describe ?? label}
-          class={onselect ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
+          class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
         />
       {/if}
       {#if galaxy !== undefined}

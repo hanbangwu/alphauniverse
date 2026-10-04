@@ -8,13 +8,14 @@ on:
         description: Measurement to run on Modal
         type: choice
         options:
-          - benchmark
-          - recall
+          - search_quality
+          - search_performance
+          - backend_performance
       runs:
-        description: The benchmark's --runs; empty keeps its default
+        description: The performance scripts' --runs; empty keeps its default
         type: string
       per_kind:
-        description: Recall's --per-kind; empty keeps its default
+        description: search_quality's --per-kind; empty keeps its default
         type: string
 
 env:
@@ -30,7 +31,7 @@ jobs:
       SCRIPT: ${{ inputs.script }}
       RUNS: ${{ inputs.runs }}
       PER_KIND: ${{ inputs.per_kind }}
-      REPORT: docs/benchmarks/${{ inputs.script == 'benchmark' && 'latest' || 'recall' }}.json
+      REPORT: docs/benchmarks/${{ inputs.script }}.json
 
     steps:
       - uses: actions/checkout@v6
@@ -41,10 +42,10 @@ jobs:
       - name: Run on Modal
         run: |
           case "$SCRIPT" in
-            benchmark) set -- ${RUNS:+--runs "$RUNS"} ;;
-            recall) set -- ${PER_KIND:+--per-kind "$PER_KIND"} ;;
+            search_quality) set -- ${PER_KIND:+--per-kind "$PER_KIND"} ;;
+            *) set -- ${RUNS:+--runs "$RUNS"} ;;
           esac
-          uv run --python 3.12 modal run -m "scripts.$SCRIPT" "$@"
+          uv run --python 3.12 modal run -m "scripts.benchmarks.$SCRIPT" "$@"
 
       - name: Report
         run: |

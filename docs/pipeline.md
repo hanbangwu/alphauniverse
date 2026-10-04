@@ -12,11 +12,10 @@ Each job writes its artifacts in place, so a failed run leaves them incomplete; 
 
 The script is outside the deployed pipeline and needs `lsdb`, which is not a project dependency: run it with `uv run --with datasets --with lsdb`.
 
-The serving app reads images, spectra and GZ10 labels from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
+The serving app reads images and spectra from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
 
 - **Image**: the anchor survey's `rgb` cutout, centre-cropped to `CROP_PIXELS` square and PNG-encoded on each request.
 - **Spectrum**: wavelength in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux.
-- **Labels**: `/meta`'s morphology counts, a count of `gz10_label` over every row, computed on the first request.
 
 ## `generate_embeddings`
 
@@ -34,7 +33,7 @@ ls, hsc, desi, sdss: list<fixed_size_list<float16, 768>>   -- null where unmatch
 gz10, provabgs:      bool
 ```
 
-- **`encoded`**: the encoder's contextualised output. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
+- **`encoded`**: what AION's `_encode` returns, the context its decoder reads. That is the encoder's output after `encoder_norm`, mapped by the linear `decoder_proj_context`, with each token's position and modality embeddings added back. Those added embeddings depend only on the token's modality and position, so every galaxy shares them. Because every modality is encoded together, a galaxy's spectrum tokens carry information from its image.
 - **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
 - **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings.
 

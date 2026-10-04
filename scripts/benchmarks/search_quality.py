@@ -1,6 +1,4 @@
 import json
-import resource
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -18,6 +16,7 @@ from app.config import (
     SPECTRUM_SURVEYS,
 )
 from app.dataset import spectrum
+from app.main import SPECTRUM_SURVEY
 from app.search import (
     NPROBE,
     PROBE,
@@ -30,7 +29,7 @@ from app.search import (
     spectrum_cells,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
-from scripts.benchmark import (
+from scripts.benchmarks.common import (
     PATCHES,
     SPANS,
     environment,
@@ -44,7 +43,7 @@ app = modal.App("alphauniverse-recall")
 image = build_image.add_local_python_source("modal_app")
 
 MATCHES = Query.model_fields["matches"].default
-REPORT = Path("docs/benchmarks/recall.json")
+REPORT = Path("docs/benchmarks/search_quality.json")
 
 
 class Corpus(NamedTuple):
@@ -57,7 +56,7 @@ def corpus() -> Corpus:
     cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
     spectra = spectrum_cells(cells)
     return Corpus(
-        patches(cells.column(ANCHOR).combine_chunks()),
+        patches(cells.column(ANCHOR)),
         spectral(spectra.drop_null()),
         np.flatnonzero(pc.is_valid(spectra).to_numpy()),
     )
@@ -97,46 +96,6 @@ def wavelength(galaxy: int) -> np.ndarray:
     return found.column("wavelength").to_numpy()
 
 
-def spectrum_coverage() -> dict[str, np.ndarray]:
-    table = source("tokens").to_table(columns=list(SPECTRUM_SURVEYS))
-    held = {
-        survey: pc.is_valid(table.column(survey)).to_numpy()
-        for survey in SPECTRUM_SURVEYS
-    }
-    return {
-        "desi": held["desi"],
-        "sdss_only": held["sdss"] & ~held["desi"],
-        "none": ~(held["desi"] | held["sdss"]),
-    }
-
-
-def observed_mask(holders: np.ndarray) -> np.ndarray:
-    mask = np.zeros((len(holders), N_SPANS), dtype=bool)
-    for galaxy in np.flatnonzero(holders):
-        mask[galaxy, observed_spans(wavelength(int(galaxy)))] = True
-    return mask
-
-
-def match_counts(
-    coverage: dict[str, np.ndarray],
-    observed: np.ndarray,
-    galaxies: np.ndarray,
-    patch_maps: np.ndarray,
-    span_maps: np.ndarray,
-) -> dict[str, Any]:
-    spanned = coverage["desi"][galaxies]
-    spectral = span_maps[spanned]
-    best_is_span = spectral.max(axis=1) > patch_maps[spanned].max(axis=1)
-    inside = observed[galaxies[spanned], spectral.argmax(axis=1)]
-    return {
-        "matches_with": {
-            name: int(held[galaxies].sum()) for name, held in coverage.items()
-        },
-        "best_is_span": int(best_is_span.sum()),
-        "best_span_observed": int(inside[best_is_span].sum()),
-    }
-
-
 def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     rng = np.random.default_rng(1)
     return [
@@ -163,16 +122,16 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     cpu=generate_index.spec.cpu,
     memory=generate_index.spec.memory,
     timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume.with_mount_options(read_only=True)},
+    volumes={CACHE_PATH: cache_volume},
 )
-def measure(per_kind: int) -> dict[str, Any]:
-    start = time.perf_counter()
+def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
     reference = corpus()
-    loaded = time.perf_counter() - start
     built = index()
-    coverage = spectrum_coverage()
-    observed = observed_mask(~coverage["none"])
-    paired = with_spans(per_kind, np.flatnonzero(coverage["desi"]))
+    surveyed = source("tokens").to_table(columns=[SPECTRUM_SURVEY])
+    paired = with_spans(
+        per_kind,
+        np.flatnonzero(pc.is_valid(surveyed.column(SPECTRUM_SURVEY)).to_numpy()),
+    )
 
     measured = {}
     for kind, batch in (
@@ -184,28 +143,17 @@ def measure(per_kind: int) -> dict[str, Any]:
         ("spans", [query.model_copy(update={"patches": ()}) for query in paired]),
         ("both", paired),
     ):
-        fractions, short, matched = [], [], []
+        fractions, short = [], []
         for query in batch:
             expected = exact_ranking(query, reference)[0][1:]
-            found, _, patch_maps, span_maps = (
-                part[1:] for part in search(query, index=built)
-            )
+            found = search(query, index=built)[0][1:]
             fractions.append(len(np.intersect1d(found, expected)) / len(expected))
             short.append(len(found) < len(expected))
-            matched.append((found, patch_maps, span_maps))
         measured[kind] = {
-            "queries": len(batch),
-            "patches": len(batch[0].patches),
-            "spans": len(batch[0].spans),
             "mean": round(float(np.mean(fractions)), 4),
             "min": round(float(np.min(fractions)), 4),
             "all_found": round(float(np.mean(np.equal(fractions, 1))), 4),
             "short_of_matches": round(float(np.mean(short)), 4),
-            **match_counts(
-                coverage,
-                observed,
-                *(np.concatenate(part) for part in zip(*matched)),
-            ),
         }
 
     return {
@@ -213,12 +161,6 @@ def measure(per_kind: int) -> dict[str, Any]:
         "probe": PROBE,
         "nprobe": NPROBE,
         "matches": MATCHES,
-        "corpus_load_s": round(loaded, 1),
-        "total_s": round(time.perf_counter() - start, 1),
-        "peak_rss_gb": round(
-            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 / 1e9, 2
-        ),
-        "galaxies": {name: int(held.sum()) for name, held in coverage.items()},
         "recall": measured,
     }
 
@@ -229,8 +171,8 @@ def main(per_kind: int = 100) -> None:
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "job": spec(measure),
-        **measure.remote(per_kind),
+        "job": spec(benchmark_search_quality),
+        **benchmark_search_quality.remote(per_kind),
     }
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
