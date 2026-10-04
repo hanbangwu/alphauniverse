@@ -1,5 +1,5 @@
-import { type RGB, continuous, tokenColors } from '$lib/color'
-import { similarityQuery, tokensQuery } from '$lib/data/queries'
+import { type RGB, continuous } from '$lib/color'
+import { similarityQuery } from '$lib/data/queries'
 import { extent, mask, row } from '$lib/data/scores'
 import type { Extent, SimilarityQuery, SimilarityResult } from '$lib/data/similarity'
 import { must } from '$lib/invariant'
@@ -17,7 +17,6 @@ export class Similarity {
 
   readonly #app: AppState = getApp()
   readonly #patchCount: number = this.#app.meta.grid ** 2
-  readonly #tokenMap: CreateQueryResult<Uint32Array<ArrayBuffer>>
   readonly #result: CreateQueryResult<SimilarityResult>
   #submitted: SimilarityQuery | null = $state(null)
 
@@ -31,15 +30,12 @@ export class Similarity {
   readonly spectrumMaps: Float32Array | null
   readonly spectrumHeat: ((value: number) => RGB) | null
   readonly spectrumMap: Float32Array | null
-  readonly tokens: Uint32Array | null
-  readonly palette: ((value: number) => RGB) | null
 
   constructor(galaxy: number) {
     const app = this.#app
     this.galaxy = galaxy
     this.grid = app.meta.grid
 
-    this.#tokenMap = createQuery(() => tokensQuery(app.view.explorer.value ? galaxy : null))
     this.draft = $derived(app.search.request(galaxy, app.view.patches.value, app.view.spans.value))
     this.#result = createQuery(() => similarityQuery(this.#submitted))
 
@@ -55,8 +51,6 @@ export class Similarity {
       return low <= high ? continuous([low, high]) : null
     })
     this.spectrumMap = $derived(this.spectrumMaps ? this.spectrumMapAt(0) : null)
-    this.tokens = $derived(this.#tokenMap.data ?? null)
-    this.palette = $derived(this.tokens ? tokenColors(this.tokens) : null)
   }
 
   get stale(): boolean {
