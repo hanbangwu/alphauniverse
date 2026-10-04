@@ -79,6 +79,8 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
     └── PatchSimilarity   dialog: query patches and spans, match count, Search, ranked matches
 ```
 
+From embedding-atlas the page uses `EmbeddingViewMosaic` and the category colours, not the `EmbeddingAtlas` app. The package declares no side effects, so `vite.config.ts` marks its modules side-effect free and the bundle holds only what the page imports.
+
 App-wide state is plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`. The similarity dialog keeps its own state, including the last search submitted, beside its components in `similarity.svelte.ts`.
 
 - The selected patches and spans and the match count are a draft: `/search` runs only when Search, or Enter in the count box, submits them. A newly selected galaxy starts with no results. While a search runs, the previous results stay on screen, dimmed.
