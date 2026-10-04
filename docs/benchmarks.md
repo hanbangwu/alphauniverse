@@ -41,7 +41,7 @@ A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
 2. `read_index` and `make_direct_map`, `index()`'s two faiss calls timed on a separate copy, so in the first round they take the index's cold reads;
-3. the loads a cold `/meta` waits for, `lifespan`'s: `galaxy_count`, `labels`, `index`, `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
+3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
 4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
 5. `search()` whole at 8, 32 and 128 matches.
 
@@ -63,7 +63,7 @@ The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 
 
 Figures are after's. Warm figures average its two rounds.
 
-**Loads.** Later rounds read files already in the page cache:
+**Loads.** Later rounds read files already in the page cache. On `ff2ee6a`, `labels` counted the dataset's `gz10_label` after `dataset` loaded it:
 
 | Load      | First round | Later rounds |
 | --------- | ----------- | ------------ |
@@ -147,7 +147,7 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 All six are within 61 − 51 = 10 ms at p50. What the floor is made of is **unmeasured**.
 
-**Cold start.** A request to a fresh container took **19.0 s**. On `ff2ee6a`, `lifespan` loaded `index` and `starts`, and the first `/meta` loaded `dataset` and `labels`. How the 19.0 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 19 s; `max_containers=1` leaves no second container to answer.
+**Cold start.** A request to a fresh container took **19.0 s**. How the 19.0 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 19 s; `max_containers=1` leaves no second container to answer.
 
 **Concurrency:**
 

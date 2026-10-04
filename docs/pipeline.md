@@ -64,7 +64,7 @@ x, y:   float32 not null
 category: uint8   -- GZ10 morphology, null where unlabelled
 ```
 
-- **`mean_points`**: one row per galaxy, from its mean embedding. Small, loaded on first paint, and the source of `/meta`'s morphology counts, unlabelled galaxies last.
+- **`mean_points`**: one row per galaxy, from its mean embedding. Small, and loaded on first paint.
 - **`full_points`**: one row per embedding, every modality in the same space; loaded only when the user asks for it. Written survey by survey, so its galaxy column is not monotonic.
 
 Training logs to Weights & Biases under `WANDB_MODE`. `modal_app.py` sets it to `offline`, so runs are written to the volume and not uploaded (for now).

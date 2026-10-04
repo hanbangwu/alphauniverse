@@ -8,11 +8,7 @@ from datasets import Image as ImageFeature
 from PIL import Image
 
 from app import dataset as dataset_module
-from app.config import (
-    CROP_PIXELS,
-    RGB_COLUMN,
-    SPECTRUM_SURVEYS,
-)
+from app.config import CROP_PIXELS, RGB_COLUMN, SPECTRUM_SURVEYS
 from app.dataset import encode, image, samples, spectrum
 
 SOURCE = Image.fromarray(
