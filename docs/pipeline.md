@@ -45,7 +45,7 @@ Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the ancho
 
 A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
-The file also stores the direct map, each vector's list and offset in 8 B, so `index()` reads it in one piece.
+`generate_index` writes the direct map into the file, each vector's list and offset in 8 B, so `index()` reads the map in one sequential read instead of from every list's ids.
 
 ## `generate_projections`
 
