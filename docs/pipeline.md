@@ -45,7 +45,7 @@ Builds **`candidate_index`**, `IVF{nlist},SQ8`, over one block per galaxy, in ga
 
 A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
-The same rows, as `float16`, go to **`search_vectors`**, an `.npy` of shape `(ntotal, 768)` in id order, so a vector's id is its row. The app reads every vector it scores from it, memory-mapped, and uses the index only to find candidates.
+The same rows, as `float16`, go to **`search_vectors`**, an `.npy` of shape `(ntotal, 768)` in id order, so a vector's id is its row. Its row count comes from `tokens`, so the build fails if `tokens` and `encoded` disagree on which galaxies have a spectrum.
 
 ## `generate_projections`
 

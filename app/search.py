@@ -218,11 +218,24 @@ def generate_index() -> None:
     built.train(training)
     del training
 
-    stored = []
-    for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
-        block = blocks(batch)
-        built.add(block)
-        stored.append(block.astype(np.float16))
+    has = with_spectrum()
+    total = len(has) * N_PATCHES + int(has.sum()) * N_SPANS
+    with open(artifact("search_vectors"), "wb") as stored:
+        np.lib.format.write_array_header_1_0(
+            stored,
+            {
+                "descr": np.lib.format.dtype_to_descr(np.dtype(np.float16)),
+                "fortran_order": False,
+                "shape": (total, DIM),
+            },
+        )
+        for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
+            block = blocks(batch)
+            built.add(block)
+            stored.write(block.astype(np.float16))
 
+    if built.ntotal != total:
+        raise ValueError(
+            "tokens and encoded disagree on which galaxies have a spectrum"
+        )
     faiss.write_index(built, str(artifact("candidate_index")))
-    np.save(artifact("search_vectors"), np.concatenate(stored))
