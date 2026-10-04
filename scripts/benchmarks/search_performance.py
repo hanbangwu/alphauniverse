@@ -16,7 +16,6 @@ import faiss
 import numpy as np
 
 from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count, labels
-from app.dataset import dataset
 from app.search import (
     Query,
     candidates,
@@ -99,7 +98,7 @@ def index_split() -> dict[str, dict[str, float]]:
 
 
 def load_times() -> dict[str, dict[str, float]]:
-    loads = (galaxy_count, dataset, labels, index, starts)
+    loads = (galaxy_count, labels, index, starts)
     marks = [mark()]
     for load in loads:
         load()
