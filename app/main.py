@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.dataset as ds
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -35,7 +34,7 @@ from .config import (
 )
 from .dataset import image, spectrum
 from .search import Query as SearchQuery
-from .search import index, search, source, starts
+from .search import index, search, starts, tokens
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
@@ -197,9 +196,7 @@ def head_download_artifact(role: Download, request: Request) -> Response:
     "/galaxy/{galaxy}",
 )
 def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
-    table = source("tokens").to_table(
-        columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
-    )
+    table = tokens().slice(galaxy, 1)
     return Galaxy(
         **{survey: table.column(survey)[0].is_valid for survey in TOKEN_SURVEYS},
         **{survey: bool(table.column(survey)[0].as_py()) for survey in FLAG_SURVEYS},
@@ -225,10 +222,7 @@ def get_image(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_image_tokens(galaxy: GalaxyIndex) -> Response:
-    table = source("tokens").to_table(
-        columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
-    )
-    cell = table.column(ANCHOR)[0]
+    cell = tokens().column(ANCHOR)[galaxy]
     return Response(
         np.asarray(cell.values)[:N_PATCHES].tobytes(),
         media_type="application/octet-stream",
@@ -253,10 +247,7 @@ def get_spectrum(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
-    table = source("tokens").to_table(
-        columns=[SPECTRUM_SURVEY], filter=ds.field("galaxy") == galaxy
-    )
-    cell = table.column(SPECTRUM_SURVEY)[0]
+    cell = tokens().column(SPECTRUM_SURVEY)[galaxy]
     if not cell.is_valid:
         raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
     return Response(
