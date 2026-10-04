@@ -94,15 +94,22 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
 def candidates(
     query: Query, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
-    ids = index.search(
-        direction, PROBE, params=faiss.SearchParametersIVF(nprobe=NPROBE)
-    )[1][0]
-    found, first = np.unique(
-        np.searchsorted(starts(), ids[ids >= 0], side="right") - 1, return_index=True
-    )
-    ranked = found[np.argsort(first)]
-    others = ranked[ranked != query.galaxy][: query.matches]
-    return np.concatenate(([query.galaxy], others)).astype(np.int32)
+    nearest, lists = PROBE, NPROBE
+    while True:
+        ids = index.search(
+            direction, nearest, params=faiss.SearchParametersIVF(nprobe=lists)
+        )[1][0]
+        found, first = np.unique(
+            np.searchsorted(starts(), ids[ids >= 0], side="right") - 1,
+            return_index=True,
+        )
+        ranked = found[np.argsort(first)]
+        others = ranked[ranked != query.galaxy][: query.matches]
+        if len(others) == query.matches or (
+            lists >= index.nlist and nearest >= index.ntotal
+        ):
+            return np.concatenate(([query.galaxy], others)).astype(np.int32)
+        nearest, lists = 2 * nearest, 2 * lists
 
 
 def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:

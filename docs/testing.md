@@ -23,7 +23,7 @@ Five tests in `tests/test_search.py` check what the shared tree cannot show:
 - `test_ids_stay_contiguous_across_add_batches` builds its own index with one galaxy per `add()` call, galaxies without a spectrum included, since the shared tree goes in with one call. A reordered or dropped batch would silently shift every galaxy id.
 - `test_embeddings_that_are_not_finite_are_rejected` passes `patches()` a cell of infinities, which the shared tree never holds. `faiss.normalize_L2` would turn them into NaN silently.
 - `test_rank_keeps_the_query_first_and_each_row_together` calls `rank()` on arrays built in the test, since on the shared tree `candidates()` already returns galaxies in ranked order.
-- `test_a_search_returns_at_most_the_matches_asked_for` changes `PROBE` and `NPROBE` so that the search can fall short, since at their defaults it finds every galaxy on the shared tree. It asks for one vector over one list, 2048 vectors over one list, and one vector over every list, and checks that the answer starts with the query galaxy and holds at most `matches` other galaxies, none twice.
+- `test_a_search_that_finds_too_few_looks_further` changes `PROBE` and `NPROBE` so that the first search falls short, since at their defaults it finds every galaxy on the shared tree. It asks for one vector over one list, 16,384 (`NLIST`) vectors over one list, more than the shared tree holds, and one vector over every list, and checks that the answer starts with the query galaxy and holds `matches` other galaxies, or all of them when the tree holds fewer, none twice.
 
 The torch modules' tests skip unless the `build` group is installed:
 
