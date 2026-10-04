@@ -1,7 +1,7 @@
 {
-  "commit": "ff2ee6a",
+  "commit": "6aa4197",
   "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
-  "date": "2026-10-03T21:57:32+00:00",
+  "date": "2026-10-04T16:57:41+00:00",
   "server": {
     "cpu": 8,
     "memory_mb": [
@@ -22,96 +22,126 @@
       "cpu": {
         "vendor_id": "AuthenticAMD",
         "cpu family": "25",
-        "model": "17",
+        "model": "1",
         "model name": "unknown"
       },
       "cpu_count": 17,
       "faiss_threads": 1,
-      "omp_num_threads": "1"
+      "omp_num_threads": "1",
+      "thread_pools": [
+        {
+          "user_api": "blas",
+          "internal_api": "openblas",
+          "num_threads": 1,
+          "prefix": "libscipy_openblas",
+          "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-61654e39.so",
+          "version": "0.3.34.0.0",
+          "threading_layer": "pthreads",
+          "architecture": "Haswell"
+        },
+        {
+          "user_api": "openmp",
+          "internal_api": "openmp",
+          "num_threads": 1,
+          "prefix": "libgomp",
+          "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libgomp-e985bcbb.so.1.0.0",
+          "version": null
+        },
+        {
+          "user_api": "blas",
+          "internal_api": "openblas",
+          "num_threads": 1,
+          "prefix": "libopenblas",
+          "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libopenblaso-r0-d77a1985.3.15.so",
+          "version": "0.3.15",
+          "threading_layer": "openmp",
+          "architecture": "Zen"
+        }
+      ]
     },
-    "cold_meta_ms": 19002.506,
-    "cold_similarity_ms": 226.382,
+    "cold_meta_ms": 17630.834,
+    "cold_similarity_ms": 735.565,
     "warm": {
       "meta": {
         "runs": 30,
-        "p50_ms": 50.876,
-        "p95_ms": 59.006
+        "p50_ms": 179.352,
+        "p95_ms": 184.163
       },
       "image": {
         "runs": 30,
-        "p50_ms": 52.826,
-        "p95_ms": 61.855
+        "p50_ms": 189.522,
+        "p95_ms": 213.675
       },
       "tokens": {
         "runs": 30,
-        "p50_ms": 59.114,
-        "p95_ms": 69.115
+        "p50_ms": 178.447,
+        "p95_ms": 183.36
       },
       "coverage": {
         "runs": 30,
-        "p50_ms": 60.776,
-        "p95_ms": 73.957
+        "p50_ms": 178.641,
+        "p95_ms": 185.633
       },
       "similarity matches=8": {
         "runs": 30,
-        "p50_ms": 96.555,
-        "p95_ms": 111.226
+        "p50_ms": 215.427,
+        "p95_ms": 231.566
       },
       "similarity matches=32": {
         "runs": 30,
-        "p50_ms": 161.286,
-        "p95_ms": 174.148
+        "p50_ms": 276.087,
+        "p95_ms": 293.793
       },
       "similarity matches=128": {
         "runs": 30,
-        "p50_ms": 404.591,
-        "p95_ms": 450.935
+        "p50_ms": 501.078,
+        "p95_ms": 555.51
       },
       "spectrum": {
         "runs": 30,
-        "p50_ms": 56.732,
-        "p95_ms": 66.557
+        "p50_ms": 184.819,
+        "p95_ms": 205.491
       },
       "spectrum tokens": {
         "runs": 30,
-        "p50_ms": 52.192,
-        "p95_ms": 58.156
+        "p50_ms": 177.282,
+        "p95_ms": 206.541
       },
       "similarity spans matches=32": {
         "runs": 30,
-        "p50_ms": 190.95,
-        "p95_ms": 201.807
+        "p50_ms": 299.495,
+        "p95_ms": 319.596
       },
       "similarity patches and spans matches=32": {
         "runs": 30,
-        "p50_ms": 167.563,
-        "p95_ms": 192.285
+        "p50_ms": 285.717,
+        "p95_ms": 307.043
       }
     },
     "concurrency": {
       "clients=1": {
         "runs": 30,
-        "p50_ms": 160.889,
-        "p95_ms": 180.643,
-        "requests_per_s": 6.16
+        "p50_ms": 270.452,
+        "p95_ms": 304.372,
+        "requests_per_s": 3.65
       },
       "clients=4": {
         "runs": 120,
-        "p50_ms": 300.123,
-        "p95_ms": 391.317,
-        "requests_per_s": 13.0
+        "p50_ms": 319.007,
+        "p95_ms": 449.793,
+        "requests_per_s": 11.39
       },
       "clients=16": {
         "runs": 480,
-        "p50_ms": 1336.925,
-        "p95_ms": 1915.807,
-        "requests_per_s": 11.62
+        "p50_ms": 1233.042,
+        "p95_ms": 1634.686,
+        "requests_per_s": 12.98
       },
       "clients=32": {
         "runs": 960,
-        "p50_ms": 2558.872,
-        "p95_ms": 3223.518,
-        "requests_per_s": 12.3
+        "p50_ms": 1848.428,
+        "p95_ms": 2463.638,
+        "requests_per_s": 16.83
       }
     }
   }
