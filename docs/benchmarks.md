@@ -88,7 +88,7 @@ Figures are after's. Warm figures average its two rounds.
 | Total         | 125.1 ms    | 98.9 ms     |            |
 
 - **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 patch vectors in 79.6 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
-- `vectors` is faiss-parallel and `score_maps` contends with its threads, so stage figures compare only at the same thread configuration.
+- `candidates` and `vectors` are faiss-parallel and `score_maps` contends with their threads, so stage figures compare only at the same thread configuration.
 
 **Whole `search()`**, 4 patches, warm p50:
 
