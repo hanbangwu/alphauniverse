@@ -214,4 +214,5 @@ def generate_index() -> None:
     for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
         built.add(blocks(batch))
 
+    built.make_direct_map()
     faiss.write_index(built, str(artifact("search_index")))

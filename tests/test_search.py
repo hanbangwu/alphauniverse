@@ -10,6 +10,7 @@ from app.config import (
     DIM,
     N_PATCHES,
     N_SPANS,
+    artifact,
 )
 from app.search import (
     NLIST,
@@ -154,3 +155,9 @@ def test_ids_stay_contiguous_across_add_batches(
         np.testing.assert_allclose(stored, expected, atol=1e-3)
     finally:
         forget()
+
+
+def test_the_index_file_stores_its_direct_map(tree: Path) -> None:
+    stored = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
+
+    assert stored.direct_map.type == faiss.DirectMap.Array
