@@ -158,6 +158,6 @@ def test_ids_stay_contiguous_across_add_batches(
 
 
 def test_the_index_file_stores_its_direct_map(tree: Path) -> None:
-    stored = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
+    stored = faiss.read_index(str(artifact("search_index")))
 
     assert stored.direct_map.type == faiss.DirectMap.Array
