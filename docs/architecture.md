@@ -79,7 +79,7 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
     └── PatchSimilarity   dialog: query patches and spans, match count, Search, ranked matches
 ```
 
-`RightPanel` and `DetailSpectrum` import `PatchSimilarity` and `SpectrumChart` dynamically, so the Search dialog and ECharts load with the first selected galaxy, not with the page.
+`RightPanel` imports `PatchSimilarity`, and `DetailSpectrum` imports `SpectrumChart`, when a galaxy is selected, so the Search dialog and ECharts load then, not with the page: nothing the page imports statically reaches ECharts. Search stays disabled until the dialog's code has loaded.
 
 App-wide state is plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`. The similarity dialog keeps its own state, including the last search submitted, beside its components in `similarity.svelte.ts`.
 

@@ -37,9 +37,16 @@
         <DetailImage {galaxy} />
       {/if}
 
-      <Button variant="secondary" size="sm" onclick={() => (view.explorer.value = true)}>
-        Search
-      </Button>
+      {#await import('$lib/components/similarity/patch-similarity.svelte')}
+        <Button variant="secondary" size="sm" disabled>Search</Button>
+      {:then { default: PatchSimilarity }}
+        <Button variant="secondary" size="sm" onclick={() => (view.explorer.value = true)}>
+          Search
+        </Button>
+        {#key galaxy}
+          <PatchSimilarity {galaxy} />
+        {/key}
+      {/await}
 
       <div class="flex items-baseline justify-between text-sm">
         <span class="font-medium">Galaxy #{galaxy}</span>
@@ -53,12 +60,6 @@
       </div>
 
       <CoverageTable {galaxy} />
-
-      {#key galaxy}
-        {#await import('$lib/components/similarity/patch-similarity.svelte') then { default: PatchSimilarity }}
-          <PatchSimilarity {galaxy} />
-        {/await}
-      {/key}
     {/if}
   </div>
 </div>

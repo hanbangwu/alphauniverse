@@ -14,12 +14,14 @@
   const coverage = createQuery(() => coverageQuery(galaxy))
   const matched = $derived(coverage.data ? hasSpectrum(coverage.data) : false)
   const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
-  const chart = import('$lib/components/spectrum/spectrum-chart.svelte')
+  const chartModule = import('$lib/components/spectrum/spectrum-chart.svelte')
+  let loading = $state(true)
+  chartModule.then(() => (loading = false))
 </script>
 
-<PatchFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">
+<PatchFrame busy={coverage.isPending || spectrum.isFetching || loading} class="bg-card">
   {#if matched && spectrum.data}
-    {#await chart then { default: SpectrumChart }}
+    {#await chartModule then { default: SpectrumChart }}
       <SpectrumChart
         spectrum={spectrum.data}
         label={`${SURVEYS[SPECTRUM_SURVEY].label} spectrum of galaxy ${galaxy}`}
