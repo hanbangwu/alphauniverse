@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.config import (
     FLAG_SURVEYS,
+    N_MORPHOLOGIES,
     N_PATCHES,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
@@ -27,6 +28,17 @@ def test_artifact_downloads(client: TestClient, tree) -> None:
 
     assert response.status_code == 200
     assert len(response.content) == (tree / "encoded.parquet").stat().st_size
+
+
+def test_meta_reports_the_galaxy_count_and_a_count_per_morphology(
+    client: TestClient, galaxies: int
+) -> None:
+    response = client.get("/meta")
+
+    assert response.status_code == 200
+    meta = response.json()
+    assert meta["galaxies"] == galaxies
+    assert len(meta["morphologies"]) == N_MORPHOLOGIES + 1
 
 
 def test_projection_head_is_served(client: TestClient) -> None:
