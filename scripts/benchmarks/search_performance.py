@@ -26,6 +26,7 @@ from app.search import (
     search,
     span_maps,
     starts,
+    tokens,
     vectors,
 )
 from modal_app import (
@@ -98,7 +99,7 @@ def index_split() -> dict[str, dict[str, float]]:
 
 
 def load_times() -> dict[str, dict[str, float]]:
-    loads = (galaxy_count, labels, index, starts)
+    loads = (galaxy_count, labels, index, tokens, starts)
     marks = [mark()]
     for load in loads:
         load()
