@@ -1,4 +1,11 @@
-import { getGalaxy, getImageTokens, getSearch, getSpectrum, getSpectrumTokens } from '$lib/api'
+import {
+  getGalaxy,
+  getImageTokens,
+  getMeta,
+  getSearch,
+  getSpectrum,
+  getSpectrumTokens
+} from '$lib/api'
 import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
@@ -7,6 +14,15 @@ import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
 import { type Float32, tableFromIPC } from 'apache-arrow'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
+
+export const metaQuery = queryOptions({
+  queryKey: ['meta'] as const,
+  queryFn: async () => {
+    const { data } = await getMeta({ throwOnError: true })
+    return data
+  },
+  ...FOREVER
+})
 
 export function tokensQuery(galaxy: number | null) {
   return queryOptions({

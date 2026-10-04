@@ -1,16 +1,20 @@
 <script lang="ts">
+  import { browser } from '$app/environment'
   import favicon from '$lib/assets/favicon.svg'
-  import { AppState, setApp } from '$lib/state/app.svelte'
+  import AppRoot from '$lib/components/app-root.svelte'
+  import { Spinner } from '$lib/components/ui/spinner'
+  import { metaQuery } from '$lib/data/queries'
   import './layout.css'
-  import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query'
+  import { QueryClient, QueryClientProvider, createQuery } from '@tanstack/svelte-query'
   import { ModeWatcher } from 'mode-watcher'
-  import { untrack } from 'svelte'
 
-  let { data, children } = $props()
+  let { children } = $props()
 
-  const queries = new QueryClient()
-
-  setApp(untrack(() => new AppState(data.meta))).start()
+  const queries = new QueryClient({ defaultOptions: { queries: { enabled: browser } } })
+  const meta = createQuery(
+    () => metaQuery,
+    () => queries
+  )
 </script>
 
 <svelte:head>
@@ -23,6 +27,18 @@
 
 <QueryClientProvider client={queries}>
   <div class="h-dvh overflow-hidden">
-    {@render children()}
+    {#if meta.data}
+      <AppRoot meta={meta.data}>
+        {@render children()}
+      </AppRoot>
+    {:else if meta.isError}
+      <p role="alert" class="grid h-full place-content-center text-sm text-muted-foreground">
+        Could not reach the server. Reload the page to try again.
+      </p>
+    {:else}
+      <div class="grid h-full place-content-center">
+        <Spinner class="size-8" />
+      </div>
+    {/if}
   </div>
 </QueryClientProvider>
