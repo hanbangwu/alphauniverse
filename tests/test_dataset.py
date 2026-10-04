@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from io import BytesIO
 
 import numpy as np
@@ -9,14 +8,8 @@ from datasets import Image as ImageFeature
 from PIL import Image
 
 from app import dataset as dataset_module
-from app.config import (
-    CROP_PIXELS,
-    FLAG_SURVEYS,
-    N_MORPHOLOGIES,
-    RGB_COLUMN,
-    SPECTRUM_SURVEYS,
-)
-from app.dataset import encode, image, labels, samples, spectrum
+from app.config import CROP_PIXELS, RGB_COLUMN, SPECTRUM_SURVEYS
+from app.dataset import encode, image, samples, spectrum
 
 SOURCE = Image.fromarray(
     np.random.default_rng(0).integers(
@@ -27,7 +20,7 @@ SPECTRUM_CELL = {"lambda": [-1.0, 4000.0], "flux": [9.0, 1.0], "mask": [True, Fa
 
 
 @pytest.fixture
-def stored(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def stored(monkeypatch: pytest.MonkeyPatch) -> None:
     spectrum_feature = {
         "lambda": Sequence(Value("float32")),
         "flux": Sequence(Value("float32")),
@@ -38,21 +31,16 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
             RGB_COLUMN: [SOURCE, SOURCE],
             SPECTRUM_SURVEYS["desi"]: [None, SPECTRUM_CELL],
             SPECTRUM_SURVEYS["sdss"]: [SPECTRUM_CELL, None],
-            FLAG_SURVEYS["gz10"]: [1, None],
         },
         features=Features(
             {
                 RGB_COLUMN: ImageFeature(),
                 SPECTRUM_SURVEYS["desi"]: spectrum_feature,
                 SPECTRUM_SURVEYS["sdss"]: spectrum_feature,
-                FLAG_SURVEYS["gz10"]: Value("int64"),
             }
         ),
     )
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
-    labels.cache_clear()
-    yield
-    labels.cache_clear()
 
 
 def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
@@ -95,7 +83,3 @@ def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
 def test_unmatched_survey_has_no_spectrum(stored: None) -> None:
     assert spectrum(0, "desi") is None
     assert spectrum(0, "sdss").column("wavelength").to_pylist() == [4000.0]
-
-
-def test_labels_count_unlabelled_galaxies_last(stored: None) -> None:
-    assert labels() == [0, 1, *[0] * (N_MORPHOLOGIES - 2), 1]

@@ -12,11 +12,10 @@ Each job writes its artifacts in place, so a failed run leaves them incomplete; 
 
 The script is outside the deployed pipeline and needs `lsdb`, which is not a project dependency: run it with `uv run --with datasets --with lsdb`.
 
-The serving app reads images, spectra and GZ10 labels from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
+The serving app reads images and spectra from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
 
 - **Image**: the anchor survey's `rgb` cutout, centre-cropped to `CROP_PIXELS` square and PNG-encoded on each request.
 - **Spectrum**: wavelength in Ångström. Samples the survey pads with (wavelength at or below zero) are dropped, and samples it masks have NaN flux.
-- **Labels**: `/meta`'s morphology counts, a count of `gz10_label` over every row, computed on the first request.
 
 ## `generate_embeddings`
 
@@ -42,7 +41,7 @@ Within an image cell the patches come first and the survey's scalars follow. A s
 
 ## `generate_index`
 
-Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches** (the scalars are sliced off), then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity.
+Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches** (the scalars are sliced off), then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
 
 A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
