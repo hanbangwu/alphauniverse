@@ -4,6 +4,13 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  build: {
+    rolldownOptions: {
+      treeshake: {
+        moduleSideEffects: [{ test: /\/node_modules\/embedding-atlas\//, sideEffects: false }]
+      }
+    }
+  },
   plugins: [
     tailwindcss(),
     sveltekit({
