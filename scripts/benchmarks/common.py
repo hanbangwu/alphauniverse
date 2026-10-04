@@ -8,6 +8,7 @@ from typing import Any
 import faiss
 import modal
 import numpy as np
+from threadpoolctl import threadpool_info
 
 from app.config import (
     N_PATCHES,
@@ -99,6 +100,7 @@ def environment() -> dict[str, Any]:
         "cpu_count": os.cpu_count(),
         "faiss_threads": faiss.omp_get_max_threads(),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
+        "thread_pools": threadpool_info(),
     }
 
 
