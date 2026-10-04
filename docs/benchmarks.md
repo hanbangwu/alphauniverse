@@ -33,7 +33,7 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 | First `/search` after that       | 0.74 s                      |
 | Everything warm after that       | 0.18–0.50 s p50 per request |
 
-**A cold visit is about 18 s of blank page**: `+layout.server.ts` awaits `/meta` during SSR. Cold start dominates, not the search.
+**A cold visit waits about 18 s behind a spinner** for `/meta`. Cold start dominates, not the search.
 
 ## `search_performance`
 
