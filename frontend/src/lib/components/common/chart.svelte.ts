@@ -20,6 +20,7 @@ export function chart(
   return (element) => {
     let visible = $state(false)
     let instance: ECharts | null = null
+    let applied: EChartsCoreOption | null = null
     const viewport = new IntersectionObserver((entries) => {
       visible = entries.at(-1)!.isIntersecting
     })
@@ -28,11 +29,14 @@ export function chart(
     observer.observe(element)
     $effect(() => {
       if (!visible) return
+      const next = option()
+      if (next === applied) return
       if (!instance) {
         instance = init(element)
         listen(instance)
       }
-      instance.setOption(option())
+      instance.setOption(next)
+      applied = next
     })
     return () => {
       viewport.disconnect()
