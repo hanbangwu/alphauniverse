@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
 CACHE_PATH = "/cache"
-WANDB_MODE = "offline"
 SERVING_CPU = 8
 SERVING_MEMORY = (8 * 1024, 32 * 1024)
 SERVING_MAX_INPUTS = 16
@@ -23,7 +22,6 @@ environment = {
     "ALPHAUNIVERSE_CACHE": CACHE_PATH,
     "HF_HOME": CACHE_PATH,
     "WANDB_DIR": CACHE_PATH,
-    "WANDB_MODE": WANDB_MODE,
 }
 
 
@@ -58,6 +56,7 @@ def generate_embeddings() -> None:
     memory=(32 * 1024, 128 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
+    secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def generate_projections() -> None:
     from app.config import build_dir

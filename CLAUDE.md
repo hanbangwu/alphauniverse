@@ -21,6 +21,7 @@ uv run python -m scripts.fixture                    # build fixture tree
 uv run modal run -m scripts.benchmarks.search_performance   # time search() on Modal
 uv run modal run -m scripts.benchmarks.backend_performance  # time the HTTP endpoints on Modal
 uv run modal run -m scripts.benchmarks.search_quality       # measure recall on Modal
+uv run modal run -m scripts.benchmarks.projection_quality   # measure projection quality on Modal
 uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
 
 cd frontend

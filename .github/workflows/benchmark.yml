@@ -11,6 +11,7 @@ on:
           - search_quality
           - search_performance
           - backend_performance
+          - projection_quality
       runs:
         description: The performance scripts' --runs; empty keeps its default
         type: string
@@ -43,6 +44,7 @@ jobs:
         run: |
           case "$SCRIPT" in
             search_quality) set -- ${PER_KIND:+--per-kind "$PER_KIND"} ;;
+            projection_quality) set -- ;;
             *) set -- ${RUNS:+--runs "$RUNS"} ;;
           esac
           uv run --python 3.12 modal run -m "scripts.benchmarks.$SCRIPT" "$@"
