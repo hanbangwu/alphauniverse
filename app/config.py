@@ -38,6 +38,7 @@ GRID = 24
 N_PATCHES = GRID**2
 
 SPECTRUM_ORIGIN = 3500.0
+SPECTRUM_SMOOTHING_SIGMA = 2
 SPECTRUM_SURVEY: SpectrumSurvey = "desi"
 SPECTRUM_TOKEN_WIDTH = 32 * 0.8
 N_SPANS = 8704 // 32
@@ -67,7 +68,62 @@ FLAG_SURVEYS: dict[str, str] = {
 }
 RGB_COLUMN = f"rgb{LS}"
 
+SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
+    ANCHOR: tuple(
+        f"{name}{LS}"
+        for name in (
+            "EBV",
+            "FLUX_G",
+            "FLUX_R",
+            "FLUX_I",
+            "FLUX_Z",
+            "FLUX_W1",
+            "FLUX_W2",
+            "FLUX_W3",
+            "FLUX_W4",
+            "SHAPE_R",
+            "SHAPE_E1",
+            "SHAPE_E2",
+        )
+    ),
+    "hsc": tuple(
+        f"{name}{HSC}"
+        for name in (
+            "a_g",
+            "a_r",
+            "a_i",
+            "a_z",
+            "a_y",
+            "g_cmodel_mag",
+            "r_cmodel_mag",
+            "i_cmodel_mag",
+            "z_cmodel_mag",
+            "y_cmodel_mag",
+            "i_sdssshape_shape11",
+            "i_sdssshape_shape22",
+            "i_sdssshape_shape12",
+        )
+    ),
+}
+SCALAR_COLUMNS = tuple(
+    column for columns in SCALAR_SURVEYS.values() for column in columns
+)
+N_SCALARS = len(SCALAR_COLUMNS)
+
+Catalogue = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
+CATALOGUES: dict[str, Catalogue] = {
+    LS: ANCHOR,
+    HSC: "hsc",
+    DESI: "desi",
+    SDSS: "sdss",
+    GZ10: "gz10",
+    PROVABGS: "provabgs",
+}
+
 N_MORPHOLOGIES = 10
+
+GEMMA = "google/embeddinggemma-2"
+GEMMA_DIM = 768
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
@@ -77,6 +133,9 @@ ARTIFACTS: dict[str, str] = {
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
+    "pairs": "parquet",
+    "alignment": "pt",
+    "aion_gemma_space": "npy",
 }
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
@@ -96,6 +155,15 @@ def store_schema(role: str) -> pa.Schema:
         + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
         + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
     )
+
+
+PAIRS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("aion", pa.list_(pa.float32(), DIM)),
+        pa.field("gemma", pa.list_(pa.float32(), GEMMA_DIM)),
+    ]
+)
 
 
 POINTS = pa.schema(

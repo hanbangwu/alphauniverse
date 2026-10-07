@@ -12,9 +12,15 @@ export class SearchState {
     return Number.isInteger(value) && value >= minimum && value <= maximum ? value : null
   }
 
-  request(galaxy: number | null, patches: number[], spans: number[]): SimilarityQuery | null {
+  request(
+    galaxy: number | null,
+    patches: number[],
+    spans: number[],
+    scalars: number[]
+  ): SimilarityQuery | null {
     const matches = this.count
-    if (galaxy === null || matches === null || patches.length + spans.length === 0) return null
-    return { galaxy, p: patches, s: spans, matches }
+    if (galaxy === null || matches === null) return null
+    if (patches.length + spans.length + scalars.length === 0) return null
+    return { galaxy, p: patches, s: spans, t: scalars, matches }
   }
 }

@@ -7,11 +7,15 @@ Every benchmark runs on Modal and measures the production artifacts on the volum
 | `search_performance`  | loads and `search()` stages, across commits  | Modal, a container with the server's spec | `docs/benchmarks/search_performance.json`  |
 | `backend_performance` | HTTP latency, cold start and concurrency     | Modal, an ephemeral server and a client   | `docs/benchmarks/backend_performance.json` |
 | `search_quality`      | recall of `search()` against an exact search | Modal, a build-image container            | `docs/benchmarks/search_quality.json`      |
+| `projection_quality`  | how the projector keeps neighbours           | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
+| `text_search_quality` | text queries against catalogue cuts          | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
 
 ```sh
 uv run modal run -m scripts.benchmarks.search_performance   # --runs, default 30
 uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
 uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, default 100
+uv run modal run -m scripts.benchmarks.projection_quality
+uv run modal run -m scripts.benchmarks.text_search_quality
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -21,7 +25,7 @@ uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, defaul
 
 ## From GitHub Actions
 
-Start the Benchmark workflow by hand from the Actions tab. Pick a branch that contains the workflow, a script, and optionally `runs` for a performance script or `per_kind` for `search_quality` (empty keeps the default). The job uses the deploy job's Modal token. The report appears in the run's summary and as its artifact; the job does not commit it. A job past six hours stops and leaves no report.
+Start the Benchmark workflow by hand from the Actions tab. Pick a branch that contains the workflow, a script, and optionally `args`, the script's flags as listed above (empty keeps the defaults). The job uses the deploy job's Modal token. The report appears in the run's summary and as its artifact; the job does not commit it. A job past six hours stops and leaves no report.
 
 ## Cost model
 
@@ -188,6 +192,41 @@ A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force ov
 | 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
 | 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
 | 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
+
+## `projection_quality`
+
+A container on the build image, with `generate_projections`' CPU and memory and no GPU, redraws the projector's sample and its validation split, takes `SIZE` (10,000) validation rows, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
+
+- `preservation`: the mean share of a row's nearest neighbours by cosine distance in 768-d that are also its nearest in 2-d.
+- `trustworthiness`: scikit-learn's `trustworthiness`, cosine in 768-d, which penalises 2-d neighbours that are far apart in 768-d.
+
+The rows are held out only if `parametric_umap` was trained with the validation split from the same `encoded`; a projector from before the split trained on them. `trustworthiness` holds all pairwise distances, so its memory grows with the square of `SIZE`.
+
+### Last run
+
+| Run              |                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-05                                                                                                                |
+| Commit           | `3005bac-dirty`: uncommitted changes on top of `3005bac`                                                                  |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                                |
+| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit, no GPU; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
+| Projector        | trained with `SAMPLE=5000000`, `EPOCHS=20`, `VALIDATION=0.3`                                                              |
+| Rows             | 10,000 validation rows                                                                                                    |
+
+| Neighbours | Preservation | Trustworthiness |
+| ---------- | ------------ | --------------- |
+| 15         | 0.3064       | 0.8926          |
+| 100        | 0.3336       | 0.8173          |
+
+At 15 neighbours, 0.3064 × 15 = 4.6 of a row's 15 nearest neighbours in 768-d are among its 15 nearest in 2-d. Random 2-d positions would keep 15 / 9,999 = 0.0015 of them, and score a trustworthiness near 0.5.
+
+## `text_search_quality`
+
+A container on the build image, with `generate_alignment`'s GPU, CPU and memory, takes the `pairs` rows of the galaxies `generate_alignment` held out, and embeds each query in `CUTS` with EmbeddingGemma. Each query's answer is a cut on a PROVABGS property: stellar mass, specific star formation rate or redshift; its population is the galaxies with that property. It ranks the population in three spaces: the EmbeddingGemma embeddings, and the AION embeddings through the linear and the MLP maps in `alignment`. Each space is ranked raw and centred: centring subtracts the documents' mean from the documents and the queries' mean from the queries, then renormalises. Per query, space and centring it reports the base rate, scikit-learn's `average_precision_score` and the precision at 10 and 100.
+
+The dataset holds 7 galaxies with a GZ10 label, too few to score morphology queries.
+
+Not run yet.
 
 ## Scaling ceilings
 

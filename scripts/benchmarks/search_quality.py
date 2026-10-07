@@ -12,23 +12,27 @@ from app.config import (
     ANCHOR,
     DATASET_REVISION,
     N_PATCHES,
+    N_SCALARS,
     N_SPANS,
     SPECTRUM_SURVEYS,
 )
 from app.dataset import spectrum
 from app.main import SPECTRUM_SURVEY
 from app.search import (
+    N_HSC_SCALARS,
+    N_LS_SCALARS,
     NPROBE,
     PROBE,
     Query,
     index,
     patches,
+    rows,
     search,
     source,
     spectral,
     spectrum_cells,
 )
-from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
+from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import (
     PATCHES,
     SPANS,
@@ -36,7 +40,6 @@ from scripts.benchmarks.common import (
     git,
     observed_spans,
     queries,
-    spec,
 )
 
 app = modal.App("alphauniverse-recall")
@@ -50,22 +53,30 @@ class Corpus(NamedTuple):
     patch_rows: np.ndarray
     span_rows: np.ndarray
     spectrum_galaxies: np.ndarray
+    ls_scalar_rows: np.ndarray
+    hsc_scalar_rows: np.ndarray
+    hsc_galaxies: np.ndarray
 
 
 def corpus() -> Corpus:
-    cells = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
+    cells = source("encoded").to_table(columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS])
     spectra = spectrum_cells(cells)
     return Corpus(
         patches(cells.column(ANCHOR)),
         spectral(spectra.drop_null()),
         np.flatnonzero(pc.is_valid(spectra).to_numpy()),
+        rows(cells.column(ANCHOR), N_PATCHES, None),
+        rows(cells.column("hsc"), N_PATCHES, None),
+        np.flatnonzero(pc.is_valid(cells.column("hsc")).to_numpy()),
     )
 
 
 def exact_ranking(
     query: Query, reference: Corpus
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     owners = np.repeat(reference.spectrum_galaxies, N_SPANS)
+    hsc_owners = np.repeat(reference.hsc_galaxies, N_HSC_SCALARS)
+    scalars = np.asarray(query.scalars, dtype=np.int64)
     query_rows = []
     if query.patches:
         query_rows.append(
@@ -75,6 +86,16 @@ def exact_ranking(
         query_rows.append(
             reference.span_rows[owners == query.galaxy][np.asarray(query.spans)]
         )
+    query_rows.append(
+        reference.ls_scalar_rows[
+            query.galaxy * N_LS_SCALARS + scalars[scalars < N_LS_SCALARS]
+        ]
+    )
+    query_rows.append(
+        reference.hsc_scalar_rows[hsc_owners == query.galaxy][
+            scalars[scalars >= N_LS_SCALARS] - N_LS_SCALARS
+        ]
+    )
     direction = np.concatenate(query_rows).mean(axis=0, keepdims=True)
     faiss.normalize_L2(direction)
     patch_maps = (reference.patch_rows @ direction.T).reshape(-1, N_PATCHES)
@@ -82,12 +103,31 @@ def exact_ranking(
     spectral_maps[reference.spectrum_galaxies] = (
         reference.span_rows @ direction.T
     ).reshape(-1, N_SPANS)
-    scores = np.fmax(patch_maps.max(axis=1), spectral_maps.max(axis=1))
+    scalar_maps = np.full((len(patch_maps), N_SCALARS), np.nan, dtype=np.float32)
+    scalar_maps[:, :N_LS_SCALARS] = (reference.ls_scalar_rows @ direction.T).reshape(
+        -1, N_LS_SCALARS
+    )
+    scalar_maps[reference.hsc_galaxies, N_LS_SCALARS:] = (
+        reference.hsc_scalar_rows @ direction.T
+    ).reshape(-1, N_HSC_SCALARS)
+    scores = np.fmax.reduce(
+        [
+            patch_maps.max(axis=1),
+            spectral_maps.max(axis=1),
+            np.fmax.reduce(scalar_maps, axis=1),
+        ]
+    )
     order = np.argsort(-scores, kind="stable")
     chosen = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
-    return chosen, scores[chosen], patch_maps[chosen], spectral_maps[chosen]
+    return (
+        chosen,
+        scores[chosen],
+        patch_maps[chosen],
+        spectral_maps[chosen],
+        scalar_maps[chosen],
+    )
 
 
 def wavelength(galaxy: int) -> np.ndarray:
@@ -119,8 +159,8 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
 
 @app.function(
     image=image,
-    cpu=generate_index.spec.cpu,
-    memory=generate_index.spec.memory,
+    cpu=16,
+    memory=(16 * 1024, 64 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
@@ -173,7 +213,6 @@ def main(per_kind: int = 100) -> None:
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "job": spec(benchmark_search_quality),
         **benchmark_search_quality.remote(per_kind),
     }
     REPORT.parent.mkdir(exist_ok=True)
