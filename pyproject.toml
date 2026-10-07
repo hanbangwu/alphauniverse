@@ -6,28 +6,29 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "astropy>=8.0.1",
-  "datasets>=5.0.1",
-  "faiss-cpu>=1.15.0",
-  "fastapi[standard]>=0.141.1",
-  "modal>=1.5.4",
-  "numpy>=2.5.2",
+  "datasets>=5.1.0",
+  "faiss-cpu>=1.15.1",
+  "fastapi[standard]>=0.142.2",
+  "modal>=1.6.1",
+  "numpy>=2.5.3",
   "pillow>=12.3.0",
   "pyarrow>=25.0.1",
-  "pydantic>=2.13.4",
+  "pydantic>=2.13.5",
   "sentence-transformers[image]>=6.1.0",
-  "threadpoolctl>=3.6.0",
+  "torch>=2.14.1",
+  "tqdm>=4.70.1",
 ]
 
 [dependency-groups]
-dev = ["pytest>=9.0.1", "ruff>=0.16.8"]
+dev = ["httpx>=0.28.1", "pytest>=9.1.1", "ruff>=0.16.10", "threadpoolctl>=3.7.0"]
 build = [
   "polymathic-aion[torch]>=0.0.2",
-  "torch>=2.13.0",
-  "torchvision>=0.28.0",
-  "tqdm>=4.70.0",
+  "scikit-learn>=1.9.1",
+  "torchvision>=0.29.1",
   "umap-learn>=0.5.12",
-  "wandb>=0.28.2",
+  "wandb>=0.30.0",
 ]
+dataset = ["dask[distributed]>=2026.8.0", "lsdb>=0.11.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

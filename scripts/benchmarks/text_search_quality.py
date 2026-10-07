@@ -7,8 +7,8 @@ import modal
 import numpy as np
 
 from app.config import DATASET_REVISION
-from modal_app import CACHE_PATH, build_image, cache_volume, generate_alignment
-from scripts.benchmarks.common import environment, git, spec
+from modal_app import CACHE_PATH, build_image, cache_volume
+from scripts.benchmarks.common import environment, git
 
 app = modal.App("alphauniverse-text-search")
 image = build_image.add_local_python_source("modal_app")
@@ -30,9 +30,9 @@ REPORT = Path("docs/benchmarks/text_search_quality.json")
 
 @app.function(
     image=image,
-    gpu=generate_alignment.spec.gpus,
-    cpu=generate_alignment.spec.cpu,
-    memory=generate_alignment.spec.memory,
+    gpu="L4",
+    cpu=16,
+    memory=(16 * 1024, 64 * 1024),
     timeout=60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
@@ -118,7 +118,6 @@ def main() -> None:
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "job": spec(benchmark_text_search_quality),
         **benchmark_text_search_quality.remote(),
     }
     REPORT.parent.mkdir(exist_ok=True)

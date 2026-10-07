@@ -7,8 +7,8 @@ import modal
 import numpy as np
 
 from app.config import DATASET_REVISION, SEED
-from modal_app import CACHE_PATH, build_image, cache_volume, generate_projections
-from scripts.benchmarks.common import environment, git, spec
+from modal_app import CACHE_PATH, build_image, cache_volume
+from scripts.benchmarks.common import environment, git
 
 app = modal.App("alphauniverse-projection")
 image = build_image.add_local_python_source("modal_app")
@@ -39,8 +39,8 @@ def preservation(embedded: np.ndarray, projected: np.ndarray, count: int) -> flo
 
 @app.function(
     image=image,
-    cpu=generate_projections.spec.cpu,
-    memory=generate_projections.spec.memory,
+    cpu=16,
+    memory=(16 * 1024, 64 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
@@ -86,7 +86,6 @@ def main() -> None:
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "job": spec(benchmark_projection_quality),
         **benchmark_projection_quality.remote(),
     }
     REPORT.parent.mkdir(exist_ok=True)

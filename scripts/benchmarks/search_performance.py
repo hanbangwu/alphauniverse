@@ -30,10 +30,11 @@ from app.search import (
     vectors,
 )
 from modal_app import (
+    CACHE_PATH,
     SERVING_CPU,
     SERVING_MEMORY,
     app,
-    fastapi_app,
+    cache_volume,
     serving_image,
 )
 from scripts.benchmarks.common import (
@@ -185,7 +186,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     image=image,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
-    volumes=fastapi_app.spec.volumes,
+    volumes={CACHE_PATH: cache_volume},
     timeout=6 * 60 * 60,
 )
 def benchmark_search_performance(

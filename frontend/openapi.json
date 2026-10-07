@@ -155,7 +155,6 @@
     "/galaxy/{galaxy}/table": {
       "get": {
         "summary": "Get Table",
-        "description": "Every numeric and boolean catalogue value of the galaxy, null where its catalogue has no match. `scalar` is the value's index for the search query's `t` where AION encodes it, else null; `token` is its token id where the galaxy has one.",
         "operationId": "get_table",
         "parameters": [
           {

@@ -28,7 +28,7 @@ from app.search import (
     spectral,
     spectrum_cells,
 )
-from modal_app import CACHE_PATH, build_image, cache_volume, generate_index
+from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import (
     PATCHES,
     SPANS,
@@ -36,7 +36,6 @@ from scripts.benchmarks.common import (
     git,
     observed_spans,
     queries,
-    spec,
 )
 
 app = modal.App("alphauniverse-recall")
@@ -119,8 +118,8 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
 
 @app.function(
     image=image,
-    cpu=generate_index.spec.cpu,
-    memory=generate_index.spec.memory,
+    cpu=16,
+    memory=(16 * 1024, 64 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
@@ -173,7 +172,6 @@ def main(per_kind: int = 100) -> None:
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        "job": spec(benchmark_search_quality),
         **benchmark_search_quality.remote(per_kind),
     }
     REPORT.parent.mkdir(exist_ok=True)
