@@ -237,6 +237,7 @@
     "/galaxy/{galaxy}/spectrum": {
       "get": {
         "summary": "Get Spectrum",
+        "description": "The galaxy's spectrum for display, its flux smoothed with a Gaussian of sigma 2 pixels; masked pixels stay NaN.",
         "operationId": "get_spectrum",
         "parameters": [
           {

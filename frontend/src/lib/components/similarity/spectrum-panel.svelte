@@ -29,10 +29,13 @@
   )
 </script>
 
-<div class="flex flex-1 flex-col gap-2">
+<div class="flex flex-col gap-2">
   <span class="text-sm font-medium">Spectrum Tokens</span>
 
-  <PatchFrame busy={coverage.isPending || spectrum.isFetching || tokens.isFetching} class="bg-card">
+  <PatchFrame
+    busy={coverage.isPending || spectrum.isFetching || tokens.isFetching}
+    class="aspect-2/1 bg-card md:aspect-4/1"
+  >
     {#if spectrum.data && cells && palette}
       <SpectrumChart
         spectrum={spectrum.data}

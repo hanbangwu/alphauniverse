@@ -16,9 +16,11 @@
   const values = $derived(similarity.imageMapAt(index))
 </script>
 
-<div class="flex flex-col gap-5 pt-6 md:flex-row">
-  <GalaxyTile {galaxy} score={similarity.scoreAt(index)} />
-  <PatchMap {values} />
-  <PatchMask {values} />
+<div class="flex flex-col gap-5 pt-6">
+  <div class="flex flex-col gap-5 md:flex-row md:justify-center md:*:max-w-xs">
+    <GalaxyTile {galaxy} score={similarity.scoreAt(index)} />
+    <PatchMap {values} />
+    <PatchMask {values} />
+  </div>
   <SpectrumPanel {galaxy} map={similarity.spectrumMapAt(index)} />
 </div>

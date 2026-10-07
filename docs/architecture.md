@@ -41,7 +41,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `alignment`        | the AION to EmbeddingGemma maps' weights      | `generate_aion_gemma_space`, `text_search_quality`                      |
 | `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space  | `/search/text`                                                          |
 
-`docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead.
+`docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux.
 
 ## The serving app
 

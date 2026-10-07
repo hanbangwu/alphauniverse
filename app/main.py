@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 import pyarrow as pa
+from astropy.convolution import Gaussian1DKernel, convolve
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -22,6 +23,7 @@ from .config import (
     N_PATCHES,
     N_SPANS,
     SPECTRUM_ORIGIN,
+    SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
     TOKEN_SURVEYS,
@@ -239,12 +241,19 @@ def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     "/galaxy/{galaxy}/spectrum",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
+    description="The galaxy's spectrum for display, its flux smoothed with a "
+    f"Gaussian of sigma {SPECTRUM_SMOOTHING_SIGMA} pixels; masked pixels stay NaN.",
 )
 def get_spectrum(galaxy: GalaxyIndex) -> Response:
     table = spectrum(galaxy, SPECTRUM_SURVEY)
     if table is None:
         raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
-    return arrow(table)
+    flux = convolve(
+        table["flux"].to_numpy(),
+        Gaussian1DKernel(SPECTRUM_SMOOTHING_SIGMA),
+        preserve_nan=True,
+    )
+    return arrow(table.set_column(1, "flux", pa.array(flux, pa.float32())))
 
 
 @app.get(
