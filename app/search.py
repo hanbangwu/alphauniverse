@@ -12,7 +12,9 @@ from .config import (
     ANCHOR,
     DIM,
     N_PATCHES,
+    N_SCALARS,
     N_SPANS,
+    SCALAR_SURVEYS,
     SEED,
     SPECTRUM_SURVEYS,
     GalaxyIndex,
@@ -24,6 +26,8 @@ NLIST = 16384
 NPROBE = 64
 PROBE = 2048
 TRAIN_GALAXIES = 2048
+N_LS_SCALARS = len(SCALAR_SURVEYS[ANCHOR])
+N_HSC_SCALARS = len(SCALAR_SURVEYS["hsc"])
 DECODER = faiss.IndexScalarQuantizer(DIM, faiss.ScalarQuantizer.QT_fp16)
 
 
@@ -39,18 +43,29 @@ class Query(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_SPANS)], ...],
         Field(alias="s", max_length=N_SPANS),
     ] = ()
+    scalars: Annotated[
+        tuple[Annotated[int, Field(ge=0, lt=N_SCALARS)], ...],
+        Field(alias="t", max_length=N_SCALARS),
+    ] = ()
     matches: Annotated[int, Field(ge=1, le=128)] = 32
 
     @model_validator(mode="after")
     def some_tokens(self) -> Self:
-        if not (self.patches or self.spans):
-            raise ValueError("select at least one patch or span")
+        if not (self.patches or self.spans or self.scalars):
+            raise ValueError("select at least one patch, span or scalar")
         return self
 
     @model_validator(mode="after")
     def spans_need_a_spectrum(self) -> Self:
         if self.spans and not with_spectrum()[self.galaxy]:
             raise ValueError(f"galaxy {self.galaxy} has no spectrum")
+        return self
+
+    @model_validator(mode="after")
+    def hsc_scalars_need_hsc(self) -> Self:
+        hsc = max(self.scalars, default=0) >= N_LS_SCALARS
+        if hsc and not with_hsc()[self.galaxy]:
+            raise ValueError(f"galaxy {self.galaxy} has no HSC match")
         return self
 
 
@@ -65,18 +80,27 @@ def tokens() -> pa.Table:
 
 
 @cache
+def with_hsc() -> np.ndarray:
+    return pc.is_valid(tokens().column("hsc")).to_numpy()
+
+
+@cache
 def with_spectrum() -> np.ndarray:
     return pc.is_valid(spectrum_cells(tokens())).to_numpy()
 
 
-def layout(has: np.ndarray) -> np.ndarray:
-    before = np.concatenate(([0], np.cumsum(has)[:-1]))
-    return np.arange(len(has)) * N_PATCHES + before * N_SPANS
+def layout(has_spectrum: np.ndarray, has_hsc: np.ndarray) -> np.ndarray:
+    sizes = N_PATCHES + N_LS_SCALARS + has_spectrum * N_SPANS + has_hsc * N_HSC_SCALARS
+    return np.concatenate(([0], np.cumsum(sizes)))
+
+
+def scalar_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
+    return first + N_PATCHES + has_spectrum * N_SPANS
 
 
 @cache
 def starts() -> np.ndarray:
-    return layout(with_spectrum())
+    return layout(with_spectrum(), with_hsc())[:-1]
 
 
 def positions(first: np.ndarray, width: int) -> np.ndarray:
@@ -93,11 +117,24 @@ def centroid(query: Query) -> np.ndarray:
         (
             start + np.asarray(query.patches, dtype=np.int64),
             start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
+            scalar_starts(start, with_spectrum()[query.galaxy])
+            + np.asarray(query.scalars, dtype=np.int64),
         )
     )
     direction = decoded(ids).mean(axis=0, keepdims=True)
     faiss.normalize_L2(direction)
     return direction
+
+
+def scalar_tokens(galaxy: int) -> dict[str, int]:
+    return {
+        column: int(token)
+        for survey, columns in SCALAR_SURVEYS.items()
+        if (cell := tokens().column(survey)[galaxy]).is_valid
+        for column, token in zip(
+            columns, np.asarray(cell.values)[N_PATCHES:], strict=True
+        )
+    }
 
 
 def candidates(
@@ -129,29 +166,54 @@ def score_maps(rows: np.ndarray, direction: np.ndarray, *, width: int) -> np.nda
     return (rows @ direction.T).reshape(-1, width)
 
 
-def span_maps(order: np.ndarray, direction: np.ndarray) -> np.ndarray:
-    maps = np.full((len(order), N_SPANS), np.nan, dtype=np.float32)
-    has = with_spectrum()[order]
-    rows = decoded(positions(starts()[order[has]] + N_PATCHES, N_SPANS))
-    maps[has] = score_maps(rows, direction, width=N_SPANS)
+def optional_maps(
+    first: np.ndarray, has: np.ndarray, direction: np.ndarray, *, width: int
+) -> np.ndarray:
+    maps = np.full((len(first), width), np.nan, dtype=np.float32)
+    rows = decoded(positions(first[has], width))
+    maps[has] = score_maps(rows, direction, width=width)
     return maps
 
 
-def rank(
-    order: np.ndarray, scored: np.ndarray, spectral: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    scores = np.fmax(scored.max(axis=1), np.fmax.reduce(spectral, axis=1))
+def span_maps(order: np.ndarray, direction: np.ndarray) -> np.ndarray:
+    return optional_maps(
+        starts()[order] + N_PATCHES, with_spectrum()[order], direction, width=N_SPANS
+    )
+
+
+def scalar_maps(order: np.ndarray, direction: np.ndarray) -> np.ndarray:
+    first = scalar_starts(starts()[order], with_spectrum()[order])
+    rows = decoded(positions(first, N_LS_SCALARS))
+    return np.hstack(
+        (
+            score_maps(rows, direction, width=N_LS_SCALARS),
+            optional_maps(
+                first + N_LS_SCALARS,
+                with_hsc()[order],
+                direction,
+                width=N_HSC_SCALARS,
+            ),
+        )
+    )
+
+
+def rank(order: np.ndarray, *maps: np.ndarray) -> tuple[np.ndarray, ...]:
+    scores = np.fmax.reduce([np.fmax.reduce(scored, axis=1) for scored in maps])
     by_score = np.concatenate(([0], 1 + np.argsort(-scores[1:], kind="stable")))
-    return order[by_score], scores[by_score], scored[by_score], spectral[by_score]
+    return order[by_score], scores[by_score], *(scored[by_score] for scored in maps)
 
 
 def search(
     query: Query, *, index: faiss.Index
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     direction = centroid(query)
     order = candidates(query, direction, index=index)
-    scored = score_maps(vectors(order), direction, width=N_PATCHES)
-    return rank(order, scored, span_maps(order, direction))
+    return rank(
+        order,
+        score_maps(vectors(order), direction, width=N_PATCHES),
+        span_maps(order, direction),
+        scalar_maps(order, direction),
+    )
 
 
 def rows(cells: pa.Array | pa.ChunkedArray, start: int, stop: int | None) -> np.ndarray:
@@ -177,15 +239,23 @@ def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array | pa.ChunkedArr
 
 def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
     spectra = spectrum_cells(batch)
-    has = pc.is_valid(spectra).to_numpy(zero_copy_only=False)
-    first = layout(has)
-    built = np.empty(
-        (len(has) * N_PATCHES + has.sum() * N_SPANS, DIM), dtype=np.float32
-    )
+    has_spectrum = pc.is_valid(spectra).to_numpy(zero_copy_only=False)
+    has_hsc = pc.is_valid(batch.column("hsc")).to_numpy(zero_copy_only=False)
+    bounds = layout(has_spectrum, has_hsc)
+    first = bounds[:-1]
+    scalar_first = scalar_starts(first, has_spectrum)
+    built = np.empty((bounds[-1], DIM), dtype=np.float32)
     built[positions(first, N_PATCHES)] = patches(batch.column(ANCHOR))
-    if has.any():
-        built[positions(first[has] + N_PATCHES, N_SPANS)] = spectral(
+    if has_spectrum.any():
+        built[positions(first[has_spectrum] + N_PATCHES, N_SPANS)] = spectral(
             spectra.drop_null()
+        )
+    built[positions(scalar_first, N_LS_SCALARS)] = rows(
+        batch.column(ANCHOR), N_PATCHES, None
+    )
+    if has_hsc.any():
+        built[positions(scalar_first[has_hsc] + N_LS_SCALARS, N_HSC_SCALARS)] = rows(
+            batch.column("hsc"), N_PATCHES, None
         )
     return built
 
@@ -205,7 +275,7 @@ def search_vectors() -> np.ndarray:
 
 def generate_index() -> None:
     dataset = source("encoded")
-    columns = [ANCHOR, *SPECTRUM_SURVEYS]
+    columns = [ANCHOR, "hsc", *SPECTRUM_SURVEYS]
     galaxies = dataset.count_rows()
     sample = np.random.default_rng(SEED).choice(
         galaxies, min(TRAIN_GALAXIES, galaxies), replace=False
@@ -223,13 +293,17 @@ def generate_index() -> None:
             pc.coalesce(*(ds.field(survey) for survey in SPECTRUM_SURVEYS))
         )
     )
+    hsc = dataset.count_rows(filter=pc.is_valid(ds.field("hsc")))
+    total = (
+        galaxies * (N_PATCHES + N_LS_SCALARS) + spectra * N_SPANS + hsc * N_HSC_SCALARS
+    )
     with open(artifact("search_vectors"), "wb") as stored:
         np.lib.format.write_array_header_1_0(
             stored,
             {
                 "descr": np.lib.format.dtype_to_descr(np.dtype(np.float16)),
                 "fortran_order": False,
-                "shape": (galaxies * N_PATCHES + spectra * N_SPANS, DIM),
+                "shape": (total, DIM),
             },
         )
         for batch in dataset.to_batches(columns=columns, batch_size=BATCH):

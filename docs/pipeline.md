@@ -1,10 +1,10 @@
 # Build pipeline
 
-Three Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
+Six Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. `generate_pairs` reads the dataset and `encoded`, `generate_alignment` reads `pairs`, and `generate_aion_gemma_space` reads `pairs` and `alignment`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
 Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
-`generate_embeddings` and `generate_projections` need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
+Every job but `generate_index` needs the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
 
 ## The dataset
 
@@ -41,15 +41,15 @@ Within an image cell the patches come first and the survey's scalars follow. A s
 
 ## `generate_index`
 
-Builds **`candidate_index`**, `IVF{nlist},SQ8`, over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches** (the scalars are sliced off), then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
+Builds **`candidate_index`**, `IVF{nlist},SQ8`, over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **scalars**; then, if the galaxy has an HSC match, HSC's 13 scalars. HSC's image patches are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
 
-A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
+A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h`, where `s` and `h` count the galaxies before it that have a spectrum and an HSC match. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum and an HSC match in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
 The same rows, as `float16`, go to **`search_vectors`**, an `.npy` of shape `(ntotal, 768)` in id order, so a vector's id is its row.
 
 ## `generate_projections`
 
-Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (500,000) embeddings uniformly from the whole store. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on that sample: UMAP's fuzzy simplicial set over the sample weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. The second pass projects every embedding.
+Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (5,000,000) embeddings uniformly from the whole store. `train_test_split` holds out `VALIDATION` (30%) of the sample. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on the rest: UMAP's fuzzy simplicial set over the training rows weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. Each epoch logs `train/loss` and `validation/loss` to Weights & Biases when `WANDB_API_KEY` is set, and logs nothing otherwise; on Modal the job reads it from the `wandb-secret` secret; the validation loss is the same loss over the held-out rows' own fuzzy simplicial set, without gradients. The second pass projects every embedding.
 
 The trained projector, **`parametric_umap`**, is a `torch.save` of:
 
@@ -70,3 +70,39 @@ category: uint8   -- GZ10 morphology, null where unlabelled
 - **`full_points`**: one row per embedding, every modality in the same space; loaded only when the user asks for it. Written survey by survey, so its galaxy column is not monotonic.
 
 Training logs to Weights & Biases under `WANDB_MODE`. `modal_app.py` sets it to `offline`, so runs are written to the volume and not uploaded (for now).
+
+## `generate_pairs`
+
+One row per galaxy, pairing AION's embedding of the galaxy with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2)'s (`GEMMA`) embedding of its Legacy Survey image.
+
+- **AION**: the mean of the galaxy's `encoded` embeddings over every token of every survey.
+- **EmbeddingGemma**: its sentence-transformers embedding, L2-normalised and at full width, under the `Document` prompt, of the galaxy's `rgb` Legacy Survey cutout as the dataset stores it, uncropped.
+
+Every image goes to one `encode` call, which batches internally:
+
+```
+galaxy: int32
+aion:   fixed_size_list<float32, 768>
+gemma:  fixed_size_list<float32, 768>
+```
+
+`GEMMA_DIM` must match the model's width: 768.
+
+## `generate_alignment`
+
+Fits two maps from a galaxy's AION embedding to its EmbeddingGemma embedding: least squares with a bias column, solved in closed form, and an MLP (`768 → HIDDEN (2048) → 768`, GELU, output L2-normalised) trained with Adam on 1 − cosine for `EPOCHS` (50). `VALIDATION` (30%) of galaxies are held out of both. Each epoch logs the training loss and, on the held-out rows, the mean cosine and `recall@10`, to Weights & Biases as `generate_projections` does; the least-squares map's two figures go to the run summary, and the run's config records `GEMMA` as `target`. `recall@10` is the share of held-out galaxies whose own EmbeddingGemma embedding is among the 10 nearest to their prediction, out of every held-out galaxy's.
+
+**`alignment`** is a `torch.save` of:
+
+```
+linear: Tensor      -- (769, GEMMA_DIM), the last row the bias
+mlp:    state_dict  -- AlignmentMap weights
+```
+
+## `generate_aion_gemma_space`
+
+Applies the MLP in `alignment` to every galaxy's `pairs` AION embedding. **`aion_gemma_space`** is an `np.save` of:
+
+```
+float32 (galaxies, GEMMA_DIM)  -- in galaxy order, L2-normalised
+```

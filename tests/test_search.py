@@ -7,20 +7,26 @@ import pytest
 
 from app import search as search_module
 from app.config import (
+    ANCHOR,
     DIM,
     N_PATCHES,
     N_SPANS,
 )
 from app.search import (
+    N_HSC_SCALARS,
+    N_LS_SCALARS,
     NLIST,
     Query,
+    centroid,
     index,
     patches,
     rank,
+    scalar_maps,
     search,
     search_vectors,
     source,
     starts,
+    with_hsc,
     with_spectrum,
 )
 from scripts.benchmarks.search_quality import (
@@ -93,7 +99,9 @@ def test_a_search_that_finds_too_few_looks_further(
 ) -> None:
     monkeypatch.setattr(search_module, "PROBE", nearest)
     monkeypatch.setattr(search_module, "NPROBE", lists)
-    found, _, _, _ = search(Query(galaxy=0, p=(64, 65), matches=matches), index=built)
+    found, _, _, _, _ = search(
+        Query(galaxy=0, p=(64, 65), matches=matches), index=built
+    )
 
     assert found[0] == 0
     assert len(set(found.tolist())) == len(found) == min(matches, len(starts()) - 1) + 1
@@ -106,6 +114,7 @@ def test_a_search_that_finds_too_few_looks_further(
         {"galaxy": 4, "p": (64, 65), "matches": 2},
         {"galaxy": 9, "s": (40, 41), "matches": 2},
         {"galaxy": 6, "p": (3,), "s": (100,), "matches": 2},
+        {"galaxy": 0, "t": (1, 14), "matches": 2},
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
@@ -114,10 +123,18 @@ def test_approximate_ranking_agrees_with_exact(
     fields: dict[str, int | tuple[int, ...]],
 ) -> None:
     query = Query.model_validate(fields)
-    expected, expected_scores, expected_maps, expected_spectral_maps = exact_ranking(
+    (
+        expected,
+        expected_scores,
+        expected_maps,
+        expected_spectral_maps,
+        expected_scalar_maps,
+    ) = exact_ranking(
         query.model_copy(update={"matches": query.matches + 1}), reference
     )
-    found, found_scores, maps, spectral_maps = search(query, index=built)
+    found, found_scores, maps, spectral_maps, found_scalar_maps = search(
+        query, index=built
+    )
 
     assert np.all(-np.diff(expected_scores[1:]) > 2 * SCORE_TOLERANCE)
     np.testing.assert_array_equal(found, expected[:-1])
@@ -125,6 +142,9 @@ def test_approximate_ranking_agrees_with_exact(
     np.testing.assert_allclose(maps, expected_maps[:-1], atol=SCORE_TOLERANCE)
     np.testing.assert_allclose(
         spectral_maps, expected_spectral_maps[:-1], atol=SCORE_TOLERANCE
+    )
+    np.testing.assert_allclose(
+        found_scalar_maps, expected_scalar_maps[:-1], atol=SCORE_TOLERANCE
     )
 
 
@@ -147,7 +167,11 @@ def test_ids_stay_contiguous_across_add_batches(
 
         built = index()
         built.make_direct_map()
-        expected_total = galaxies * N_PATCHES + with_spectrum().sum() * N_SPANS
+        expected_total = (
+            galaxies * (N_PATCHES + N_LS_SCALARS)
+            + with_spectrum().sum() * N_SPANS
+            + with_hsc().sum() * N_HSC_SCALARS
+        )
         assert built.ntotal == len(search_vectors()) == expected_total
 
         rows = patches(source("encoded").to_table(columns=["ls"]).column("ls"))
@@ -159,3 +183,25 @@ def test_ids_stay_contiguous_across_add_batches(
         )
     finally:
         forget()
+
+
+def test_selected_scalars_join_the_direction(tree: Path) -> None:
+    stored = source("encoded").take([0], columns=[ANCHOR, "hsc"])
+    ls, hsc = (
+        np.asarray(stored.column(survey)[0].as_py(), dtype=np.float32)
+        for survey in (ANCHOR, "hsc")
+    )
+    selected = np.stack((ls[3], ls[N_PATCHES + 1], hsc[N_PATCHES + 2]))
+    faiss.normalize_L2(selected)
+    scalars = selected[1:]
+    expected = selected.mean(axis=0, keepdims=True)
+    faiss.normalize_L2(expected)
+
+    direction = centroid(Query(galaxy=0, p=(3,), t=(1, 14)))
+
+    np.testing.assert_allclose(direction, expected, atol=SCORE_TOLERANCE)
+    np.testing.assert_allclose(
+        scalar_maps(np.array([0]), direction)[0, [1, 14]],
+        (scalars @ direction.T)[:, 0],
+        atol=SCORE_TOLERANCE,
+    )

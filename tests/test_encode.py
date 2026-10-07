@@ -22,7 +22,7 @@ from app.config import (
     device,
     store_schema,
 )
-from app.search import blocks, source
+from app.search import N_HSC_SCALARS, N_LS_SCALARS, blocks, source
 from scripts.fixture import TOKENS, forget
 
 torch = pytest.importorskip("torch")
@@ -152,6 +152,7 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
         any(row[TOKEN_SURVEYS[survey]] is not None for survey in SPECTRUM_SURVEYS)
         for row in rows
     )
+    hsc = sum(row[TOKEN_SURVEYS["hsc"]] is not None for row in rows)
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
     build_dir().mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
@@ -162,9 +163,11 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
 
         for role in STORES:
             assert pq.read_schema(artifact(role)).equals(store_schema(role))
-        table = source("encoded").to_table(columns=[ANCHOR, *SPECTRUM_SURVEYS])
+        table = source("encoded").to_table(columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS])
         assert blocks(table).shape == (
-            len(rows) * N_PATCHES + spectra * N_SPANS,
+            len(rows) * (N_PATCHES + N_LS_SCALARS)
+            + spectra * N_SPANS
+            + hsc * N_HSC_SCALARS,
             DIM,
         )
     finally:
