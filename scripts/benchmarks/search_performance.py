@@ -22,6 +22,7 @@ from app.search import (
     centroid,
     index,
     rank,
+    scalar_maps,
     score_maps,
     search,
     span_maps,
@@ -50,7 +51,15 @@ from scripts.benchmarks.common import (
 
 image = serving_image.add_local_python_source("modal_app")
 
-STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
+STAGES = [
+    "centroid",
+    "candidates",
+    "vectors",
+    "score_maps",
+    "span_maps",
+    "scalar_maps",
+    "rank",
+]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
@@ -120,7 +129,9 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
     marks.append(mark())
     spectral_scores = span_maps(order, direction, index=built)
     marks.append(mark())
-    rank(order, scored, spectral_scores)
+    scalar_scores = scalar_maps(order, direction, index=built)
+    marks.append(mark())
+    rank(order, scored, spectral_scores, scalar_scores)
     marks.append(mark())
     return usages(STAGES, marks)
 

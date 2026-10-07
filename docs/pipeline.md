@@ -41,9 +41,9 @@ Within an image cell the patches come first and the survey's scalars follow. A s
 
 ## `generate_index`
 
-Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches** (the scalars are sliced off), then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
+Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **scalars**; then, if the galaxy has an HSC match, HSC's 13 scalars. HSC's image patches are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
 
-A vector's id is its position in that sequence: galaxy `g` starts at `576 g + 272 s`, where `s` counts the galaxies before it that have a spectrum, and its spans follow its patches. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
+A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h`, where `s` and `h` count the galaxies before it that have a spectrum and an HSC match. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum and an HSC match in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
 ## `generate_projections`
 

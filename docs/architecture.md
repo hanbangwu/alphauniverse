@@ -30,10 +30,10 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 | Role               | Shape                                         | Who reads it                                                            |
 | ------------------ | --------------------------------------------- | ----------------------------------------------------------------------- |
-| `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/search`, `/downloads/{role}`                |
+| `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/downloads/{role}`                           |
 | `codebook`         | same, the encoder's input embeddings          | `/downloads/{role}`                                                     |
 | `tokens`           | same, token ids                               | startup, `/search`, the token and galaxy endpoints, `/downloads/{role}` |
-| `search_index`     | faiss IVF over patches and spectral tokens    | `/search`                                                               |
+| `search_index`     | faiss IVF over patches, spans and scalars     | `/search`                                                               |
 | `mean_points`      | one 2-d point per galaxy                      | `/meta`, `/projections/mean`                                            |
 | `full_points`      | one 2-d point per embedding                   | `/projections/full`                                                     |
 | `parametric_umap`  | the trained projector's weights               | nothing at serve time                                                   |
@@ -65,14 +65,14 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 
 ## Similarity search
 
-A query is one or more image patches, spectral spans and encoded scalars of one galaxy. An HSC scalar needs an HSC match. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map.
+A query is one or more image patches, spectral spans and encoded scalars of one galaxy. An HSC scalar needs an HSC match. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-patch score map, a per-span score map where it has a spectrum, and a per-scalar score map, NaN for the HSC scalars where it has no HSC match.
 
 The search reads vectors back from the index by id, in the layout `docs/pipeline.md` gives:
 
-1. The query's vectors are averaged and normalised into one direction. A scalar's vector is its `encoded` embedding, the slot after the 576 patches in its survey's cell, L2-normalised. Every search reads the query galaxy's scalar vectors from `encoded`, which decodes the column chunk of the galaxy's row group; the last 128 galaxies' are kept in memory.
+1. The query's vectors are averaged and normalised into one direction.
 2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`. If they hold fewer galaxies, the search runs again with both numbers doubled, until there are enough or it has probed every list for every vector. The lists probed are set per search, so the index that concurrent requests share is not changed. faiss scans them on its threads and starts no prefetch threads.
-3. Every patch and span of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps. The query galaxy's 25 scalars are scored the same way, NaN where it has no HSC match; other galaxies' scalars are not scored.
-4. A galaxy's score is its best token score over both maps. The candidates are sorted by it, after the query galaxy.
+3. Every patch, span and scalar of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
+4. A galaxy's score is its best token score over its maps. The candidates are sorted by it, after the query galaxy.
 
 ## Text search
 

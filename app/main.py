@@ -43,7 +43,6 @@ from .search import (
     index,
     scalar_tokens,
     search,
-    source,
     starts,
     tokens,
     with_hsc,
@@ -134,7 +133,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     index()
     starts()
     with_hsc()
-    source("encoded")
     yield
 
 
@@ -315,8 +313,6 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
 )
 def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
     galaxies, scores, values, spans, scalars = search(query, index=index())
-    scalar_maps = np.full((len(galaxies), N_SCALARS), np.nan, dtype=np.float32)
-    scalar_maps[0] = scalars
 
     item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
@@ -325,7 +321,7 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
             pa.field("score", pa.float32(), nullable=False),
             pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
             pa.field("spectrum", pa.list_(item, N_SPANS)),
-            pa.field("scalars", pa.list_(item, N_SCALARS)),
+            pa.field("scalars", pa.list_(item, N_SCALARS), nullable=False),
         ]
     )
     batch = pa.record_batch(
@@ -338,11 +334,7 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
                 N_SPANS,
                 mask=pa.array(np.isnan(spans[:, 0])),
             ),
-            pa.FixedSizeListArray.from_arrays(
-                pa.array(scalar_maps.reshape(-1)),
-                N_SCALARS,
-                mask=pa.array(np.arange(len(galaxies)) > 0),
-            ),
+            pa.FixedSizeListArray.from_arrays(pa.array(scalars.reshape(-1)), N_SCALARS),
         ],
         schema=schema,
     )

@@ -161,14 +161,23 @@ def test_similarity_takes_scalars_alone(client: TestClient) -> None:
     assert 1 < table.num_rows <= 6
 
 
-def test_only_the_query_galaxy_has_scalar_scores(client: TestClient) -> None:
+def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
+    client: TestClient,
+) -> None:
     table = _similarity(client, galaxy=1, p=[100], matches=5)
-    scalars = table.column("scalars")
+    galaxies = table.column("galaxy").to_numpy()
+    scores = np.asarray(table.column("scalars").to_pylist())
+    with_hsc = pq.read_table(artifact("encoded"), columns=["hsc"]).column("hsc")
 
-    assert scalars.is_valid().to_pylist() == [True] + [False] * (table.num_rows - 1)
-    scores = np.asarray(scalars[0].as_py())
-    assert np.isfinite(scores[:12]).all()
-    assert np.isnan(scores[12:]).all()
+    assert np.isfinite(scores[:, :12]).all()
+    np.testing.assert_array_equal(
+        np.isfinite(scores[:, 12:]).all(axis=1),
+        with_hsc.is_valid().to_numpy()[galaxies],
+    )
+    np.testing.assert_array_equal(
+        np.isnan(scores[:, 12:]).all(axis=1),
+        ~with_hsc.is_valid().to_numpy()[galaxies],
+    )
 
 
 def test_hsc_scalars_of_a_galaxy_without_hsc_are_rejected(

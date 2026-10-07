@@ -24,7 +24,6 @@ from app.config import (
 from app.search import (
     generate_index,
     index,
-    scalar_embeddings,
     source,
     starts,
     tokens,
@@ -114,7 +113,6 @@ def forget() -> None:
         tokens,
         with_spectrum,
         with_hsc,
-        scalar_embeddings,
         starts,
         aion_gemma_space,
     ):

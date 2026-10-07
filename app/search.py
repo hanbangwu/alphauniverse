@@ -1,4 +1,4 @@
-from functools import cache, lru_cache
+from functools import cache
 from typing import Annotated, Self
 
 import faiss
@@ -26,6 +26,8 @@ NLIST = 16384
 NPROBE = 64
 PROBE = 2048
 TRAIN_GALAXIES = 2048
+N_LS_SCALARS = len(SCALAR_SURVEYS[ANCHOR])
+N_HSC_SCALARS = len(SCALAR_SURVEYS["hsc"])
 
 
 class Query(BaseModel):
@@ -60,7 +62,7 @@ class Query(BaseModel):
 
     @model_validator(mode="after")
     def hsc_scalars_need_hsc(self) -> Self:
-        hsc = max(self.scalars, default=0) >= len(SCALAR_SURVEYS[ANCHOR])
+        hsc = max(self.scalars, default=0) >= N_LS_SCALARS
         if hsc and not with_hsc()[self.galaxy]:
             raise ValueError(f"galaxy {self.galaxy} has no HSC match")
         return self
@@ -86,14 +88,18 @@ def with_spectrum() -> np.ndarray:
     return pc.is_valid(spectrum_cells(tokens())).to_numpy()
 
 
-def layout(has: np.ndarray) -> np.ndarray:
-    before = np.concatenate(([0], np.cumsum(has)[:-1]))
-    return np.arange(len(has)) * N_PATCHES + before * N_SPANS
+def layout(has_spectrum: np.ndarray, has_hsc: np.ndarray) -> np.ndarray:
+    sizes = N_PATCHES + N_LS_SCALARS + has_spectrum * N_SPANS + has_hsc * N_HSC_SCALARS
+    return np.concatenate(([0], np.cumsum(sizes)))
+
+
+def scalar_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
+    return first + N_PATCHES + has_spectrum * N_SPANS
 
 
 @cache
 def starts() -> np.ndarray:
-    return layout(with_spectrum())
+    return layout(with_spectrum(), with_hsc())[:-1]
 
 
 def positions(first: np.ndarray, width: int) -> np.ndarray:
@@ -106,25 +112,13 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
         (
             start + np.asarray(query.patches, dtype=np.int64),
             start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
+            scalar_starts(start, with_spectrum()[query.galaxy])
+            + np.asarray(query.scalars, dtype=np.int64),
         )
     )
-    vectors = np.concatenate(
-        (
-            index.reconstruct_batch(ids),
-            scalar_embeddings(query.galaxy)[list(query.scalars)],
-        )
-    )
-    direction = vectors.mean(axis=0, keepdims=True)
+    direction = index.reconstruct_batch(ids).mean(axis=0, keepdims=True)
     faiss.normalize_L2(direction)
     return direction
-
-
-@lru_cache
-def scalar_embeddings(galaxy: int) -> np.ndarray:
-    row = source("encoded").take([galaxy], columns=list(SCALAR_SURVEYS))
-    return np.concatenate(
-        [rows(row.column(survey), N_PATCHES, None) for survey in SCALAR_SURVEYS]
-    )
 
 
 def scalar_tokens(galaxy: int) -> dict[str, int]:
@@ -136,13 +130,6 @@ def scalar_tokens(galaxy: int) -> dict[str, int]:
             columns, np.asarray(cell.values)[N_PATCHES:], strict=True
         )
     }
-
-
-def scalar_map(galaxy: int, direction: np.ndarray) -> np.ndarray:
-    scores = np.full(N_SCALARS, np.nan, dtype=np.float32)
-    stored = scalar_embeddings(galaxy)
-    scores[: len(stored)] = score_maps(stored, direction, width=len(stored))[0]
-    return scores
 
 
 def candidates(
@@ -174,22 +161,55 @@ def score_maps(rows: np.ndarray, direction: np.ndarray, *, width: int) -> np.nda
     return (rows @ direction.T).reshape(-1, width)
 
 
-def span_maps(
-    order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
+def optional_maps(
+    first: np.ndarray,
+    has: np.ndarray,
+    direction: np.ndarray,
+    *,
+    width: int,
+    index: faiss.Index,
 ) -> np.ndarray:
-    maps = np.full((len(order), N_SPANS), np.nan, dtype=np.float32)
-    has = with_spectrum()[order]
-    rows = index.reconstruct_batch(positions(starts()[order[has]] + N_PATCHES, N_SPANS))
-    maps[has] = score_maps(rows, direction, width=N_SPANS)
+    maps = np.full((len(first), width), np.nan, dtype=np.float32)
+    rows = index.reconstruct_batch(positions(first[has], width))
+    maps[has] = score_maps(rows, direction, width=width)
     return maps
 
 
-def rank(
-    order: np.ndarray, scored: np.ndarray, spectral: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    scores = np.fmax(scored.max(axis=1), np.fmax.reduce(spectral, axis=1))
+def span_maps(
+    order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
+) -> np.ndarray:
+    return optional_maps(
+        starts()[order] + N_PATCHES,
+        with_spectrum()[order],
+        direction,
+        width=N_SPANS,
+        index=index,
+    )
+
+
+def scalar_maps(
+    order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
+) -> np.ndarray:
+    first = scalar_starts(starts()[order], with_spectrum()[order])
+    rows = index.reconstruct_batch(positions(first, N_LS_SCALARS))
+    return np.hstack(
+        (
+            score_maps(rows, direction, width=N_LS_SCALARS),
+            optional_maps(
+                first + N_LS_SCALARS,
+                with_hsc()[order],
+                direction,
+                width=N_HSC_SCALARS,
+                index=index,
+            ),
+        )
+    )
+
+
+def rank(order: np.ndarray, *maps: np.ndarray) -> tuple[np.ndarray, ...]:
+    scores = np.fmax.reduce([np.fmax.reduce(scored, axis=1) for scored in maps])
     by_score = np.concatenate(([0], 1 + np.argsort(-scores[1:], kind="stable")))
-    return order[by_score], scores[by_score], scored[by_score], spectral[by_score]
+    return order[by_score], scores[by_score], *(scored[by_score] for scored in maps)
 
 
 def search(
@@ -197,10 +217,11 @@ def search(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     direction = centroid(query, index=index)
     order = candidates(query, direction, index=index)
-    scored = score_maps(vectors(order, index=index), direction, width=N_PATCHES)
-    return (
-        *rank(order, scored, span_maps(order, direction, index=index)),
-        scalar_map(query.galaxy, direction),
+    return rank(
+        order,
+        score_maps(vectors(order, index=index), direction, width=N_PATCHES),
+        span_maps(order, direction, index=index),
+        scalar_maps(order, direction, index=index),
     )
 
 
@@ -227,15 +248,23 @@ def spectrum_cells(batch: pa.RecordBatch | pa.Table) -> pa.Array | pa.ChunkedArr
 
 def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
     spectra = spectrum_cells(batch)
-    has = pc.is_valid(spectra).to_numpy(zero_copy_only=False)
-    first = layout(has)
-    built = np.empty(
-        (len(has) * N_PATCHES + has.sum() * N_SPANS, DIM), dtype=np.float32
-    )
+    has_spectrum = pc.is_valid(spectra).to_numpy(zero_copy_only=False)
+    has_hsc = pc.is_valid(batch.column("hsc")).to_numpy(zero_copy_only=False)
+    bounds = layout(has_spectrum, has_hsc)
+    first = bounds[:-1]
+    scalar_first = scalar_starts(first, has_spectrum)
+    built = np.empty((bounds[-1], DIM), dtype=np.float32)
     built[positions(first, N_PATCHES)] = patches(batch.column(ANCHOR))
-    if has.any():
-        built[positions(first[has] + N_PATCHES, N_SPANS)] = spectral(
+    if has_spectrum.any():
+        built[positions(first[has_spectrum] + N_PATCHES, N_SPANS)] = spectral(
             spectra.drop_null()
+        )
+    built[positions(scalar_first, N_LS_SCALARS)] = rows(
+        batch.column(ANCHOR), N_PATCHES, None
+    )
+    if has_hsc.any():
+        built[positions(scalar_first[has_hsc] + N_LS_SCALARS, N_HSC_SCALARS)] = rows(
+            batch.column("hsc"), N_PATCHES, None
         )
     return built
 
@@ -251,7 +280,7 @@ def index() -> faiss.Index:
 
 def generate_index() -> None:
     dataset = source("encoded")
-    columns = [ANCHOR, *SPECTRUM_SURVEYS]
+    columns = [ANCHOR, "hsc", *SPECTRUM_SURVEYS]
     galaxies = dataset.count_rows()
     sample = np.random.default_rng(SEED).choice(
         galaxies, min(TRAIN_GALAXIES, galaxies), replace=False
