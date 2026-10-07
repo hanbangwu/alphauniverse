@@ -7,11 +7,15 @@ Every benchmark runs on Modal and measures the production artifacts on the volum
 | `search_performance`  | loads and `search()` stages, across commits  | Modal, a container with the server's spec | `docs/benchmarks/search_performance.json`  |
 | `backend_performance` | HTTP latency, cold start and concurrency     | Modal, an ephemeral server and a client   | `docs/benchmarks/backend_performance.json` |
 | `search_quality`      | recall of `search()` against an exact search | Modal, a build-image container            | `docs/benchmarks/search_quality.json`      |
+| `projection_quality`  | how the projector keeps neighbours           | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
+| `text_search_quality` | text queries against catalogue cuts          | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
 
 ```sh
 uv run modal run -m scripts.benchmarks.search_performance   # --runs, default 30
 uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
 uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, default 100
+uv run modal run -m scripts.benchmarks.projection_quality
+uv run modal run -m scripts.benchmarks.text_search_quality
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -21,7 +25,7 @@ uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, defaul
 
 ## From GitHub Actions
 
-Start the Benchmark workflow by hand from the Actions tab. Pick a branch that contains the workflow, a script, and optionally `runs` for a performance script or `per_kind` for `search_quality` (empty keeps the default). The job uses the deploy job's Modal token. The report appears in the run's summary and as its artifact; the job does not commit it. A job past six hours stops and leaves no report.
+Start the Benchmark workflow by hand from the Actions tab. Pick a branch that contains the workflow, a script, and optionally `args`, the script's flags as listed above (empty keeps the defaults). The job uses the deploy job's Modal token. The report appears in the run's summary and as its artifact; the job does not commit it. A job past six hours stops and leaves no report.
 
 ## Cost model
 
@@ -29,11 +33,11 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 
 | Step                             | Cost                        |
 | -------------------------------- | --------------------------- |
-| Container start + loads, `/meta` | **19.0 s**                  |
-| First `/search` after that       | 0.23 s                      |
-| Everything warm after that       | 0.05–0.40 s p50 per request |
+| Container start + loads, `/meta` | **17.6 s**                  |
+| First `/search` after that       | 0.74 s                      |
+| Everything warm after that       | 0.18–0.50 s p50 per request |
 
-**A cold visit is about 19 s of blank page**: `+layout.server.ts` awaits `/meta` during SSR. Cold start dominates, not the search.
+**A cold visit is about 18 s of blank page**: `+layout.server.ts` awaits `/meta` during SSR. Cold start dominates, not the search.
 
 ## `search_performance`
 
@@ -45,7 +49,7 @@ A container with the server's spec runs, per version:
 4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
 5. `search()` whole at 8, 32 and 128 matches.
 
-The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks, and system time includes the sandbox's fault handling. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
+The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. Cold reads are charged to user time: in the last run's first round, `make_direct_map` took 8,465 ms of wall time and 8,310 ms of user CPU, none of system. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
 
 Versions are the checked-out commit (after), `origin/main` (before), and the stored report's best unless its code matches one of those. Each is a `git archive` of `app/`, `scripts/` and `modal_app.py`, run in a subprocess with after's locked dependencies, in mirrored order: after, before, best, then back. After's first round has the cold page cache. A failed round records its error.
 
@@ -53,52 +57,55 @@ The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 
 
 ### Last run
 
-| Run              |                                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------- |
-| Date             | 2026-10-03                                                                                                    |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                    |
-| Versions         | `ff2ee6a` (after), `c382995` (before, `main`); no stored best                                                 |
-| Container        | 8 CPU, 8 GiB requested, 32 GiB limit; 24 CPUs visible, faiss and OpenMP at 8 threads; AMD family 25, model 17 |
-| Rounds           | 4, two per version; 30 warm queries per figure after one discarded                                            |
+| Run              |                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Date             | 2026-10-04                                                                                                   |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                   |
+| Versions         | `6aa4197` as after and as before (`main`); the stored best, `ff2ee6a`, is not in the clone and was dropped   |
+| Container        | 8 CPU, 8 GiB requested, 32 GiB limit; 24 CPUs visible, faiss and OpenMP at 8 threads; AMD family 25, model 1 |
+| Rounds           | 4, two per version; 30 warm queries per figure after one discarded                                           |
 
-Figures are after's. Warm figures average its two rounds.
+Figures are after's. Warm figures average its two rounds. After and before are the same commit, so later rounds range over all three.
 
-**Loads.** Later rounds read files already in the page cache. On `ff2ee6a`, `labels` counted the dataset's `gz10_label` after `dataset` loaded it:
+**Loads.** Later rounds read files already in the page cache:
 
-| Load      | First round | Later rounds |
-| --------- | ----------- | ------------ |
-| `index`   | 5.68 s      | 0.15–0.17 s  |
-| `labels`  | 1.19 s      | 0.002 s      |
-| `dataset` | 0.62 s      | 0.36–0.40 s  |
-| `starts`  | 0.02 s      | 0.02 s       |
-| Total     | 7.51 s      | 0.54–0.58 s  |
+| Load              | First round | Later rounds  |
+| ----------------- | ----------- | ------------- |
+| `import app.main` | 5.19 s      | 2.38–3.58 s   |
+| `read_index`      | 0.106 s     | 0.016–0.018 s |
+| `make_direct_map` | 8.47 s      | 0.16–0.18 s   |
+| `galaxy_count`    | 9.0 ms      | 2.4–2.9 ms    |
+| `labels`          | 16.5 ms     | 5.7–6.6 ms    |
+| `index`           | 323 ms      | 175–192 ms    |
+| `tokens`          | 56.3 ms     | 38.2–60.2 ms  |
+| `starts`          | 4.6 ms      | 3.8–5.8 ms    |
 
-`faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
+`read_index` and `make_direct_map` are step 2's split, which takes the cold reads; `index` then finds those pages. `faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
 
 **Stages**, 4 patches, 32 matches:
 
 | Stage         | First query | Warm p50    | Warm share |
 | ------------- | ----------- | ----------- | ---------- |
-| `centroid`    | 15.7 ms     | 0.79 ms     | 0.8 %      |
-| `candidates`  | 14.0 ms     | 17.6 ms     | 17.8 %     |
-| **`vectors`** | 82.6 ms     | **79.6 ms** | **80.5 %** |
-| `score_maps`  | 1.30 ms     | 0.63 ms     | 0.6 %      |
-| `span_maps`   | 11.5 ms     | 0.18 ms     | 0.2 %      |
-| `rank`        | 0.12 ms     | 0.09 ms     | 0.1 %      |
-| Total         | 125.1 ms    | 98.9 ms     |            |
+| `centroid`    | 0.72 ms     | 0.31 ms     | 0.4 %      |
+| `candidates`  | 21.8 ms     | 5.03 ms     | 5.8 %      |
+| **`vectors`** | 88.0 ms     | **79.8 ms** | **91.5 %** |
+| `score_maps`  | 7.59 ms     | 1.51 ms     | 1.7 %      |
+| `span_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
+| `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
+| Total         | 131.0 ms    | 87.2 ms     |            |
 
-- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 patch vectors in 79.6 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
-- `vectors` is faiss-parallel and `score_maps` contends with its threads, so stage figures compare only at the same thread configuration.
+- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 patch vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
+- `candidates` and `vectors` are faiss-parallel and `score_maps` contends with their threads, so stage figures compare only at the same thread configuration.
 
 **Whole `search()`**, 4 patches, warm p50:
 
 | Matches | p50      |
 | ------- | -------- |
-| 8       | 41.0 ms  |
-| 32      | 100.3 ms |
-| 128     | 318.5 ms |
+| 8       | 29.1 ms  |
+| 32      | 89.5 ms  |
+| 128     | 306.3 ms |
 
-**Versions.** Mean warm totals are 98.9 ms (after) and 99.5 ms (before), 0.6 ms apart; after's two rounds differ by 100.76 − 97.05 = 3.71 ms. Neither version is measurably faster.
+**Rounds.** Warm totals are 92.288 and 82.014 ms (after) and 94.215 and 92.371 ms (before): one commit's rounds differ by up to 94.215 − 82.014 = 12.201 ms.
 
 ## `backend_performance`
 
@@ -115,50 +122,50 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 | Run              |                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
-| Date             | 2026-10-03                                                                                        |
-| Commit           | `ff2ee6a`                                                                                         |
+| Date             | 2026-10-04                                                                                        |
+| Commit           | `6aa4197`                                                                                         |
 | Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                        |
 | Server           | 8 CPU, 8 GiB requested, 32 GiB limit; `max_inputs=16`, `max_containers=1`, `scaledown_window=300` |
-| Client           | 1 CPU; 17 CPUs visible, faiss at 1 thread; AMD family 25, model 17                                |
+| Client           | 1 CPU; 17 CPUs visible, faiss at 1 thread; AMD family 25, model 1                                 |
 | Runs             | 30 warm per figure after one discarded; one cold                                                  |
 
 **`/search`**, warm, 32 matches unless stated:
 
 | Query                  | p50    | p95    |
 | ---------------------- | ------ | ------ |
-| 4 patches, 8 matches   | 97 ms  | 111 ms |
-| 4 patches              | 161 ms | 174 ms |
-| 4 patches, 128 matches | 405 ms | 451 ms |
-| 4 spans                | 191 ms | 202 ms |
-| 4 patches and 4 spans  | 168 ms | 192 ms |
+| 4 patches, 8 matches   | 215 ms | 232 ms |
+| 4 patches              | 276 ms | 294 ms |
+| 4 patches, 128 matches | 501 ms | 556 ms |
+| 4 spans                | 299 ms | 320 ms |
+| 4 patches and 4 spans  | 286 ms | 307 ms |
 
-`matches` sets the cost: each match is rescored from 576 reconstructed vectors. Over the 51 ms `/meta` floor, 32 matches add 161 − 51 = 110 ms at p50, and 128 add 405 − 51 = 354 ms.
+`matches` sets the cost: each match is rescored from 576 reconstructed vectors. Over the 179 ms `/meta` floor, 32 matches add 276 − 179 = 97 ms at p50, and 128 add 501 − 179 = 322 ms.
 
 **Other endpoints**, warm:
 
-| Endpoint                      | p50   | p95   |
-| ----------------------------- | ----- | ----- |
-| `/meta`                       | 51 ms | 59 ms |
-| `/galaxy/{g}/image`           | 53 ms | 62 ms |
-| `/galaxy/{g}/image/tokens`    | 59 ms | 69 ms |
-| `/galaxy/{g}`                 | 61 ms | 74 ms |
-| `/galaxy/{g}/spectrum`        | 57 ms | 67 ms |
-| `/galaxy/{g}/spectrum/tokens` | 52 ms | 58 ms |
+| Endpoint                      | p50    | p95    |
+| ----------------------------- | ------ | ------ |
+| `/meta`                       | 179 ms | 184 ms |
+| `/galaxy/{g}/image`           | 190 ms | 214 ms |
+| `/galaxy/{g}/image/tokens`    | 178 ms | 183 ms |
+| `/galaxy/{g}`                 | 179 ms | 186 ms |
+| `/galaxy/{g}/spectrum`        | 185 ms | 205 ms |
+| `/galaxy/{g}/spectrum/tokens` | 177 ms | 207 ms |
 
-All six are within 61 − 51 = 10 ms at p50. What the floor is made of is **unmeasured**.
+All six are within 190 − 177 = 13 ms at p50. What the floor is made of is **unmeasured**.
 
-**Cold start.** A request to a fresh container took **19.0 s**. How the 19.0 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 19 s; `max_containers=1` leaves no second container to answer.
+**Cold start.** A request to a fresh container took **17.6 s**. How the 17.6 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 17.6 s; `max_containers=1` leaves no second container to answer.
 
 **Concurrency:**
 
 | Clients | p50    | p95    | Requests/s |
 | ------- | ------ | ------ | ---------- |
-| 1       | 161 ms | 181 ms | 6.16       |
-| 4       | 300 ms | 391 ms | 13.00      |
-| 16      | 1.34 s | 1.92 s | 11.62      |
-| 32      | 2.56 s | 3.22 s | 12.30      |
+| 1       | 270 ms | 304 ms | 3.65       |
+| 4       | 319 ms | 450 ms | 11.39      |
+| 16      | 1.23 s | 1.63 s | 12.98      |
+| 32      | 1.85 s | 2.46 s | 16.83      |
 
-**Throughput peaks at 13.00 requests/s with 4 clients** and holds at 11.62–12.30 from 16 up; latency grows with the queue (32 / 12.30 = 2.60 s, against a p50 of 2.56 s). Whether the server or the 1-CPU client sets the ceiling is **unmeasured**.
+**Throughput reaches 16.83 requests/s with 32 clients**, the most clients timed; latency grows with the queue (32 / 16.83 = 1.90 s, against a p50 of 1.85 s). Whether the server or the 1-CPU client sets the ceiling is **unmeasured**.
 
 ## `search_quality`
 
@@ -171,26 +178,59 @@ A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force ov
 
 ### Last run
 
-| Run              |                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Date             | 2026-10-03                                                                                                        |
-| Commit           | `5c65e2d-dirty`: uncommitted changes on top of `5c65e2d`                                                          |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                        |
-| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
-| Queries          | 100 per kind, `PROBE=2048`, `NPROBE=64`                                                                           |
+| Run              |                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-04                                                                                                       |
+| Commit           | `6aa4197`                                                                                                        |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                       |
+| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 1 |
+| Queries          | 100 per kind, `PROBE=2048`, `NPROBE=64`                                                                          |
 
-The run predates `looked_further` and `most_searches`; its last column is the share they replaced.
+| Query                 | Drawn from | Mean  | Lowest | All 32 found | Searched again | Most searches |
+| --------------------- | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
+| 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
+| 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
+| 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
+| 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
-| Query                 | Drawn from | Mean  | Lowest | All 32 found | Fewer than 32 returned |
-| --------------------- | ---------- | ----- | ------ | ------------ | ---------------------- |
-| 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%                     |
-| 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%                     |
-| 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%                     |
-| 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%                     |
+## `projection_quality`
+
+A container on the build image, with `generate_projections`' CPU and memory and no GPU, redraws the projector's sample and its validation split, takes `SIZE` (10,000) validation rows, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
+
+- `preservation`: the mean share of a row's nearest neighbours by cosine distance in 768-d that are also its nearest in 2-d.
+- `trustworthiness`: scikit-learn's `trustworthiness`, cosine in 768-d, which penalises 2-d neighbours that are far apart in 768-d.
+
+The rows are held out only if `parametric_umap` was trained with the validation split from the same `encoded`; a projector from before the split trained on them. `trustworthiness` holds all pairwise distances, so its memory grows with the square of `SIZE`.
+
+### Last run
+
+| Run              |                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-05                                                                                                                |
+| Commit           | `3005bac-dirty`: uncommitted changes on top of `3005bac`                                                                  |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                                |
+| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit, no GPU; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
+| Projector        | trained with `SAMPLE=5000000`, `EPOCHS=20`, `VALIDATION=0.3`                                                              |
+| Rows             | 10,000 validation rows                                                                                                    |
+
+| Neighbours | Preservation | Trustworthiness |
+| ---------- | ------------ | --------------- |
+| 15         | 0.3064       | 0.8926          |
+| 100        | 0.3336       | 0.8173          |
+
+At 15 neighbours, 0.3064 × 15 = 4.6 of a row's 15 nearest neighbours in 768-d are among its 15 nearest in 2-d. Random 2-d positions would keep 15 / 9,999 = 0.0015 of them, and score a trustworthiness near 0.5.
+
+## `text_search_quality`
+
+A container on the build image, with `generate_alignment`'s GPU, CPU and memory, takes the `pairs` rows of the galaxies `generate_alignment` held out, and embeds each query in `CUTS` with EmbeddingGemma. Each query's answer is a cut on a PROVABGS property: stellar mass, specific star formation rate or redshift; its population is the galaxies with that property. It ranks the population in three spaces: the EmbeddingGemma embeddings, and the AION embeddings through the linear and the MLP maps in `alignment`. Each space is ranked raw and centred: centring subtracts the documents' mean from the documents and the queries' mean from the queries, then renormalises. Per query, space and centring it reports the base rate, scikit-learn's `average_precision_score` and the precision at 10 and 100.
+
+The dataset holds 7 galaxies with a GZ10 label, too few to score morphology queries.
+
+Not run yet.
 
 ## Scaling ceilings
 
-| Ceiling          | Now           | Breaks at                                                                                 |
-| ---------------- | ------------- | ----------------------------------------------------------------------------------------- |
-| Cold start       | 19.0 s        | a proxy or browser timeout; which one, and at what length, is unmeasured                  |
-| Serving capacity | one container | 13.00 requests/s peak `/search` throughput at 4 clients; `max_containers=1` is a hard cap |
+| Ceiling          | Now           | Breaks at                                                                                             |
+| ---------------- | ------------- | ----------------------------------------------------------------------------------------------------- |
+| Cold start       | 17.6 s        | a proxy or browser timeout; which one, and at what length, is unmeasured                              |
+| Serving capacity | one container | 16.83 requests/s `/search` throughput at 32 clients, the most timed; `max_containers=1` is a hard cap |

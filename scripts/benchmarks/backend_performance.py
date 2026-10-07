@@ -27,7 +27,6 @@ from scripts.benchmarks.common import (
     git,
     observed_spans,
     server,
-    spec,
     summary,
 )
 
@@ -164,7 +163,6 @@ def main(runs: int = 30) -> None:
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "server": server(),
-        "client": spec(benchmark_backend_performance),
         "requests": benchmark_backend_performance.remote(
             fastapi_app.get_web_url(), runs
         ),

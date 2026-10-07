@@ -8,7 +8,7 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 - **Explore the embedding space** - Every galaxy appears as a point in a parametric UMAP projection. There are two views: **mean**, one point per galaxy from its average embedding; and **full**, one point per embedding (all modalities share one map). Hovering or selecting a point shows the galaxy's morphology and image.
 - **Inspect a galaxy** - Selecting a point shows its Legacy Survey image or its DESI spectrum, its morphology label, and which surveys it was crossmatched into.
-- **Search by token** - Search on a selected galaxy shows the token behind each of its 576 image patches and each span of its spectrum. Click patches, spans, or both, then press Search to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and of its span scores where it has a spectrum; thresholding the patch heatmap gives zero-shot segmentation.
+- **Search by token** - Search on a selected galaxy shows the token behind each of its 576 image patches and each span of its spectrum. A Tabular Data table lists the galaxy's catalogue values; the 25 that AION encodes can be checked, and after a search are shaded by their score. Click patches, spans, values, or any mix, then press Search to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and of its span scores where it has a spectrum; thresholding the patch heatmap gives zero-shot segmentation.
 
 ## Data
 
@@ -48,12 +48,15 @@ bun run dev
 
 The dev build calls the API at `http://127.0.0.1:8000`, so start the local API first.
 
-### Backend
+### Pipeline
 
 ```sh
-uv run modal run modal_app.py::generate_embeddings   # encode dataset
-uv run modal run modal_app.py::generate_index        # build the search index
-uv run modal run modal_app.py::generate_projections  # fit and apply the projection
+uv run modal run modal_app.py::generate_embeddings        # encode dataset
+uv run modal run modal_app.py::generate_index             # build the search index
+uv run modal run modal_app.py::generate_projections       # fit and apply the projection
+uv run modal run modal_app.py::generate_pairs             # AION and EmbeddingGemma embeddings of each galaxy
+uv run modal run modal_app.py::generate_alignment         # fit the AION to EmbeddingGemma map
+uv run modal run modal_app.py::generate_aion_gemma_space  # every galaxy's vector for text search
 ```
 
 ### API schema
