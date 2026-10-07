@@ -28,7 +28,7 @@ jobs:
           uv run --python 3.12 ruff format --check app scripts tests modal_app.py
 
       - name: Test
-        run: uv run --python 3.12 pytest
+        run: uv run --python 3.12 --group build pytest
 
   openapi:
     name: OpenAPI

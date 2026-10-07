@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import faiss
-import modal
 import numpy as np
 from threadpoolctl import threadpool_info
 
@@ -66,14 +65,6 @@ def observed_spans(wavelength: np.ndarray) -> np.ndarray:
         / SPECTRUM_TOKEN_WIDTH
     ).astype(int)
     return np.arange(max(first, 0), min(last, N_SPANS - 1) + 1)
-
-
-def spec(function: modal.Function) -> dict[str, Any]:
-    return {
-        "cpu": function.spec.cpu,
-        "memory_mb": function.spec.memory,
-        "gpu": function.spec.gpus,
-    }
 
 
 def server() -> dict[str, Any]:

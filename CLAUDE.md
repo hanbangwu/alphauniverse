@@ -13,20 +13,28 @@
 
 ## Commands
 
+### Frontend
+
 ```sh
-uv run pytest                                       # tests
-uv run ruff check app scripts tests modal_app.py    # lint
-uv run ruff format app scripts tests modal_app.py   # format
-uv run python -m scripts.fixture                    # build fixture tree
+uv run pytest                                               # tests
+uv run ruff check app scripts tests modal_app.py            # lint
+uv run ruff format app scripts tests modal_app.py           # format
+uv run python -m scripts.fixture                            # build fixture tree
 uv run modal run -m scripts.benchmarks.search_performance   # time search() on Modal
 uv run modal run -m scripts.benchmarks.backend_performance  # time the HTTP endpoints on Modal
 uv run modal run -m scripts.benchmarks.search_quality       # measure recall on Modal
-uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
+uv run modal run -m scripts.benchmarks.projection_quality   # measure projection quality on Modal
+uv run modal run -m scripts.benchmarks.text_search_quality  # measure text search on Modal
+uv run python -m scripts.openapi                            # regenerate frontend/openapi.json
+```
 
+### Backend
+
+```sh
 cd frontend
 bun install && bun run dev
-bun run check                                       # regenerate client + typecheck
-bun run lint                                        # prettier + eslint
+bun run check               # regenerate client + typecheck
+bun run lint                # prettier + eslint
 ```
 
 ## Workflow
@@ -36,7 +44,7 @@ bun run lint                                        # prettier + eslint
 - One functional change per branch per pull request. The unit is the logical function, not the line count: a documentation pass can run to thousands of lines and still be one change, while two unrelated fixes in one diff are two and make the pull request hard to review.
 - A pull request is a series of commits, each one small nominal goal. Before writing code, list the goals and the decisions they need, each with options and a recommendation, in the pull request's issue, and wait for agreement.
 - Implement the agreed goals one commit each, then stop before the pull request leaves draft. List choices made while carrying out a goal under "Decisions" in the pull request.
-- Run `/simplify`, then `/code-review`, before opening the pull request, not after, and fix what they find; Copilot then reviews the same diff. Update the description when a later fix changes something it claims.
+- Run `/simplify`, then `/code-review`, before opening the pull request, not after, and fix what they find. Request a Copilot review of the same diff only when the pull request changes search results, a route or response model, an artifact's schema or a `generate_*` job. Update the description when a later fix changes something it claims.
 - A pull request that changes code updates, in the same pull request, anything it makes stale in `README.md`, `docs/`, `CLAUDE.md` and `.claude/rules/`. Claude checks this before opening one, and on every pull request it reviews or finds merged that changes code without touching those files; it proposes what it finds in a docs pull request.
 - A pull request opens with what changed, the issue it closes and the decisions needed, in a few lines. Background, alternatives and evidence follow in a collapsed `<details>` section.
 - Every issue and pull request carries GitHub's default labels, and no others: `bug` for wrong behaviour; `enhancement` for features, performance, tests, CI and refactors; `documentation` when docs or instructions are the main change; `question` while it waits on an answer; `duplicate` or `wontfix` when it closes for either reason.

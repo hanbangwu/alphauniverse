@@ -28,7 +28,7 @@
       event.preventDefault()
       content?.focus()
     }}
-    class="z-100 max-h-11/12 w-full overflow-y-auto sm:max-w-6xl"
+    class="z-100 max-h-11/12 w-full overflow-y-auto sm:max-w-[90vw]"
   >
     <Dialog.Header>
       <Dialog.Title>Search</Dialog.Title>
