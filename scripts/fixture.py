@@ -21,7 +21,16 @@ from app.config import (
     points,
     store_schema,
 )
-from app.search import generate_index, index, source, starts, tokens, with_spectrum
+from app.search import (
+    generate_index,
+    index,
+    scalar_embeddings,
+    source,
+    starts,
+    tokens,
+    with_hsc,
+    with_spectrum,
+)
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
@@ -104,6 +113,8 @@ def forget() -> None:
         index,
         tokens,
         with_spectrum,
+        with_hsc,
+        scalar_embeddings,
         starts,
         aion_gemma_space,
     ):

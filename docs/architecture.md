@@ -30,7 +30,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 | Role               | Shape                                         | Who reads it                                                            |
 | ------------------ | --------------------------------------------- | ----------------------------------------------------------------------- |
-| `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/downloads/{role}`                           |
+| `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/search`, `/downloads/{role}`                |
 | `codebook`         | same, the encoder's input embeddings          | `/downloads/{role}`                                                     |
 | `tokens`           | same, token ids                               | startup, `/search`, the token and galaxy endpoints, `/downloads/{role}` |
 | `search_index`     | faiss IVF over patches and spectral tokens    | `/search`                                                               |
@@ -41,11 +41,11 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `alignment`        | the AION to EmbeddingGemma maps' weights      | `generate_aion_gemma_space`, `text_search_quality`                      |
 | `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space  | `/search/text`                                                          |
 
-`docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux.
+`docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image`, `/galaxy/{g}/spectrum` and `/galaxy/{g}/table` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux. `/galaxy/{g}/table` returns every numeric and boolean column whose name ends in one of the six catalogue suffixes, null where that catalogue has no match; each of the 25 scalars AION encodes (12 Legacy Survey, then 13 HSC, `SCALAR_SURVEYS` in `app/config.py`) carries its index.
 
 ## The serving app
 
-Ten endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded`, `codebook` and `tokens`.
+Eleven endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded`, `codebook` and `tokens`.
 
 A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no body. An artifact's ETag is Starlette's, from the file's size and modification time, compared before the file is read. Every other successful response's ETag is an MD5 of its body, added by the route class every endpoint uses: the server still builds the response and saves only the transfer. Successful responses and 304s carry `Cache-Control: no-cache`, so a browser revalidates before each reuse.
 
@@ -59,18 +59,19 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 | `/galaxy/{g}/image/tokens`    | raw `uint32` |
 | `/galaxy/{g}/spectrum`        | Arrow IPC    |
 | `/galaxy/{g}/spectrum/tokens` | raw `uint32` |
+| `/galaxy/{g}/table`           | JSON         |
 | `/search`                     | Arrow IPC    |
 | `/search/text`                | JSON         |
 
 ## Similarity search
 
-A query is one or more image patches and spectral spans of one galaxy. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map.
+A query is one or more image patches, spectral spans and encoded scalars of one galaxy. An HSC scalar needs an HSC match. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-patch score map and, where it has a spectrum, a per-span score map.
 
 The search reads vectors back from the index by id, in the layout `docs/pipeline.md` gives:
 
-1. The query's vectors are averaged and normalised into one direction.
+1. The query's vectors are averaged and normalised into one direction. A scalar's vector is its `encoded` embedding, the slot after the 576 patches in its survey's cell, L2-normalised. Every search reads the query galaxy's scalar vectors from `encoded`, which decodes the column chunk of the galaxy's row group; the last 128 galaxies' are kept in memory.
 2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`. If they hold fewer galaxies, the search runs again with both numbers doubled, until there are enough or it has probed every list for every vector. The lists probed are set per search, so the index that concurrent requests share is not changed. faiss scans them on its threads and starts no prefetch threads.
-3. Every patch and span of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
+3. Every patch and span of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps. The query galaxy's 25 scalars are scored the same way, NaN where it has no HSC match; other galaxies' scalars are not scored.
 4. A galaxy's score is its best token score over both maps. The candidates are sorted by it, after the query galaxy.
 
 ## Text search
@@ -89,7 +90,7 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
 ├── ProjectionView   embedding-atlas over a DuckDB-WASM table
 │   └── GalaxyTooltip     hovered or selected galaxy: image, id, morphology
 └── RightPanel       selected galaxy: image or spectrum, morphology, crossmatches
-    └── PatchSimilarity   dialog: query patches and spans, match count, Search, ranked matches
+    └── PatchSimilarity   dialog: query patches, spans and scalars, match count, Search, ranked matches
 ```
 
 App-wide state is plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`. The similarity dialog keeps its own state, including the last search submitted, beside its components in `similarity.svelte.ts`.
@@ -106,6 +107,8 @@ App-wide state is plain classes under `src/lib/state/`, held in a `runed` contex
 Patch grids are Apache ECharts custom series, one rect per patch on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. Each grid is its own ECharts instance. In the similarity dialog the image sits over the image token grid, blended with `mix-blend-screen`. Before a search the grid is opaque and the image at `tokenAlpha` opacity, 0.3; while the pointer is over the panel the image is opaque and the grid takes `tokenAlpha` opacity, 0.3 or 0.8 when selected. After a search the grid shows the score map and both are opaque. Before a search the spectrum's token areas sit over the line at `tokenAlpha` opacity. A match row holds the galaxy's image, its score grid, a mask grid while the Mask switch beside the query galaxy's Image Tokens title is on, and a spectrum chart where it has a spectrum. The Invert switch sits beside the query galaxy's Image Mask title, and the threshold slider under its grid. Panel titles stay the same before and after a search. A match list is 32 rows by default and up to 128.
 
 Spectra are Apache ECharts line charts. The app serves and shows only DESI spectra; a galaxy without one shows no spectrum. The dialog's interactive chart shades one area per spectrum token, laid out from `spectrum_origin` and `spectrum_width` in `/meta` and coloured like the token grid. It holds the selected spans in `view.spans`, which join the selected patches in the query. It zooms on the wheel and pans on drag, since 272 spans do not fit a panel a few hundred pixels wide.
+
+Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by catalogue. Each encoded scalar has a checkbox; the checked ones are `view.scalars` and join the query. An encoded scalar without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes the row's score on viridis over the 25 scores. A checked row has a 1 px `SELECTED` outline, as a selected span does.
 
 ## Deployment
 

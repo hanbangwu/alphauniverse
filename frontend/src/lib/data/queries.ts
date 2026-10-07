@@ -4,10 +4,12 @@ import {
   getSearch,
   getSpectrum,
   getSpectrumTokens,
+  getTable,
   getTextSearch
 } from '$lib/api'
 import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
+import { row } from './scores'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
@@ -37,6 +39,20 @@ export function coverageQuery(galaxy: number | null) {
         ? skipToken
         : async () => {
             const { data } = await getGalaxy({ path: { galaxy }, throwOnError: true })
+            return data
+          },
+    ...FOREVER
+  })
+}
+
+export function tableQuery(galaxy: number | null) {
+  return queryOptions({
+    queryKey: ['table', galaxy] as const,
+    queryFn:
+      galaxy === null
+        ? skipToken
+        : async () => {
+            const { data } = await getTable({ path: { galaxy }, throwOnError: true })
             return data
           },
     ...FOREVER
@@ -114,11 +130,13 @@ export function similarityQuery(request: SimilarityQuery | null) {
         : async ({ signal }): Promise<SimilarityResult> => {
             const { data } = await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
+            const scalarMaps = table.getChild('scalars')!.getChildAt<Float32>(0)!.toArray()
             return {
               galaxies: table.getChild('galaxy')!.toArray(),
               scores: table.getChild('score')!.toArray(),
               imageMaps: table.getChild('map')!.getChildAt<Float32>(0)!.toArray(),
-              spectrumMaps: table.getChild('spectrum')!.getChildAt<Float32>(0)!.toArray()
+              spectrumMaps: table.getChild('spectrum')!.getChildAt<Float32>(0)!.toArray(),
+              scalarMap: row(scalarMaps, 0, scalarMaps.length / table.numRows)
             }
           },
     placeholderData: keepPreviousData,

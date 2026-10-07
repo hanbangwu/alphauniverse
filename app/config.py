@@ -68,6 +68,58 @@ FLAG_SURVEYS: dict[str, str] = {
 }
 RGB_COLUMN = f"rgb{LS}"
 
+SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
+    ANCHOR: tuple(
+        f"{name}{LS}"
+        for name in (
+            "EBV",
+            "FLUX_G",
+            "FLUX_R",
+            "FLUX_I",
+            "FLUX_Z",
+            "FLUX_W1",
+            "FLUX_W2",
+            "FLUX_W3",
+            "FLUX_W4",
+            "SHAPE_R",
+            "SHAPE_E1",
+            "SHAPE_E2",
+        )
+    ),
+    "hsc": tuple(
+        f"{name}{HSC}"
+        for name in (
+            "a_g",
+            "a_r",
+            "a_i",
+            "a_z",
+            "a_y",
+            "g_cmodel_mag",
+            "r_cmodel_mag",
+            "i_cmodel_mag",
+            "z_cmodel_mag",
+            "y_cmodel_mag",
+            "i_sdssshape_shape11",
+            "i_sdssshape_shape22",
+            "i_sdssshape_shape12",
+        )
+    ),
+}
+SCALAR_COLUMNS = tuple(
+    column for columns in SCALAR_SURVEYS.values() for column in columns
+)
+N_SCALARS = len(SCALAR_COLUMNS)
+
+Catalogue = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
+CATALOGUES: dict[str, Catalogue] = {
+    LS: ANCHOR,
+    HSC: "hsc",
+    DESI: "desi",
+    SDSS: "sdss",
+    GZ10: "gz10",
+    PROVABGS: "provabgs",
+}
+
 N_MORPHOLOGIES = 10
 
 GEMMA = "google/embeddinggemma-2"

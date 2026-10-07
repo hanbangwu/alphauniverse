@@ -8,6 +8,7 @@ export class ViewState {
   readonly detail: EnumField<DetailView>
   readonly patches = new IndexListField()
   readonly spans = new IndexListField()
+  readonly scalars = new IndexListField()
   readonly explorer = new Field(false)
 
   constructor() {
@@ -27,6 +28,7 @@ export class ViewState {
     if (galaxy !== this.galaxy.value) {
       this.patches.reset()
       this.spans.reset()
+      this.scalars.reset()
     }
     this.galaxy.value = galaxy
   }

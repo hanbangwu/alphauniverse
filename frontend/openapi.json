@@ -152,6 +152,51 @@
         }
       }
     },
+    "/galaxy/{galaxy}/table": {
+      "get": {
+        "summary": "Get Table",
+        "description": "Every numeric and boolean catalogue value of the galaxy, null where its catalogue has no match. `scalar` is the value's index for the search query's `t` where AION encodes it, else null; `token` is its token id where the galaxy has one.",
+        "operationId": "get_table",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TableRow"
+                  },
+                  "title": "Response Get Table"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/galaxy/{galaxy}/image": {
       "get": {
         "summary": "Get Image",
@@ -365,6 +410,22 @@
             }
           },
           {
+            "name": "t",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 25
+              },
+              "maxItems": 25,
+              "default": [],
+              "title": "T"
+            }
+          },
+          {
             "name": "matches",
             "in": "query",
             "required": false,
@@ -554,6 +615,74 @@
           "morphologies"
         ],
         "title": "Meta"
+      },
+      "TableRow": {
+        "properties": {
+          "catalogue": {
+            "type": "string",
+            "enum": [
+              "ls",
+              "hsc",
+              "desi",
+              "sdss",
+              "gz10",
+              "provabgs"
+            ],
+            "title": "Catalogue"
+          },
+          "column": {
+            "type": "string",
+            "title": "Column"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "scalar": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scalar"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "catalogue",
+          "column",
+          "value",
+          "scalar",
+          "token"
+        ],
+        "title": "TableRow"
       },
       "TextMatches": {
         "properties": {

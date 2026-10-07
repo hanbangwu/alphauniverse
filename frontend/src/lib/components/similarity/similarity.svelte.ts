@@ -31,6 +31,8 @@ export class Similarity {
   readonly spectrumMaps: Float32Array | null
   readonly spectrumHeat: ((value: number) => RGB) | null
   readonly spectrumMap: Float32Array | null
+  readonly scalarMap: Float32Array | null
+  readonly scalarHeat: ((value: number) => RGB) | null
   readonly tokens: Uint32Array | null
   readonly palette: ((value: number) => RGB) | null
 
@@ -40,7 +42,14 @@ export class Similarity {
     this.grid = app.meta.grid
 
     this.#tokenMap = createQuery(() => tokensQuery(galaxy))
-    this.draft = $derived(app.search.request(galaxy, app.view.patches.value, app.view.spans.value))
+    this.draft = $derived(
+      app.search.request(
+        galaxy,
+        app.view.patches.value,
+        app.view.spans.value,
+        app.view.scalars.value
+      )
+    )
     this.#result = createQuery(() => similarityQuery(this.#submitted))
 
     this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
@@ -55,6 +64,12 @@ export class Similarity {
       return low <= high ? continuous([low, high]) : null
     })
     this.spectrumMap = $derived(this.spectrumMaps ? this.spectrumMapAt(0) : null)
+    this.scalarMap = $derived(this.#result.data?.scalarMap ?? null)
+    this.scalarHeat = $derived.by(() => {
+      if (!this.scalarMap) return null
+      const [low, high] = extent(this.scalarMap)
+      return low <= high ? continuous([low, high]) : null
+    })
     this.tokens = $derived(this.#tokenMap.data ?? null)
     this.palette = $derived(this.tokens ? tokenColors(this.tokens) : null)
   }

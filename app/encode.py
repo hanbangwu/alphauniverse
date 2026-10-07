@@ -47,8 +47,7 @@ from .config import (
     ANCHOR,
     CROP_PIXELS,
     FLAG_SURVEYS,
-    HSC,
-    LS,
+    SCALAR_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
     artifact,
@@ -57,35 +56,47 @@ from .config import (
 )
 from .dataset import dataset
 
-LS_SCALARS = (
-    (LegacySurveyEBV, f"EBV{LS}"),
-    (LegacySurveyFluxG, f"FLUX_G{LS}"),
-    (LegacySurveyFluxR, f"FLUX_R{LS}"),
-    (LegacySurveyFluxI, f"FLUX_I{LS}"),
-    (LegacySurveyFluxZ, f"FLUX_Z{LS}"),
-    (LegacySurveyFluxW1, f"FLUX_W1{LS}"),
-    (LegacySurveyFluxW2, f"FLUX_W2{LS}"),
-    (LegacySurveyFluxW3, f"FLUX_W3{LS}"),
-    (LegacySurveyFluxW4, f"FLUX_W4{LS}"),
-    (LegacySurveyShapeR, f"SHAPE_R{LS}"),
-    (LegacySurveyShapeE1, f"SHAPE_E1{LS}"),
-    (LegacySurveyShapeE2, f"SHAPE_E2{LS}"),
+LS_SCALARS = tuple(
+    zip(
+        (
+            LegacySurveyEBV,
+            LegacySurveyFluxG,
+            LegacySurveyFluxR,
+            LegacySurveyFluxI,
+            LegacySurveyFluxZ,
+            LegacySurveyFluxW1,
+            LegacySurveyFluxW2,
+            LegacySurveyFluxW3,
+            LegacySurveyFluxW4,
+            LegacySurveyShapeR,
+            LegacySurveyShapeE1,
+            LegacySurveyShapeE2,
+        ),
+        SCALAR_SURVEYS[ANCHOR],
+        strict=True,
+    )
 )
 
-HSC_SCALARS = (
-    (HSCAG, f"a_g{HSC}"),
-    (HSCAR, f"a_r{HSC}"),
-    (HSCAI, f"a_i{HSC}"),
-    (HSCAZ, f"a_z{HSC}"),
-    (HSCAY, f"a_y{HSC}"),
-    (HSCMagG, f"g_cmodel_mag{HSC}"),
-    (HSCMagR, f"r_cmodel_mag{HSC}"),
-    (HSCMagI, f"i_cmodel_mag{HSC}"),
-    (HSCMagZ, f"z_cmodel_mag{HSC}"),
-    (HSCMagY, f"y_cmodel_mag{HSC}"),
-    (HSCShape11, f"i_sdssshape_shape11{HSC}"),
-    (HSCShape22, f"i_sdssshape_shape22{HSC}"),
-    (HSCShape12, f"i_sdssshape_shape12{HSC}"),
+HSC_SCALARS = tuple(
+    zip(
+        (
+            HSCAG,
+            HSCAR,
+            HSCAI,
+            HSCAZ,
+            HSCAY,
+            HSCMagG,
+            HSCMagR,
+            HSCMagI,
+            HSCMagZ,
+            HSCMagY,
+            HSCShape11,
+            HSCShape22,
+            HSCShape12,
+        ),
+        SCALAR_SURVEYS["hsc"],
+        strict=True,
+    )
 )
 
 

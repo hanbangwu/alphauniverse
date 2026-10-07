@@ -21,12 +21,15 @@ from .config import (
     FLAG_SURVEYS,
     GRID,
     N_PATCHES,
+    N_SCALARS,
     N_SPANS,
+    SCALAR_COLUMNS,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
     TOKEN_SURVEYS,
+    Catalogue,
     Download,
     GalaxyIndex,
     Projection,
@@ -34,9 +37,17 @@ from .config import (
     galaxy_count,
     labels,
 )
-from .dataset import image, spectrum
+from .dataset import catalogue, image, spectrum, table
 from .search import Query as SearchQuery
-from .search import index, search, starts, tokens
+from .search import (
+    index,
+    scalar_tokens,
+    search,
+    source,
+    starts,
+    tokens,
+    with_hsc,
+)
 from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
@@ -61,6 +72,14 @@ class Galaxy(BaseModel):
     sdss: bool
     gz10: bool
     provabgs: bool
+
+
+class TableRow(BaseModel):
+    catalogue: Catalogue
+    column: str
+    value: float | int | bool | None
+    scalar: int | None
+    token: int | None
 
 
 class TextMatches(BaseModel):
@@ -114,6 +133,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     labels()
     index()
     starts()
+    with_hsc()
+    source("encoded")
     yield
 
 
@@ -212,6 +233,23 @@ def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
 
 
 @app.get(
+    "/galaxy/{galaxy}/table",
+)
+def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
+    token_ids = scalar_tokens(galaxy)
+    return [
+        TableRow(
+            catalogue=catalogue(column),
+            column=column.partition("-")[0],
+            value=value,
+            scalar=SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None,
+            token=token_ids.get(column),
+        )
+        for column, value in table(galaxy).items()
+    ]
+
+
+@app.get(
     "/galaxy/{galaxy}/image",
     response_class=Response,
     responses={
@@ -276,7 +314,9 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": ARROW_STREAM}},
 )
 def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, values, spans = search(query, index=index())
+    galaxies, scores, values, spans, scalars = search(query, index=index())
+    scalar_maps = np.full((len(galaxies), N_SCALARS), np.nan, dtype=np.float32)
+    scalar_maps[0] = scalars
 
     item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
@@ -285,6 +325,7 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
             pa.field("score", pa.float32(), nullable=False),
             pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
             pa.field("spectrum", pa.list_(item, N_SPANS)),
+            pa.field("scalars", pa.list_(item, N_SCALARS)),
         ]
     )
     batch = pa.record_batch(
@@ -296,6 +337,11 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
                 pa.array(spans.reshape(-1)),
                 N_SPANS,
                 mask=pa.array(np.isnan(spans[:, 0])),
+            ),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(scalar_maps.reshape(-1)),
+                N_SCALARS,
+                mask=pa.array(np.arange(len(galaxies)) > 0),
             ),
         ],
         schema=schema,

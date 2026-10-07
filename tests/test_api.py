@@ -4,17 +4,22 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from datasets import Dataset
 from fastapi.testclient import TestClient
 
+from app import dataset as dataset_module
 from app.config import (
     ANCHOR,
+    DESI,
     FLAG_SURVEYS,
     N_MORPHOLOGIES,
     N_PATCHES,
+    SCALAR_SURVEYS,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
 )
+from app.dataset import table_columns
 
 ARROW = "application/vnd.apache.arrow.stream"
 
@@ -134,7 +139,7 @@ def test_similarity_returns_one_arrow_batch(client: TestClient) -> None:
     table = _similarity(client, galaxy=2, p=[100, 101], matches=5)
 
     assert 1 < table.num_rows <= 6
-    assert table.column_names == ["galaxy", "score", "map", "spectrum"]
+    assert table.column_names == ["galaxy", "score", "map", "spectrum", "scalars"]
     assert len(table.column("map")[0]) == N_PATCHES
 
 
@@ -147,6 +152,63 @@ def test_similarity_spectrum_column_is_null_without_a_spectrum(
     np.testing.assert_array_equal(
         table.column("spectrum").is_valid().to_numpy(), _with_spectrum()[galaxies]
     )
+
+
+def test_similarity_takes_scalars_alone(client: TestClient) -> None:
+    table = _similarity(client, galaxy=0, t=[0, 12], matches=5)
+
+    assert table.column("galaxy")[0].as_py() == 0
+    assert 1 < table.num_rows <= 6
+
+
+def test_only_the_query_galaxy_has_scalar_scores(client: TestClient) -> None:
+    table = _similarity(client, galaxy=1, p=[100], matches=5)
+    scalars = table.column("scalars")
+
+    assert scalars.is_valid().to_pylist() == [True] + [False] * (table.num_rows - 1)
+    scores = np.asarray(scalars[0].as_py())
+    assert np.isfinite(scores[:12]).all()
+    assert np.isnan(scores[12:]).all()
+
+
+def test_hsc_scalars_of_a_galaxy_without_hsc_are_rejected(
+    client: TestClient,
+) -> None:
+    response = client.get("/search", params={"galaxy": 1, "t": [12]})
+
+    assert response.status_code == 422
+    [error] = response.json()["detail"]
+    assert "galaxy 1 has no HSC match" in error["msg"]
+
+
+def test_table_rows_name_their_catalogue_and_scalar(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = Dataset.from_dict({SCALAR_SURVEYS["hsc"][0]: [1.5], f"Z{DESI}": [0.25]})
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    table_columns.cache_clear()
+
+    response = client.get("/galaxy/0/table")
+    table_columns.cache_clear()
+
+    hsc = pq.read_table(artifact("tokens"), columns=["hsc"]).column("hsc")[0]
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "catalogue": "hsc",
+            "column": "a_g",
+            "value": 1.5,
+            "scalar": 12,
+            "token": hsc.values[N_PATCHES].as_py(),
+        },
+        {
+            "catalogue": "desi",
+            "column": "Z",
+            "value": 0.25,
+            "scalar": None,
+            "token": None,
+        },
+    ]
 
 
 def test_similarity_without_patches_or_spans_is_rejected(client: TestClient) -> None:
@@ -173,6 +235,7 @@ def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
         "/galaxy/{galaxy}",
         "/galaxy/{galaxy}/spectrum",
         "/galaxy/{galaxy}/spectrum/tokens",
+        "/galaxy/{galaxy}/table",
         "/search?galaxy={galaxy}&p=0",
     ],
 )

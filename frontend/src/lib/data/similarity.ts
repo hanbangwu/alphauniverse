@@ -9,4 +9,5 @@ export interface SimilarityResult {
   scores: Float32Array
   imageMaps: Float32Array
   spectrumMaps: Float32Array
+  scalarMap: Float32Array
 }

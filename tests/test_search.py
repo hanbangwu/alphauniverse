@@ -7,6 +7,7 @@ import pytest
 
 from app import search as search_module
 from app.config import (
+    ANCHOR,
     DIM,
     N_PATCHES,
     N_SPANS,
@@ -14,9 +15,11 @@ from app.config import (
 from app.search import (
     NLIST,
     Query,
+    centroid,
     index,
     patches,
     rank,
+    scalar_map,
     search,
     source,
     starts,
@@ -92,7 +95,9 @@ def test_a_search_that_finds_too_few_looks_further(
 ) -> None:
     monkeypatch.setattr(search_module, "PROBE", nearest)
     monkeypatch.setattr(search_module, "NPROBE", lists)
-    found, _, _, _ = search(Query(galaxy=0, p=(64, 65), matches=matches), index=built)
+    found, _, _, _, _ = search(
+        Query(galaxy=0, p=(64, 65), matches=matches), index=built
+    )
 
     assert found[0] == 0
     assert len(set(found.tolist())) == len(found) == min(matches, len(starts()) - 1) + 1
@@ -116,7 +121,7 @@ def test_approximate_ranking_agrees_with_exact(
     expected, expected_scores, expected_maps, expected_spectral_maps = exact_ranking(
         query.model_copy(update={"matches": query.matches + 1}), reference
     )
-    found, found_scores, maps, spectral_maps = search(query, index=built)
+    found, found_scores, maps, spectral_maps, _ = search(query, index=built)
 
     assert np.all(-np.diff(expected_scores[1:]) > 2 * SCORE_TOLERANCE)
     np.testing.assert_array_equal(found, expected[:-1])
@@ -154,3 +159,24 @@ def test_ids_stay_contiguous_across_add_batches(
         np.testing.assert_allclose(stored, expected, atol=1e-3)
     finally:
         forget()
+
+
+def test_selected_scalars_join_the_direction(built: faiss.Index) -> None:
+    stored = source("encoded").take([0], columns=[ANCHOR, "hsc"])
+    ls, hsc = (
+        np.asarray(stored.column(survey)[0].as_py(), dtype=np.float32)
+        for survey in (ANCHOR, "hsc")
+    )
+    scalars = np.stack((ls[N_PATCHES + 1], hsc[N_PATCHES + 2]))
+    faiss.normalize_L2(scalars)
+    expected = np.vstack((built.reconstruct(int(starts()[0]) + 3)[None], scalars)).mean(
+        axis=0, keepdims=True
+    )
+    faiss.normalize_L2(expected)
+
+    direction = centroid(Query(galaxy=0, p=(3,), t=(1, 14)), index=built)
+
+    np.testing.assert_allclose(direction, expected, atol=1e-6)
+    np.testing.assert_allclose(
+        scalar_map(0, direction)[[1, 14]], (scalars @ direction.T)[:, 0], atol=1e-6
+    )

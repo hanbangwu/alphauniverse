@@ -8,8 +8,15 @@ from datasets import Image as ImageFeature
 from PIL import Image
 
 from app import dataset as dataset_module
-from app.config import CROP_PIXELS, RGB_COLUMN, SPECTRUM_SURVEYS
-from app.dataset import encode, image, samples, spectrum
+from app.config import (
+    CROP_PIXELS,
+    FLAG_SURVEYS,
+    LS,
+    RGB_COLUMN,
+    SCALAR_COLUMNS,
+    SPECTRUM_SURVEYS,
+)
+from app.dataset import encode, image, samples, spectrum, table, table_columns
 
 SOURCE = Image.fromarray(
     np.random.default_rng(0).integers(
@@ -83,3 +90,21 @@ def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
 def test_unmatched_survey_has_no_spectrum(stored: None) -> None:
     assert spectrum(0, "desi") is None
     assert spectrum(0, "sdss").column("wavelength").to_pylist() == [4000.0]
+
+
+def test_table_keeps_numeric_catalogue_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = Dataset.from_dict(
+        {
+            SCALAR_COLUMNS[0]: [0.5, None],
+            f"object_id{LS}": ["a", "b"],
+            "_healpix_29": [1, 2],
+            FLAG_SURVEYS["gz10"]: [None, 3],
+        }
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    table_columns.cache_clear()
+
+    assert table(1) == {SCALAR_COLUMNS[0]: None, FLAG_SURVEYS["gz10"]: 3}
+    table_columns.cache_clear()

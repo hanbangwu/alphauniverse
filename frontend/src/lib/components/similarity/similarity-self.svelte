@@ -8,6 +8,7 @@
   import PatchPanel from './patch-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
+  import TablePanel from './table-panel.svelte'
 
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
@@ -60,6 +61,12 @@
         <MaskControls domain={similarity.imageDomain} />
       </PatchMask>
     {/if}
+
+    <TablePanel
+      galaxy={similarity.galaxy}
+      selected={view.scalars.value}
+      ontoggle={(index) => view.scalars.toggle(index)}
+    />
   </div>
 
   <SpectrumPanel

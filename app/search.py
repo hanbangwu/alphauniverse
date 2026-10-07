@@ -1,4 +1,4 @@
-from functools import cache
+from functools import cache, lru_cache
 from typing import Annotated, Self
 
 import faiss
@@ -12,7 +12,9 @@ from .config import (
     ANCHOR,
     DIM,
     N_PATCHES,
+    N_SCALARS,
     N_SPANS,
+    SCALAR_SURVEYS,
     SEED,
     SPECTRUM_SURVEYS,
     GalaxyIndex,
@@ -38,18 +40,29 @@ class Query(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_SPANS)], ...],
         Field(alias="s", max_length=N_SPANS),
     ] = ()
+    scalars: Annotated[
+        tuple[Annotated[int, Field(ge=0, lt=N_SCALARS)], ...],
+        Field(alias="t", max_length=N_SCALARS),
+    ] = ()
     matches: Annotated[int, Field(ge=1, le=128)] = 32
 
     @model_validator(mode="after")
     def some_tokens(self) -> Self:
-        if not (self.patches or self.spans):
-            raise ValueError("select at least one patch or span")
+        if not (self.patches or self.spans or self.scalars):
+            raise ValueError("select at least one patch, span or scalar")
         return self
 
     @model_validator(mode="after")
     def spans_need_a_spectrum(self) -> Self:
         if self.spans and not with_spectrum()[self.galaxy]:
             raise ValueError(f"galaxy {self.galaxy} has no spectrum")
+        return self
+
+    @model_validator(mode="after")
+    def hsc_scalars_need_hsc(self) -> Self:
+        hsc = max(self.scalars, default=0) >= len(SCALAR_SURVEYS[ANCHOR])
+        if hsc and not with_hsc()[self.galaxy]:
+            raise ValueError(f"galaxy {self.galaxy} has no HSC match")
         return self
 
 
@@ -61,6 +74,11 @@ def source(role: str) -> ds.Dataset:
 @cache
 def tokens() -> pa.Table:
     return source("tokens").to_table()
+
+
+@cache
+def with_hsc() -> np.ndarray:
+    return pc.is_valid(tokens().column("hsc")).to_numpy()
 
 
 @cache
@@ -90,9 +108,41 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
             start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
         )
     )
-    direction = index.reconstruct_batch(ids).mean(axis=0, keepdims=True)
+    vectors = np.concatenate(
+        (
+            index.reconstruct_batch(ids),
+            scalar_embeddings(query.galaxy)[list(query.scalars)],
+        )
+    )
+    direction = vectors.mean(axis=0, keepdims=True)
     faiss.normalize_L2(direction)
     return direction
+
+
+@lru_cache
+def scalar_embeddings(galaxy: int) -> np.ndarray:
+    row = source("encoded").take([galaxy], columns=list(SCALAR_SURVEYS))
+    return np.concatenate(
+        [rows(row.column(survey), N_PATCHES, None) for survey in SCALAR_SURVEYS]
+    )
+
+
+def scalar_tokens(galaxy: int) -> dict[str, int]:
+    return {
+        column: int(token)
+        for survey, columns in SCALAR_SURVEYS.items()
+        if (cell := tokens().column(survey)[galaxy]).is_valid
+        for column, token in zip(
+            columns, np.asarray(cell.values)[N_PATCHES:], strict=True
+        )
+    }
+
+
+def scalar_map(galaxy: int, direction: np.ndarray) -> np.ndarray:
+    scores = np.full(N_SCALARS, np.nan, dtype=np.float32)
+    stored = scalar_embeddings(galaxy)
+    scores[: len(stored)] = score_maps(stored, direction, width=len(stored))[0]
+    return scores
 
 
 def candidates(
@@ -144,11 +194,14 @@ def rank(
 
 def search(
     query: Query, *, index: faiss.Index
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     direction = centroid(query, index=index)
     order = candidates(query, direction, index=index)
     scored = score_maps(vectors(order, index=index), direction, width=N_PATCHES)
-    return rank(order, scored, span_maps(order, direction, index=index))
+    return (
+        *rank(order, scored, span_maps(order, direction, index=index)),
+        scalar_map(query.galaxy, direction),
+    )
 
 
 def rows(cells: pa.Array | pa.ChunkedArray, start: int, stop: int | None) -> np.ndarray:
