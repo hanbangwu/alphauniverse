@@ -19,6 +19,6 @@
   <PatchFrame>
     <GalaxyThumb {galaxy} />
   </PatchFrame>
-  <span class="text-sm font-medium">Galaxy #{galaxy}</span>
+  <span class="text-sm font-medium">#{galaxy}</span>
   <span class="text-muted-foreground text-xs">{MORPHOLOGIES[tooltip.category ?? UNLABELLED]}</span>
 </div>

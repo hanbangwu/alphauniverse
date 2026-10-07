@@ -69,6 +69,9 @@ RGB_COLUMN = f"rgb{LS}"
 
 N_MORPHOLOGIES = 10
 
+GEMMA = "google/embeddinggemma-2"
+GEMMA_DIM = 768
+
 ARTIFACTS: dict[str, str] = {
     "encoded": "parquet",
     "search_index": "faiss",
@@ -77,6 +80,9 @@ ARTIFACTS: dict[str, str] = {
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
+    "pairs": "parquet",
+    "alignment": "pt",
+    "aion_gemma_space": "npy",
 }
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
@@ -96,6 +102,15 @@ def store_schema(role: str) -> pa.Schema:
         + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
         + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
     )
+
+
+PAIRS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("aion", pa.list_(pa.float32(), DIM)),
+        pa.field("gemma", pa.list_(pa.float32(), GEMMA_DIM)),
+    ]
+)
 
 
 POINTS = pa.schema(

@@ -8,12 +8,14 @@ Every benchmark runs on Modal and measures the production artifacts on the volum
 | `backend_performance` | HTTP latency, cold start and concurrency     | Modal, an ephemeral server and a client   | `docs/benchmarks/backend_performance.json` |
 | `search_quality`      | recall of `search()` against an exact search | Modal, a build-image container            | `docs/benchmarks/search_quality.json`      |
 | `projection_quality`  | how the projector keeps neighbours           | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
+| `text_search_quality` | text queries against catalogue cuts          | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
 
 ```sh
 uv run modal run -m scripts.benchmarks.search_performance   # --runs, default 30
 uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
 uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, default 100
 uv run modal run -m scripts.benchmarks.projection_quality
+uv run modal run -m scripts.benchmarks.text_search_quality
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -23,7 +25,7 @@ uv run modal run -m scripts.benchmarks.projection_quality
 
 ## From GitHub Actions
 
-Start the Benchmark workflow by hand from the Actions tab. Pick a branch that contains the workflow, a script, and optionally `runs` for a performance script or `per_kind` for `search_quality` (empty keeps the default). The job uses the deploy job's Modal token. The report appears in the run's summary and as its artifact; the job does not commit it. A job past six hours stops and leaves no report.
+Start the Benchmark workflow by hand from the Actions tab. Pick a branch that contains the workflow, a script, and optionally `args`, the script's flags as listed above (empty keeps the defaults). The job uses the deploy job's Modal token. The report appears in the run's summary and as its artifact; the job does not commit it. A job past six hours stops and leaves no report.
 
 ## Cost model
 
@@ -217,6 +219,14 @@ The rows are held out only if `parametric_umap` was trained with the validation 
 | 100        | 0.3336       | 0.8173          |
 
 At 15 neighbours, 0.3064 × 15 = 4.6 of a row's 15 nearest neighbours in 768-d are among its 15 nearest in 2-d. Random 2-d positions would keep 15 / 9,999 = 0.0015 of them, and score a trustworthiness near 0.5.
+
+## `text_search_quality`
+
+A container on the build image, with `generate_alignment`'s GPU, CPU and memory, takes the `pairs` rows of the galaxies `generate_alignment` held out, and embeds each query in `CUTS` with EmbeddingGemma. Each query's answer is a cut on a PROVABGS property: stellar mass, specific star formation rate or redshift; its population is the galaxies with that property. It ranks the population in three spaces: the EmbeddingGemma embeddings, and the AION embeddings through the linear and the MLP maps in `alignment`. Each space is ranked raw and centred: centring subtracts the documents' mean from the documents and the queries' mean from the queries, then renormalises. Per query, space and centring it reports the base rate, scikit-learn's `average_precision_score` and the precision at 10 and 100.
+
+The dataset holds 7 galaxies with a GZ10 label, too few to score morphology queries.
+
+Not run yet.
 
 ## Scaling ceilings
 

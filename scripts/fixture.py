@@ -10,6 +10,7 @@ import pyarrow.parquet as pq
 from app.config import (
     ANCHOR,
     DIM,
+    GEMMA_DIM,
     N_MORPHOLOGIES,
     N_PATCHES,
     TOKEN_SURVEYS,
@@ -21,6 +22,7 @@ from app.config import (
     store_schema,
 )
 from app.search import generate_index, index, source, starts, tokens, with_spectrum
+from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_PATCHES + 12,
@@ -95,7 +97,16 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
 
 
 def forget() -> None:
-    for cached in (galaxy_count, labels, source, index, tokens, with_spectrum, starts):
+    for cached in (
+        galaxy_count,
+        labels,
+        source,
+        index,
+        tokens,
+        with_spectrum,
+        starts,
+        aion_gemma_space,
+    ):
         cached.cache_clear()
 
 
@@ -134,6 +145,12 @@ def build(galaxies: int, seed: int = 0) -> Path:
         points(owner, _project(basis, anchors.reshape(-1, DIM)), category.take(owner)),
         artifact("full_points"),
         compression="zstd",
+    )
+
+    vectors = rng.standard_normal((galaxies, GEMMA_DIM)).astype(np.float32)
+    np.save(
+        artifact("aion_gemma_space"),
+        vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
     )
 
     forget()

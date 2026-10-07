@@ -35,6 +35,7 @@ from .config import (
 from .dataset import image, spectrum
 from .search import Query as SearchQuery
 from .search import index, search, starts, tokens
+from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
@@ -58,6 +59,11 @@ class Galaxy(BaseModel):
     sdss: bool
     gz10: bool
     provabgs: bool
+
+
+class TextMatches(BaseModel):
+    galaxies: list[int]
+    scores: list[float]
 
 
 BINARY_OCTET: dict[str, Any] = {
@@ -287,3 +293,9 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
     )
 
     return arrow(batch)
+
+
+@app.get("/search/text")
+def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
+    galaxies, scores = text_search(query)
+    return TextMatches(galaxies=galaxies.tolist(), scores=scores.tolist())

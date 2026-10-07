@@ -6,9 +6,12 @@ Two halves, connected only by files on disk: the build pipeline, Modal jobs that
 hanbangwu/alphauniverse-cosmos (Hugging Face)
 └── generate_embeddings       GPU ─▶ encoded · codebook · tokens
     ├── generate_index        CPU ─▶ search_index
-    └── generate_projections  GPU ─▶ mean_points · full_points · parametric_umap
+    ├── generate_projections  GPU ─▶ mean_points · full_points · parametric_umap
+    └── generate_pairs        GPU ─▶ pairs
+        └── generate_alignment GPU ─▶ alignment
+            └── generate_aion_gemma_space GPU ─▶ aion_gemma_space
 
-        every artifact and the cached dataset, on the Modal volume at /cache
+  every artifact, the cached dataset and EmbeddingGemma, on the Modal volume at /cache
                                       │
                                       ▼
                app/main.py  (FastAPI, one Modal container)
@@ -25,21 +28,24 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 ## The artifacts
 
-| Role              | Shape                                      | Who reads it                                                            |
-| ----------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
-| `encoded`         | one row per galaxy, embeddings per survey  | index build, projections, `/downloads/{role}`                           |
-| `codebook`        | same, the encoder's input embeddings       | `/downloads/{role}`                                                     |
-| `tokens`          | same, token ids                            | startup, `/search`, the token and galaxy endpoints, `/downloads/{role}` |
-| `search_index`    | faiss IVF over patches and spectral tokens | `/search`                                                               |
-| `mean_points`     | one 2-d point per galaxy                   | `/meta`, `/projections/mean`                                            |
-| `full_points`     | one 2-d point per embedding                | `/projections/full`                                                     |
-| `parametric_umap` | the trained projector's weights            | nothing at serve time                                                   |
+| Role               | Shape                                         | Who reads it                                                            |
+| ------------------ | --------------------------------------------- | ----------------------------------------------------------------------- |
+| `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/downloads/{role}`                           |
+| `codebook`         | same, the encoder's input embeddings          | `/downloads/{role}`                                                     |
+| `tokens`           | same, token ids                               | startup, `/search`, the token and galaxy endpoints, `/downloads/{role}` |
+| `search_index`     | faiss IVF over patches and spectral tokens    | `/search`                                                               |
+| `mean_points`      | one 2-d point per galaxy                      | `/meta`, `/projections/mean`                                            |
+| `full_points`      | one 2-d point per embedding                   | `/projections/full`                                                     |
+| `parametric_umap`  | the trained projector's weights               | nothing at serve time                                                   |
+| `pairs`            | AION and EmbeddingGemma embeddings per galaxy | `generate_alignment`, `text_search_quality`                             |
+| `alignment`        | the AION to EmbeddingGemma maps' weights      | `generate_aion_gemma_space`, `text_search_quality`                      |
+| `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space  | `/search/text`                                                          |
 
 `docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image` and `/galaxy/{g}/spectrum` read the cached dataset instead.
 
 ## The serving app
 
-Nine endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded`, `codebook` and `tokens`.
+Ten endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded`, `codebook` and `tokens`.
 
 A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no body. An artifact's ETag is Starlette's, from the file's size and modification time, compared before the file is read. Every other successful response's ETag is an MD5 of its body, added by the route class every endpoint uses: the server still builds the response and saves only the transfer. Successful responses and 304s carry `Cache-Control: no-cache`, so a browser revalidates before each reuse.
 
@@ -54,6 +60,7 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 | `/galaxy/{g}/spectrum`        | Arrow IPC    |
 | `/galaxy/{g}/spectrum/tokens` | raw `uint32` |
 | `/search`                     | Arrow IPC    |
+| `/search/text`                | JSON         |
 
 ## Similarity search
 
@@ -66,13 +73,19 @@ The search reads vectors back from the index by id, in the layout `docs/pipeline
 3. Every patch and span of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
 4. A galaxy's score is its best token score over both maps. The candidates are sorted by it, after the query galaxy.
 
+## Text search
+
+A query is free text and a match count. `/search/text` embeds the text with EmbeddingGemma in the API process, under the `SearchQuery` prompt; the model loads on the first text search, from the Hugging Face cache, which `generate_pairs` fills on Modal. The answer is the `matches` galaxies whose `aion_gemma_space` vectors have the highest cosine with it, ranked. `aion_gemma_space` is loaded on the first text search.
+
+In the left panel, the text box submits on Search or Enter; the results are a grid of thumbnails with galaxy id and score, and clicking one selects the galaxy.
+
 ## The frontend
 
 SvelteKit, Svelte 5 runes, one page in three resizable panes.
 
 ```
 +page.svelte
-├── LeftPanel        point set toggle, morphology filter, download
+├── LeftPanel        point set toggle, text search, morphology filter, download
 ├── ProjectionView   embedding-atlas over a DuckDB-WASM table
 │   └── GalaxyTooltip     hovered or selected galaxy: image, id, morphology
 └── RightPanel       selected galaxy: image or spectrum, morphology, crossmatches

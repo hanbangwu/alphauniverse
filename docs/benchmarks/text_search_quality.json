@@ -1,0 +1,339 @@
+{
+  "commit": "16730a0-dirty",
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-10-07T04:56:32+00:00",
+  "job": {
+    "cpu": 16,
+    "memory_mb": [
+      32768,
+      131072
+    ],
+    "gpu": "L4"
+  },
+  "environment": {
+    "cpu": {
+      "vendor_id": "AuthenticAMD",
+      "cpu family": "25",
+      "model": "1",
+      "model name": "unknown"
+    },
+    "cpu_count": 32,
+    "faiss_threads": 16,
+    "omp_num_threads": "16",
+    "thread_pools": [
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 16,
+        "prefix": "libscipy_openblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-61654e39.so",
+        "version": "0.3.34.0.0",
+        "threading_layer": "pthreads",
+        "architecture": "Haswell"
+      },
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 16,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libgomp-e985bcbb.so.1.0.0",
+        "version": null
+      },
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 16,
+        "prefix": "libopenblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libopenblaso-r0-d77a1985.3.15.so",
+        "version": "0.3.15",
+        "threading_layer": "openmp",
+        "architecture": "Zen"
+      },
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 16,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+        "version": null
+      },
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 16,
+        "prefix": "libscipy_openblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+        "version": "0.3.31.dev",
+        "threading_layer": "pthreads",
+        "architecture": "Haswell"
+      }
+    ]
+  },
+  "galaxies": 5211,
+  "queries": {
+    "A massive galaxy, stellar mass above 10^11 solar masses": {
+      "gemma": {
+        "raw": {
+          "base_rate": 0.3604,
+          "average_precision": 0.5654,
+          "precision@10": 0.7,
+          "precision@100": 0.7
+        },
+        "centred": {
+          "base_rate": 0.3604,
+          "average_precision": 0.5762,
+          "precision@10": 0.8,
+          "precision@100": 0.67
+        }
+      },
+      "linear": {
+        "raw": {
+          "base_rate": 0.3604,
+          "average_precision": 0.5902,
+          "precision@10": 0.9,
+          "precision@100": 0.69
+        },
+        "centred": {
+          "base_rate": 0.3604,
+          "average_precision": 0.5714,
+          "precision@10": 0.8,
+          "precision@100": 0.68
+        }
+      },
+      "mlp": {
+        "raw": {
+          "base_rate": 0.3604,
+          "average_precision": 0.5929,
+          "precision@10": 0.8,
+          "precision@100": 0.75
+        },
+        "centred": {
+          "base_rate": 0.3604,
+          "average_precision": 0.591,
+          "precision@10": 0.9,
+          "precision@100": 0.63
+        }
+      }
+    },
+    "A low-mass dwarf galaxy": {
+      "gemma": {
+        "raw": {
+          "base_rate": 0.0558,
+          "average_precision": 0.0413,
+          "precision@10": 0.0,
+          "precision@100": 0.0
+        },
+        "centred": {
+          "base_rate": 0.0558,
+          "average_precision": 0.0475,
+          "precision@10": 0.0,
+          "precision@100": 0.06
+        }
+      },
+      "linear": {
+        "raw": {
+          "base_rate": 0.0558,
+          "average_precision": 0.0437,
+          "precision@10": 0.0,
+          "precision@100": 0.0
+        },
+        "centred": {
+          "base_rate": 0.0558,
+          "average_precision": 0.0343,
+          "precision@10": 0.0,
+          "precision@100": 0.0
+        }
+      },
+      "mlp": {
+        "raw": {
+          "base_rate": 0.0558,
+          "average_precision": 0.0468,
+          "precision@10": 0.0,
+          "precision@100": 0.02
+        },
+        "centred": {
+          "base_rate": 0.0558,
+          "average_precision": 0.0331,
+          "precision@10": 0.0,
+          "precision@100": 0.0
+        }
+      }
+    },
+    "A star-forming galaxy": {
+      "gemma": {
+        "raw": {
+          "base_rate": 0.1066,
+          "average_precision": 0.0933,
+          "precision@10": 0.1,
+          "precision@100": 0.07
+        },
+        "centred": {
+          "base_rate": 0.1066,
+          "average_precision": 0.1123,
+          "precision@10": 0.2,
+          "precision@100": 0.1
+        }
+      },
+      "linear": {
+        "raw": {
+          "base_rate": 0.1066,
+          "average_precision": 0.102,
+          "precision@10": 0.0,
+          "precision@100": 0.12
+        },
+        "centred": {
+          "base_rate": 0.1066,
+          "average_precision": 0.1376,
+          "precision@10": 0.1,
+          "precision@100": 0.14
+        }
+      },
+      "mlp": {
+        "raw": {
+          "base_rate": 0.1066,
+          "average_precision": 0.0973,
+          "precision@10": 0.2,
+          "precision@100": 0.08
+        },
+        "centred": {
+          "base_rate": 0.1066,
+          "average_precision": 0.1205,
+          "precision@10": 0.1,
+          "precision@100": 0.14
+        }
+      }
+    },
+    "A quiescent galaxy with no ongoing star formation": {
+      "gemma": {
+        "raw": {
+          "base_rate": 0.3236,
+          "average_precision": 0.3028,
+          "precision@10": 0.2,
+          "precision@100": 0.31
+        },
+        "centred": {
+          "base_rate": 0.3236,
+          "average_precision": 0.2336,
+          "precision@10": 0.1,
+          "precision@100": 0.08
+        }
+      },
+      "linear": {
+        "raw": {
+          "base_rate": 0.3236,
+          "average_precision": 0.2668,
+          "precision@10": 0.3,
+          "precision@100": 0.2
+        },
+        "centred": {
+          "base_rate": 0.3236,
+          "average_precision": 0.2171,
+          "precision@10": 0.0,
+          "precision@100": 0.06
+        }
+      },
+      "mlp": {
+        "raw": {
+          "base_rate": 0.3236,
+          "average_precision": 0.2525,
+          "precision@10": 0.2,
+          "precision@100": 0.19
+        },
+        "centred": {
+          "base_rate": 0.3236,
+          "average_precision": 0.2137,
+          "precision@10": 0.0,
+          "precision@100": 0.05
+        }
+      }
+    },
+    "A distant galaxy at redshift above 0.5": {
+      "gemma": {
+        "raw": {
+          "base_rate": 0.0178,
+          "average_precision": 0.0153,
+          "precision@10": 0.0,
+          "precision@100": 0.0
+        },
+        "centred": {
+          "base_rate": 0.0178,
+          "average_precision": 0.0131,
+          "precision@10": 0.0,
+          "precision@100": 0.01
+        }
+      },
+      "linear": {
+        "raw": {
+          "base_rate": 0.0178,
+          "average_precision": 0.014,
+          "precision@10": 0.0,
+          "precision@100": 0.01
+        },
+        "centred": {
+          "base_rate": 0.0178,
+          "average_precision": 0.0204,
+          "precision@10": 0.0,
+          "precision@100": 0.02
+        }
+      },
+      "mlp": {
+        "raw": {
+          "base_rate": 0.0178,
+          "average_precision": 0.0152,
+          "precision@10": 0.0,
+          "precision@100": 0.01
+        },
+        "centred": {
+          "base_rate": 0.0178,
+          "average_precision": 0.021,
+          "precision@10": 0.0,
+          "precision@100": 0.01
+        }
+      }
+    },
+    "A nearby galaxy at redshift below 0.1": {
+      "gemma": {
+        "raw": {
+          "base_rate": 0.0876,
+          "average_precision": 0.1096,
+          "precision@10": 0.1,
+          "precision@100": 0.09
+        },
+        "centred": {
+          "base_rate": 0.0876,
+          "average_precision": 0.1015,
+          "precision@10": 0.1,
+          "precision@100": 0.08
+        }
+      },
+      "linear": {
+        "raw": {
+          "base_rate": 0.0876,
+          "average_precision": 0.1088,
+          "precision@10": 0.1,
+          "precision@100": 0.12
+        },
+        "centred": {
+          "base_rate": 0.0876,
+          "average_precision": 0.1347,
+          "precision@10": 0.2,
+          "precision@100": 0.1
+        }
+      },
+      "mlp": {
+        "raw": {
+          "base_rate": 0.0876,
+          "average_precision": 0.1283,
+          "precision@10": 0.2,
+          "precision@100": 0.16
+        },
+        "centred": {
+          "base_rate": 0.0876,
+          "average_precision": 0.1306,
+          "precision@10": 0.1,
+          "precision@100": 0.11
+        }
+      }
+    }
+  }
+}

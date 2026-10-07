@@ -12,11 +12,9 @@ on:
           - search_performance
           - backend_performance
           - projection_quality
-      runs:
-        description: The performance scripts' --runs; empty keeps its default
-        type: string
-      per_kind:
-        description: search_quality's --per-kind; empty keeps its default
+          - text_search_quality
+      args:
+        description: Arguments for the script, such as --runs 50; empty keeps its defaults
         type: string
 
 env:
@@ -30,8 +28,7 @@ jobs:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
       SCRIPT: ${{ inputs.script }}
-      RUNS: ${{ inputs.runs }}
-      PER_KIND: ${{ inputs.per_kind }}
+      ARGS: ${{ inputs.args }}
       REPORT: docs/benchmarks/${{ inputs.script }}.json
 
     steps:
@@ -41,13 +38,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Run on Modal
-        run: |
-          case "$SCRIPT" in
-            search_quality) set -- ${PER_KIND:+--per-kind "$PER_KIND"} ;;
-            projection_quality) set -- ;;
-            *) set -- ${RUNS:+--runs "$RUNS"} ;;
-          esac
-          uv run --python 3.12 modal run -m "scripts.benchmarks.$SCRIPT" "$@"
+        run: uv run --python 3.12 modal run -m "scripts.benchmarks.$SCRIPT" $ARGS
 
       - name: Report
         run: |

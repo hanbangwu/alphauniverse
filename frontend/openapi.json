@@ -400,6 +400,59 @@
           }
         }
       }
+    },
+    "/search/text": {
+      "get": {
+        "summary": "Get Text Search",
+        "operationId": "get_text_search",
+        "parameters": [
+          {
+            "name": "text",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "title": "Text"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextMatches"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -500,6 +553,30 @@
           "morphologies"
         ],
         "title": "Meta"
+      },
+      "TextMatches": {
+        "properties": {
+          "galaxies": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Galaxies"
+          },
+          "scores": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Scores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "galaxies",
+          "scores"
+        ],
+        "title": "TextMatches"
       },
       "ValidationError": {
         "properties": {

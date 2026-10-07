@@ -13,6 +13,7 @@ dependencies = [
   "pillow>=12.3.0",
   "pyarrow>=25.0.1",
   "pydantic>=2.13.4",
+  "sentence-transformers[image]>=6.1.0",
   "threadpoolctl>=3.6.0",
 ]
 

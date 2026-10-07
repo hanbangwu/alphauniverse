@@ -1,10 +1,10 @@
 # Build pipeline
 
-Three Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
+Six Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. `generate_pairs` reads the dataset and `encoded`, `generate_alignment` reads `pairs`, and `generate_aion_gemma_space` reads `pairs` and `alignment`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
 Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
-`generate_embeddings` and `generate_projections` need the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
+Every job but `generate_index` needs the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
 
 ## The dataset
 
@@ -68,3 +68,39 @@ category: uint8   -- GZ10 morphology, null where unlabelled
 - **`full_points`**: one row per embedding, every modality in the same space; loaded only when the user asks for it. Written survey by survey, so its galaxy column is not monotonic.
 
 Training logs to Weights & Biases under `WANDB_MODE`. `modal_app.py` sets it to `offline`, so runs are written to the volume and not uploaded (for now).
+
+## `generate_pairs`
+
+One row per galaxy, pairing AION's embedding of the galaxy with [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2)'s (`GEMMA`) embedding of its Legacy Survey image.
+
+- **AION**: the mean of the galaxy's `encoded` embeddings over every token of every survey.
+- **EmbeddingGemma**: its sentence-transformers embedding, L2-normalised and at full width, under the `Document` prompt, of the galaxy's `rgb` Legacy Survey cutout as the dataset stores it, uncropped.
+
+Every image goes to one `encode` call, which batches internally:
+
+```
+galaxy: int32
+aion:   fixed_size_list<float32, 768>
+gemma:  fixed_size_list<float32, 768>
+```
+
+`GEMMA_DIM` must match the model's width: 768.
+
+## `generate_alignment`
+
+Fits two maps from a galaxy's AION embedding to its EmbeddingGemma embedding: least squares with a bias column, solved in closed form, and an MLP (`768 → HIDDEN (2048) → 768`, GELU, output L2-normalised) trained with Adam on 1 − cosine for `EPOCHS` (50). `VALIDATION` (30%) of galaxies are held out of both. Each epoch logs the training loss and, on the held-out rows, the mean cosine and `recall@10`, to Weights & Biases as `generate_projections` does; the least-squares map's two figures go to the run summary, and the run's config records `GEMMA` as `target`. `recall@10` is the share of held-out galaxies whose own EmbeddingGemma embedding is among the 10 nearest to their prediction, out of every held-out galaxy's.
+
+**`alignment`** is a `torch.save` of:
+
+```
+linear: Tensor      -- (769, GEMMA_DIM), the last row the bias
+mlp:    state_dict  -- AlignmentMap weights
+```
+
+## `generate_aion_gemma_space`
+
+Applies the MLP in `alignment` to every galaxy's `pairs` AION embedding. **`aion_gemma_space`** is an `np.save` of:
+
+```
+float32 (galaxies, GEMMA_DIM)  -- in galaxy order, L2-normalised
+```

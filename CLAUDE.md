@@ -13,21 +13,28 @@
 
 ## Commands
 
+### Frontend
+
 ```sh
-uv run pytest                                       # tests
-uv run ruff check app scripts tests modal_app.py    # lint
-uv run ruff format app scripts tests modal_app.py   # format
-uv run python -m scripts.fixture                    # build fixture tree
+uv run pytest                                               # tests
+uv run ruff check app scripts tests modal_app.py            # lint
+uv run ruff format app scripts tests modal_app.py           # format
+uv run python -m scripts.fixture                            # build fixture tree
 uv run modal run -m scripts.benchmarks.search_performance   # time search() on Modal
 uv run modal run -m scripts.benchmarks.backend_performance  # time the HTTP endpoints on Modal
 uv run modal run -m scripts.benchmarks.search_quality       # measure recall on Modal
 uv run modal run -m scripts.benchmarks.projection_quality   # measure projection quality on Modal
-uv run python -m scripts.openapi                    # regenerate frontend/openapi.json
+uv run modal run -m scripts.benchmarks.text_search_quality  # measure text search on Modal
+uv run python -m scripts.openapi                            # regenerate frontend/openapi.json
+```
 
+### Backend
+
+```sh
 cd frontend
 bun install && bun run dev
-bun run check                                       # regenerate client + typecheck
-bun run lint                                        # prettier + eslint
+bun run check               # regenerate client + typecheck
+bun run lint                # prettier + eslint
 ```
 
 ## Workflow

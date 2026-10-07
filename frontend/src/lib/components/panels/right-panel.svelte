@@ -43,7 +43,7 @@
       </Button>
 
       <div class="flex items-baseline justify-between text-sm">
-        <span class="font-medium">Galaxy #{galaxy}</span>
+        <span class="font-medium">#{galaxy}</span>
         {#if morphology.isPending}
           <Spinner class="size-3 self-center text-muted-foreground" />
         {:else}

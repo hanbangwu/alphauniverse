@@ -81,6 +81,51 @@ def generate_index() -> None:
     generate_index()
 
 
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=6 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_pairs() -> None:
+    from app.config import build_dir
+    from app.text_search import generate_pairs
+
+    build_dir().mkdir(parents=True, exist_ok=True)
+    generate_pairs()
+
+
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=16,
+    memory=(32 * 1024, 128 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+    secrets=[modal.Secret.from_name("wandb-secret")],
+)
+def generate_alignment() -> None:
+    from app.alignment import generate_alignment
+
+    generate_alignment()
+
+
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=16,
+    memory=(32 * 1024, 128 * 1024),
+    timeout=60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_aion_gemma_space() -> None:
+    from app.alignment import generate_aion_gemma_space
+
+    generate_aion_gemma_space()
+
+
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")

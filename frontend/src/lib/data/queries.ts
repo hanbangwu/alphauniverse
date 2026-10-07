@@ -1,4 +1,11 @@
-import { getGalaxy, getImageTokens, getSearch, getSpectrum, getSpectrumTokens } from '$lib/api'
+import {
+  getGalaxy,
+  getImageTokens,
+  getSearch,
+  getSpectrum,
+  getSpectrumTokens,
+  getTextSearch
+} from '$lib/api'
 import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
@@ -113,6 +120,21 @@ export function similarityQuery(request: SimilarityQuery | null) {
               imageMaps: table.getChild('map')!.getChildAt<Float32>(0)!.toArray(),
               spectrumMaps: table.getChild('spectrum')!.getChildAt<Float32>(0)!.toArray()
             }
+          },
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000
+  })
+}
+
+export function textSearchQuery(text: string | null) {
+  return queryOptions({
+    queryKey: ['text-search', text] as const,
+    queryFn:
+      text === null
+        ? skipToken
+        : async ({ signal }) => {
+            const { data } = await getTextSearch({ query: { text }, signal, throwOnError: true })
+            return data
           },
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000
