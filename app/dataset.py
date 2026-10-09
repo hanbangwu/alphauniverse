@@ -7,12 +7,14 @@ import pyarrow as pa
 from datasets import Dataset, Image, load_dataset
 
 from .config import (
+    CATALOGUES,
     CROP_PIXELS,
     DATASET_AUTHOR,
     DATASET_NAME,
     DATASET_REVISION,
     RGB_COLUMN,
     SPECTRUM_SURVEYS,
+    Catalogue,
     SpectrumSurvey,
 )
 
@@ -52,3 +54,29 @@ def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
     if not cell.is_valid:
         return None
     return pa.table(samples(cell))
+
+
+def catalogue(column: str) -> Catalogue | None:
+    _, separator, suffix = column.partition("-")
+    return CATALOGUES.get(separator + suffix)
+
+
+@cache
+def table_columns() -> tuple[str, ...]:
+    return tuple(
+        field.name
+        for field in dataset().data.schema
+        if (
+            pa.types.is_integer(field.type)
+            or pa.types.is_floating(field.type)
+            or pa.types.is_boolean(field.type)
+        )
+        and catalogue(field.name) is not None
+    )
+
+
+def table(galaxy: int) -> dict[str, float | int | bool | None]:
+    return {
+        column: dataset().data.column(column)[galaxy].as_py()
+        for column in table_columns()
+    }

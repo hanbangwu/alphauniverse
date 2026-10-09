@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from typing import NamedTuple
 
 import numpy as np
 import pyarrow as pa
@@ -6,6 +7,7 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
+from sklearn.model_selection import train_test_split
 from torch import nn
 from tqdm import tqdm
 from umap import UMAP
@@ -30,11 +32,13 @@ from .search import source
 
 BATCH = 1024
 CHUNK = 128
-EPOCHS = 10
+EPOCHS = 20
 LEARNING_RATE = 1e-3
 MIN_DIST = 0.1
 NEGATIVES = 5
-SAMPLE = 500_000
+SAMPLE = 5_000_000
+VALIDATION = 0.3
+CURVE_A, CURVE_B = find_ab_params(1.0, MIN_DIST)
 
 
 class ParametricUMAP(nn.Module):
@@ -60,27 +64,67 @@ class ParametricUMAP(nn.Module):
         return torch.cat(projected).numpy()
 
 
-def fit_parametric_umap(sampled: np.ndarray) -> ParametricUMAP:
-    import wandb
+class Graph(NamedTuple):
+    rows: torch.Tensor
+    heads: torch.Tensor
+    tails: torch.Tensor
+    strength: np.ndarray
 
+
+def split(sampled: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    return train_test_split(sampled, test_size=VALIDATION, random_state=SEED)
+
+
+def graph(sampled: np.ndarray) -> Graph:
     strengths, _, _ = fuzzy_simplicial_set(
         sampled, n_neighbors=UMAP().n_neighbors, random_state=SEED, metric="cosine"
     )
     edges = strengths.tocoo()
-    rows = torch.as_tensor(sampled, device=device())
-    heads = torch.as_tensor(edges.row, dtype=torch.int64, device=device())
-    tails = torch.as_tensor(edges.col, dtype=torch.int64, device=device())
-    strength = torch.as_tensor(edges.data, device=device())
-    steps = len(strength) // BATCH
+    return Graph(
+        torch.as_tensor(sampled, device=device()),
+        torch.as_tensor(edges.row, dtype=torch.int64, device=device()),
+        torch.as_tensor(edges.col, dtype=torch.int64, device=device()),
+        edges.data / edges.data.sum(dtype=np.float64),
+    )
 
-    a, b = find_ab_params(1.0, MIN_DIST)
-    log_a = float(np.log(a))
 
+def batches(edges: Graph, generator: np.random.Generator) -> tuple[torch.Tensor, ...]:
+    steps = len(edges.strength) // BATCH
+    draw = generator.choice(len(edges.strength), steps * BATCH, p=edges.strength)
+    return torch.as_tensor(draw, device=device()).split(BATCH)
+
+
+def loss(model: ParametricUMAP, edges: Graph, edge: torch.Tensor) -> torch.Tensor:
     def logits(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
-        return -(log_a + 2 * b * F.pairwise_distance(left, right).log())
+        return -(
+            float(np.log(CURVE_A))
+            + 2 * CURVE_B * F.pairwise_distance(left, right).log()
+        )
+
+    anchor = model(edges.rows[edges.heads[edge]])
+    positive = model(edges.rows[edges.tails[edge]])
+    negative = model(
+        edges.rows[
+            torch.randint(len(edges.rows), (len(edge), NEGATIVES), device=device())
+        ]
+    )
+
+    attract = logits(anchor, positive)
+    repel = logits(anchor.unsqueeze(1), negative)
+    return F.binary_cross_entropy_with_logits(
+        attract, torch.ones_like(attract)
+    ) + F.binary_cross_entropy_with_logits(repel, torch.zeros_like(repel))
+
+
+def fit_parametric_umap(training: np.ndarray, validation: np.ndarray) -> ParametricUMAP:
+    import wandb
+
+    training_graph = graph(training)
+    validation_graph = graph(validation)
 
     torch.manual_seed(SEED)
-    model = ParametricUMAP(rows.shape[1]).to(device())
+    generator = np.random.default_rng(SEED)
+    model = ParametricUMAP(training.shape[1]).to(device())
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     with wandb.init(
@@ -98,42 +142,42 @@ def fit_parametric_umap(sampled: np.ndarray) -> ParametricUMAP:
             "min_dist": MIN_DIST,
             "negatives": NEGATIVES,
             "sample": SAMPLE,
+            "validation": VALIDATION,
             "seed": SEED,
         },
     ) as run:
         run.define_metric("epoch")
         run.define_metric("train/loss", step_metric="epoch", summary="min")
+        run.define_metric("validation/loss", step_metric="epoch", summary="min")
 
         for epoch in range(EPOCHS):
-            draw = torch.multinomial(strength, steps * BATCH, replacement=True)
-            total = torch.zeros((), device=device())
-            for edge in tqdm(draw.split(BATCH), desc="parametric umap"):
-                anchor = model(rows[heads[edge]])
-                positive = model(rows[tails[edge]])
-                negative = model(
-                    rows[
-                        torch.randint(
-                            len(rows), (len(edge), NEGATIVES), device=device()
-                        )
-                    ]
-                )
-
-                attract = logits(anchor, positive)
-                repel = logits(anchor.unsqueeze(1), negative)
-                loss = F.binary_cross_entropy_with_logits(
-                    attract, torch.ones_like(attract)
-                ) + F.binary_cross_entropy_with_logits(repel, torch.zeros_like(repel))
-
+            training_losses = []
+            for edge in tqdm(
+                batches(training_graph, generator), desc="parametric umap"
+            ):
+                step = loss(model, training_graph, edge)
                 optimizer.zero_grad()
-                loss.backward()
+                step.backward()
                 optimizer.step()
+                training_losses.append(step.detach())
 
-                total += loss.detach()
+            with torch.no_grad():
+                validation_losses = [
+                    loss(model, validation_graph, edge)
+                    for edge in batches(validation_graph, generator)
+                ]
 
-            run.log({"epoch": epoch, "train/loss": total.item() / steps})
+            run.log(
+                {
+                    "epoch": epoch,
+                    "train/loss": torch.stack(training_losses).mean().item(),
+                    "validation/loss": torch.stack(validation_losses).mean().item(),
+                }
+            )
 
     torch.save(
-        {"dim": rows.shape[1], "state": model.state_dict()}, artifact("parametric_umap")
+        {"dim": training.shape[1], "state": model.state_dict()},
+        artifact("parametric_umap"),
     )
     return model.eval()
 
@@ -171,13 +215,7 @@ def embedding_count() -> int:
     )
 
 
-def generate_projections() -> None:
-    category = (
-        dataset().data.column(FLAG_SURVEYS["gz10"]).cast(pa.uint8()).combine_chunks()
-    )
-    count = len(category)
-    galaxy = np.arange(count, dtype=np.int32)
-
+def scan(count: int) -> tuple[np.ndarray, np.ndarray]:
     population = embedding_count()
     chosen = np.sort(
         np.random.default_rng(SEED).choice(
@@ -198,12 +236,18 @@ def generate_projections() -> None:
         taken.append(values[window - seen])
         seen += len(values)
 
-    mean = (sums / held[:, None]).astype(dtype=np.float32)
-    del sums, held
+    return (sums / held[:, None]).astype(dtype=np.float32), np.concatenate(taken)
 
-    sampled = np.concatenate(taken)
-    taken.clear()
-    model = fit_parametric_umap(sampled)
+
+def generate_projections() -> None:
+    category = (
+        dataset().data.column(FLAG_SURVEYS["gz10"]).cast(pa.uint8()).combine_chunks()
+    )
+    count = len(category)
+    galaxy = np.arange(count, dtype=np.int32)
+
+    mean, sampled = scan(count)
+    model = fit_parametric_umap(*split(sampled))
     del sampled
 
     pq.write_table(

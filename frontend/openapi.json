@@ -152,6 +152,50 @@
         }
       }
     },
+    "/galaxy/{galaxy}/table": {
+      "get": {
+        "summary": "Get Table",
+        "operationId": "get_table",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TableRow"
+                  },
+                  "title": "Response Get Table"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/galaxy/{galaxy}/image": {
       "get": {
         "summary": "Get Image",
@@ -237,6 +281,7 @@
     "/galaxy/{galaxy}/spectrum": {
       "get": {
         "summary": "Get Spectrum",
+        "description": "The galaxy's spectrum for display, its flux smoothed with a Gaussian of sigma 2 pixels; masked pixels stay NaN.",
         "operationId": "get_spectrum",
         "parameters": [
           {
@@ -364,6 +409,22 @@
             }
           },
           {
+            "name": "t",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 25
+              },
+              "maxItems": 25,
+              "default": [],
+              "title": "T"
+            }
+          },
+          {
             "name": "matches",
             "in": "query",
             "required": false,
@@ -384,6 +445,59 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/text": {
+      "get": {
+        "summary": "Get Text Search",
+        "operationId": "get_text_search",
+        "parameters": [
+          {
+            "name": "text",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "title": "Text"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextMatches"
                 }
               }
             }
@@ -500,6 +614,98 @@
           "morphologies"
         ],
         "title": "Meta"
+      },
+      "TableRow": {
+        "properties": {
+          "catalogue": {
+            "type": "string",
+            "enum": [
+              "ls",
+              "hsc",
+              "desi",
+              "sdss",
+              "gz10",
+              "provabgs"
+            ],
+            "title": "Catalogue"
+          },
+          "column": {
+            "type": "string",
+            "title": "Column"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "scalar": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scalar"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "catalogue",
+          "column",
+          "value",
+          "scalar",
+          "token"
+        ],
+        "title": "TableRow"
+      },
+      "TextMatches": {
+        "properties": {
+          "galaxies": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Galaxies"
+          },
+          "scores": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Scores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "galaxies",
+          "scores"
+        ],
+        "title": "TextMatches"
       },
       "ValidationError": {
         "properties": {
