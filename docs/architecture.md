@@ -97,7 +97,7 @@ App-wide state is plain classes under `src/lib/state/`, held in a `runed` contex
 
 - The selected patches and spans and the match count are a draft: `/search` runs only when Search, or Enter in the count box, submits them. A newly selected galaxy starts with no results. While a search runs, the previous results stay on screen, dimmed.
 - `Field<T>` and its subclasses wrap a `$state` value with normalisation (sorting and deduping index lists), so components never validate.
-- The match count is kept as the typed text. `SearchState` checks it against bounds that `state/schema.ts` reads from the generated zod schema, so they come from the API contract.
+- The match count is kept as the typed text. `SearchState` checks it against bounds that `state/schema.ts` reads from `/search`'s parameters in `openapi.json`, so they come from the API contract.
 
 The layout fetches `/meta` in the browser through TanStack Query, cached forever, and shows a spinner until it returns. DuckDB-WASM starts loading the `mean` points at the same time. Data then takes two paths, deliberately separate:
 

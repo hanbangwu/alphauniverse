@@ -1,8 +1,8 @@
-import { zGetSearchQuery } from '$lib/api/zod.gen'
+import type { GetSearchData } from '$lib/api'
 import { must } from '$lib/invariant'
-import * as z from 'zod'
+import { paths } from '../../../openapi.json'
 
-export type Param = keyof typeof zGetSearchQuery.shape
+export type Param = keyof NonNullable<GetSearchData['query']>
 
 export interface Range {
   minimum: number
@@ -10,17 +10,15 @@ export interface Range {
   default: number
 }
 
-const DEFAULTS: Record<string, unknown> = zGetSearchQuery.parse({ galaxy: 0, p: [0] })
-
 export function rangeOf(name: Param): Range {
-  let schema: unknown = zGetSearchQuery.shape[name]
-  while (schema instanceof z.ZodDefault || schema instanceof z.ZodOptional) {
-    schema = schema.unwrap()
-  }
-  if (!(schema instanceof z.ZodNumber)) throw new Error(`${name} is not a number`)
+  const { schema } = must(
+    paths['/search'].get.parameters.find((parameter) => parameter.name === name),
+    `parameter ${name}`
+  )
+  if (typeof schema.default !== 'number') throw new Error(`${name} has no number default`)
   return {
-    minimum: must(schema.minValue, `minimum for ${name}`),
-    maximum: must(schema.maxValue, `maximum for ${name}`),
-    default: must(DEFAULTS[name], `default for ${name}`) as number
+    minimum: must(schema.minimum, `minimum for ${name}`),
+    maximum: must(schema.maximum, `maximum for ${name}`),
+    default: schema.default
   }
 }
