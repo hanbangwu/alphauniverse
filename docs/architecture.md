@@ -76,7 +76,7 @@ The search reads vectors back from the index by id, in the layout `docs/pipeline
 
 ## Text search
 
-A query is free text and a match count. `/search/text` embeds the text with EmbeddingGemma in the API process, under the `SearchQuery` prompt; the model loads on the first text search, from the Hugging Face cache, which `generate_pairs` fills on Modal. The answer is the `matches` galaxies whose `aion_gemma_space` vectors have the highest cosine with it, ranked. `aion_gemma_space` is loaded on the first text search.
+A query is free text and a match count. `/search/text` embeds the text with EmbeddingGemma in the API process, under the `SearchQuery` prompt. The first text search imports sentence-transformers and torch and loads the model from the Hugging Face cache, which `generate_pairs` fills on Modal. The answer is the `matches` galaxies whose `aion_gemma_space` vectors have the highest cosine with it, ranked. `aion_gemma_space` is loaded on the first text search.
 
 In the left panel, the text box submits on Search or Enter; the results are a grid of thumbnails with galaxy id and score, and clicking one selects the galaxy.
 
