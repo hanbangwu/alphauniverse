@@ -37,7 +37,7 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 | First `/search` after that       | 0.74 s                      |
 | Everything warm after that       | 0.18–0.50 s p50 per request |
 
-**A cold visit is about 18 s of blank page**: `+layout.server.ts` awaits `/meta` during SSR. Cold start dominates, not the search.
+**A cold visit shows a spinner until `/meta` returns**, 17.6 s after the browser sends it. Cold start dominates, not the search.
 
 ## `search_performance`
 
@@ -81,7 +81,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 `read_index` and `make_direct_map` are that run's separate timing of the two calls `index()` then loaded with, which took the cold reads; `index` then found those pages. `make_direct_map()` read every list's ids.
 
-**Stages**, 4 patches, 32 matches:
+**Stages**, 4 patches, 32 matches. The run predates `scalar_maps`, which the script now times:
 
 | Stage         | First query | Warm p50    | Warm share |
 | ------------- | ----------- | ----------- | ---------- |
@@ -90,6 +90,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 | **`vectors`** | 88.0 ms     | **79.8 ms** | **91.5 %** |
 | `score_maps`  | 7.59 ms     | 1.51 ms     | 1.7 %      |
 | `span_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
+| `scalar_maps` | unmeasured  | unmeasured  |            |
 | `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
 | Total         | 131.0 ms    | 87.2 ms     |            |
 
@@ -138,7 +139,7 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 | 4 spans                | 299 ms | 320 ms |
 | 4 patches and 4 spans  | 286 ms | 307 ms |
 
-`matches` sets the cost: each match is rescored from 576 vectors. Over the 179 ms `/meta` floor, 32 matches add 276 − 179 = 97 ms at p50, and 128 add 501 − 179 = 322 ms.
+`matches` sets the cost: in that run each match was rescored from 576 reconstructed vectors, before scalars joined the index. Over the 179 ms `/meta` floor, 32 matches add 276 − 179 = 97 ms at p50, and 128 add 501 − 179 = 322 ms.
 
 **Other endpoints**, warm:
 
@@ -225,7 +226,28 @@ A container on the build image, with `generate_alignment`'s GPU, CPU and memory,
 
 The dataset holds 7 galaxies with a GZ10 label, too few to score morphology queries.
 
-Not run yet.
+### Last run
+
+| Run              |                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Date             | 2026-10-07                                                                                                               |
+| Commit           | `16730a0-dirty`: uncommitted changes on top of `16730a0`                                                                 |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                               |
+| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit, one L4; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 1 |
+| Galaxies         | 5,211 held out by `generate_alignment`                                                                                   |
+
+Average precision, raw:
+
+| Query                                                   | Base rate | EmbeddingGemma | Linear | MLP    |
+| ------------------------------------------------------- | --------- | -------------- | ------ | ------ |
+| A massive galaxy, stellar mass above 10^11 solar masses | 0.3604    | 0.5654         | 0.5902 | 0.5929 |
+| A low-mass dwarf galaxy                                 | 0.0558    | 0.0413         | 0.0437 | 0.0468 |
+| A star-forming galaxy                                   | 0.1066    | 0.0933         | 0.1020 | 0.0973 |
+| A quiescent galaxy with no ongoing star formation       | 0.3236    | 0.3028         | 0.2668 | 0.2525 |
+| A distant galaxy at redshift above 0.5                  | 0.0178    | 0.0153         | 0.0140 | 0.0152 |
+| A nearby galaxy at redshift below 0.1                   | 0.0876    | 0.1096         | 0.1088 | 0.1283 |
+
+Raw, only the stellar-mass query beats its base rate by more than 0.05 in any space. Centred figures and precision at 10 and 100 are in `docs/benchmarks/text_search_quality.json`.
 
 ## Scaling ceilings
 

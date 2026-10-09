@@ -4,13 +4,13 @@ Six Modal jobs; the README has the commands. Embeddings come first, then the ind
 
 Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
-Every job but `generate_index` needs the `build` dependency group (torch, AION, umap-learn, wandb); the serving image does not install it.
+Every job runs on the build image, which adds the `build` dependency group (AION, scikit-learn, torchvision, umap-learn, wandb). The serving image installs only the main dependencies, which include torch and sentence-transformers for text search.
 
 ## The dataset
 
 `hanbangwu/alphauniverse-cosmos` is built by `scripts/alphauniverse_cosmos.py`: Legacy Survey DR10 south, cut to a √2° box on the COSMOS field, left-joined against five catalogues with LSDB and pushed to the Hub. The README lists the surveys and their token counts.
 
-The script is outside the deployed pipeline and needs `lsdb`, which is not a project dependency: run it with `uv run --with datasets --with lsdb`.
+The script is outside the deployed pipeline and needs the `dataset` dependency group (lsdb, dask): run it with `uv run --group dataset python -m scripts.alphauniverse_cosmos`.
 
 The serving app reads images and spectra from the dataset itself, from the copy `generate_embeddings` cached on the volume, with `HF_HUB_OFFLINE=1`. Offline, `datasets` ignores `DATASET_REVISION` and loads the most recently cached revision, so the volume must hold only the revision the artifacts were built from.
 
@@ -68,8 +68,6 @@ category: uint8   -- GZ10 morphology, null where unlabelled
 
 - **`mean_points`**: one row per galaxy, from its mean embedding. Small, and loaded on first paint.
 - **`full_points`**: one row per embedding, every modality in the same space; loaded only when the user asks for it. Written survey by survey, so its galaxy column is not monotonic.
-
-Training logs to Weights & Biases under `WANDB_MODE`. `modal_app.py` sets it to `offline`, so runs are written to the volume and not uploaded (for now).
 
 ## `generate_pairs`
 

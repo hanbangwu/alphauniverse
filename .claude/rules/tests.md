@@ -8,7 +8,7 @@ paths:
 
 - `tests/` tests the code against the fixture tree. It is hermetic: no Modal, no network, no production artifacts. Checks on the real artifacts do not belong here.
 - One file per `app/` module, testing its functions and loaders directly.
-- A module that imports torch is tested with AION and its codecs built with random weights from configs vendored in `tests/`; no test downloads weights. Its test file calls `pytest.importorskip("torch")` before importing anything that needs torch, so the default suite runs without the `build` group, and a CI job that installs the group runs it.
+- A module that imports torch is tested with AION and its codecs built with random weights from configs vendored in `tests/`; no test downloads weights. The suite runs with the `build` group, as CI runs it.
 - `test_api.py` holds only the HTTP contract: status codes, content types and response shapes.
 - A test earns its place by catching a plausible bug in this repository's code that no other test catches. If no such bug comes to mind, do not write it.
 - Test what callers rely on: contracts, invariants (ordering, id layout, determinism), agreement with a reference implementation, and regressions. Assert the behaviour that matters, not every observable property.

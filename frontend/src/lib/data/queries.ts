@@ -1,6 +1,7 @@
 import {
   getGalaxy,
   getImageTokens,
+  getMeta,
   getSearch,
   getSpectrum,
   getSpectrumTokens,
@@ -16,6 +17,15 @@ import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
 import { type Float32, tableFromIPC } from 'apache-arrow'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
+
+export const metaQuery = queryOptions({
+  queryKey: ['meta'] as const,
+  queryFn: async () => {
+    const { data } = await getMeta({ throwOnError: true })
+    return data
+  },
+  ...FOREVER
+})
 
 export function tokensQuery(galaxy: number | null) {
   return queryOptions({
