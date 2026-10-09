@@ -1,16 +1,20 @@
+from __future__ import annotations
+
 from functools import cache
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from datasets import Image
 from pydantic import BaseModel, ConfigDict, Field
-from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from .config import DIM, GEMMA, GEMMA_DIM, PAIRS, RGB_COLUMN, artifact, device
 from .dataset import dataset
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 
 class TextQuery(BaseModel):
@@ -22,6 +26,8 @@ class TextQuery(BaseModel):
 
 @cache
 def text_model() -> SentenceTransformer:
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(GEMMA, device=device())
 
 
