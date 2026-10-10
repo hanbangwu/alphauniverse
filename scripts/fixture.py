@@ -13,7 +13,7 @@ from app.config import (
     GEMMA_DIM,
     N_MORPHOLOGIES,
     N_PATCHES,
-    TOKEN_SURVEYS,
+    REDSHIFT,
     artifact,
     build_dir,
     galaxy_count,
@@ -28,6 +28,7 @@ from app.search import (
     starts,
     tokens,
     with_hsc,
+    with_redshift,
     with_spectrum,
 )
 from app.text_search import aion_gemma_space
@@ -37,9 +38,10 @@ TOKENS: dict[str, int] = {
     "hsc": N_PATCHES + 13,
     "desi": 273,
     "sdss": 273,
+    REDSHIFT: 1,
 }
 
-STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
+STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4, REDSHIFT: 3}
 
 CLUSTERS = 64
 NOISE = 0.05
@@ -52,12 +54,8 @@ def covered(survey: str, galaxy: int) -> bool:
 def _cells(
     rng: np.random.Generator, centres: np.ndarray, galaxies: int
 ) -> tuple[dict[str, list[np.ndarray | None]], dict[str, list[np.ndarray | None]]]:
-    embeddings: dict[str, list[np.ndarray | None]] = {
-        survey: [] for survey in TOKEN_SURVEYS
-    }
-    token_cells: dict[str, list[np.ndarray | None]] = {
-        survey: [] for survey in TOKEN_SURVEYS
-    }
+    embeddings: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
+    token_cells: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
 
     for galaxy in range(galaxies):
         for survey, count in TOKENS.items():
@@ -87,7 +85,7 @@ def _store(
                     survey: [
                         None if cell is None else list(cell) for cell in cells[survey]
                     ]
-                    for survey in TOKEN_SURVEYS
+                    for survey in TOKENS
                 },
                 **flags,
             },
@@ -113,6 +111,7 @@ def forget() -> None:
         tokens,
         with_spectrum,
         with_hsc,
+        with_redshift,
         starts,
         aion_gemma_space,
     ):

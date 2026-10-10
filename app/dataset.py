@@ -12,6 +12,8 @@ from .config import (
     DATASET_AUTHOR,
     DATASET_NAME,
     DATASET_REVISION,
+    REDSHIFT_COLUMNS,
+    REDSHIFT_RANGE,
     RGB_COLUMN,
     SPECTRUM_SURVEYS,
     Catalogue,
@@ -80,3 +82,22 @@ def table(galaxy: int) -> dict[str, float | int | bool | None]:
         column: dataset().data.column(column)[galaxy].as_py()
         for column in table_columns()
     }
+
+
+def usable(redshift: float | None, warning: bool | None) -> bool:
+    return (
+        redshift is not None
+        and not warning
+        and REDSHIFT_RANGE[0] <= redshift <= REDSHIFT_RANGE[1]
+    )
+
+
+def redshift(row: dict) -> tuple[SpectrumSurvey, float] | None:
+    return next(
+        (
+            (survey, row[value])
+            for survey, (value, warning) in REDSHIFT_COLUMNS.items()
+            if usable(row[value], row[warning])
+        ),
+        None,
+    )

@@ -108,7 +108,15 @@ SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
 SCALAR_COLUMNS = tuple(
     column for columns in SCALAR_SURVEYS.values() for column in columns
 )
-N_SCALARS = len(SCALAR_COLUMNS)
+REDSHIFT = "redshift"
+REDSHIFT_SCALAR = len(SCALAR_COLUMNS)
+N_SCALARS = REDSHIFT_SCALAR + 1
+REDSHIFT_RANGE = (0.0, 6.0)
+REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str]] = {
+    "desi": (f"Z{DESI}", f"ZWARN{DESI}"),
+    "sdss": (f"Z{SDSS}", f"ZWARNING{SDSS}"),
+}
+STORE_COLUMNS = (*TOKEN_SURVEYS, REDSHIFT)
 
 Catalogue = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
 CATALOGUES: dict[str, Catalogue] = {
@@ -152,7 +160,7 @@ def store_schema(role: str) -> pa.Schema:
     )
     return pa.schema(
         [pa.field("galaxy", pa.int32())]
-        + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
+        + [pa.field(survey, cell) for survey in STORE_COLUMNS]
         + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
     )
 

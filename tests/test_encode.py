@@ -14,6 +14,8 @@ from app.config import (
     FLAG_SURVEYS,
     N_PATCHES,
     N_SPANS,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
     SPECTRUM_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
@@ -55,7 +57,18 @@ def spectrum(rng: np.random.Generator, samples: int, padding: int) -> dict:
 def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
     rng = np.random.default_rng(seed)
     scalars = encode_module.LS_SCALARS + encode_module.HSC_SCALARS
+    redshifts = {
+        column: value
+        for (survey, (redshift, warning)), value in zip(
+            REDSHIFT_COLUMNS.items(), (0.5, 0.3), strict=True
+        )
+        for column, value in (
+            (redshift, value if {"desi": desi, "sdss": sdss}[survey] else None),
+            (warning, False if {"desi": desi, "sdss": sdss}[survey] else None),
+        )
+    }
     return {
+        **redshifts,
         TOKEN_SURVEYS[ANCHOR]: image(rng, ["des-g", "des-r", "des-i", "des-z"]),
         TOKEN_SURVEYS["hsc"]: (
             image(rng, ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]) if hsc else None
@@ -158,10 +171,12 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
 
         for role in STORES:
             assert pq.read_schema(artifact(role)).equals(store_schema(role))
-        table = source("encoded").to_table(columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS])
+        table = source("encoded").to_table(
+            columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
+        )
         assert blocks(table).shape == (
             len(rows) * (N_PATCHES + N_LS_SCALARS)
-            + spectra * N_SPANS
+            + spectra * (N_SPANS + 1)
             + hsc * N_HSC_SCALARS,
             DIM,
         )
