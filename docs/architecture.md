@@ -45,7 +45,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 ## The serving app
 
-Eleven endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded`, `codebook` and `tokens`.
+Eleven endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded` and `tokens`, as Arrow IPC files, and `codebook`, as Parquet.
 
 A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no body. An artifact's ETag is Starlette's, from the file's size and modification time, compared before the file is read. Every other successful response's ETag is an MD5 of its body, added by the route class every endpoint uses: the server still builds the response and saves only the transfer. Successful responses and 304s carry `Cache-Control: no-cache`, so a browser revalidates before each reuse.
 

@@ -4,7 +4,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
-import pyarrow.parquet as pq
 import pytest
 
 from app.config import (
@@ -19,7 +18,6 @@ from app.config import (
     SPECTRUM_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
-    artifact,
     build_dir,
     device,
     store_schema,
@@ -168,7 +166,7 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
         encode_module.generate_embeddings()
 
         for role in STORES:
-            assert pq.read_schema(artifact(role)).equals(store_schema(role))
+            assert source(role).schema.equals(store_schema(role))
         table = source("encoded").to_table(
             columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
         )
