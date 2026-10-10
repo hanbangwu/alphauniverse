@@ -1,4 +1,5 @@
 import importlib
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,7 @@ from app.config import (
     TOP_CODES,
     VOCABULARY,
     artifact,
+    build_dir,
 )
 
 pytest.importorskip("torch")
@@ -23,12 +25,18 @@ def column(table: pa.Table, name: str) -> np.ndarray:
 
 
 @pytest.fixture(scope="module")
-def store(tree: Path, random_weights: None) -> tuple[pa.Table, dict[str, np.ndarray]]:
-    predictions_module.generate_predictions()
-    with pa.memory_map(str(artifact("predictions"))) as source:
-        table = pa.ipc.open_file(source).read_all()
-    with np.load(artifact("prediction_basis")) as basis:
-        return table, dict(basis)
+def store(
+    tree: Path, random_weights: None, tmp_path_factory: pytest.TempPathFactory
+) -> tuple[pa.Table, dict[str, np.ndarray]]:
+    tokens = artifact("tokens")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path_factory.mktemp("store")))
+        build_dir().mkdir(parents=True)
+        shutil.copy(tokens, artifact("tokens"))
+        predictions_module.generate_predictions()
+        table = pa.ipc.open_file(pa.memory_map(str(artifact("predictions")))).read_all()
+        with np.load(artifact("prediction_basis")) as basis:
+            return table, dict(basis)
 
 
 @pytest.fixture(scope="module")
