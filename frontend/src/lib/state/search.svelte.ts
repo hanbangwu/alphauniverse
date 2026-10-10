@@ -21,6 +21,12 @@ export class SearchState {
     const matches = this.count
     if (galaxy === null || matches === null) return null
     if (imageTokens.length + spectrumTokens.length + tableValues.length === 0) return null
-    return { galaxy, p: imageTokens, s: spectrumTokens, t: tableValues, matches }
+    return {
+      galaxy,
+      ls_image: imageTokens,
+      desi_spectrum: spectrumTokens,
+      table_values: tableValues,
+      matches
+    }
   }
 }

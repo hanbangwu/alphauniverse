@@ -29,9 +29,9 @@
   }
 
   function fill(row: TableRow): string | undefined {
-    if (row.scalar === null || row.token === null) return undefined
-    const picked = selected.includes(row.scalar)
-    const score = similarity.tableValueMap?.[row.scalar] ?? NaN
+    if (row.table_value === null || row.token === null) return undefined
+    const picked = selected.includes(row.table_value)
+    const score = similarity.tableValueMap?.[row.table_value] ?? NaN
     const heat = similarity.tableValueHeat
     const style =
       heat && !Number.isNaN(score)
@@ -78,15 +78,15 @@
               <Table.Row
                 class={[
                   'transition-none last:border-0',
-                  ((row.scalar !== null && row.token === null) || row.excluded !== null) &&
+                  ((row.table_value !== null && row.token === null) || row.excluded !== null) &&
                     'cursor-not-allowed',
                   row.excluded !== null && 'text-muted-foreground italic'
                 ]}
                 style={fill(row)}
               >
                 <Table.Cell class="px-0 py-1.5">
-                  {#if row.scalar !== null}
-                    {@const tableValue = row.scalar}
+                  {#if row.table_value !== null}
+                    {@const tableValue = row.table_value}
                     <input
                       type="checkbox"
                       class="accent-primary disabled:cursor-not-allowed"
