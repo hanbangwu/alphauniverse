@@ -19,7 +19,7 @@ The serving app reads images and spectra from the dataset itself, from the copy 
 
 ## `generate_embeddings`
 
-For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id. A spectrum's padding samples (wavelength at or below zero) are dropped before tokenising, as the serving app drops them.
+For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id. A spectrum's padding samples (wavelength at or below zero) are dropped before tokenising, as the serving app drops them. AION's one redshift token (`tok_z`) takes the DESI `Z` if it is usable, else the SDSS `Z`: usable means present, not NaN, unflagged (`ZWARN`, `ZWARNING`) and at most the trained codec's upper limit, 6 (`REDSHIFT_LIMIT`). The codec clamps a negative redshift to its first bin.
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
@@ -30,6 +30,7 @@ Three stores are written, with the same columns:
 ```
 galaxy: int32
 ls, hsc, desi, sdss: list<fixed_size_list<float16, 768>>   -- null where unmatched
+redshift:            list<fixed_size_list<float16, 768>>   -- one token, null without a usable redshift
 gz10, provabgs:      bool
 ```
 
@@ -41,9 +42,9 @@ Within an image cell the patches come first and the survey's scalars follow. A s
 
 ## `generate_index`
 
-Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **scalars**; then, if the galaxy has an HSC match, HSC's 13 scalars. HSC's image patches are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
+Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **scalars**; then, if the galaxy has an HSC match, HSC's 13 scalars; then, if it has a redshift token, its **redshift**. HSC's image patches are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
 
-A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h`, where `s` and `h` count the galaxies before it that have a spectrum and an HSC match. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum and an HSC match in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
+A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h + r`, where `s`, `h` and `r` count the galaxies before it that have a spectrum, an HSC match and a redshift token. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum, an HSC match and a redshift in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
 ## `generate_predictions`
 
