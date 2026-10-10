@@ -26,15 +26,18 @@ Five tests in `tests/test_search.py` check what the shared tree cannot show:
 - `test_rank_keeps_the_query_first_and_each_row_together` calls `rank()` on arrays built in the test, since on the shared tree `candidates()` already returns galaxies in ranked order.
 - `test_a_search_that_finds_too_few_looks_further` changes `PROBE` and `NPROBE` so that the first search falls short, since at their defaults it finds every galaxy on the shared tree. It asks for one vector over one list, 16,384 (`NLIST`) vectors over one list, more than the shared tree holds, and one vector over every list, and checks that the answer starts with the query galaxy and holds `matches` other galaxies, or all of them when the tree holds fewer, none twice.
 
+`tests/test_pql.py` checks `app.pql`'s mode sums and maps against dense distributions rebuilt from the fixture's `predictions`.
+
 `test_selected_scalars_join_the_direction` checks the query direction and `scalar_maps` against the stored embeddings of a selected patch, a Legacy Survey scalar and an HSC scalar.
 
 The pipeline modules' tests need the `build` group, which every command above installs:
 
 ```sh
-uv run --group build pytest tests/test_encode.py tests/test_parametric_umap.py tests/test_alignment.py
+uv run --group build pytest tests/test_encode.py tests/test_predictions.py tests/test_parametric_umap.py tests/test_alignment.py
 ```
 
 - They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base`. No test downloads weights.
+- `tests/test_predictions.py` runs `generate_predictions` in its own tree on a copy of the shared tree's `tokens`: rewriting the shared `predictions` would break the memory map `app.pql` holds.
 - `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, and checks the results match.
 - `tests/test_alignment.py` checks that `fit_linear` recovers a known affine map and that `recall` is 1 for an exact prediction. Nothing loads EmbeddingGemma, so `generate_pairs`, `text_model` and `embed_queries` in `app/text_search.py` are untested.
 - `test_padded_sdss_spectra_keep_their_flux` is `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input. Remove the mark once that is fixed.

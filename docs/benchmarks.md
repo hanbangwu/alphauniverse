@@ -9,6 +9,7 @@ Every benchmark runs on Modal and measures the production artifacts on the volum
 | `search_quality`      | recall of `search()` against an exact search | Modal, a build-image container            | `docs/benchmarks/search_quality.json`      |
 | `projection_quality`  | how the projector keeps neighbours           | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
 | `text_search_quality` | text queries against catalogue cuts          | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
+| `pql_quality`         | PQL scoring against `search()`               | Modal, a build-image container with a GPU | `docs/benchmarks/pql_quality.json`         |
 
 ```sh
 uv run modal run -m scripts.benchmarks.search_performance   # --runs, default 30
@@ -16,6 +17,7 @@ uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
 uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, default 100
 uv run modal run -m scripts.benchmarks.projection_quality
 uv run modal run -m scripts.benchmarks.text_search_quality
+uv run modal run -m scripts.benchmarks.pql_quality          # --sample, default 1000
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -258,6 +260,16 @@ Average precision, raw:
 | A nearby galaxy at redshift below 0.1                   | 0.0876    | 0.1096         | 0.1088 | 0.1283 |
 
 Raw, only the stellar-mass query beats its base rate by more than 0.05 in any space. Centred figures and precision at 10 and 100 are in `docs/benchmarks/text_search_quality.json`.
+
+## `pql_quality`
+
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra removed, and encodes it so for cosine, with the job's own code. Per galaxy it queries 16 contiguous observed spans of its first spectrum survey, all its observed spans, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy and by `search()` at 128 matches, and reports, PQL against cosine with a 95% bootstrap interval over queries:
+
+- `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
+- `identity` (span queries): whether the query galaxy, spectrum removed, ranks in the top 10 among every other galaxy.
+- `availability` and `evidence` (span queries): over 20 coin flips that show each other sampled galaxy with or without its spectrum, the share with a spectrum among the top 32 minus its share overall, for galaxies at another redshift (|Δz|/(1+z) ≥ 0.01) and at the same one.
+
+It needs `predictions` and `prediction_basis` from `generate_predictions`. Unmeasured.
 
 ## Scaling ceilings
 
