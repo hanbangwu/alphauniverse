@@ -173,12 +173,18 @@ def spectrum_token_overlaps(
     return np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR)
 
 
-def table_value_probabilities(
+def table_value_log_probabilities(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
     count = len(TABLE_VALUE_SURVEYS[survey])
     stored = array(rows, f"{survey}_table_values", count, VOCABULARY)[:, slots]
-    return np.exp(stored.astype(np.float32))
+    return stored.astype(np.float32)
+
+
+def table_value_overlaps(gallery: np.ndarray, query: np.ndarray) -> np.ndarray:
+    products = gallery + query
+    largest = products.max(axis=-1)
+    return largest + np.log(np.exp(products - largest[..., None]).sum(axis=-1))
 
 
 def query_forms(
@@ -192,19 +198,23 @@ def query_forms(
         elif kind == "spectrum":
             forms[mode] = spectrum_token_coefficients(own, survey, slots)[0]
         else:
-            forms[mode] = table_value_probabilities(own, survey, slots)[0]
+            forms[mode] = table_value_log_probabilities(own, survey, slots)[0]
     return forms
 
 
-def overlaps(
+def log_overlaps(
     rows: pa.RecordBatch, mode: str, slots: np.ndarray, form: np.ndarray
 ) -> np.ndarray:
     survey, kind = mode.split("_")
     if kind == "image":
-        return image_token_overlaps(form, *top_image_tokens(rows, survey, slots, KEPT))
+        return np.log(
+            image_token_overlaps(form, *top_image_tokens(rows, survey, slots, KEPT))
+        )
     if kind == "spectrum":
-        return spectrum_token_overlaps(rows, survey, slots, form)
-    return (table_value_probabilities(rows, survey, slots) * form).sum(axis=-1)
+        return np.log(spectrum_token_overlaps(rows, survey, slots, form))
+    return table_value_overlaps(
+        table_value_log_probabilities(rows, survey, slots), form
+    )
 
 
 def sums(
@@ -213,7 +223,7 @@ def sums(
     forms: dict[str, np.ndarray],
 ) -> dict[str, np.ndarray]:
     return {
-        mode: np.log(overlaps(rows, mode, slots, forms[mode])).sum(axis=-1)
+        mode: log_overlaps(rows, mode, slots, forms[mode]).sum(axis=-1)
         for mode, slots in selected.items()
     }
 
@@ -267,11 +277,9 @@ def maps(
             )
     table_values = np.hstack(
         [
-            np.log(
-                (
-                    table_value_probabilities(rows, survey, slice(None))
-                    * table_value_probabilities(own, survey, slice(None))
-                ).sum(axis=-1)
+            table_value_overlaps(
+                table_value_log_probabilities(rows, survey, slice(None)),
+                table_value_log_probabilities(own, survey, slice(None)),
             )
             for survey in TABLE_VALUE_SURVEYS
         ]

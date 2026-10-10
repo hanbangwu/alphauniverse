@@ -150,7 +150,7 @@ export function similarityQuery(request: SimilarityQuery | null) {
             }
           },
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000
+    staleTime: Infinity
   })
 }
 
@@ -165,6 +165,6 @@ export function textSearchQuery(text: string | null) {
             return data
           },
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000
+    staleTime: Infinity
   })
 }

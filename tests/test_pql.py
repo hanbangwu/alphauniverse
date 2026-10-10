@@ -179,3 +179,17 @@ def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
         axis=0,
     )
     np.testing.assert_allclose(pql.scores(query), expected)
+
+
+def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow() -> (
+    None
+):
+    query = np.full((1, VOCABULARY), -120.0, dtype=np.float32)
+    gallery = np.full((3, 1, VOCABULARY), -120.0, dtype=np.float32)
+    query[0, 0] = 0
+    gallery[:, 0, 1] = 0
+
+    found = pql.table_value_overlaps(gallery, query)
+
+    expected = np.log(np.exp(gallery.astype(np.float64) + query).sum(axis=-1))
+    np.testing.assert_allclose(found, expected, rtol=1e-6)
