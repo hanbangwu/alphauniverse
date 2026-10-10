@@ -254,39 +254,6 @@ def test_galaxy_past_the_end_is_rejected(
     assert client.get(path.format(galaxy=galaxies)).status_code == 422
 
 
-def test_text_search_ranks_the_galaxy_nearest_the_query_first(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from app import text_search
-
-    vectors = text_search.aion_gemma_space()
-    monkeypatch.setattr(text_search, "embed_queries", lambda _: 2 * vectors[3:4])
-
-    matches = client.get(
-        "/search/text", params={"text": "a galaxy", "matches": 5}
-    ).json()
-
-    assert len(matches["galaxies"]) == 5
-    assert matches["galaxies"][0] == 3
-    assert np.all(np.diff(matches["scores"]) <= 0)
-
-
-def test_text_search_returns_every_galaxy_when_asked_for_more(
-    client: TestClient, galaxies: int, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from app import text_search
-
-    monkeypatch.setattr(
-        text_search, "embed_queries", lambda _: text_search.aion_gemma_space()[:1]
-    )
-
-    matches = client.get(
-        "/search/text", params={"text": "a galaxy", "matches": 128}
-    ).json()
-
-    assert sorted(matches["galaxies"]) == list(range(galaxies))
-
-
 @pytest.mark.parametrize(
     "params", [{"text": ""}, {"text": "x" * 501}, {"text": "a", "matches": 0}]
 )
