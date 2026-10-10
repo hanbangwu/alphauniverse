@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from itertools import batched
+from typing import NamedTuple
 
 import numpy as np
 import pyarrow as pa
@@ -10,10 +11,12 @@ from . import encode
 from .config import (
     ANCHOR,
     DIM,
+    IMAGE_VOCABULARY,
     N_PATCHES,
     N_SPANS,
     PREDICTIONS,
     REDSHIFT,
+    REDSHIFT_VOCABULARY,
     SEED,
     SPAN_RANK,
     STORE_COLUMNS,
@@ -40,13 +43,38 @@ SPECTRA = {
 }
 REDSHIFT_KEY = encode.Z.token_key
 
-SPAN_TARGETS = {key: np.arange(1, N_SPANS + 1) for key in SPECTRA.values()}
-TARGETS = (
-    {key: np.arange(N_PATCHES) for key in IMAGES.values()}
-    | {key: np.arange(1) for keys in SCALARS.values() for key in keys}
-    | {REDSHIFT_KEY: np.arange(1)}
-    | SPAN_TARGETS
+
+class Mode(NamedTuple):
+    name: str
+    keys: tuple[str, ...]
+    positions: np.ndarray
+    vocabulary: int
+    survey: str
+
+
+MODES = (
+    *(
+        Mode(f"{survey}_image", (key,), np.arange(N_PATCHES), IMAGE_VOCABULARY, survey)
+        for survey, key in IMAGES.items()
+    ),
+    *(
+        Mode(
+            f"{survey}_spectrum", (key,), np.arange(1, N_SPANS + 1), VOCABULARY, survey
+        )
+        for survey, key in SPECTRA.items()
+    ),
+    *(
+        Mode(f"{survey}_table", keys, np.arange(1), VOCABULARY, survey)
+        for survey, keys in SCALARS.items()
+    ),
+    Mode(REDSHIFT, (REDSHIFT_KEY,), np.arange(1), REDSHIFT_VOCABULARY, REDSHIFT),
 )
+SPAN_TARGETS = {key: np.arange(1, N_SPANS + 1) for key in SPECTRA.values()}
+TARGETS = {key: mode.positions for mode in MODES for key in mode.keys}
+
+
+def distributions(predicted: dict[str, np.ndarray], mode: Mode) -> np.ndarray:
+    return np.concatenate([predicted[key] for key in mode.keys])
 
 
 def inputs(row: dict) -> dict[str, torch.Tensor]:

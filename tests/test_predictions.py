@@ -142,3 +142,18 @@ def test_a_redshift_token_joins_the_context_only_where_the_galaxy_has_one(
     assert (None if found is None else found.tolist()) == (
         None if redshift is None else [redshift]
     )
+
+
+def test_every_mode_gives_a_normalised_distribution_per_slot_over_its_vocabulary(
+    tree: Path, random_weights: None
+) -> None:
+    row = predictions_module.source("tokens").head(1).to_pylist()[0]
+
+    predicted = predictions_module.predictions(
+        predictions_module.inputs(row), predictions_module.TARGETS
+    )
+
+    for mode in predictions_module.MODES:
+        found = predictions_module.distributions(predicted, mode)
+        assert found.shape == (len(mode.keys) * len(mode.positions), mode.vocabulary)
+        np.testing.assert_allclose(np.exp(found).sum(axis=-1), 1, rtol=1e-4)
