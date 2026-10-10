@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { RGB } from '$lib/color'
-  import ImageTokenFrame from '$lib/components/common/image-token-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
   import type { Snippet } from 'svelte'
@@ -53,7 +53,7 @@
     onpointerenter={() => onhover?.(true)}
     onpointerleave={() => onhover?.(false)}
   >
-    <ImageTokenFrame {busy}>
+    <PanelFrame {busy}>
       {#if values && color}
         <ImageTokenGrid
           {values}
@@ -75,7 +75,7 @@
           <GalaxyThumb {galaxy} />
         </div>
       {/if}
-    </ImageTokenFrame>
+    </PanelFrame>
   </div>
 
   {@render children?.()}

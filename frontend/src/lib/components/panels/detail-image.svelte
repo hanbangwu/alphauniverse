@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ImageTokenFrame from '$lib/components/common/image-token-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
 
   interface Props {
@@ -9,6 +9,6 @@
   let { galaxy }: Props = $props()
 </script>
 
-<ImageTokenFrame>
+<PanelFrame>
   <GalaxyThumb {galaxy} />
-</ImageTokenFrame>
+</PanelFrame>

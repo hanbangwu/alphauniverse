@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ImageTokenFrame from '$lib/components/common/image-token-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import { morphologyQuery } from '$lib/data/queries'
   import { MORPHOLOGIES } from '$lib/labels'
@@ -26,9 +26,9 @@
   aria-pressed={view.galaxy.value === galaxy}
   class="flex w-full items-center gap-4 rounded-lg p-2 text-left hover:bg-muted aria-pressed:bg-muted"
 >
-  <ImageTokenFrame class="size-20 shrink-0">
+  <PanelFrame class="size-20 shrink-0">
     <GalaxyThumb {galaxy} />
-  </ImageTokenFrame>
+  </PanelFrame>
   <div class="flex flex-col gap-1">
     <span class="text-sm font-medium">#{galaxy}</span>
     <span class="text-xs text-muted-foreground tabular-nums">

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ImageTokenFrame from '$lib/components/common/image-token-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import { getSimilarity } from './similarity.svelte'
 
@@ -17,7 +17,7 @@
   <span class="text-sm font-medium">
     #{galaxy}{score === undefined ? '' : `: ${similarity.score(score)}`}
   </span>
-  <ImageTokenFrame>
+  <PanelFrame>
     <GalaxyThumb {galaxy} />
-  </ImageTokenFrame>
+  </PanelFrame>
 </div>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tokenAlpha, tokenColors } from '$lib/color'
-  import ImageTokenFrame from '$lib/components/common/image-token-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
   import { hasSpectrum } from '$lib/data/spectra'
@@ -32,7 +32,7 @@
 <div class="flex flex-col gap-2">
   <span class="text-sm font-medium">Spectrum Tokens</span>
 
-  <ImageTokenFrame
+  <PanelFrame
     busy={coverage.isPending || spectrum.isFetching || tokens.isFetching}
     class="aspect-2/1 bg-card md:aspect-4/1"
   >
@@ -55,5 +55,5 @@
         No spectrum
       </p>
     {/if}
-  </ImageTokenFrame>
+  </PanelFrame>
 </div>
