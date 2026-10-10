@@ -52,6 +52,7 @@ A container with the server's spec runs, per version:
 3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `tokens` (which `starts` loads), `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
 4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
 5. `search()` whole at 8, 32 and 128 matches.
+6. where the version has `app/pql.py`, its loads (`predictions`, `basis`) and, first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 4 patches, 16 contiguous spans, all 272 spans and 4 Legacy Survey table values. These are reported under `pql`, outside `total_p50_ms`.
 
 The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. Cold reads are charged to user time: in the last run's first round, `make_direct_map` took 8,465 ms of wall time and 8,310 ms of user CPU, none of system. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
 

@@ -15,8 +15,17 @@ from typing import Any
 import faiss
 import numpy as np
 
-from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count, labels
+from app import pql
+from app.config import (
+    DATASET_REVISION,
+    N_PATCHES,
+    N_SPANS,
+    artifact,
+    galaxy_count,
+    labels,
+)
 from app.search import (
+    N_LS_SCALARS,
     Query,
     candidates,
     centroid,
@@ -29,6 +38,7 @@ from app.search import (
     starts,
     tokens,
     vectors,
+    with_spectrum,
 )
 from modal_app import (
     CACHE_PATH,
@@ -41,6 +51,7 @@ from modal_app import (
 from scripts.benchmarks.common import (
     MATCHES,
     PATCHES,
+    SCALARS,
     elapsed,
     environment,
     git,
@@ -64,6 +75,7 @@ STAGES = [
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
+SPAN_WINDOW = 16
 ENTRY = (
     "import json, sys, time\n"
     "start = time.perf_counter()\n"
@@ -145,6 +157,65 @@ def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any
     )
 
 
+def pql_queries(count: int) -> dict[str, list[Query]]:
+    rng = np.random.default_rng(4)
+    holders = rng.choice(np.flatnonzero(with_spectrum()), count)
+    first = rng.integers(N_SPANS - SPAN_WINDOW + 1, size=count)
+    return {
+        "patches": queries(count, PATCHES, MATCHES[1]),
+        "spans_16": [
+            Query(galaxy=int(galaxy), spans=tuple(range(start, start + SPAN_WINDOW)))
+            for galaxy, start in zip(holders, first, strict=True)
+        ],
+        "spans_all": [
+            Query(galaxy=int(galaxy), spans=tuple(range(N_SPANS))) for galaxy in holders
+        ],
+        "table_values": [
+            Query(
+                galaxy=int(rng.integers(galaxy_count())),
+                scalars=tuple(
+                    rng.choice(N_LS_SCALARS, SCALARS, replace=False).tolist()
+                ),
+            )
+            for _ in range(count)
+        ],
+    }
+
+
+def pql_times(runs: int, matches: int) -> dict[str, Any]:
+    loads = (pql.predictions, pql.basis)
+    marks = [mark()]
+    for load in loads:
+        load()
+        marks.append(mark())
+    timed = {}
+    for kind, batch in pql_queries(runs + 1).items():
+        samples = []
+        for query in batch:
+            start = time.perf_counter()
+            order = np.argsort(-pql.scores(query), kind="stable")[: matches + 1]
+            scanned = time.perf_counter()
+            pql.maps(query, order)
+            samples.append(
+                ((scanned - start) * 1000, (time.perf_counter() - scanned) * 1000)
+            )
+        timed[kind] = {
+            "cold_ms": {
+                "scan": round(samples[0][0], 3),
+                "maps": round(samples[0][1], 3),
+            },
+            "scan": summary([scan for scan, _ in samples[1:]]),
+            "maps": summary([maps for _, maps in samples[1:]]),
+        }
+    return {
+        "load_ms": {
+            name: round(usage["wall"], 3)
+            for name, usage in usages([load.__name__ for load in loads], marks).items()
+        },
+        "queries": timed,
+    }
+
+
 @app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     split = index_split()
@@ -186,6 +257,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
         "searches": {
             f"matches={asked}": whole_searches(runs, asked, built) for asked in MATCHES
         },
+        "pql": pql_times(runs, matches),
         "usage_ms": {
             "index_split": {name: rounded(usage) for name, usage in split.items()},
             "loads": {name: rounded(usage) for name, usage in loads.items()},
