@@ -30,11 +30,12 @@ export class Similarity {
   readonly imageDomain: Extent | null
   readonly imageHeat: ((value: number) => RGB) | null
   readonly imageCosines: Float32Array | null
+  readonly imageCosineDomain: Extent | null
+  readonly imageCosineHeat: ((value: number) => RGB) | null
   readonly spectrumMaps: Float32Array | null
   readonly spectrumHeat: ((value: number) => RGB) | null
   readonly spectrumCosines: Float32Array | null
-  readonly cosineDomain: Extent = [0, 1]
-  readonly cosineHeat: (value: number) => RGB = continuous(this.cosineDomain)
+  readonly spectrumCosineHeat: ((value: number) => RGB) | null
   readonly tableValueMap: Float32Array | null
   readonly tableValueHeat: ((value: number) => RGB) | null
 
@@ -68,6 +69,10 @@ export class Similarity {
     this.imageCosines = $derived(
       this.#imageCosines.data ? best(this.#imageCosines.data, app.view.imageTokens.value) : null
     )
+    this.imageCosineDomain = $derived(this.imageCosines ? extent(this.imageCosines) : null)
+    this.imageCosineHeat = $derived(
+      this.imageCosineDomain ? continuous(this.imageCosineDomain) : null
+    )
     this.spectrumMaps = $derived(this.#result.data?.spectrumMaps ?? null)
     this.spectrumHeat = $derived.by(() => {
       if (!this.spectrumMaps) return null
@@ -79,6 +84,9 @@ export class Similarity {
         ? best(this.#spectrumCosines.data, app.view.spectrumTokens.value)
         : null
     )
+    this.spectrumCosineHeat = $derived(
+      this.spectrumCosines ? continuous(extent(this.spectrumCosines)) : null
+    )
     this.tableValueMap = $derived(this.#result.data?.tableValueMap ?? null)
     this.tableValueHeat = $derived.by(() => {
       if (!this.tableValueMap) return null
@@ -89,6 +97,14 @@ export class Similarity {
 
   get error(): string | null {
     return this.#result.isError ? errorMessage(this.#result.error) : null
+  }
+
+  get imageCosinesError(): string | null {
+    return this.#imageCosines.isError ? errorMessage(this.#imageCosines.error) : null
+  }
+
+  get spectrumCosinesError(): string | null {
+    return this.#spectrumCosines.isError ? errorMessage(this.#spectrumCosines.error) : null
   }
 
   get stale(): boolean {

@@ -31,7 +31,7 @@
       describe="Click an image token to query it"
       values={similarity.imageCosines ?? tokens.data ?? null}
       grid={similarity.grid}
-      color={similarity.imageCosines ? similarity.cosineHeat : palette}
+      color={similarity.imageCosines ? similarity.imageCosineHeat : palette}
       opacity={similarity.imageCosines ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
       galaxy={similarity.galaxy}
       title={similarity.imageCosines ? similarity.cosine : similarity.caption}
@@ -42,38 +42,44 @@
       imageOpacity={similarity.imageCosines || hovered ? undefined : tokenAlpha(false)}
     >
       {#snippet action()}
-        <label class="flex items-center gap-2 text-sm font-medium">
-          <Switch
-            checked={display.on.value}
-            disabled={!similarity.imageCosines && !similarity.searched}
-            onCheckedChange={(checked) => (display.on.value = checked)}
-          />
-          Mask
-        </label>
+        <div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 text-sm font-medium">
+            <Switch
+              checked={display.on.value}
+              disabled={!display.on.value && !similarity.imageCosines && !similarity.searched}
+              onCheckedChange={(checked) => (display.on.value = checked)}
+            />
+            Mask
+          </label>
+          <label class="flex items-center gap-2 text-sm font-medium">
+            <Switch
+              checked={display.invert.value}
+              disabled={!display.on.value}
+              onCheckedChange={(checked) => (display.invert.value = checked)}
+            />
+            Invert
+          </label>
+        </div>
       {/snippet}
       {#if tokens.isError}
         <p role="alert" class="text-xs leading-relaxed text-destructive">
           {errorMessage(tokens.error)}
         </p>
       {/if}
+      {#if similarity.imageCosinesError}
+        <p role="alert" class="text-xs leading-relaxed text-destructive">
+          {similarity.imageCosinesError}
+        </p>
+      {/if}
     </ImageTokenPanel>
 
-    {#if similarity.imageCosines}
+    {#if similarity.imageCosines && similarity.imageCosineDomain}
       <ImageTokenMask
         values={similarity.imageCosines}
-        domain={similarity.cosineDomain}
+        domain={similarity.imageCosineDomain}
         control={display.query}
       >
-        {#snippet action()}
-          <label class="flex items-center gap-2 text-sm font-medium">
-            <Switch
-              checked={display.invert.value}
-              onCheckedChange={(checked) => (display.invert.value = checked)}
-            />
-            Invert
-          </label>
-        {/snippet}
-        <MaskControls domain={similarity.cosineDomain} control={display.query} />
+        <MaskControls domain={similarity.imageCosineDomain} control={display.query} />
       </ImageTokenMask>
     {/if}
 
@@ -87,9 +93,14 @@
   <SpectrumPanel
     galaxy={similarity.galaxy}
     map={similarity.spectrumCosines}
-    heat={similarity.cosineHeat}
+    heat={similarity.spectrumCosineHeat}
     caption={similarity.cosine}
     selected={view.spectrumTokens.value}
     ontoggle={(index) => view.spectrumTokens.toggle(index)}
   />
+  {#if similarity.spectrumCosinesError}
+    <p role="alert" class="text-xs leading-relaxed text-destructive">
+      {similarity.spectrumCosinesError}
+    </p>
+  {/if}
 </div>
