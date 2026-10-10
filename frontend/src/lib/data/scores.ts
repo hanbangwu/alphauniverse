@@ -22,6 +22,16 @@ export function row(values: Float32Array, index: number, width: number): Float32
   return values.subarray(index * width, (index + 1) * width)
 }
 
+export function best(table: Float32Array, rows: number[], width: number): Float32Array {
+  const out = new Float32Array(width).fill(-Infinity)
+  for (const index of rows) {
+    for (let column = 0; column < width; column++) {
+      out[column] = Math.max(out[column], table[index * width + column])
+    }
+  }
+  return out
+}
+
 export function matchMean(values: Float32Array, rows: number): Float32Array {
   const width = values.length / rows
   const mean = new Float32Array(width)

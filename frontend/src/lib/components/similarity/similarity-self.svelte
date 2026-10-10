@@ -29,23 +29,23 @@
     <ImageTokenPanel
       label="Image Tokens"
       describe="Click an image token to query it"
-      values={similarity.imageMap ?? tokens.data ?? null}
+      values={similarity.imageCosines ?? tokens.data ?? null}
       grid={similarity.grid}
-      color={similarity.imageMap ? similarity.imageHeat : palette}
-      opacity={similarity.imageMap ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
+      color={similarity.imageCosines ? similarity.cosineHeat : palette}
+      opacity={similarity.imageCosines ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
       galaxy={similarity.galaxy}
-      title={similarity.imageMap ? similarity.score : similarity.caption}
+      title={similarity.imageCosines ? similarity.cosine : similarity.caption}
       selected={view.imageTokens.value}
       ontoggle={(index) => view.imageTokens.toggle(index)}
       busy={!tokens.data && !tokens.isError}
       onhover={(value) => (hovered = value)}
-      imageOpacity={similarity.imageMap || hovered ? undefined : tokenAlpha(false)}
+      imageOpacity={similarity.imageCosines || hovered ? undefined : tokenAlpha(false)}
     >
       {#snippet action()}
         <label class="flex items-center gap-2 text-sm font-medium">
           <Switch
             checked={display.on.value}
-            disabled={!similarity.searched}
+            disabled={!similarity.imageCosines && !similarity.searched}
             onCheckedChange={(checked) => (display.on.value = checked)}
           />
           Mask
@@ -58,8 +58,12 @@
       {/if}
     </ImageTokenPanel>
 
-    {#if similarity.imageMap && similarity.imageDomain}
-      <ImageTokenMask values={similarity.imageMap}>
+    {#if similarity.imageCosines}
+      <ImageTokenMask
+        values={similarity.imageCosines}
+        domain={similarity.cosineDomain}
+        control={display.query}
+      >
         {#snippet action()}
           <label class="flex items-center gap-2 text-sm font-medium">
             <Switch
@@ -69,7 +73,7 @@
             Invert
           </label>
         {/snippet}
-        <MaskControls domain={similarity.imageDomain} />
+        <MaskControls domain={similarity.cosineDomain} control={display.query} />
       </ImageTokenMask>
     {/if}
 
@@ -82,7 +86,9 @@
 
   <SpectrumPanel
     galaxy={similarity.galaxy}
-    map={similarity.spectrumMap}
+    map={similarity.spectrumCosines}
+    heat={similarity.cosineHeat}
+    caption={similarity.cosine}
     selected={view.spectrumTokens.value}
     ontoggle={(index) => view.spectrumTokens.toggle(index)}
   />

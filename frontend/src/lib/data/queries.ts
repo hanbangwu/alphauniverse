@@ -1,4 +1,5 @@
 import {
+  getCosines,
   getGalaxy,
   getImageTokens,
   getMeta,
@@ -8,7 +9,7 @@ import {
   getTable,
   getTextSearch
 } from '$lib/api'
-import type { Projection } from '$lib/client'
+import type { CosineMode, Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { matchMean } from './scores'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
@@ -98,6 +99,20 @@ export function spectrumTokensQuery(galaxy: number | null) {
         : async () => {
             const { data } = await getSpectrumTokens({ path: { galaxy }, throwOnError: true })
             return new Uint32Array(await data.arrayBuffer())
+          },
+    ...FOREVER
+  })
+}
+
+export function cosinesQuery(galaxy: number | null, mode: CosineMode) {
+  return queryOptions({
+    queryKey: ['cosines', galaxy, mode] as const,
+    queryFn:
+      galaxy === null
+        ? skipToken
+        : async () => {
+            const { data } = await getCosines({ path: { galaxy, mode }, throwOnError: true })
+            return new Float32Array(await data.arrayBuffer())
           },
     ...FOREVER
   })

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { SPECTRUM_SURVEY } from '$lib/data/spectra'
   import { OBSERVATIONS } from '$lib/labels'
+  import { getMask } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenMap from './image-token-map.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
@@ -15,6 +16,7 @@
   let { galaxy, index }: Props = $props()
 
   const similarity = getSimilarity()
+  const display = getMask()
   const values = $derived(similarity.imageMapAt(index))
   const predicted = $derived(similarity.predictedAt(index))
   const elsewhere = $derived(
@@ -26,7 +28,7 @@
   <div class="flex flex-col gap-5 md:flex-row md:justify-center md:*:max-w-xs">
     <GalaxyTile {galaxy} score={similarity.scoreAt(index)} />
     <ImageTokenMap {values} />
-    <ImageTokenMask {values} />
+    <ImageTokenMask {values} domain={similarity.imageDomain} control={display.matches} />
   </div>
   {#if elsewhere.length}
     <p class="text-xs text-muted-foreground">
