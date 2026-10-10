@@ -394,6 +394,20 @@ def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Arr
 
 
 @app.get(
+    "/saliency",
+    response_class=Response,
+    responses={200: {"content": ARROW_STREAM}},
+    description="For the query galaxy, at every slot of every mode, the partial "
+    "correlation over every other galaxy between its score on the selection and its "
+    "agreement with the query galaxy at that slot, controlling for its mean agreement "
+    "outside the selection. One row, one list column per map.",
+)
+def get_saliency(query: Annotated[pql.Query, Query()]) -> Response:
+    fields, columns = map_arrays(pql.by_mode(pql.saliency(query)[None]))
+    return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
+
+
+@app.get(
     "/search",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},

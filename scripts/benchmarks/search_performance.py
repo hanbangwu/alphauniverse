@@ -52,6 +52,7 @@ STAGES = [
     "order",
     "maps",
     "predicted",
+    "saliency",
 ]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
@@ -132,6 +133,8 @@ def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
     pql.maps(found, galaxies)
     marks.append(mark())
     pql.predicted(query, galaxies)
+    marks.append(mark())
+    pql.saliency(query)
     marks.append(mark())
     return usages(STAGES, marks)
 

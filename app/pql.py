@@ -421,6 +421,34 @@ def maps(found: Agreements, galaxies: np.ndarray) -> dict[str, np.ndarray]:
     return by_mode(np.exp(found.values[galaxies] - found.peaks))
 
 
+def saliency(query: Query) -> np.ndarray:
+    found = agreements(query.galaxy)
+    chosen = columns(selection(query))
+    others = np.arange(len(found.values)) != query.galaxy
+    count = others.sum()
+    score = found.values[:, chosen].sum(axis=1, dtype=np.float64)
+    control = (found.totals - score) / (WIDTH - len(chosen))
+
+    def centred(values: np.ndarray) -> np.ndarray:
+        return np.where(others, values - values[others].mean(), 0)
+
+    centred_score, centred_control = centred(score), centred(control)
+    spread_score = np.sqrt(centred_score @ centred_score / count)
+    spread_control = np.sqrt(centred_control @ centred_control / count)
+    covariances = products(found.values, np.c_[centred_score, centred_control]).T
+    with np.errstate(divide="ignore", invalid="ignore"):
+        with_score, with_control = covariances / (
+            count * found.spread * [[spread_score], [spread_control]]
+        )
+        between = (
+            centred_score @ centred_control / (count * spread_score * spread_control)
+        )
+        return (
+            (with_score - with_control * between)
+            / np.sqrt((1 - with_control**2) * (1 - between**2))
+        ).astype(np.float32)
+
+
 def fractions(
     forms: dict[str, np.ndarray], totals: dict[str, np.ndarray]
 ) -> dict[str, np.ndarray]:
