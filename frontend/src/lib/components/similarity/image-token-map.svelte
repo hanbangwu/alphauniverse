@@ -4,9 +4,10 @@
 
   interface Props {
     values: Float32Array
+    selected: number[]
   }
 
-  let { values }: Props = $props()
+  let { values, selected }: Props = $props()
 
   const similarity = getSimilarity()
 </script>
@@ -17,4 +18,5 @@
   grid={similarity.grid}
   color={similarity.imageHeat}
   title={similarity.score}
+  {selected}
 />

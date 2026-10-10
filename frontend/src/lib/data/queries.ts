@@ -3,6 +3,7 @@ import {
   getGalaxy,
   getImageTokens,
   getMeta,
+  getSaliency,
   getSearch,
   getSpectrum,
   getSpectrumTokens,
@@ -12,7 +13,7 @@ import {
 import type { CosineMode, Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { matchMean } from './scores'
-import type { SimilarityQuery, SimilarityResult } from './similarity'
+import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
 import { type Float32, type Table, type Utf8, type Vector, tableFromIPC } from 'apache-arrow'
@@ -150,10 +151,8 @@ export function morphologyQuery(mosaic: MosaicState, table: string | null, galax
   })
 }
 
-function shownMaps(table: Table, mode: string): Float32Array {
-  const selection = table.getChild(`${mode}_selection`)!
-  const shown = selection.nullCount === 0 ? selection : table.getChild(mode)!
-  return shown.getChildAt<Float32>(0)!.toArray()
+function maps(table: Table, mode: string): Float32Array {
+  return table.getChild(mode)!.getChildAt<Float32>(0)!.toArray()
 }
 
 export function similarityQuery(request: SimilarityQuery | null) {
@@ -165,17 +164,36 @@ export function similarityQuery(request: SimilarityQuery | null) {
         : async ({ signal }): Promise<SimilarityResult> => {
             const { data } = await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
-            const tableValueMaps = table.getChild('table_values')!.getChildAt<Float32>(0)!.toArray()
             return {
               galaxies: table.getChild('galaxy')!.toArray(),
               similarities: table.getChild('similarity')!.toArray(),
-              imageMaps: shownMaps(table, 'ls_image'),
-              spectrumMaps: shownMaps(table, 'desi_spectrum'),
-              tableValueMap: matchMean(tableValueMaps, table.numRows),
+              imageMaps: maps(table, 'ls_image'),
+              spectrumMaps: maps(table, 'desi_spectrum'),
+              tableValueMap: matchMean(maps(table, 'table_values'), table.numRows),
               predicted: Array.from(
                 table.getChild('predicted')!,
                 (row: Vector<Utf8>) => Array.from(row) as string[]
               )
+            }
+          },
+    placeholderData: keepPreviousData,
+    staleTime: Infinity
+  })
+}
+
+export function saliencyQuery(request: SaliencyQuery | null) {
+  return queryOptions({
+    queryKey: ['saliency', request] as const,
+    queryFn:
+      request === null
+        ? skipToken
+        : async ({ signal }): Promise<SaliencyResult> => {
+            const { data } = await getSaliency({ query: request, signal, throwOnError: true })
+            const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
+            return {
+              image: maps(table, 'ls_image'),
+              spectrum: maps(table, 'desi_spectrum'),
+              tableValues: maps(table, 'table_values')
             }
           },
     placeholderData: keepPreviousData,

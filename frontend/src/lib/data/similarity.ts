@@ -1,6 +1,8 @@
-import type { GetSearchData } from '$lib/api'
+import type { GetSaliencyData, GetSearchData } from '$lib/api'
 
 export type SimilarityQuery = GetSearchData['query']
+
+export type SaliencyQuery = GetSaliencyData['query']
 
 export type Extent = readonly [number, number]
 
@@ -11,4 +13,10 @@ export interface SimilarityResult {
   spectrumMaps: Float32Array
   tableValueMap: Float32Array
   predicted: string[][]
+}
+
+export interface SaliencyResult {
+  image: Float32Array
+  spectrum: Float32Array
+  tableValues: Float32Array
 }
