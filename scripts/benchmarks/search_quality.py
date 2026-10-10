@@ -71,7 +71,7 @@ def allocate_anonymous() -> list[dict[str, Any]]:
 
 @app.local_entrypoint()
 def main() -> None:
-    report: dict[str, Any] = {"git": git(), "limit_mib": LIMIT_MIB}
+    report: dict[str, Any] = {"git": git("rev-parse", "HEAD"), "limit_mib": LIMIT_MIB}
     for name, function in (
         ("mapped", touch_mapped),
         ("anonymous", allocate_anonymous),
