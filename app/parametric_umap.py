@@ -201,7 +201,10 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
 
 def embedding_count() -> int:
     table = source("encoded").to_table(columns=list(TOKEN_SURVEYS))
-    return sum(pc.sum(pc.list_value_length(column)).as_py() for column in table.columns)
+    return sum(
+        pc.sum(pc.list_value_length(column), min_count=0).as_py()
+        for column in table.columns
+    )
 
 
 def sample() -> np.ndarray:
