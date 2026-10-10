@@ -332,6 +332,15 @@ def scores(query: Query) -> np.ndarray:
     return combine(parts(query))
 
 
+def cosines(galaxy: int, mode: str) -> np.ndarray:
+    form = query_forms(row(galaxy), {mode: slice(None)})[mode]
+    if mode in SPECTRUM_MODES:
+        mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
+        form = mean + form @ directions
+    unit = form / np.linalg.norm(form, axis=-1, keepdims=True)
+    return (unit @ unit.T).astype(np.float32)
+
+
 def maps(
     query: Query, galaxies: np.ndarray
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
