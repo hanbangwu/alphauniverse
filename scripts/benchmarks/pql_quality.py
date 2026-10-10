@@ -26,9 +26,9 @@ from app.search import (
     N_HSC_SCALARS,
     N_LS_SCALARS,
     Query,
+    bounds,
     centroid,
     index,
-    layout,
     search,
     source,
     with_hsc,
@@ -184,9 +184,8 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
         rng.choice(np.flatnonzero(with_spectrum() & known), sample, replace=False)
     )
     hidden_rows, hidden_tokens = hidden(galaxies)
-    bounds = layout(with_spectrum(), with_hsc())
     observed_tokens = [
-        built.reconstruct_batch(np.arange(bounds[galaxy], bounds[galaxy + 1]))
+        built.reconstruct_batch(np.arange(bounds()[galaxy], bounds()[galaxy + 1]))
         for galaxy in galaxies
     ]
     flips = rng.random((FLIPS, sample)) < 0.5
