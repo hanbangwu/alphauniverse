@@ -23,7 +23,7 @@ For each galaxy: tokenise every modality it has, run all its tokens through the 
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
-Galaxies are encoded one at a time and written in batches of 1024 rows.
+Galaxies are encoded one at a time and written in batches of `BATCH` (128). `encoded` is an uncompressed Arrow IPC file, one record batch per batch, which every reader memory-maps; `codebook` and `tokens` are Parquet, one row group per batch.
 
 Three stores are written, with the same columns:
 
