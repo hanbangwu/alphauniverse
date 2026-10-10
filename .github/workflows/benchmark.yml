@@ -44,11 +44,15 @@ jobs:
 
       - name: Report
         run: |
-          {
-            echo '```json'
-            cat "$REPORT"
-            echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$(stat -c %s "$REPORT")" -lt 1000000 ]; then
+            {
+              echo '```json'
+              cat "$REPORT"
+              echo '```'
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The report is over the step summary's 1 MiB limit; it is in the run's artifact." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/upload-artifact@v7
         with:

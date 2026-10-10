@@ -47,8 +47,17 @@ COEFFICIENTS = (
 DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
 
 
-def floor(overlaps: torch.Tensor, vocabulary: int) -> torch.Tensor:
-    return overlaps.clamp_min(pql.SPAN_FLOOR * VOCABULARY / vocabulary)
+def kind(mode: Mode) -> str:
+    return mode.name.split("_")[-1]
+
+
+def floor(scheme: object, vocabulary: int) -> float:
+    projected = isinstance(scheme, Projection) or (
+        isinstance(scheme, Current) and scheme.kind == "spectrum"
+    )
+    if projected:
+        return pql.SPECTRUM_TOKEN_FLOOR * VOCABULARY / vocabulary
+    return torch.finfo(torch.float32).tiny
 
 
 def step(low: torch.Tensor, high: torch.Tensor, bits: int) -> torch.Tensor:
@@ -65,8 +74,8 @@ def quantise(
 def store(values: torch.Tensor, precision: Precision) -> Stored:
     if precision.scale == "none":
         return {"values": values.to(DTYPES[precision.name])}
-    low = values.amin(dim=-1, keepdim=True).float()
-    high = values.amax(dim=-1, keepdim=True).float()
+    low = values.amin(dim=-1, keepdim=True)
+    high = values.amax(dim=-1, keepdim=True)
     return {
         "codes": quantise(values, precision.bits, low, high),
         "offsets": low,
@@ -138,7 +147,11 @@ class Kept:
         self, stored: Stored
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         values = load(
-            {name[5:]: array for name, array in stored.items() if name[:5] == "kept_"}
+            {
+                name.removeprefix("kept_"): array
+                for name, array in stored.items()
+                if name.startswith("kept_")
+            }
         )
         if self.precision.domain == "log":
             values = values.exp()
@@ -184,7 +197,7 @@ class TopK(Kept):
         self, k: int, rest: str, precision: Precision, vocabulary: int
     ) -> None:
         super().__init__(rest, precision, vocabulary)
-        self.k = min(k, vocabulary)
+        self.k = k
         self.name = f"top{k}/{rest}/{precision.name}"
 
     def kept(
@@ -225,8 +238,11 @@ class Basis:
     def fit(self, chunks: Iterable[torch.Tensor]) -> None:
         rows = [chunk.reshape(-1, chunk.shape[-1]) for chunk in chunks]
         count = sum(len(chunk) for chunk in rows)
-        total = sum(chunk.double().exp().sum(dim=0) for chunk in rows)
-        products = sum(chunk.double().exp().T @ chunk.double().exp() for chunk in rows)
+        total, products = 0, 0
+        for chunk in rows:
+            probabilities = chunk.double().exp()
+            total = total + probabilities.sum(dim=0)
+            products = products + probabilities.T @ probabilities
         mean = total / count
         _, vectors = torch.linalg.eigh(products / count - torch.outer(mean, mean))
         self.mean = mean.float()
@@ -236,6 +252,12 @@ class Basis:
         ]
         self.low = torch.stack([part.amin(dim=0) for part in projected]).amin(dim=0)
         self.high = torch.stack([part.amax(dim=0) for part in projected]).amax(dim=0)
+
+    def to(self, device: torch.device) -> "Basis":
+        moved = Basis(self.rank)
+        for name in ("mean", "directions", "low", "high"):
+            setattr(moved, name, getattr(self, name).to(device))
+        return moved
 
 
 class Projection:
@@ -282,7 +304,7 @@ class Projection:
 class Current:
     def __init__(self, mode: Mode, basis: Basis) -> None:
         self.vocabulary = mode.vocabulary
-        self.kind = mode.name.split("_")[-1]
+        self.kind = kind(mode)
         self.basis = basis
         self.dense = Dense(FLOATS[1])
         self.name = "current"
