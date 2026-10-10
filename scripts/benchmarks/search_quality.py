@@ -96,9 +96,9 @@ def direction(query: Query, galaxy: int, reference: Corpus) -> np.ndarray:
             scalars[scalars >= N_LS_SCALARS] - N_LS_SCALARS
         ]
     )
-    found = np.concatenate(query_rows).mean(axis=0, keepdims=True)
-    faiss.normalize_L2(found)
-    return found
+    averaged = np.concatenate(query_rows).mean(axis=0, keepdims=True)
+    faiss.normalize_L2(averaged)
+    return averaged
 
 
 def exact_maps(
@@ -145,21 +145,24 @@ def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
         ]
     )
     del taken
-    scores = np.empty((source("encoded").count_rows(), len(batch)), dtype=np.float32)
+    scores = np.empty((len(batch), source("encoded").count_rows()), dtype=np.float32)
     start = 0
     for cells in source("encoded").to_batches(
         columns=COLUMNS, batch_size=BATCH, batch_readahead=1
     ):
-        scores[start : start + cells.num_rows] = best(
+        scores[:, start : start + cells.num_rows] = best(
             *exact_maps(directions, corpus(cells))
-        )
+        ).T
         start += cells.num_rows
-    return [
-        np.concatenate(([query.galaxy], order[order != query.galaxy][: query.matches]))
-        for query, order in zip(
-            batch, np.argsort(-scores, axis=0, kind="stable").T, strict=True
+    rankings = []
+    for query, row in zip(batch, scores, strict=True):
+        order = np.argsort(-row, kind="stable")
+        rankings.append(
+            np.concatenate(
+                ([query.galaxy], order[order != query.galaxy][: query.matches])
+            )
         )
-    ]
+    return rankings
 
 
 def exact_ranking(
