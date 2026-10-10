@@ -170,10 +170,12 @@ All six are within 190 − 177 = 13 ms at p50. What the floor is made of is **un
 
 ## `search_quality`
 
-A container on the build image, with the build jobs' CPU, memory and volume, loads every patch and span embedding, then runs `--per-kind` queries of each kind at 32 matches:
+A container on the build image, with the build jobs' CPU, memory and volume, loads every patch, span and scalar embedding, then runs `--per-kind` queries of each kind at 32 matches:
 
 - `patches`: 4 patches of a galaxy drawn from all galaxies.
 - `paired_patches`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 patches and 4 spans inside its observed range, queried with the patches, the spans, and both.
+- `scalars`: 4 Legacy Survey scalars of a galaxy drawn from all galaxies.
+- `hsc_scalars`: 2 Legacy Survey and 2 HSC scalars of a galaxy drawn from galaxies with an HSC match.
 
 A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force over float32 embeddings) that `search()` returns at the served `PROBE` and `NPROBE`. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
 
@@ -193,6 +195,8 @@ A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force ov
 | 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
 | 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
 | 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
+
+`scalars` and `hsc_scalars` are unmeasured: this run predates them.
 
 ## `projection_quality`
 
