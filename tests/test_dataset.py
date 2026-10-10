@@ -12,11 +12,20 @@ from app.config import (
     CROP_PIXELS,
     FLAG_SURVEYS,
     LS,
+    REDSHIFT_COLUMNS,
     RGB_COLUMN,
     SCALAR_COLUMNS,
     SPECTRUM_SURVEYS,
 )
-from app.dataset import encode, image, samples, spectrum, table, table_columns
+from app.dataset import (
+    encode,
+    image,
+    redshift,
+    samples,
+    spectrum,
+    table,
+    table_columns,
+)
 
 SOURCE = Image.fromarray(
     np.random.default_rng(0).integers(
@@ -108,3 +117,31 @@ def test_table_keeps_numeric_catalogue_columns(
 
     assert table(1) == {SCALAR_COLUMNS[0]: None, FLAG_SURVEYS["gz10"]: 3}
     table_columns.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("desi", "sdss", "expected"),
+    [
+        ((0.5, False), (0.51, False), "desi"),
+        ((0.5, True), (0.51, False), "sdss"),
+        ((6.5, False), (0.51, False), "sdss"),
+        ((float("nan"), False), (0.51, False), "sdss"),
+        ((-0.001, False), (None, None), "desi"),
+        ((1.5, False), (None, None), "desi"),
+        ((None, None), (0.51, True), None),
+    ],
+)
+def test_aion_gets_the_first_usable_redshift_desi_before_sdss(
+    desi: tuple[float | None, bool | None],
+    sdss: tuple[float | None, bool | None],
+    expected: str | None,
+) -> None:
+    row = {
+        column: value
+        for (value_column, _, warning_column), (measured, flagged) in zip(
+            REDSHIFT_COLUMNS.values(), (desi, sdss), strict=True
+        )
+        for column, value in ((value_column, measured), (warning_column, flagged))
+    }
+
+    assert redshift(row) == expected
