@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tokenAlpha, tokenColors } from '$lib/color'
-  import PatchFrame from '$lib/components/common/patch-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
   import { hasSpectrum } from '$lib/data/spectra'
@@ -32,7 +32,7 @@
 <div class="flex flex-col gap-2">
   <span class="text-sm font-medium">Spectrum Tokens</span>
 
-  <PatchFrame
+  <PanelFrame
     busy={coverage.isPending || spectrum.isFetching || tokens.isFetching}
     class="aspect-2/1 bg-card md:aspect-4/1"
   >
@@ -46,7 +46,7 @@
         {selected}
         {ontoggle}
         label={ontoggle
-          ? 'Scroll to zoom, drag to pan, click a span to select its token'
+          ? 'Scroll to zoom, drag to pan, click a spectrum token to select it'
           : `Spectrum of galaxy ${galaxy}`}
         class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
       />
@@ -55,5 +55,5 @@
         No spectrum
       </p>
     {/if}
-  </PatchFrame>
+  </PanelFrame>
 </div>

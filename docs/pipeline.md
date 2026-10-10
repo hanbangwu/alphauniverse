@@ -38,19 +38,19 @@ gz10, provabgs:      bool
 - **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
 - **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings.
 
-Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spans.
+Within an image cell the image tokens come first and the survey's table values follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spectrum tokens.
 
 ## `generate_index`
 
-Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **scalars**; then, if the galaxy has an HSC match, HSC's 13 scalars; then, if it has a redshift token, its **redshift**. HSC's image patches are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
+Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image tokens**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **table values**; then, if the galaxy has an HSC match, HSC's 13 table values; then, if it has a redshift token, its **redshift**. HSC's image tokens are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
 
 A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h + r`, where `s`, `h` and `r` count the galaxies before it that have a spectrum, an HSC match and a redshift token. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum, an HSC match and a redshift in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
 ## `generate_predictions`
 
-For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the redshift, the 576 cells and the scalars of the Legacy Survey and HSC images, and spans 1 to 272 of the DESI and SDSS spectra. The decoder predicts 128 slots at a time, in an order drawn with `SEED`; as in AION's default, the slots of one call attend to each other. Nothing reads the predictions at serve time yet.
+For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the redshift, the 576 image tokens and the table values of the Legacy Survey and HSC images, and spectrum tokens 1 to 272 of the DESI and SDSS spectra. The decoder predicts 128 slots at a time, in an order drawn with `SEED`; as in AION's default, the slots of one call attend to each other. Nothing reads the predictions at serve time yet.
 
-The job makes two passes over `tokens`. The first predicts only the spans and accumulates, per spectrum survey, the sum and the sum of outer products of every span's probabilities; their covariance's top 256 eigenvectors and the mean form **`prediction_basis`**, an `np.savez` of:
+The job makes two passes over `tokens`. The first predicts only the spectrum tokens and accumulates, per spectrum survey, the sum and the sum of outer products of every spectrum token's probabilities; their covariance's top 256 eigenvectors and the mean form **`prediction_basis`**, an `np.savez` of:
 
 ```
 desi_mean, sdss_mean:             float64 (1024,)
@@ -62,17 +62,17 @@ The second predicts every slot and writes **`predictions`**, an uncompressed Arr
 ```
 galaxy:                    int32
 redshift:                  fixed_size_list<float16, 1025>      -- the redshift's log-probabilities over AION's 1,025 `tok_z` codes
-ls_codes, hsc_codes:       fixed_size_list<uint16, 576 × 64>   -- each cell's 64 most probable codes, most probable first
+ls_codes, hsc_codes:       fixed_size_list<uint16, 576 × 64>   -- each image token's 64 most probable codes, most probable first
 ls_log_probabilities, ...: fixed_size_list<float16, 576 × 64>  -- their log-probabilities
-ls_tails, hsc_tails:       fixed_size_list<float32, 576>       -- log of each cell's remaining mass
-ls_scalars:                fixed_size_list<float16, 12 × 1024> -- every scalar's log-probabilities
-hsc_scalars:               fixed_size_list<float16, 13 × 1024>
-desi_coefficients, ...:    fixed_size_list<uint8, 272 × 256>   -- each span's probabilities projected on the basis
-desi_offsets, ...:         fixed_size_list<float32, 272>       -- per span, coefficient = offset + code × step
+ls_tails, hsc_tails:       fixed_size_list<float32, 576>       -- log of each image token's remaining mass
+ls_table_values:                fixed_size_list<float16, 12 × 1024> -- every table value's log-probabilities
+hsc_table_values:               fixed_size_list<float16, 13 × 1024>
+desi_coefficients, ...:    fixed_size_list<uint8, 272 × 256>   -- each spectrum token's probabilities projected on the basis
+desi_offsets, ...:         fixed_size_list<float32, 272>       -- per spectrum token, coefficient = offset + code × step
 desi_steps, ...:           fixed_size_list<float32, 272>
 ```
 
-A span's probabilities are `mean + coefficients @ directions`. A row takes 496,390 B: 2,050 for the redshift, 149,760 per survey's cells, 24,576 and 26,624 for the scalars, 71,808 per survey's spans and 4 for `galaxy`. AION's `tok_z` has 1,025 codes where its codec emits 0 to 1023; all 1,025 are stored as AION gives them.
+A spectrum token's probabilities are `mean + coefficients @ directions`. A row takes 496,390 B: 2,050 for the redshift, 149,760 per survey's image tokens, 24,576 and 26,624 for the table values, 71,808 per survey's spectrum tokens and 4 for `galaxy`. AION's `tok_z` has 1,025 codes where its codec emits 0 to 1023; all 1,025 are stored as AION gives them.
 
 ## `generate_projections`
 

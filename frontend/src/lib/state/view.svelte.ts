@@ -6,9 +6,9 @@ export class ViewState {
   readonly pointSet: EnumField<PointSet>
   readonly galaxy = new Field<number | null>(null)
   readonly detail: EnumField<DetailView>
-  readonly patches = new IndexListField()
-  readonly spans = new IndexListField()
-  readonly scalars = new IndexListField()
+  readonly imageTokens = new IndexListField()
+  readonly spectrumTokens = new IndexListField()
+  readonly tableValues = new IndexListField()
   readonly explorer = new Field(false)
 
   constructor() {
@@ -26,9 +26,9 @@ export class ViewState {
 
   select(galaxy: number | null): void {
     if (galaxy !== this.galaxy.value) {
-      this.patches.reset()
-      this.spans.reset()
-      this.scalars.reset()
+      this.imageTokens.reset()
+      this.spectrumTokens.reset()
+      this.tableValues.reset()
     }
     this.galaxy.value = galaxy
   }

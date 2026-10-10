@@ -35,13 +35,13 @@ CROP_PIXELS = 96
 DIM = 768
 
 GRID = 24
-N_PATCHES = GRID**2
+N_IMAGE_TOKENS = GRID**2
 
 SPECTRUM_ORIGIN = 3500.0
 SPECTRUM_SMOOTHING_SIGMA = 2
 SPECTRUM_SURVEY: SpectrumSurvey = "desi"
 SPECTRUM_TOKEN_WIDTH = 32 * 0.8
-N_SPANS = 8704 // 32
+N_SPECTRUM_TOKENS = 8704 // 32
 
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
@@ -68,7 +68,7 @@ FLAG_SURVEYS: dict[str, str] = {
 }
 RGB_COLUMN = f"rgb{LS}"
 
-SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
+TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
     ANCHOR: tuple(
         f"{name}{LS}"
         for name in (
@@ -105,12 +105,12 @@ SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
         )
     ),
 }
-SCALAR_COLUMNS = tuple(
-    column for columns in SCALAR_SURVEYS.values() for column in columns
+TABLE_VALUE_COLUMNS = tuple(
+    column for columns in TABLE_VALUE_SURVEYS.values() for column in columns
 )
 REDSHIFT = "redshift"
-REDSHIFT_SCALAR = 0
-N_SCALARS = len(SCALAR_COLUMNS) + 1
+REDSHIFT_TABLE_VALUE = 0
+N_TABLE_VALUES = len(TABLE_VALUE_COLUMNS) + 1
 REDSHIFT_LIMIT = 6.0
 REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
     "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),
