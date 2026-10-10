@@ -222,9 +222,9 @@ def batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
     for field in PREDICTIONS:
         flat = np.concatenate([values[field.name] for values in records])
         columns.append(
-            pa.array(flat)
-            if field.name == "galaxy"
-            else pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
+            pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
+            if pa.types.is_fixed_size_list(field.type)
+            else pa.array(flat)
         )
     return pa.record_batch(columns, schema=PREDICTIONS)
 
