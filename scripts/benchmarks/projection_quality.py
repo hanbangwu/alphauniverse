@@ -8,7 +8,7 @@ import numpy as np
 
 from app.config import DATASET_REVISION, SEED
 from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import environment, git
+from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-projection")
 image = build_image.add_local_python_source("modal_app")
@@ -77,6 +77,7 @@ def benchmark_projection_quality() -> dict[str, Any]:
             }
             for count in NEIGHBOURS
         },
+        "memory": memory(),
     }
 
 
