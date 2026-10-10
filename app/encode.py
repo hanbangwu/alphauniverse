@@ -2,7 +2,6 @@ from functools import cache
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
 import torch
 import torchvision.transforms.functional as F
 from aion import AION
@@ -53,11 +52,13 @@ from .config import (
     SCALAR_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
-    artifact,
     device,
     store_schema,
+    store_writer,
 )
 from .dataset import dataset, redshift
+
+BATCH = 128
 
 LS_SCALARS = tuple(
     zip(
@@ -244,10 +245,7 @@ def by_survey(
 def generate_embeddings() -> None:
     data = dataset()
     schemas = {role: store_schema(role) for role in STORES}
-    writers = {
-        role: pq.ParquetWriter(artifact(role), schemas[role], compression="zstd")
-        for role in STORES
-    }
+    writers = {role: store_writer(role) for role in STORES}
     batches: dict[str, list[pa.RecordBatch]] = {role: [] for role in STORES}
 
     for galaxy in tqdm(range(len(data)), desc="encode"):
@@ -280,11 +278,11 @@ def generate_embeddings() -> None:
                     [{"galaxy": galaxy, **cells[role], **flags}], schema=schemas[role]
                 )
             )
-            if len(batches[role]) == 1024:
-                writers[role].write_table(pa.Table.from_batches(batches[role]))
+            if len(batches[role]) == BATCH:
+                writers[role].write_batch(pa.concat_batches(batches[role]))
                 batches[role].clear()
 
     for role in STORES:
         if batches[role]:
-            writers[role].write_table(pa.Table.from_batches(batches[role]))
+            writers[role].write_batch(pa.concat_batches(batches[role]))
         writers[role].close()

@@ -2,7 +2,7 @@ import io
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
+import pyarrow.compute as pc
 import pytest
 from datasets import Dataset
 from fastapi.testclient import TestClient
@@ -27,16 +27,20 @@ from app.dataset import table_columns
 ARROW = "application/vnd.apache.arrow.stream"
 
 
+def _stored(role: str) -> pa.Table:
+    return pa.ipc.open_file(artifact(role)).read_all()
+
+
 def _with_spectrum() -> np.ndarray:
-    stored = pq.read_table(artifact("encoded"), columns=list(SPECTRUM_SURVEYS))
+    stored = _stored("encoded").select(list(SPECTRUM_SURVEYS))
     return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
-def test_artifact_downloads(client: TestClient, tree) -> None:
+def test_artifact_downloads(client: TestClient) -> None:
     response = client.get("/downloads/encoded")
 
     assert response.status_code == 200
-    assert len(response.content) == (tree / "encoded.parquet").stat().st_size
+    assert len(response.content) == artifact("encoded").stat().st_size
 
 
 def test_meta_reports_a_count_per_morphology_without_the_dataset(
@@ -93,7 +97,7 @@ def test_image_tokens_are_that_galaxys_stored_patch_tokens(
     client: TestClient, galaxies: int
 ) -> None:
     galaxy = galaxies - 1
-    cell = pq.read_table(artifact("tokens"), columns=[ANCHOR]).column(ANCHOR)[galaxy]
+    cell = _stored("tokens").column(ANCHOR)[galaxy]
 
     response = client.get(f"/galaxy/{galaxy}/image/tokens")
 
@@ -104,7 +108,7 @@ def test_image_tokens_are_that_galaxys_stored_patch_tokens(
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
-    stored = pq.read_table(artifact("tokens"), filters=[("galaxy", "==", galaxy)])
+    stored = _stored("tokens").filter(pc.field("galaxy") == galaxy)
     rows = client.get(f"/galaxy/{galaxy}").json()
 
     assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
@@ -113,14 +117,14 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
 
 
 def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:
-    tokens = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    tokens = _stored("tokens").column("desi")
     untokenised = tokens.is_valid().to_pylist().index(False)
 
     assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
 
 
 def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    column = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    column = _stored("tokens").column("desi")
     galaxy = column.is_valid().to_pylist().index(True)
     cell = column[galaxy]
 
@@ -170,7 +174,7 @@ def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
     table = _similarity(client, galaxy=1, p=[100], matches=5)
     galaxies = table.column("galaxy").to_numpy()
     scores = np.asarray(table.column("scalars").to_pylist())
-    stored = pq.read_table(artifact("encoded"), columns=["hsc", REDSHIFT])
+    stored = _stored("encoded")
     with_hsc = stored.column("hsc").is_valid().to_numpy()[galaxies]
     with_redshift = stored.column(REDSHIFT).is_valid().to_numpy()[galaxies]
     hsc = scores[:, 13:]
@@ -225,7 +229,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_scalar
     response = client.get("/galaxy/0/table")
     table_columns.cache_clear()
 
-    stored = pq.read_table(artifact("tokens"), columns=["hsc", REDSHIFT])
+    stored = _stored("tokens")
     hsc, redshift = (stored.column(name)[0] for name in ("hsc", REDSHIFT))
     plain = {"scalar": None, "token": None, "excluded": None}
     assert response.status_code == 200
