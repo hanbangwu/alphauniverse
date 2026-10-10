@@ -3,7 +3,7 @@ from typing import NamedTuple
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.dataset as ds
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
@@ -19,7 +19,7 @@ from .config import (
     FLAG_SURVEYS,
     POINTS,
     SEED,
-    TOKEN_SURVEYS,
+    STORE_COLUMNS,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
@@ -183,13 +183,11 @@ def fit_parametric_umap(training: np.ndarray, validation: np.ndarray) -> Paramet
 
 
 def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    for survey in TOKEN_SURVEYS:
-        scanner = source("encoded").scanner(
-            columns=["galaxy", survey],
-            batch_size=CHUNK,
-            filter=ds.field(survey).is_valid(),
-        )
-        for batch in scanner.to_batches():
+    for survey in STORE_COLUMNS:
+        for stored in source("encoded").to_batches(
+            columns=["galaxy", survey], batch_size=CHUNK
+        ):
+            batch = stored.filter(stored.column(survey).is_valid())
             cells = batch.column(survey)
             offsets = np.asarray(cells.offsets, dtype=np.intp)
             yield (
@@ -202,41 +200,39 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
 
 
 def embedding_count() -> int:
-    metadata = pq.read_metadata(artifact("encoded"))
-    columns = (
-        metadata.row_group(group).column(leaf)
-        for group in range(metadata.num_row_groups)
-        for leaf in range(metadata.num_columns)
-        if "." in metadata.schema.column(leaf).path
-    )
-    return (
-        sum(column.num_values - column.statistics.null_count for column in columns)
-        // DIM
+    table = source("encoded").to_table(columns=list(STORE_COLUMNS))
+    return sum(
+        pc.sum(pc.list_value_length(column), min_count=0).as_py()
+        for column in table.columns
     )
 
 
-def scan(count: int) -> tuple[np.ndarray, np.ndarray]:
+def sample() -> np.ndarray:
     population = embedding_count()
-    chosen = np.sort(
+    return np.sort(
         np.random.default_rng(SEED).choice(
             population, min(SAMPLE, population), replace=False
         )
     )
 
+
+def scan(count: int, chosen: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    order = np.argsort(chosen)
+    ascending = chosen[order]
     sums = np.zeros((count, DIM), dtype=np.float64)
     held = np.zeros(count, dtype=np.int64)
-    taken: list[np.ndarray] = []
+    taken = np.empty((len(chosen), DIM), dtype=np.float32)
     seen = 0
     for galaxies, offsets, values in tqdm(_stream(), desc="scan"):
         sums[galaxies] += np.add.reduceat(values, offsets[:-1])
         held[galaxies] += np.diff(offsets)
-        window = chosen[
-            np.searchsorted(chosen, seen) : np.searchsorted(chosen, seen + len(values))
-        ]
-        taken.append(values[window - seen])
+        first, last = np.searchsorted(ascending, (seen, seen + len(values)))
+        taken[order[first:last]] = values[ascending[first:last] - seen]
         seen += len(values)
+    if len(chosen) and ascending[-1] >= seen:
+        raise ValueError(f"the sample reaches past the {seen} streamed embeddings")
 
-    return (sums / held[:, None]).astype(dtype=np.float32), np.concatenate(taken)
+    return (sums / held[:, None]).astype(dtype=np.float32), taken
 
 
 def generate_projections() -> None:
@@ -246,8 +242,9 @@ def generate_projections() -> None:
     count = len(category)
     galaxy = np.arange(count, dtype=np.int32)
 
-    mean, sampled = scan(count)
-    model = fit_parametric_umap(*split(sampled))
+    training, validation = split(sample())
+    mean, sampled = scan(count, np.concatenate((training, validation)))
+    model = fit_parametric_umap(sampled[: len(training)], sampled[len(training) :])
     del sampled
 
     pq.write_table(

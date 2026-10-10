@@ -1,4 +1,3 @@
-import io
 import json
 import time
 from collections.abc import Callable
@@ -6,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from functools import partial
+from itertools import cycle
 from pathlib import Path
 from typing import Any
 
@@ -13,27 +13,30 @@ import httpx
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pyarrow.parquet as pq
 
-from app.config import DATASET_REVISION, N_PATCHES
+from app.config import DATASET_REVISION, N_IMAGE_TOKENS
 from app.main import SPECTRUM_SURVEY
+from app.search import FIRST_LS_TABLE_VALUE, N_LS_TABLE_VALUES
 from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
+    IMAGE_TOKENS,
     MATCHES,
-    PATCHES,
-    SPANS,
+    SPECTRUM_TOKENS,
+    TABLE_VALUES,
     elapsed,
     environment,
     git,
-    observed_spans,
+    observed_spectrum_tokens,
     server,
     summary,
 )
+from scripts.benchmarks.text_search_quality import CUTS
 
 image = serving_image.add_local_python_source("modal_app")
 
 CLIENTS = (1, 4, SERVING_MAX_INPUTS, 2 * SERVING_MAX_INPUTS)
 REPORT = Path("docs/benchmarks/backend_performance.json")
+TEXTS = tuple(text for text, _ in CUTS)
 
 
 def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
@@ -60,7 +63,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def parameters(matches: int) -> dict[str, Any]:
             return {
                 "galaxy": galaxy(),
-                "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                "p": rng.choice(N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False).tolist(),
                 "matches": matches,
             }
 
@@ -74,12 +77,25 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             return int(rng.integers(galaxies))
 
         cold_similarity = round(elapsed(lambda: similarity(32)), 3)
+        cold_text_search = round(elapsed(lambda: get("/search/text", text=TEXTS[0])), 3)
+        texts = cycle(TEXTS)
+        added = np.random.default_rng(1)
 
         calls = {
             "meta": lambda: get("/meta"),
             "image": lambda: get(f"/galaxy/{galaxy()}/image"),
             "tokens": lambda: get(f"/galaxy/{galaxy()}/image/tokens"),
             "coverage": lambda: get(f"/galaxy/{galaxy()}"),
+            "table": lambda: get(f"/galaxy/{int(added.integers(galaxies))}/table"),
+            "text search": lambda: get("/search/text", text=next(texts)),
+            "similarity table values matches=32": lambda: get(
+                "/search",
+                galaxy=int(added.integers(galaxies)),
+                t=(
+                    FIRST_LS_TABLE_VALUE
+                    + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
+                ).tolist(),
+            ),
         } | {
             f"similarity matches={matches}": (
                 lambda matches=matches: similarity(matches)
@@ -110,42 +126,52 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 "requests_per_s": round(len(samples) / seconds, 2)
             }
 
-        cells = pq.read_table(
-            io.BytesIO(session.get("/downloads/tokens").raise_for_status().content),
-            columns=[SPECTRUM_SURVEY],
-        )
+        cells = pa.ipc.open_file(
+            session.get("/downloads/tokens").raise_for_status().content
+        ).read_all()
         holders = np.flatnonzero(pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy())
 
         def spectrum(route: str) -> None:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
-        def span_query(patch_count: int) -> dict[str, Any]:
+        def spectrum_token_query(image_token_count: int) -> dict[str, Any]:
             galaxy = int(rng.choice(holders))
             response = session.get(f"/galaxy/{galaxy}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
-            spans = observed_spans(table.column("wavelength").to_numpy())
+            spectrum_tokens = observed_spectrum_tokens(
+                table.column("wavelength").to_numpy()
+            )
             return {
                 "galaxy": galaxy,
-                "p": rng.choice(N_PATCHES, patch_count, replace=False).tolist(),
-                "s": rng.choice(spans, SPANS, replace=False).tolist(),
+                "p": rng.choice(
+                    N_IMAGE_TOKENS, image_token_count, replace=False
+                ).tolist(),
+                "s": rng.choice(
+                    spectrum_tokens, SPECTRUM_TOKENS, replace=False
+                ).tolist(),
                 "matches": 32,
             }
 
-        def span_similarity(patch_count: int) -> Callable[[], None]:
-            batch = iter([span_query(patch_count) for _ in range(runs + 1)])
+        def spectrum_token_similarity(image_token_count: int) -> Callable[[], None]:
+            batch = iter(
+                [spectrum_token_query(image_token_count) for _ in range(runs + 1)]
+            )
             return lambda: get("/search", **next(batch))
 
         spectral_calls = {
             name: lambda route=route: spectrum(route)
             for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
         } | {
-            "similarity spans matches=32": span_similarity(0),
-            "similarity patches and spans matches=32": span_similarity(PATCHES),
+            "similarity spectrum tokens matches=32": spectrum_token_similarity(0),
+            "similarity image tokens and spectrum tokens matches=32": spectrum_token_similarity(
+                IMAGE_TOKENS
+            ),
         }
         return {
             "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
+            "cold_text_search_ms": cold_text_search,
             "warm": warm
             | {label: time_it(runs, call) for label, call in spectral_calls.items()},
             "concurrency": {

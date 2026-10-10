@@ -19,17 +19,18 @@ The serving app reads images and spectra from the dataset itself, from the copy 
 
 ## `generate_embeddings`
 
-For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
+For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id. A spectrum's padding samples (wavelength at or below zero) are dropped before tokenising, as the serving app drops them. AION's one redshift token (`tok_z`) takes the DESI `Z` if it is usable, else the SDSS `Z`: usable means present, not NaN, unflagged (`ZWARN`, `ZWARNING`) and at most the trained codec's upper limit, 6 (`REDSHIFT_LIMIT`). The codec clamps a negative redshift to its first bin.
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
-Galaxies are encoded one at a time and written in batches of 1024 rows.
+Galaxies are encoded one at a time and written in batches of 128 (`encode.BATCH`). `encoded` and `tokens` are uncompressed Arrow IPC files, one record batch per batch, which every reader memory-maps; `codebook` is Parquet, one row group per batch.
 
 Three stores are written, with the same columns:
 
 ```
 galaxy: int32
 ls, hsc, desi, sdss: list<fixed_size_list<float16, 768>>   -- null where unmatched
+redshift:            list<fixed_size_list<float16, 768>>   -- one token, null without a usable redshift
 gz10, provabgs:      bool
 ```
 
@@ -37,17 +38,17 @@ gz10, provabgs:      bool
 - **`codebook`**: the encoder's input embedding of each token, before position and modality embeddings are added or any context is mixed in, so it depends only on the token id and its modality.
 - **`tokens`**: the token ids, so each survey cell is a `list<uint32>` instead of a list of embeddings.
 
-Within an image cell the patches come first and the survey's scalars follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spans.
+Within an image cell the image tokens come first and the survey's table values follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spectrum tokens.
 
 ## `generate_index`
 
-Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **scalars**; then, if the galaxy has an HSC match, HSC's 13 scalars. HSC's image patches are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
+Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image tokens**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **table values**; then, if the galaxy has an HSC match, HSC's 13 table values; then, if it has a redshift token, its **redshift**. HSC's image tokens are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
 
-A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h`, where `s` and `h` count the galaxies before it that have a spectrum and an HSC match. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum and an HSC match in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
+A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h + r`, where `s`, `h` and `r` count the galaxies before it that have a spectrum, an HSC match and a redshift token. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum, an HSC match and a redshift in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
 
 ## `generate_projections`
 
-Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (5,000,000) embeddings uniformly from the whole store. `train_test_split` holds out `VALIDATION` (30%) of the sample. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on the rest: UMAP's fuzzy simplicial set over the training rows weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. Each epoch logs `train/loss` and `validation/loss` to Weights & Biases when `WANDB_API_KEY` is set, and logs nothing otherwise; on Modal the job reads it from the `wandb-secret` secret; the validation loss is the same loss over the held-out rows' own fuzzy simplicial set, without gradients. The second pass projects every embedding.
+Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. `SAMPLE` (5,000,000) embeddings are drawn uniformly from the whole store, and `train_test_split` holds out `VALIDATION` (30%) of them. The first pass accumulates each galaxy's mean embedding over all its tokens and writes each drawn embedding into one array, training rows then validation rows. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on the training rows: UMAP's fuzzy simplicial set over the training rows weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. Each epoch logs `train/loss` and `validation/loss` to Weights & Biases when `WANDB_API_KEY` is set, and logs nothing otherwise; on Modal the job reads it from the `wandb-secret` secret; the validation loss is the same loss over the held-out rows' own fuzzy simplicial set, without gradients. The second pass projects every embedding.
 
 The trained projector, **`parametric_umap`**, is a `torch.save` of:
 
@@ -74,7 +75,7 @@ One row per galaxy, pairing AION's embedding of the galaxy with [EmbeddingGemma 
 - **AION**: the mean of the galaxy's `encoded` embeddings over every token of every survey.
 - **EmbeddingGemma**: its sentence-transformers embedding, L2-normalised and at full width, under the `Document` prompt, of the galaxy's `rgb` Legacy Survey cutout as the dataset stores it, uncropped.
 
-Every image goes to one `encode` call, which batches internally:
+Images are decoded and passed to `encode` `BATCH` (1024) at a time:
 
 ```
 galaxy: int32

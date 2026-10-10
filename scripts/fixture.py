@@ -11,35 +11,40 @@ from app.config import (
     ANCHOR,
     DIM,
     GEMMA_DIM,
+    N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
-    N_PATCHES,
-    TOKEN_SURVEYS,
+    REDSHIFT,
+    STORE_COLUMNS,
     artifact,
     build_dir,
     galaxy_count,
     labels,
     points,
     store_schema,
+    store_writer,
 )
 from app.search import (
+    bounds,
     generate_index,
     index,
     source,
     starts,
     tokens,
     with_hsc,
+    with_redshift,
     with_spectrum,
 )
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
-    ANCHOR: N_PATCHES + 12,
-    "hsc": N_PATCHES + 13,
+    ANCHOR: N_IMAGE_TOKENS + 12,
+    "hsc": N_IMAGE_TOKENS + 13,
     "desi": 273,
     "sdss": 273,
+    REDSHIFT: 1,
 }
 
-STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
+STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4, REDSHIFT: 6}
 
 CLUSTERS = 64
 NOISE = 0.05
@@ -52,12 +57,8 @@ def covered(survey: str, galaxy: int) -> bool:
 def _cells(
     rng: np.random.Generator, centres: np.ndarray, galaxies: int
 ) -> tuple[dict[str, list[np.ndarray | None]], dict[str, list[np.ndarray | None]]]:
-    embeddings: dict[str, list[np.ndarray | None]] = {
-        survey: [] for survey in TOKEN_SURVEYS
-    }
-    token_cells: dict[str, list[np.ndarray | None]] = {
-        survey: [] for survey in TOKEN_SURVEYS
-    }
+    embeddings: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
+    token_cells: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
 
     for galaxy in range(galaxies):
         for survey, count in TOKENS.items():
@@ -79,23 +80,23 @@ def _store(
     galaxies: int,
     flags: dict[str, np.ndarray],
 ) -> None:
-    pq.write_table(
-        pa.table(
-            {
-                "galaxy": np.arange(galaxies),
-                **{
-                    survey: [
-                        None if cell is None else list(cell) for cell in cells[survey]
-                    ]
-                    for survey in TOKEN_SURVEYS
+    with store_writer(role) as writer:
+        writer.write_table(
+            pa.table(
+                {
+                    "galaxy": np.arange(galaxies),
+                    **{
+                        survey: [
+                            None if cell is None else list(cell)
+                            for cell in cells[survey]
+                        ]
+                        for survey in STORE_COLUMNS
+                    },
+                    **flags,
                 },
-                **flags,
-            },
-            schema=store_schema(role),
-        ),
-        artifact(role),
-        compression="zstd",
-    )
+                schema=store_schema(role),
+            )
+        )
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
@@ -113,6 +114,8 @@ def forget() -> None:
         tokens,
         with_spectrum,
         with_hsc,
+        with_redshift,
+        bounds,
         starts,
         aion_gemma_space,
     ):

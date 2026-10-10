@@ -4,7 +4,7 @@
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
   import { tableQuery } from '$lib/data/queries'
-  import { SURVEYS } from '$lib/labels'
+  import { SECTIONS } from '$lib/labels'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -19,7 +19,7 @@
   const similarity = getSimilarity()
   const table = createQuery(() => tableQuery(galaxy))
 
-  const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.catalogue)])
+  const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.section)])
   const palette = $derived(
     tokenColors((table.data ?? []).flatMap((row) => (row.token === null ? [] : [row.token])))
   )
@@ -31,8 +31,8 @@
   function fill(row: TableRow): string | undefined {
     if (row.scalar === null || row.token === null) return undefined
     const picked = selected.includes(row.scalar)
-    const score = similarity.scalarMap?.[row.scalar] ?? NaN
-    const heat = similarity.scalarHeat
+    const score = similarity.tableValueMap?.[row.scalar] ?? NaN
+    const heat = similarity.tableValueHeat
     const style =
       heat && !Number.isNaN(score)
         ? paint(heat(score), 1)
@@ -68,33 +68,48 @@
           </Table.Row>
         </Table.Header>
         <Table.Body>
-          {#each groups as [catalogue, rows] (catalogue)}
+          {#each groups as [section, rows] (section)}
             <Table.Row class="hover:bg-transparent">
               <Table.Cell colspan={3} class="px-0 pt-3 pb-1 text-muted-foreground uppercase">
-                {SURVEYS[catalogue].label}
+                {SECTIONS[section].label}
               </Table.Cell>
             </Table.Row>
             {#each rows as row (row.column)}
               <Table.Row
-                class={row.scalar !== null && row.token === null
-                  ? 'cursor-not-allowed transition-none last:border-0'
-                  : 'transition-none last:border-0'}
+                class={[
+                  'transition-none last:border-0',
+                  ((row.scalar !== null && row.token === null) || row.excluded !== null) &&
+                    'cursor-not-allowed',
+                  row.excluded !== null && 'text-muted-foreground italic'
+                ]}
                 style={fill(row)}
               >
                 <Table.Cell class="px-0 py-1.5">
                   {#if row.scalar !== null}
-                    {@const scalar = row.scalar}
+                    {@const tableValue = row.scalar}
                     <input
                       type="checkbox"
                       class="accent-primary disabled:cursor-not-allowed"
-                      checked={selected.includes(scalar)}
+                      checked={selected.includes(tableValue)}
                       disabled={row.token === null}
-                      onchange={() => ontoggle(scalar)}
+                      onchange={() => ontoggle(tableValue)}
                       aria-label={`Query ${row.column}`}
+                    />
+                  {:else if row.excluded !== null}
+                    <input
+                      type="checkbox"
+                      class="disabled:cursor-not-allowed"
+                      disabled
+                      aria-label={`Query ${row.column}: ${row.excluded}`}
                     />
                   {/if}
                 </Table.Cell>
-                <Table.Cell class="px-0 py-1.5 font-mono">{row.column}</Table.Cell>
+                <Table.Cell class="px-0 py-1.5 font-mono">
+                  {row.column}
+                  {#if row.excluded !== null}
+                    <span class="block font-sans text-[10px]">{row.excluded}</span>
+                  {/if}
+                </Table.Cell>
                 <Table.Cell class="px-0 py-1.5 text-right font-mono tabular-nums">
                   {format(row.value)}
                 </Table.Cell>

@@ -35,13 +35,13 @@ CROP_PIXELS = 96
 DIM = 768
 
 GRID = 24
-N_PATCHES = GRID**2
+N_IMAGE_TOKENS = GRID**2
 
 SPECTRUM_ORIGIN = 3500.0
 SPECTRUM_SMOOTHING_SIGMA = 2
 SPECTRUM_SURVEY: SpectrumSurvey = "desi"
 SPECTRUM_TOKEN_WIDTH = 32 * 0.8
-N_SPANS = 8704 // 32
+N_SPECTRUM_TOKENS = 8704 // 32
 
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
@@ -68,7 +68,7 @@ FLAG_SURVEYS: dict[str, str] = {
 }
 RGB_COLUMN = f"rgb{LS}"
 
-SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
+TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
     ANCHOR: tuple(
         f"{name}{LS}"
         for name in (
@@ -105,10 +105,18 @@ SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
         )
     ),
 }
-SCALAR_COLUMNS = tuple(
-    column for columns in SCALAR_SURVEYS.values() for column in columns
+TABLE_VALUE_COLUMNS = tuple(
+    column for columns in TABLE_VALUE_SURVEYS.values() for column in columns
 )
-N_SCALARS = len(SCALAR_COLUMNS)
+REDSHIFT = "redshift"
+REDSHIFT_TABLE_VALUE = 0
+N_TABLE_VALUES = len(TABLE_VALUE_COLUMNS) + 1
+REDSHIFT_LIMIT = 6.0
+REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
+    "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),
+    "sdss": (f"Z{SDSS}", f"Z_ERR{SDSS}", f"ZWARNING{SDSS}"),
+}
+STORE_COLUMNS = (*TOKEN_SURVEYS, REDSHIFT)
 
 Catalogue = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
 CATALOGUES: dict[str, Catalogue] = {
@@ -126,10 +134,10 @@ GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
 
 ARTIFACTS: dict[str, str] = {
-    "encoded": "parquet",
+    "encoded": "arrow",
     "search_index": "faiss",
     "codebook": "parquet",
-    "tokens": "parquet",
+    "tokens": "arrow",
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
@@ -152,9 +160,15 @@ def store_schema(role: str) -> pa.Schema:
     )
     return pa.schema(
         [pa.field("galaxy", pa.int32())]
-        + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
+        + [pa.field(survey, cell) for survey in STORE_COLUMNS]
         + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
     )
+
+
+def store_writer(role: str) -> pq.ParquetWriter | pa.ipc.RecordBatchFileWriter:
+    if ARTIFACTS[role] == "arrow":
+        return pa.ipc.new_file(artifact(role), store_schema(role))
+    return pq.ParquetWriter(artifact(role), store_schema(role), compression="zstd")
 
 
 PAIRS = pa.schema(

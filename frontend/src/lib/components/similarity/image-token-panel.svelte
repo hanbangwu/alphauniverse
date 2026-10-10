@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { RGB } from '$lib/color'
-  import PatchFrame from '$lib/components/common/patch-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
-  import PatchGrid from '$lib/components/patch/patch-grid.svelte'
+  import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
   import type { Snippet } from 'svelte'
 
   interface Props {
@@ -53,9 +53,9 @@
     onpointerenter={() => onhover?.(true)}
     onpointerleave={() => onhover?.(false)}
   >
-    <PatchFrame {busy}>
+    <PanelFrame {busy}>
       {#if values && color}
-        <PatchGrid
+        <ImageTokenGrid
           {values}
           {grid}
           {color}
@@ -75,7 +75,7 @@
           <GalaxyThumb {galaxy} />
         </div>
       {/if}
-    </PatchFrame>
+    </PanelFrame>
   </div>
 
   {@render children?.()}
