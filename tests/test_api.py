@@ -14,10 +14,11 @@ from app.config import (
     FLAG_SURVEYS,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
+    N_SPECTRUM_TOKENS,
+    N_TABLE_VALUES,
     REDSHIFT,
     REDSHIFT_TABLE_VALUE,
     SDSS,
-    SPECTRUM_SURVEYS,
     TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
@@ -29,11 +30,6 @@ ARROW = "application/vnd.apache.arrow.stream"
 
 def _stored(role: str) -> pa.Table:
     return pa.ipc.open_file(artifact(role)).read_all()
-
-
-def _with_spectrum() -> np.ndarray:
-    stored = _stored("encoded").select(list(SPECTRUM_SURVEYS))
-    return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
 def test_artifact_downloads(client: TestClient) -> None:
@@ -142,71 +138,89 @@ def _similarity(client: TestClient, **query) -> pa.RecordBatch:
     return pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
 
 
-def test_similarity_returns_one_arrow_batch(client: TestClient) -> None:
-    table = _similarity(client, galaxy=2, p=[100, 101], matches=5)
+def test_search_returns_one_arrow_batch_with_every_mode(client: TestClient) -> None:
+    table = _similarity(client, galaxy=2, ls_image=[100, 101], matches=5)
 
     assert 1 < table.num_rows <= 6
-    assert table.column_names == ["galaxy", "score", "map", "spectrum", "scalars"]
-    assert len(table.column("map")[0]) == N_IMAGE_TOKENS
+    assert table.column("galaxy")[0].as_py() == 2
+    widths = {
+        "ls_image": N_IMAGE_TOKENS,
+        "hsc_image": N_IMAGE_TOKENS,
+        "desi_spectrum": N_SPECTRUM_TOKENS,
+        "sdss_spectrum": N_SPECTRUM_TOKENS,
+        "table_values": N_TABLE_VALUES,
+    }
+    for name, width in widths.items():
+        assert len(table.column(name)[0]) == width
+        assert np.isfinite(np.asarray(table.column(name).to_pylist())).all()
 
 
-def test_similarity_spectrum_column_is_null_without_a_spectrum(
+def test_only_selected_modes_have_a_selection_map_and_a_sum(
     client: TestClient,
 ) -> None:
-    table = _similarity(client, galaxy=0, s=[10, 11], matches=11)
-    galaxies = table.column("galaxy").to_numpy()
-
-    np.testing.assert_array_equal(
-        table.column("spectrum").is_valid().to_numpy(), _with_spectrum()[galaxies]
+    table = _similarity(
+        client, galaxy=0, sdss_spectrum=[10, 11], table_values=[1], matches=5
     )
 
+    selections = {
+        name: table.column(name).is_valid().to_numpy().all()
+        for name in table.column_names
+        if name.endswith("_selection")
+    }
+    sums = {
+        name: table.column(name).is_valid().to_numpy().all()
+        for name in table.column_names
+        if name.endswith("_sum")
+    }
+    assert selections == {
+        "ls_image_selection": False,
+        "hsc_image_selection": False,
+        "desi_spectrum_selection": False,
+        "sdss_spectrum_selection": True,
+    }
+    assert {name for name, valid in sums.items() if valid} == {
+        "sdss_spectrum_sum",
+        "ls_table_sum",
+    }
 
-def test_similarity_takes_table_values_alone(client: TestClient) -> None:
-    table = _similarity(client, galaxy=0, t=[1, 13], matches=5)
 
-    assert table.column("galaxy")[0].as_py() == 0
-    assert 1 < table.num_rows <= 6
-
-
-def test_every_galaxy_has_table_value_scores_where_it_has_table_values(
-    client: TestClient,
-) -> None:
-    table = _similarity(client, galaxy=1, p=[100], matches=5)
+def test_has_flags_say_which_galaxies_observed_each_mode(client: TestClient) -> None:
+    table = _similarity(client, galaxy=1, ls_image=[100], matches=11)
     galaxies = table.column("galaxy").to_numpy()
-    scores = np.asarray(table.column("scalars").to_pylist())
-    stored = _stored("encoded")
-    with_hsc = stored.column("hsc").is_valid().to_numpy()[galaxies]
-    with_redshift = stored.column(REDSHIFT).is_valid().to_numpy()[galaxies]
-    hsc = scores[:, 13:]
+    stored = _stored("tokens")
 
-    assert np.isfinite(scores[:, 1:13]).all()
-    np.testing.assert_array_equal(np.isfinite(hsc).all(axis=1), with_hsc)
-    np.testing.assert_array_equal(np.isnan(hsc).all(axis=1), ~with_hsc)
-    np.testing.assert_array_equal(
-        np.isfinite(scores[:, REDSHIFT_TABLE_VALUE]), with_redshift
-    )
+    for column in ("hsc", "desi", "sdss", REDSHIFT):
+        np.testing.assert_array_equal(
+            table.column(f"has_{column}").to_numpy(zero_copy_only=False),
+            stored.column(column).is_valid().to_numpy(zero_copy_only=False)[galaxies],
+        )
 
 
-def test_hsc_table_values_of_a_galaxy_without_hsc_are_rejected(
-    client: TestClient,
+@pytest.mark.parametrize(
+    ("selection", "missing"),
+    [
+        ({"table_values": [13]}, "HSC match"),
+        ({"hsc_image": [0]}, "HSC match"),
+        ({"desi_spectrum": [0]}, "DESI spectrum"),
+        ({"table_values": [REDSHIFT_TABLE_VALUE]}, "usable redshift"),
+    ],
+)
+def test_a_selection_on_a_mode_the_galaxy_lacks_is_rejected(
+    client: TestClient, selection: dict, missing: str
 ) -> None:
-    response = client.get("/search", params={"galaxy": 1, "t": [13]})
+    response = client.get("/search", params={"galaxy": 1, **selection})
 
     assert response.status_code == 422
     [error] = response.json()["detail"]
-    assert "galaxy 1 has no HSC match" in error["msg"]
+    assert f"galaxy 1 has no {missing}" in error["msg"]
 
 
-def test_the_redshift_needs_a_usable_redshift_and_not_an_hsc_match(
+def test_the_redshift_is_searchable_for_a_galaxy_with_a_usable_redshift(
     client: TestClient,
 ) -> None:
-    accepted = client.get("/search", params={"galaxy": 6, "t": [REDSHIFT_TABLE_VALUE]})
-    rejected = client.get("/search", params={"galaxy": 1, "t": [REDSHIFT_TABLE_VALUE]})
+    table = _similarity(client, galaxy=6, table_values=[REDSHIFT_TABLE_VALUE])
 
-    assert accepted.status_code == 200
-    assert rejected.status_code == 422
-    [error] = rejected.json()["detail"]
-    assert "galaxy 1 has no usable redshift" in error["msg"]
+    assert table.column("redshift_sum").is_valid().to_numpy().all()
 
 
 def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_value(
@@ -265,22 +279,8 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
     ]
 
 
-def test_similarity_without_image_tokens_or_spectrum_tokens_is_rejected(
-    client: TestClient,
-) -> None:
+def test_search_without_a_selection_is_rejected(client: TestClient) -> None:
     assert client.get("/search", params={"galaxy": 0}).status_code == 422
-
-
-def test_spectrum_tokens_of_a_galaxy_without_a_spectrum_are_rejected(
-    client: TestClient,
-) -> None:
-    galaxy = int(np.flatnonzero(~_with_spectrum())[0])
-
-    response = client.get("/search", params={"galaxy": galaxy, "s": [0]})
-
-    assert response.status_code == 422
-    [error] = response.json()["detail"]
-    assert f"galaxy {galaxy} has no spectrum" in error["msg"]
 
 
 @pytest.mark.parametrize(
@@ -292,7 +292,7 @@ def test_spectrum_tokens_of_a_galaxy_without_a_spectrum_are_rejected(
         "/galaxy/{galaxy}/spectrum",
         "/galaxy/{galaxy}/spectrum/tokens",
         "/galaxy/{galaxy}/table",
-        "/search?galaxy={galaxy}&p=0",
+        "/search?galaxy={galaxy}&ls_image=0",
     ],
 )
 def test_galaxy_past_the_end_is_rejected(
