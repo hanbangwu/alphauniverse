@@ -33,11 +33,12 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 
 | Step                             | Cost                        |
 | -------------------------------- | --------------------------- |
-| Container start + loads, `/meta` | **17.6 s**                  |
-| First `/search` after that       | 0.74 s                      |
-| Everything warm after that       | 0.18–0.50 s p50 per request |
+| Container start + loads, `/meta` | **18.1 s**                  |
+| First `/search` after that       | 0.52 s                      |
+| First `/search/text` after that  | 35.5 s                      |
+| Everything warm after that       | 0.13–0.43 s p50 per request |
 
-**A cold visit shows a spinner until `/meta` returns**, 17.6 s after the browser sends it. Cold start dominates, not the search.
+**A cold visit shows a spinner until `/meta` returns**, 18.1 s after the browser sends it. Cold start dominates, then the first text search.
 
 ## `search_performance`
 
@@ -112,8 +113,8 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 `modal run` starts an ephemeral `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A 1-CPU client in a separate container times, in order:
 
-1. one cold `/meta` and one cold `/search`;
-2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, and `/search` with 4 patches at 8, 32 and 128 matches;
+1. one cold `/meta`, one cold `/search`, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
+2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey scalars at 32 matches, and `/search` with 4 patches at 8, 32 and 128 matches;
 3. warm: both spectrum routes, and `/search` at 32 matches with 4 spans, alone and with 4 patches, on galaxies with a DESI spectrum and spans inside its observed range;
 4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 patches at 32 matches.
 
@@ -123,8 +124,8 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 | Run              |                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
-| Date             | 2026-10-04                                                                                        |
-| Commit           | `6aa4197`                                                                                         |
+| Date             | 2026-10-10                                                                                        |
+| Commit           | `853bac8`, #190 and #191 on `37bff8a`                                                             |
 | Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                        |
 | Server           | 8 CPU, 8 GiB requested, 32 GiB limit; `max_inputs=16`, `max_containers=1`, `scaledown_window=300` |
 | Client           | 1 CPU; 17 CPUs visible, faiss at 1 thread; AMD family 25, model 1                                 |
@@ -132,41 +133,44 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 **`/search`**, warm, 32 matches unless stated:
 
-| Query                  | p50    | p95    |
-| ---------------------- | ------ | ------ |
-| 4 patches, 8 matches   | 215 ms | 232 ms |
-| 4 patches              | 276 ms | 294 ms |
-| 4 patches, 128 matches | 501 ms | 556 ms |
-| 4 spans                | 299 ms | 320 ms |
-| 4 patches and 4 spans  | 286 ms | 307 ms |
+| Query                   | p50    | p95    |
+| ----------------------- | ------ | ------ |
+| 4 patches, 8 matches    | 164 ms | 174 ms |
+| 4 patches               | 225 ms | 255 ms |
+| 4 patches, 128 matches  | 429 ms | 503 ms |
+| 4 spans                 | 253 ms | 276 ms |
+| 4 patches and 4 spans   | 237 ms | 258 ms |
+| 4 Legacy Survey scalars | 231 ms | 264 ms |
 
-`matches` sets the cost: in that run each match was rescored from 576 reconstructed vectors, before scalars joined the index. Over the 179 ms `/meta` floor, 32 matches add 276 − 179 = 97 ms at p50, and 128 add 501 − 179 = 322 ms.
+`matches` sets the cost. Over the 128 ms `/meta` floor, 32 matches add 225 − 128 = 97 ms at p50, and 128 add 429 − 128 = 301 ms.
 
 **Other endpoints**, warm:
 
 | Endpoint                      | p50    | p95    |
 | ----------------------------- | ------ | ------ |
-| `/meta`                       | 179 ms | 184 ms |
-| `/galaxy/{g}/image`           | 190 ms | 214 ms |
-| `/galaxy/{g}/image/tokens`    | 178 ms | 183 ms |
-| `/galaxy/{g}`                 | 179 ms | 186 ms |
-| `/galaxy/{g}/spectrum`        | 185 ms | 205 ms |
-| `/galaxy/{g}/spectrum/tokens` | 177 ms | 207 ms |
+| `/meta`                       | 128 ms | 135 ms |
+| `/galaxy/{g}/image`           | 140 ms | 151 ms |
+| `/galaxy/{g}/image/tokens`    | 126 ms | 133 ms |
+| `/galaxy/{g}`                 | 126 ms | 131 ms |
+| `/galaxy/{g}/spectrum`        | 130 ms | 145 ms |
+| `/galaxy/{g}/spectrum/tokens` | 126 ms | 134 ms |
+| `/galaxy/{g}/table`           | 139 ms | 151 ms |
+| `/search/text`                | 284 ms | 316 ms |
 
-All six are within 190 − 177 = 13 ms at p50. What the floor is made of is **unmeasured**.
+All but `/search/text` are within 140 − 126 = 14 ms at p50; `/search/text` adds 284 − 128 = 156 ms over the floor. What the floor is made of is **unmeasured**.
 
-**Cold start.** A request to a fresh container took **17.6 s**. How the 17.6 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 17.6 s; `max_containers=1` leaves no second container to answer.
+**Cold start.** A request to a fresh container took **18.1 s**. How the 18.1 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 18.1 s; `max_containers=1` leaves no second container to answer. The first `/search/text` after the cold `/search` took **35.5 s**: it loads EmbeddingGemma and `aion_gemma_space` and imports sentence-transformers.
 
 **Concurrency:**
 
 | Clients | p50    | p95    | Requests/s |
 | ------- | ------ | ------ | ---------- |
-| 1       | 270 ms | 304 ms | 3.65       |
-| 4       | 319 ms | 450 ms | 11.39      |
-| 16      | 1.23 s | 1.63 s | 12.98      |
-| 32      | 1.85 s | 2.46 s | 16.83      |
+| 1       | 232 ms | 262 ms | 4.26       |
+| 4       | 289 ms | 345 ms | 13.42      |
+| 16      | 1.05 s | 1.39 s | 15.61      |
+| 32      | 2.10 s | 2.64 s | 15.63      |
 
-**Throughput reaches 16.83 requests/s with 32 clients**, the most clients timed; latency grows with the queue (32 / 16.83 = 1.90 s, against a p50 of 1.85 s). Whether the server or the 1-CPU client sets the ceiling is **unmeasured**.
+**Throughput reaches 15.63 requests/s with 32 clients**, the most clients timed, against 15.61 with 16; latency grows with the queue (32 / 15.63 = 2.05 s, against a p50 of 2.10 s). Whether the server or the 1-CPU client sets the ceiling is **unmeasured**.
 
 ## `search_quality`
 
@@ -254,5 +258,5 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 | Ceiling          | Now           | Breaks at                                                                                             |
 | ---------------- | ------------- | ----------------------------------------------------------------------------------------------------- |
-| Cold start       | 17.6 s        | a proxy or browser timeout; which one, and at what length, is unmeasured                              |
-| Serving capacity | one container | 16.83 requests/s `/search` throughput at 32 clients, the most timed; `max_containers=1` is a hard cap |
+| Cold start       | 18.1 s        | a proxy or browser timeout; which one, and at what length, is unmeasured                              |
+| Serving capacity | one container | 15.63 requests/s `/search` throughput at 32 clients, the most timed; `max_containers=1` is a hard cap |
