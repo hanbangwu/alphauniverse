@@ -14,19 +14,19 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from app.config import DATASET_REVISION, N_PATCHES
+from app.config import DATASET_REVISION, N_IMAGE_TOKENS
 from app.main import SPECTRUM_SURVEY
-from app.search import FIRST_LS_SCALAR, N_LS_SCALARS
+from app.search import FIRST_LS_TABLE_VALUE, N_LS_TABLE_VALUES
 from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
+    IMAGE_TOKENS,
     MATCHES,
-    PATCHES,
-    SCALARS,
-    SPANS,
+    SPECTRUM_TOKENS,
+    TABLE_VALUES,
     elapsed,
     environment,
     git,
-    observed_spans,
+    observed_spectrum_tokens,
     server,
     summary,
 )
@@ -63,7 +63,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def parameters(matches: int) -> dict[str, Any]:
             return {
                 "galaxy": galaxy(),
-                "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                "p": rng.choice(N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False).tolist(),
                 "matches": matches,
             }
 
@@ -88,11 +88,12 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "coverage": lambda: get(f"/galaxy/{galaxy()}"),
             "table": lambda: get(f"/galaxy/{int(added.integers(galaxies))}/table"),
             "text search": lambda: get("/search/text", text=next(texts)),
-            "similarity scalars matches=32": lambda: get(
+            "similarity table values matches=32": lambda: get(
                 "/search",
                 galaxy=int(added.integers(galaxies)),
                 t=(
-                    FIRST_LS_SCALAR + added.choice(N_LS_SCALARS, SCALARS, replace=False)
+                    FIRST_LS_TABLE_VALUE
+                    + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist(),
             ),
         } | {
@@ -133,28 +134,38 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def spectrum(route: str) -> None:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
-        def span_query(patch_count: int) -> dict[str, Any]:
+        def spectrum_token_query(image_token_count: int) -> dict[str, Any]:
             galaxy = int(rng.choice(holders))
             response = session.get(f"/galaxy/{galaxy}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
-            spans = observed_spans(table.column("wavelength").to_numpy())
+            spectrum_tokens = observed_spectrum_tokens(
+                table.column("wavelength").to_numpy()
+            )
             return {
                 "galaxy": galaxy,
-                "p": rng.choice(N_PATCHES, patch_count, replace=False).tolist(),
-                "s": rng.choice(spans, SPANS, replace=False).tolist(),
+                "p": rng.choice(
+                    N_IMAGE_TOKENS, image_token_count, replace=False
+                ).tolist(),
+                "s": rng.choice(
+                    spectrum_tokens, SPECTRUM_TOKENS, replace=False
+                ).tolist(),
                 "matches": 32,
             }
 
-        def span_similarity(patch_count: int) -> Callable[[], None]:
-            batch = iter([span_query(patch_count) for _ in range(runs + 1)])
+        def spectrum_token_similarity(image_token_count: int) -> Callable[[], None]:
+            batch = iter(
+                [spectrum_token_query(image_token_count) for _ in range(runs + 1)]
+            )
             return lambda: get("/search", **next(batch))
 
         spectral_calls = {
             name: lambda route=route: spectrum(route)
             for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
         } | {
-            "similarity spans matches=32": span_similarity(0),
-            "similarity patches and spans matches=32": span_similarity(PATCHES),
+            "similarity spectrum tokens matches=32": spectrum_token_similarity(0),
+            "similarity image tokens and spectrum tokens matches=32": spectrum_token_similarity(
+                IMAGE_TOKENS
+            ),
         }
         return {
             "environment": environment(),

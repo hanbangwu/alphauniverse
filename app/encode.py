@@ -49,8 +49,8 @@ from .config import (
     FLAG_SURVEYS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
-    SCALAR_SURVEYS,
     STORES,
+    TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
     device,
     store_schema,
@@ -60,7 +60,7 @@ from .dataset import dataset, redshift
 
 BATCH = 128
 
-LS_SCALARS = tuple(
+LS_TABLE_VALUES = tuple(
     zip(
         (
             LegacySurveyEBV,
@@ -76,12 +76,12 @@ LS_SCALARS = tuple(
             LegacySurveyShapeE1,
             LegacySurveyShapeE2,
         ),
-        SCALAR_SURVEYS[ANCHOR],
+        TABLE_VALUE_SURVEYS[ANCHOR],
         strict=True,
     )
 )
 
-HSC_SCALARS = tuple(
+HSC_TABLE_VALUES = tuple(
     zip(
         (
             HSCAG,
@@ -98,7 +98,7 @@ HSC_SCALARS = tuple(
             HSCShape22,
             HSCShape12,
         ),
-        SCALAR_SURVEYS["hsc"],
+        TABLE_VALUE_SURVEYS["hsc"],
         strict=True,
     )
 )
@@ -168,7 +168,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
-                for modality, column in LS_SCALARS
+                for modality, column in LS_TABLE_VALUES
             },
         }
     }
@@ -181,7 +181,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
-                for modality, column in HSC_SCALARS
+                for modality, column in HSC_TABLE_VALUES
             },
         }
     if row[TOKEN_SURVEYS["desi"]] is not None:

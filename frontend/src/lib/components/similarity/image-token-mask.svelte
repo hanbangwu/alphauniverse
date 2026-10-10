@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PatchPanel from './patch-panel.svelte'
+  import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import type { Snippet } from 'svelte'
 
@@ -16,7 +16,7 @@
 </script>
 
 {#if bits}
-  <PatchPanel
+  <ImageTokenPanel
     label="Image Mask"
     values={bits}
     grid={similarity.grid}
