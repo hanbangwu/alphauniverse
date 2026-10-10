@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from contextlib import asynccontextmanager
 from io import BytesIO
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
@@ -20,33 +20,39 @@ from .config import (
     DATASET_NAME,
     FLAG_SURVEYS,
     GRID,
-    N_PATCHES,
-    N_SCALARS,
-    N_SPANS,
-    SCALAR_COLUMNS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
+    N_TABLE_VALUES,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    REDSHIFT_LIMIT,
+    REDSHIFT_TABLE_VALUE,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
+    TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
     Catalogue,
     Download,
     GalaxyIndex,
     Projection,
+    SpectrumSurvey,
     artifact,
     galaxy_count,
     labels,
 )
-from .dataset import catalogue, image, spectrum, table
-from .search import Query as SearchQuery
+from .dataset import catalogue, image, redshift, spectrum, table
 from .search import (
+    FIRST_LS_TABLE_VALUE,
     index,
-    scalar_tokens,
     search,
     starts,
+    table_value_tokens,
     tokens,
     with_hsc,
 )
+from .search import Query as SearchQuery
 from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
@@ -74,11 +80,12 @@ class Galaxy(BaseModel):
 
 
 class TableRow(BaseModel):
-    catalogue: Catalogue
+    section: Catalogue | Literal["redshift"]
     column: str
     value: float | int | bool | None
     scalar: int | None
     token: int | None
+    excluded: str | None
 
 
 class TextMatches(BaseModel):
@@ -230,20 +237,72 @@ def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
     )
 
 
+def excluded(values: dict, survey: SpectrumSurvey, chosen: str | None) -> str | None:
+    value, _, warning = (values[column] for column in REDSHIFT_COLUMNS[survey])
+    if value is None or survey == chosen:
+        return None
+    if warning:
+        return f"flagged by {survey.upper()}"
+    if not value <= REDSHIFT_LIMIT:
+        return f"above AION's redshift limit, {REDSHIFT_LIMIT:g}"
+    return f"AION takes one redshift: {chosen.upper()}'s"
+
+
+def redshift_row(
+    column: str,
+    survey: SpectrumSurvey,
+    values: dict,
+    chosen: str | None,
+    token: int | None,
+) -> TableRow:
+    first = column == REDSHIFT_COLUMNS[survey][0]
+    selectable = first and survey == chosen
+    return TableRow(
+        section=REDSHIFT,
+        column=f"{survey.upper()} {column.partition('-')[0]}",
+        value=values[column],
+        scalar=REDSHIFT_TABLE_VALUE if selectable else None,
+        token=token if selectable else None,
+        excluded=excluded(values, survey, chosen) if first else None,
+    )
+
+
+def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRow:
+    table_value = (
+        FIRST_LS_TABLE_VALUE + TABLE_VALUE_COLUMNS.index(column)
+        if column in TABLE_VALUE_COLUMNS
+        else None
+    )
+    return TableRow(
+        section=catalogue(column),
+        column=column.partition("-")[0],
+        value=value,
+        scalar=table_value,
+        token=None if table_value is None else token_ids.get(column),
+        excluded=None,
+    )
+
+
 @app.get(
     "/galaxy/{galaxy}/table",
 )
 def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
-    token_ids = scalar_tokens(galaxy)
+    token_ids = table_value_tokens(galaxy)
+    values = table(galaxy)
+    chosen = redshift(values)
+    shown = [
+        (column, survey)
+        for survey, columns in REDSHIFT_COLUMNS.items()
+        for column in columns
+    ]
+    redshifts = {column for column, _ in shown}
     return [
-        TableRow(
-            catalogue=catalogue(column),
-            column=column.partition("-")[0],
-            value=value,
-            scalar=SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None,
-            token=token_ids.get(column),
-        )
-        for column, value in table(galaxy).items()
+        redshift_row(column, survey, values, chosen, token_ids.get(REDSHIFT))
+        for column, survey in shown
+    ] + [
+        catalogue_row(column, value, token_ids)
+        for column, value in values.items()
+        if column not in redshifts
     ]
 
 
@@ -268,7 +327,7 @@ def get_image(galaxy: GalaxyIndex) -> Response:
 def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     cell = tokens().column(ANCHOR)[galaxy]
     return Response(
-        np.asarray(cell.values)[:N_PATCHES].tobytes(),
+        np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
         media_type="application/octet-stream",
     )
 
@@ -312,29 +371,35 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": ARROW_STREAM}},
 )
 def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, values, spans, scalars = search(query, index=index())
+    galaxies, scores, values, spectrum_tokens, table_values = search(
+        query, index=index()
+    )
 
     item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
         [
             pa.field("galaxy", pa.int32(), nullable=False),
             pa.field("score", pa.float32(), nullable=False),
-            pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
-            pa.field("spectrum", pa.list_(item, N_SPANS)),
-            pa.field("scalars", pa.list_(item, N_SCALARS), nullable=False),
+            pa.field("map", pa.list_(item, N_IMAGE_TOKENS), nullable=False),
+            pa.field("spectrum", pa.list_(item, N_SPECTRUM_TOKENS)),
+            pa.field("scalars", pa.list_(item, N_TABLE_VALUES), nullable=False),
         ]
     )
     batch = pa.record_batch(
         [
             pa.array(galaxies),
             pa.array(scores),
-            pa.FixedSizeListArray.from_arrays(pa.array(values.reshape(-1)), N_PATCHES),
             pa.FixedSizeListArray.from_arrays(
-                pa.array(spans.reshape(-1)),
-                N_SPANS,
-                mask=pa.array(np.isnan(spans[:, 0])),
+                pa.array(values.reshape(-1)), N_IMAGE_TOKENS
             ),
-            pa.FixedSizeListArray.from_arrays(pa.array(scalars.reshape(-1)), N_SCALARS),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(spectrum_tokens.reshape(-1)),
+                N_SPECTRUM_TOKENS,
+                mask=pa.array(np.isnan(spectrum_tokens[:, 0])),
+            ),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(table_values.reshape(-1)), N_TABLE_VALUES
+            ),
         ],
         schema=schema,
     )

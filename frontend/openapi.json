@@ -417,9 +417,9 @@
               "items": {
                 "type": "integer",
                 "minimum": 0,
-                "exclusiveMaximum": 25
+                "exclusiveMaximum": 26
               },
-              "maxItems": 25,
+              "maxItems": 26,
               "default": [],
               "title": "T"
             }
@@ -617,17 +617,25 @@
       },
       "TableRow": {
         "properties": {
-          "catalogue": {
-            "type": "string",
-            "enum": [
-              "ls",
-              "hsc",
-              "desi",
-              "sdss",
-              "gz10",
-              "provabgs"
+          "section": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ls",
+                  "hsc",
+                  "desi",
+                  "sdss",
+                  "gz10",
+                  "provabgs"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "redshift"
+              }
             ],
-            "title": "Catalogue"
+            "title": "Section"
           },
           "column": {
             "type": "string",
@@ -671,15 +679,27 @@
               }
             ],
             "title": "Token"
+          },
+          "excluded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded"
           }
         },
         "type": "object",
         "required": [
-          "catalogue",
+          "section",
           "column",
           "value",
           "scalar",
-          "token"
+          "token",
+          "excluded"
         ],
         "title": "TableRow"
       },

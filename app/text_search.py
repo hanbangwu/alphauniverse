@@ -1,16 +1,22 @@
+from __future__ import annotations
+
 from functools import cache
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from datasets import Image
 from pydantic import BaseModel, ConfigDict, Field
-from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from .config import DIM, GEMMA, GEMMA_DIM, PAIRS, RGB_COLUMN, artifact, device
 from .dataset import dataset
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
+
+BATCH = 1024
 
 
 class TextQuery(BaseModel):
@@ -22,6 +28,8 @@ class TextQuery(BaseModel):
 
 @cache
 def text_model() -> SentenceTransformer:
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(GEMMA, device=device())
 
 
@@ -40,7 +48,12 @@ def generate_pairs() -> None:
         held[galaxies] += np.diff(offsets)
     aion = (sums / held[:, None]).astype(np.float32)
     images = data.select_columns([RGB_COLUMN]).cast_column(RGB_COLUMN, Image())
-    gemma = text_model().encode(list(images[RGB_COLUMN]), prompt_name="Document")
+    gemma = np.concatenate(
+        [
+            text_model().encode(batch[RGB_COLUMN], prompt_name="Document")
+            for batch in images.iter(batch_size=BATCH)
+        ]
+    )
 
     pq.write_table(
         pa.table(

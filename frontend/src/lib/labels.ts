@@ -1,4 +1,4 @@
-import type { Galaxy } from '$lib/api'
+import type { Galaxy, TableRow } from '$lib/api'
 
 export interface Label {
   label: string
@@ -17,6 +17,11 @@ export const SURVEYS: Labels<keyof Galaxy> = {
   sdss: { label: 'SDSS' },
   gz10: { label: 'Galaxy Zoo 10' },
   provabgs: { label: 'PROVABGS' }
+}
+
+export const SECTIONS: Labels<TableRow['section']> = {
+  redshift: { label: 'Redshift' },
+  ...SURVEYS
 }
 
 export const POINT_SETS = {

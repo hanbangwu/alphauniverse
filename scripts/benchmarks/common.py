@@ -1,4 +1,5 @@
 import os
+import resource
 import subprocess
 import time
 from collections.abc import Callable
@@ -7,11 +8,12 @@ from typing import Any
 
 import faiss
 import numpy as np
+import pyarrow as pa
 from threadpoolctl import threadpool_info
 
 from app.config import (
-    N_PATCHES,
-    N_SPANS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
     SPECTRUM_ORIGIN,
     SPECTRUM_TOKEN_WIDTH,
     galaxy_count,
@@ -25,8 +27,9 @@ from modal_app import (
     SERVING_SCALEDOWN_WINDOW,
 )
 
-PATCHES = 4
-SPANS = 4
+IMAGE_TOKENS = 4
+SPECTRUM_TOKENS = 4
+TABLE_VALUES = 4
 MATCHES = (8, 32, 128)
 
 
@@ -44,14 +47,16 @@ def summary(samples: list[float]) -> dict[str, Any]:
     }
 
 
-def queries(count: int, patch_count: int, matches: int) -> list[Query]:
+def queries(count: int, image_token_count: int, matches: int) -> list[Query]:
     rng = np.random.default_rng(0)
     return [
         Query(
             galaxy=int(rng.integers(galaxy_count())),
             p=tuple(
-                int(patch)
-                for patch in rng.choice(N_PATCHES, patch_count, replace=False)
+                int(image_token)
+                for image_token in rng.choice(
+                    N_IMAGE_TOKENS, image_token_count, replace=False
+                )
             ),
             matches=matches,
         )
@@ -59,12 +64,12 @@ def queries(count: int, patch_count: int, matches: int) -> list[Query]:
     ]
 
 
-def observed_spans(wavelength: np.ndarray) -> np.ndarray:
+def observed_spectrum_tokens(wavelength: np.ndarray) -> np.ndarray:
     first, last = np.floor(
         (np.array([wavelength.min(), wavelength.max()]) - SPECTRUM_ORIGIN)
         / SPECTRUM_TOKEN_WIDTH
     ).astype(int)
-    return np.arange(max(first, 0), min(last, N_SPANS - 1) + 1)
+    return np.arange(max(first, 0), min(last, N_SPECTRUM_TOKENS - 1) + 1)
 
 
 def server() -> dict[str, Any]:
@@ -92,6 +97,29 @@ def environment() -> dict[str, Any]:
         "faiss_threads": faiss.omp_get_max_threads(),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
         "thread_pools": threadpool_info(),
+    }
+
+
+def memory() -> dict[str, float]:
+    resident = {"files": 0, "anonymous": 0}
+    kind = "anonymous"
+    with open("/proc/self/smaps") as smaps:
+        for line in smaps:
+            fields = line.split()
+            if not fields:
+                continue
+            if fields[0] == "Rss:":
+                resident[kind] += int(fields[1])
+            elif not fields[0].endswith(":"):
+                file_backed = len(fields) > 5 and os.path.isfile(fields[5])
+                kind = "files" if file_backed else "anonymous"
+    return {
+        "peak_rss_mib": round(
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1
+        ),
+        "arrow_peak_mib": round(pa.default_memory_pool().max_memory() / 2**20, 1),
+        "resident_files_mib": round(resident["files"] / 1024, 1),
+        "resident_anonymous_mib": round(resident["anonymous"] / 1024, 1),
     }
 
 

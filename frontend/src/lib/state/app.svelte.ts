@@ -3,21 +3,22 @@ import { morphologyColors } from '$lib/color'
 import { pointsQuery } from '$lib/data/queries'
 import { FilterState } from './filter.svelte'
 import { MaskState } from './mask.svelte'
-import { MosaicState } from './mosaic.svelte'
+import type { MosaicState } from './mosaic.svelte'
 import { SearchState } from './search.svelte'
 import { ViewState } from './view.svelte'
 import { mode } from 'mode-watcher'
 import { Context } from 'runed'
-import { onDestroy } from 'svelte'
 
 export class AppState {
   readonly view: ViewState
   readonly search: SearchState
   readonly mask = new MaskState()
   readonly filters: FilterState
-  readonly mosaic = new MosaicState()
 
-  constructor(readonly meta: Meta) {
+  constructor(
+    readonly meta: Meta,
+    readonly mosaic: MosaicState
+  ) {
     this.view = new ViewState()
     this.search = new SearchState()
     this.filters = new FilterState(meta, this.mosaic)
@@ -41,7 +42,6 @@ export class AppState {
 
   start(): void {
     this.filters.start()
-    onDestroy(() => this.mosaic.destroy())
   }
 }
 

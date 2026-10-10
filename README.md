@@ -7,8 +7,9 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 ## What you can do with it
 
 - **Explore the embedding space** - Every galaxy appears as a point in a parametric UMAP projection. There are two views: **mean**, one point per galaxy from its average embedding; and **full**, one point per embedding (all modalities share one map). Hovering or selecting a point shows the galaxy's morphology and image.
-- **Inspect a galaxy** - Selecting a point shows its Legacy Survey image or its DESI spectrum, its morphology label, and which surveys it was crossmatched into.
-- **Search by token** - Search on a selected galaxy shows the token behind each of its 576 image patches and each span of its spectrum. A Tabular Data table lists the galaxy's catalogue values; the 25 that AION encodes can be checked, and after a search are shaded by their score. Click patches, spans, values, or any mix, then press Search to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its patch scores, and of its span scores where it has a spectrum; thresholding the patch heatmap gives zero-shot segmentation.
+- **Inspect a galaxy** - Selecting a point shows its Legacy Survey image or its DESI spectrum, smoothed for display, its morphology label, and which surveys it was crossmatched into.
+- **Search by token** - Search on a selected galaxy shows each of its 576 image tokens and 272 spectrum tokens. A Tabular Data table lists the galaxy's catalogue values; the 26 that AION encodes (25 photometric values and one redshift) can be checked, and after a search are shaded by their score. Click image tokens, spectrum tokens, values, or any mix, then press Search to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its image token scores, and of its spectrum token scores where it has a spectrum; thresholding the image token heatmap gives zero-shot segmentation.
+- **Search by text** - The Text Search tab beside the projection takes a description and lists the galaxies whose AION embeddings, mapped into [EmbeddingGemma](https://huggingface.co/google/embeddinggemma-2)'s space, lie nearest it, each with its cosine score and morphology. Clicking one selects it.
 
 ## Data
 
@@ -16,10 +17,12 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 | Survey             | Modality | Tokens per galaxy |
 | ------------------ | -------- | ----------------- |
-| Legacy Survey DR10 | image    | 576 + 12 scalars  |
-| HSC PDR3           | image    | 576 + 13 scalars  |
+| Legacy Survey DR10 | image    | 576 + 12 table values  |
+| HSC PDR3           | image    | 576 + 13 table values  |
 | DESI EDR SV3       | spectrum | 273               |
 | SDSS               | spectrum | 273               |
+
+A galaxy with a spectroscopic redshift also gets one redshift token: DESI's if it is unflagged and at most 6, else SDSS's under the same test, else none.
 
 Every token carries a 768-d embedding, in two flavours: **encoded**, the contextualised encoding AION's decoder reads, and **codebook**, the encoder's input embedding of the token id, before any context.
 
@@ -36,7 +39,7 @@ uv run python -m scripts.fixture                                   # writes .cac
 ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py  # serves 127.0.0.1:8000
 ```
 
-The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it. Images and spectra read the Hugging Face dataset itself: the first such request downloads it into the local Hugging Face cache (24.33 GB at the pinned revision), and with `HF_HUB_OFFLINE=1` they fail unless it is already there.
+The fixture's 12 galaxies and their embeddings are synthetic: develop against it, never measure with it. Images, spectra and the catalogue table read the Hugging Face dataset itself: the first such request downloads it into the local Hugging Face cache (24.33 GB at the pinned revision), and with `HF_HUB_OFFLINE=1` they fail unless it is already there. The first text search downloads EmbeddingGemma the same way.
 
 ### Frontend
 

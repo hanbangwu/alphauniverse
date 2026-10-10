@@ -1,6 +1,7 @@
 import {
   getGalaxy,
   getImageTokens,
+  getMeta,
   getSearch,
   getSpectrum,
   getSpectrumTokens,
@@ -16,6 +17,15 @@ import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
 import { type Float32, tableFromIPC } from 'apache-arrow'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
+
+export const metaQuery = queryOptions({
+  queryKey: ['meta'] as const,
+  queryFn: async () => {
+    const { data } = await getMeta({ throwOnError: true })
+    return data
+  },
+  ...FOREVER
+})
 
 export function tokensQuery(galaxy: number | null) {
   return queryOptions({
@@ -130,13 +140,13 @@ export function similarityQuery(request: SimilarityQuery | null) {
         : async ({ signal }): Promise<SimilarityResult> => {
             const { data } = await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
-            const scalarMaps = table.getChild('scalars')!.getChildAt<Float32>(0)!.toArray()
+            const tableValueMaps = table.getChild('scalars')!.getChildAt<Float32>(0)!.toArray()
             return {
               galaxies: table.getChild('galaxy')!.toArray(),
               scores: table.getChild('score')!.toArray(),
               imageMaps: table.getChild('map')!.getChildAt<Float32>(0)!.toArray(),
               spectrumMaps: table.getChild('spectrum')!.getChildAt<Float32>(0)!.toArray(),
-              scalarMap: row(scalarMaps, 0, scalarMaps.length / table.numRows)
+              tableValueMap: row(tableValueMaps, 0, tableValueMaps.length / table.numRows)
             }
           },
     placeholderData: keepPreviousData,
