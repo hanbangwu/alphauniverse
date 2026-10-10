@@ -15,12 +15,12 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 `hanbangwu/alphauniverse-cosmos` is Legacy Survey DR10 south over COSMOS, crossmatched against HSC, DESI, SDSS, Galaxy Zoo 10 and PROVABGS. The image and spectrum surveys are tokenised:
 
-| Survey             | Modality | Tokens per galaxy |
-| ------------------ | -------- | ----------------- |
-| Legacy Survey DR10 | image    | 576 + 12 table values  |
-| HSC PDR3           | image    | 576 + 13 table values  |
-| DESI EDR SV3       | spectrum | 273               |
-| SDSS               | spectrum | 273               |
+| Survey             | Modality | Tokens per galaxy     |
+| ------------------ | -------- | --------------------- |
+| Legacy Survey DR10 | image    | 576 + 12 table values |
+| HSC PDR3           | image    | 576 + 13 table values |
+| DESI EDR SV3       | spectrum | 273                   |
+| SDSS               | spectrum | 273                   |
 
 A galaxy with a spectroscopic redshift also gets one redshift token: DESI's if it is unflagged and at most 6, else SDSS's under the same test, else none.
 
