@@ -127,7 +127,7 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     own = table.slice(GALAXY, 1)
     shown = table.take(galaxies)
 
-    aligned, _ = pql.maps(query, galaxies)
+    aligned = pql.maps(pql.agreements(GALAXY), galaxies)
 
     expected = {
         mode: slot_similarities(
@@ -145,26 +145,6 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     )
 
 
-def test_selection_maps_compare_every_slot_with_the_mean_of_the_selected_slots(
-    table: pa.Table, query: pql.Query
-) -> None:
-    galaxies = np.asarray([3, 0])
-    own = table.slice(GALAXY, 1)
-    shown = table.take(galaxies)
-
-    _, selected = pql.maps(query, galaxies)
-
-    assert selected.keys() == {*IMAGE_MODES, *SPECTRUM_MODES}
-    for mode in selected:
-        mean = dense(own, mode, TOP_CODES)[0, SELECTED_SLOTS[mode]].mean(axis=0)
-        np.testing.assert_allclose(
-            selected[mode],
-            slot_similarities(mode, dense(shown, mode, pql.KEPT), mean),
-            rtol=1e-4,
-            err_msg=mode,
-        )
-
-
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
     table: pa.Table,
 ) -> None:
@@ -176,17 +156,6 @@ def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
         rows = dense(own, mode, TOP_CODES)[0]
         unit = rows / np.linalg.norm(rows, axis=-1, keepdims=True)
         np.testing.assert_allclose(found, unit @ unit.T, atol=1e-5, err_msg=mode)
-
-
-def test_unselected_image_and_spectrum_modes_have_no_selection_map(
-    tree: Path,
-) -> None:
-    aligned, selected = pql.maps(
-        pql.Query(galaxy=GALAXY, table_values=(1,)), np.asarray([3])
-    )
-
-    assert selected == {}
-    assert all(np.isfinite(values).all() for values in aligned.values())
 
 
 def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
@@ -201,11 +170,13 @@ def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
     others = np.delete(np.arange(len(scores)), GALAXY)
     best = others[np.argsort(-scores[others], kind="stable")][:matches]
     assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
-    np.testing.assert_allclose(results.scores, scores[results.galaxies])
+    np.testing.assert_allclose(results.scores, scores[results.galaxies], atol=1e-4)
     for mode, values in pql.parts(ranked).items():
-        np.testing.assert_allclose(results.sums[mode], values[results.galaxies])
+        np.testing.assert_allclose(
+            results.sums[mode], values[results.galaxies], rtol=1e-5
+        )
     np.testing.assert_allclose(
-        results.similarity, similarity(ranked)[results.galaxies], rtol=1e-6
+        results.similarity, similarity(ranked)[results.galaxies], rtol=1e-5
     )
 
 

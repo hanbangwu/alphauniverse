@@ -377,6 +377,22 @@ def get_cosines(galaxy: GalaxyIndex, mode: CosineMode) -> Response:
     )
 
 
+def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Array]]:
+    item = pa.field("item", pa.float32(), nullable=False)
+    return (
+        [
+            pa.field(mode, pa.list_(item, values.shape[1]), nullable=False)
+            for mode, values in maps.items()
+        ],
+        [
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(values.reshape(-1), pa.float32()), values.shape[1]
+            )
+            for values in maps.values()
+        ],
+    )
+
+
 @app.get(
     "/search",
     response_class=Response,
@@ -385,7 +401,6 @@ def get_cosines(galaxy: GalaxyIndex, mode: CosineMode) -> Response:
 def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     results = pql.search(query)
     count = len(results.galaxies)
-    item = pa.field("item", pa.float32(), nullable=False)
     fields = [
         pa.field("galaxy", pa.int32(), nullable=False),
         pa.field("score", pa.float32(), nullable=False),
@@ -396,25 +411,9 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
         pa.array(results.scores),
         pa.array(results.similarity, pa.float32()),
     ]
-    for mode, values in results.aligned.items():
-        fields.append(pa.field(mode, pa.list_(item, values.shape[1]), nullable=False))
-        columns.append(
-            pa.FixedSizeListArray.from_arrays(
-                pa.array(values.reshape(-1), pa.float32()), values.shape[1]
-            )
-        )
-    for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
-        width = results.aligned[mode].shape[1]
-        kind = pa.list_(item, width)
-        fields.append(pa.field(f"{mode}_selection", kind))
-        selected = results.selected.get(mode)
-        columns.append(
-            pa.nulls(count, kind)
-            if selected is None
-            else pa.FixedSizeListArray.from_arrays(
-                pa.array(selected.reshape(-1), pa.float32()), width
-            )
-        )
+    map_fields, map_columns = map_arrays(results.aligned)
+    fields += map_fields
+    columns += map_columns
     for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES):
         fields.append(pa.field(f"{mode}_sum", pa.float32()))
         sums = results.sums.get(mode)
