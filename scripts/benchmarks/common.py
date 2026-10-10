@@ -27,6 +27,7 @@ from modal_app import (
 
 PATCHES = 4
 SPANS = 4
+SCALARS = 4
 MATCHES = (8, 32, 128)
 
 

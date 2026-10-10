@@ -15,6 +15,7 @@ from app.config import (
     N_SCALARS,
     N_SPANS,
     SPECTRUM_SURVEYS,
+    galaxy_count,
 )
 from app.dataset import spectrum
 from app.main import SPECTRUM_SURVEY
@@ -31,10 +32,12 @@ from app.search import (
     source,
     spectral,
     spectrum_cells,
+    with_hsc,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import (
     PATCHES,
+    SCALARS,
     SPANS,
     environment,
     git,
@@ -157,6 +160,38 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     ]
 
 
+def ls_scalars(count: int) -> list[Query]:
+    rng = np.random.default_rng(2)
+    return [
+        Query(
+            galaxy=int(rng.integers(galaxy_count())),
+            t=tuple(
+                int(scalar)
+                for scalar in rng.choice(N_LS_SCALARS, SCALARS, replace=False)
+            ),
+        )
+        for _ in range(count)
+    ]
+
+
+def hsc_scalars(count: int) -> list[Query]:
+    rng = np.random.default_rng(3)
+    return [
+        Query(
+            galaxy=int(galaxy),
+            t=tuple(
+                int(scalar)
+                for scalar in (
+                    *rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
+                    *N_LS_SCALARS
+                    + rng.choice(N_HSC_SCALARS, SCALARS // 2, replace=False),
+                )
+            ),
+        )
+        for galaxy in rng.choice(np.flatnonzero(with_hsc()), count, replace=False)
+    ]
+
+
 @app.function(
     image=image,
     cpu=16,
@@ -182,6 +217,8 @@ def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
         ),
         ("spans", [query.model_copy(update={"patches": ()}) for query in paired]),
         ("both", paired),
+        ("scalars", ls_scalars(per_kind)),
+        ("hsc_scalars", hsc_scalars(per_kind)),
     ):
         fractions, searches = [], []
         for query in batch:
