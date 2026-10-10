@@ -81,18 +81,19 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         cold_similarity = round(elapsed(lambda: similarity(32)), 3)
         cold_text_search = round(elapsed(lambda: get("/search/text", text=TEXTS[0])), 3)
         texts = cycle(TEXTS)
+        added = np.random.default_rng(1)
 
         calls = {
             "meta": lambda: get("/meta"),
             "image": lambda: get(f"/galaxy/{galaxy()}/image"),
             "tokens": lambda: get(f"/galaxy/{galaxy()}/image/tokens"),
             "coverage": lambda: get(f"/galaxy/{galaxy()}"),
-            "table": lambda: get(f"/galaxy/{galaxy()}/table"),
+            "table": lambda: get(f"/galaxy/{int(added.integers(galaxies))}/table"),
             "text search": lambda: get("/search/text", text=next(texts)),
             "similarity scalars matches=32": lambda: get(
                 "/search",
-                galaxy=galaxy(),
-                t=rng.choice(N_LS_SCALARS, SCALARS, replace=False).tolist(),
+                galaxy=int(added.integers(galaxies)),
+                t=added.choice(N_LS_SCALARS, SCALARS, replace=False).tolist(),
             ),
         } | {
             f"similarity matches={matches}": (
