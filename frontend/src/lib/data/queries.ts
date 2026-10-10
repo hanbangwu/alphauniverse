@@ -9,6 +9,7 @@ import {
   getTextSearch
 } from '$lib/api'
 import type { Projection } from '$lib/client'
+import { OBSERVED } from '$lib/labels'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { matchMean } from './scores'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
@@ -131,6 +132,15 @@ export function morphologyQuery(mosaic: MosaicState, table: string | null, galax
   })
 }
 
+function predictedModes(table: Table): string[][] {
+  const selected = Object.entries(OBSERVED).filter(
+    ([mode]) => table.getChild(`${mode}_sum`)!.nullCount === 0
+  )
+  return Array.from({ length: table.numRows }, (_, index) =>
+    selected.flatMap(([, { has, label }]) => (table.getChild(has)!.get(index) ? [] : [label]))
+  )
+}
+
 function shownMaps(table: Table, mode: string): Float32Array {
   const selection = table.getChild(`${mode}_selection`)!
   const shown = selection.nullCount === 0 ? selection : table.getChild(mode)!
@@ -152,7 +162,8 @@ export function similarityQuery(request: SimilarityQuery | null) {
               scores: table.getChild('score')!.toArray(),
               imageMaps: shownMaps(table, 'ls_image'),
               spectrumMaps: shownMaps(table, 'desi_spectrum'),
-              tableValueMap: matchMean(tableValueMaps, table.numRows)
+              tableValueMap: matchMean(tableValueMaps, table.numRows),
+              predicted: predictedModes(table)
             }
           },
     placeholderData: keepPreviousData,

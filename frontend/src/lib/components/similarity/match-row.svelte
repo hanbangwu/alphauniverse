@@ -14,6 +14,8 @@
 
   const similarity = getSimilarity()
   const values = $derived(similarity.imageMapAt(index))
+  const predicted = $derived(similarity.predictedAt(index))
+  const elsewhere = $derived(predicted.filter((label) => label !== 'DESI spectrum'))
 </script>
 
 <div class="flex flex-col gap-5 pt-6">
@@ -22,5 +24,16 @@
     <ImageTokenMap {values} />
     <ImageTokenMask {values} />
   </div>
-  <SpectrumPanel {galaxy} map={similarity.spectrumMapAt(index)} />
+  {#if elsewhere.length}
+    <p class="text-xs text-muted-foreground">
+      No {elsewhere.join(', ')}: matched on AION's prediction
+    </p>
+  {/if}
+  <SpectrumPanel
+    {galaxy}
+    map={similarity.spectrumMapAt(index)}
+    absent={predicted.includes('DESI spectrum')
+      ? "No DESI spectrum: matched on AION's prediction"
+      : undefined}
+  />
 </div>

@@ -12,9 +12,10 @@
     map: Float32Array | null
     selected?: number[]
     ontoggle?: (index: number) => void
+    absent?: string
   }
 
-  let { galaxy, map, selected, ontoggle }: Props = $props()
+  let { galaxy, map, selected, ontoggle, absent = 'No spectrum' }: Props = $props()
 
   const similarity = getSimilarity()
 
@@ -52,7 +53,7 @@
       />
     {:else if coverage.data && !matched}
       <p class="absolute inset-0 grid place-content-center text-xs text-muted-foreground">
-        No spectrum
+        {absent}
       </p>
     {/if}
   </PanelFrame>

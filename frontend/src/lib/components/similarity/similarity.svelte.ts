@@ -100,6 +100,10 @@ export class Similarity {
 
   readonly maskTitle: Caption = (value) => (value ? 'masked' : 'unmasked')
 
+  predictedAt(index: number): string[] {
+    return this.#result.data?.predicted[index] ?? []
+  }
+
   scoreAt(index: number): number {
     return this.#result.data?.scores[index] ?? 0
   }
