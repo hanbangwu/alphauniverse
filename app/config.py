@@ -142,6 +142,13 @@ Download = Literal["encoded", "codebook", "tokens"]
 
 
 STORES = ("encoded", "codebook", "tokens")
+ROW_GROUP = 128
+VECTOR_ENCODING = {
+    "use_dictionary": False,
+    "use_byte_stream_split": [
+        f"{survey}.list.element.list.element" for survey in TOKEN_SURVEYS
+    ],
+}
 
 
 def store_schema(role: str) -> pa.Schema:

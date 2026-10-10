@@ -47,16 +47,16 @@ from .config import (
     ANCHOR,
     CROP_PIXELS,
     FLAG_SURVEYS,
+    ROW_GROUP,
     SCALAR_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
+    VECTOR_ENCODING,
     artifact,
     device,
     store_schema,
 )
 from .dataset import dataset
-
-ROW_GROUP = 128
 
 LS_SCALARS = tuple(
     zip(
@@ -230,17 +230,6 @@ def by_survey(
     }
 
 
-def vector_encoding(schema: pa.Schema) -> dict[str, object]:
-    return {
-        "use_dictionary": False,
-        "use_byte_stream_split": [
-            f"{field.name}.list.element.list.element"
-            for field in schema
-            if pa.types.is_list(field.type)
-        ],
-    }
-
-
 def generate_embeddings() -> None:
     data = dataset()
     schemas = {role: store_schema(role) for role in STORES}
@@ -249,7 +238,7 @@ def generate_embeddings() -> None:
             artifact(role),
             schemas[role],
             compression="zstd",
-            **({} if role == "tokens" else vector_encoding(schemas[role])),
+            **({} if role == "tokens" else VECTOR_ENCODING),
         )
         for role in STORES
     }
