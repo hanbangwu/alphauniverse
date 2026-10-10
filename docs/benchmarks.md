@@ -170,7 +170,7 @@ All six are within 190 − 177 = 13 ms at p50. What the floor is made of is **un
 
 ## `search_quality`
 
-A container on the build image, with the build jobs' CPU, memory and volume, loads every patch and span embedding, then runs `--per-kind` queries of each kind at 32 matches:
+A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and the volume, loads every patch and span embedding, then runs `--per-kind` queries of each kind at 32 matches:
 
 - `patches`: 4 patches of a galaxy drawn from all galaxies.
 - `paired_patches`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 patches and 4 spans inside its observed range, queried with the patches, the spans, and both.
@@ -196,7 +196,7 @@ A query's recall is the share of `exact_ranking`'s 32 galaxies (a brute force ov
 
 ## `projection_quality`
 
-A container on the build image, with `generate_projections`' CPU and memory and no GPU, redraws the projector's sample and its validation split, takes `SIZE` (10,000) validation rows, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
+A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and no GPU, redraws the projector's sample and its validation split, takes `SIZE` (10,000) validation rows, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
 
 - `preservation`: the mean share of a row's nearest neighbours by cosine distance in 768-d that are also its nearest in 2-d.
 - `trustworthiness`: scikit-learn's `trustworthiness`, cosine in 768-d, which penalises 2-d neighbours that are far apart in 768-d.
@@ -223,7 +223,7 @@ At 15 neighbours, 0.3064 × 15 = 4.6 of a row's 15 nearest neighbours in 768-d a
 
 ## `text_search_quality`
 
-A container on the build image, with `generate_alignment`'s GPU, CPU and memory, takes the `pairs` rows of the galaxies `generate_alignment` held out, and embeds each query in `CUTS` with EmbeddingGemma. Each query's answer is a cut on a PROVABGS property: stellar mass, specific star formation rate or redshift; its population is the galaxies with that property. It ranks the population in three spaces: the EmbeddingGemma embeddings, and the AION embeddings through the linear and the MLP maps in `alignment`. Each space is ranked raw and centred: centring subtracts the documents' mean from the documents and the queries' mean from the queries, then renormalises. Per query, space and centring it reports the base rate, scikit-learn's `average_precision_score` and the precision at 10 and 100.
+A container on the build image, with an L4 GPU, 16 CPU, 16 GiB requested and a 64 GiB limit, takes the `pairs` rows of the galaxies `generate_alignment` held out, and embeds each query in `CUTS` with EmbeddingGemma. Each query's answer is a cut on a PROVABGS property: stellar mass, specific star formation rate or redshift; its population is the galaxies with that property. It ranks the population in three spaces: the EmbeddingGemma embeddings, and the AION embeddings through the linear and the MLP maps in `alignment`. Each space is ranked raw and centred: centring subtracts the documents' mean from the documents and the queries' mean from the queries, then renormalises. Per query, space and centring it reports the base rate, scikit-learn's `average_precision_score` and the precision at 10 and 100.
 
 The dataset holds 7 galaxies with a GZ10 label, too few to score morphology queries.
 
