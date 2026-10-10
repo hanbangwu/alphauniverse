@@ -8,7 +8,6 @@ on:
         description: Measurement to run on Modal
         type: choice
         options:
-          - search_quality
           - search_performance
           - backend_performance
           - projection_quality
