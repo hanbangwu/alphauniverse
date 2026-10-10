@@ -104,10 +104,12 @@ def memory() -> dict[str, float]:
     with open("/proc/self/smaps") as smaps:
         for line in smaps:
             fields = line.split()
+            if not fields:
+                continue
             if fields[0] == "Rss:":
                 resident[kind] += int(fields[1])
             elif not fields[0].endswith(":"):
-                file_backed = len(fields) > 5 and fields[5].startswith("/")
+                file_backed = len(fields) > 5 and os.path.isfile(fields[5])
                 kind = "files" if file_backed else "anonymous"
     return {
         "peak_rss_mib": round(
