@@ -113,10 +113,7 @@ def hidden(galaxies: np.ndarray) -> tuple[pa.RecordBatch, list[np.ndarray]]:
     for row in table.take(galaxies).to_pylist():
         row |= dict.fromkeys((*SPECTRUM_SURVEYS, REDSHIFT))
         encoded, _, mask, modality = encode.context(predictions.inputs(row))
-        predicted = {
-            key: predictions.predict(encoded, mask, key, positions)
-            for key, positions in predictions.TARGETS.items()
-        }
+        predicted = predictions.decode(encoded, mask, predictions.TARGETS)
         records.append(predictions.record(row["galaxy"], predicted, fitted))
         tokens = encoded[0][torch.isin(modality[0], kept.to(modality.device))]
         rows.append(torch.nn.functional.normalize(tokens.float(), dim=-1).cpu().numpy())
