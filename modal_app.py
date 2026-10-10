@@ -54,6 +54,22 @@ def generate_embeddings() -> None:
     gpu="L4",
     cpu=16,
     memory=(32 * 1024, 128 * 1024),
+    timeout=24 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_predictions() -> None:
+    from app.config import build_dir
+    from app.predictions import generate_predictions
+
+    build_dir().mkdir(parents=True, exist_ok=True)
+    generate_predictions()
+
+
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=16,
+    memory=(32 * 1024, 128 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
     secrets=[modal.Secret.from_name("wandb-secret")],

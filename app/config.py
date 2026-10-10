@@ -144,6 +144,8 @@ ARTIFACTS: dict[str, str] = {
     "pairs": "parquet",
     "alignment": "pt",
     "aion_gemma_space": "npy",
+    "predictions": "arrow",
+    "prediction_basis": "npz",
 }
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
