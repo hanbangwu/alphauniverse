@@ -14,8 +14,8 @@
     selected?: number[]
     ontoggle?: (index: number) => void
     absent?: string
-    heat?: ((value: number) => RGB) | null
-    caption?: (value: number, index: number) => string
+    heat: ((value: number) => RGB) | null
+    caption: (value: number, index: number) => string
   }
 
   let { galaxy, map, selected, ontoggle, absent = 'No spectrum', heat, caption }: Props = $props()
@@ -28,9 +28,7 @@
   const tokens = createQuery(() => spectrumTokensQuery(matched && !map ? galaxy : null))
 
   const cells = $derived(map ?? tokens.data ?? null)
-  const palette = $derived(
-    map ? (heat ?? similarity.spectrumHeat) : tokens.data ? tokenColors(tokens.data) : null
-  )
+  const palette = $derived(map ? heat : tokens.data ? tokenColors(tokens.data) : null)
 </script>
 
 <div class="flex flex-col gap-2">
@@ -46,7 +44,7 @@
         values={cells}
         color={palette}
         opacity={map ? undefined : tokenAlpha}
-        title={map ? (caption ?? similarity.score) : similarity.caption}
+        title={map ? caption : similarity.caption}
         {selected}
         {ontoggle}
         label={ontoggle

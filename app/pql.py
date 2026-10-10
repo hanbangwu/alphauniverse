@@ -269,13 +269,17 @@ def log_overlaps(
     return table_value_overlaps(table_value_log_probabilities(rows, mode, slots), form)
 
 
-def log_peaks(mode: str, form: np.ndarray) -> np.ndarray:
-    if mode in IMAGE_MODES:
-        return np.log(form.max(axis=-1))
+def distributions(mode: str, form: np.ndarray) -> np.ndarray:
     if mode in SPECTRUM_MODES:
         mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
-        return np.log((mean + form @ directions).max(axis=-1))
-    return form.max(axis=-1)
+        return mean + form @ directions
+    return form
+
+
+def log_peaks(mode: str, form: np.ndarray) -> np.ndarray:
+    if mode in TABLE_MODES:
+        return form.max(axis=-1)
+    return np.log(distributions(mode, form).max(axis=-1))
 
 
 def slot_similarities(
@@ -333,12 +337,9 @@ def scores(query: Query) -> np.ndarray:
 
 
 def cosines(galaxy: int, mode: str) -> np.ndarray:
-    form = query_forms(row(galaxy), {mode: slice(None)})[mode]
-    if mode in SPECTRUM_MODES:
-        mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
-        form = mean + form @ directions
+    form = distributions(mode, query_forms(row(galaxy), {mode: slice(None)})[mode])
     unit = form / np.linalg.norm(form, axis=-1, keepdims=True)
-    return (unit @ unit.T).astype(np.float32)
+    return (unit @ unit.T).astype(np.float32, copy=False)
 
 
 def maps(

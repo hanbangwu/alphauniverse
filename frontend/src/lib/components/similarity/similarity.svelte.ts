@@ -66,22 +66,19 @@ export class Similarity {
     )
     this.imageHeat = $derived(this.imageDomain ? continuous(this.imageDomain) : null)
     this.imageCosines = $derived(
-      this.#imageCosines.data
-        ? best(this.#imageCosines.data, app.view.imageTokens.value, this.#imageTokenCount)
-        : null
+      this.#imageCosines.data ? best(this.#imageCosines.data, app.view.imageTokens.value) : null
     )
     this.spectrumMaps = $derived(this.#result.data?.spectrumMaps ?? null)
     this.spectrumHeat = $derived.by(() => {
       if (!this.spectrumMaps) return null
-      const width = this.spectrumMaps.length / this.galaxies.length
-      const [low, high] = extent(this.spectrumMaps.subarray(width))
+      const [low, high] = extent(this.spectrumMaps.subarray(this.spectrumMapAt(0).length))
       return low <= high ? continuous([low, high]) : null
     })
-    this.spectrumCosines = $derived.by(() => {
-      const table = this.#spectrumCosines.data
-      if (!table) return null
-      return best(table, app.view.spectrumTokens.value, Math.sqrt(table.length))
-    })
+    this.spectrumCosines = $derived(
+      this.#spectrumCosines.data
+        ? best(this.#spectrumCosines.data, app.view.spectrumTokens.value)
+        : null
+    )
     this.tableValueMap = $derived(this.#result.data?.tableValueMap ?? null)
     this.tableValueHeat = $derived.by(() => {
       if (!this.tableValueMap) return null

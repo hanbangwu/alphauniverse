@@ -38,6 +38,8 @@
   <SpectrumPanel
     {galaxy}
     map={similarity.spectrumMapAt(index)}
+    heat={similarity.spectrumHeat}
+    caption={similarity.score}
     absent={predicted.includes(SPECTRUM_SURVEY)
       ? "No DESI spectrum: matched on AION's prediction"
       : undefined}

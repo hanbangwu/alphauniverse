@@ -22,7 +22,8 @@ export function row(values: Float32Array, index: number, width: number): Float32
   return values.subarray(index * width, (index + 1) * width)
 }
 
-export function best(table: Float32Array, rows: number[], width: number): Float32Array {
+export function best(table: Float32Array, rows: number[]): Float32Array {
+  const width = Math.sqrt(table.length)
   const out = new Float32Array(width).fill(-Infinity)
   for (const index of rows) {
     for (let column = 0; column < width; column++) {

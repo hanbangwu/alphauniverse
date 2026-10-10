@@ -110,11 +110,15 @@ export function cosinesQuery(galaxy: number | null, mode: CosineMode) {
     queryFn:
       galaxy === null
         ? skipToken
-        : async () => {
-            const { data } = await getCosines({ path: { galaxy, mode }, throwOnError: true })
+        : async ({ signal }) => {
+            const { data } = await getCosines({
+              path: { galaxy, mode },
+              signal,
+              throwOnError: true
+            })
             return new Float32Array(await data.arrayBuffer())
           },
-    ...FOREVER
+    staleTime: Infinity
   })
 }
 
