@@ -8,6 +8,7 @@ from datasets import Dataset
 from fastapi.testclient import TestClient
 
 from app import dataset as dataset_module
+from app import pql
 from app.config import (
     ANCHOR,
     DESI,
@@ -110,6 +111,22 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
     assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
     for survey in TOKEN_SURVEYS:
         assert rows[survey] is stored.column(survey)[0].is_valid
+
+
+def test_cosines_are_a_square_float32_table_of_the_mode_s_slots(
+    client: TestClient,
+) -> None:
+    for mode, slots in (
+        ("ls_image", N_IMAGE_TOKENS),
+        ("desi_spectrum", N_SPECTRUM_TOKENS),
+    ):
+        response = client.get(f"/galaxy/0/cosines/{mode}")
+
+        assert response.status_code == 200
+        served = np.frombuffer(response.content, dtype=np.float32)
+        np.testing.assert_allclose(
+            served.reshape(slots, slots), pql.cosines(0, mode), err_msg=mode
+        )
 
 
 def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:

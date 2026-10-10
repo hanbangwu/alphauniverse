@@ -361,6 +361,63 @@
         }
       }
     },
+    "/galaxy/{galaxy}/cosines/{mode}": {
+      "get": {
+        "summary": "Get Cosines",
+        "description": "The cosine between AION's predicted distributions at every pair of the galaxy's slots of one image or spectrum mode: n by n float32, row-major, n the mode's slot count.",
+        "operationId": "get_cosines",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls_image",
+                "hsc_image",
+                "desi_spectrum",
+                "sdss_spectrum"
+              ],
+              "type": "string",
+              "title": "Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search": {
       "get": {
         "summary": "Get Search",

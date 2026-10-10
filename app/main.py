@@ -360,6 +360,23 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     )
 
 
+CosineMode = Literal[*IMAGE_MODES, *SPECTRUM_MODES]
+
+
+@app.get(
+    "/galaxy/{galaxy}/cosines/{mode}",
+    response_class=Response,
+    responses={200: {"content": BINARY_OCTET}},
+    description="The cosine between AION's predicted distributions at every pair of "
+    "the galaxy's slots of one image or spectrum mode: n by n float32, row-major, "
+    "n the mode's slot count.",
+)
+def get_cosines(galaxy: GalaxyIndex, mode: CosineMode) -> Response:
+    return Response(
+        pql.cosines(galaxy, mode).tobytes(), media_type="application/octet-stream"
+    )
+
+
 @app.get(
     "/search",
     response_class=Response,
