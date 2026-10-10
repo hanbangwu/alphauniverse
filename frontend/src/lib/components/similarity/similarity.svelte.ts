@@ -95,8 +95,6 @@ export class Similarity {
   readonly score = (value: number): string =>
     `${SIMILARITY.short} ${Math.min(1, value).toFixed(DECIMALS)}`
 
-  readonly overlap: Caption = (value) => `overlap ${Math.exp(value).toPrecision(DECIMALS)}`
-
   readonly caption: Caption = (value) => `token ${value}`
 
   readonly maskColor = (value: number): RGB => (value ? [255, 255, 255] : [0, 0, 0])

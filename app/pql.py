@@ -269,6 +269,21 @@ def log_overlaps(
     return table_value_overlaps(table_value_log_probabilities(rows, mode, slots), form)
 
 
+def log_peaks(mode: str, form: np.ndarray) -> np.ndarray:
+    if mode in IMAGE_MODES:
+        return np.log(form.max(axis=-1))
+    if mode in SPECTRUM_MODES:
+        mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
+        return np.log((mean + form @ directions).max(axis=-1))
+    return form.max(axis=-1)
+
+
+def slot_similarities(
+    rows: pa.RecordBatch, mode: str, slots: np.ndarray | slice, form: np.ndarray
+) -> np.ndarray:
+    return np.exp(log_overlaps(rows, mode, slots, form) - log_peaks(mode, form))
+
+
 def sums(
     rows: pa.RecordBatch,
     selected: dict[str, np.ndarray],
@@ -315,39 +330,25 @@ def maps(
         own, dict.fromkeys((*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES), slice(None))
     )
     aligned = {
-        mode: log_overlaps(rows, mode, slice(None), form)
+        mode: slot_similarities(rows, mode, slice(None), form)
         for mode, form in every.items()
     }
     aligned["table_values"] = np.hstack([aligned.pop(mode) for mode in TABLE_MODES])
     selected = {
-        mode: log_overlaps(rows, mode, slice(None), every[mode][slots].mean(axis=0))
+        mode: slot_similarities(
+            rows, mode, slice(None), every[mode][slots].mean(axis=0)
+        )
         for mode, slots in selection(query).items()
         if mode not in TABLE_MODES
     }
     return aligned, selected
 
 
-def best_overlaps(
-    own: pa.RecordBatch, selected: dict[str, np.ndarray]
-) -> dict[str, float]:
-    best = {}
-    for mode, form in query_forms(own, selected).items():
-        if mode in IMAGE_MODES:
-            peaks = np.log(form.max(axis=-1))
-        elif mode in SPECTRUM_MODES:
-            mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
-            peaks = np.log((mean + form @ directions).max(axis=-1))
-        else:
-            peaks = form.max(axis=-1)
-        best[mode] = float(peaks.sum())
-    return best
-
-
 def fractions(query: Query, totals: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     selected = selection(query)
-    best = best_overlaps(row(query.galaxy), selected)
+    forms = query_forms(row(query.galaxy), selected)
     return {
-        mode: (values - best[mode]) / len(selected[mode])
+        mode: (values - log_peaks(mode, forms[mode]).sum()) / len(selected[mode])
         for mode, values in totals.items()
     }
 

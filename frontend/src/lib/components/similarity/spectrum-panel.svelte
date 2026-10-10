@@ -44,7 +44,7 @@
         values={cells}
         color={palette}
         opacity={map ? undefined : tokenAlpha}
-        title={map ? similarity.overlap : similarity.caption}
+        title={map ? similarity.score : similarity.caption}
         {selected}
         {ontoggle}
         label={ontoggle

@@ -84,6 +84,10 @@ def log_overlaps(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.ndarra
     return np.log(overlaps)
 
 
+def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.ndarray:
+    return np.exp(log_overlaps(mode, gallery, query) - np.log(query.max(axis=-1)))
+
+
 @pytest.fixture(scope="module")
 def table(tree: Path) -> pa.Table:
     return pql.predictions()
@@ -111,7 +115,7 @@ def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
         np.testing.assert_allclose(sums[mode], expected, rtol=1e-4, err_msg=mode)
 
 
-def test_aligned_maps_overlap_each_slot_with_the_same_slot_of_the_query(
+def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     table: pa.Table, query: pql.Query
 ) -> None:
     galaxies = np.asarray([3, 0])
@@ -121,7 +125,7 @@ def test_aligned_maps_overlap_each_slot_with_the_same_slot_of_the_query(
     aligned, _ = pql.maps(query, galaxies)
 
     expected = {
-        mode: log_overlaps(
+        mode: slot_similarities(
             mode, dense(shown, mode, pql.KEPT), dense(own, mode, TOP_CODES)[0]
         )
         for mode in SELECTED_SLOTS
@@ -136,7 +140,7 @@ def test_aligned_maps_overlap_each_slot_with_the_same_slot_of_the_query(
     )
 
 
-def test_selection_maps_overlap_every_slot_with_the_mean_of_the_selected_slots(
+def test_selection_maps_compare_every_slot_with_the_mean_of_the_selected_slots(
     table: pa.Table, query: pql.Query
 ) -> None:
     galaxies = np.asarray([3, 0])
@@ -150,7 +154,7 @@ def test_selection_maps_overlap_every_slot_with_the_mean_of_the_selected_slots(
         mean = dense(own, mode, TOP_CODES)[0, SELECTED_SLOTS[mode]].mean(axis=0)
         np.testing.assert_allclose(
             selected[mode],
-            log_overlaps(mode, dense(shown, mode, pql.KEPT), mean),
+            slot_similarities(mode, dense(shown, mode, pql.KEPT), mean),
             rtol=1e-4,
             err_msg=mode,
         )
