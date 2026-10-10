@@ -160,15 +160,12 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     ]
 
 
-def ls_scalars(count: int) -> list[Query]:
+def scalars(count: int) -> list[Query]:
     rng = np.random.default_rng(2)
     return [
         Query(
             galaxy=int(rng.integers(galaxy_count())),
-            t=tuple(
-                int(scalar)
-                for scalar in rng.choice(N_LS_SCALARS, SCALARS, replace=False)
-            ),
+            t=tuple(rng.choice(N_LS_SCALARS, SCALARS, replace=False).tolist()),
         )
         for _ in range(count)
     ]
@@ -180,12 +177,13 @@ def hsc_scalars(count: int) -> list[Query]:
         Query(
             galaxy=int(galaxy),
             t=tuple(
-                int(scalar)
-                for scalar in (
-                    *rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
-                    *N_LS_SCALARS
-                    + rng.choice(N_HSC_SCALARS, SCALARS // 2, replace=False),
-                )
+                np.concatenate(
+                    (
+                        rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
+                        N_LS_SCALARS
+                        + rng.choice(N_HSC_SCALARS, SCALARS // 2, replace=False),
+                    )
+                ).tolist()
             ),
         )
         for galaxy in rng.choice(np.flatnonzero(with_hsc()), count, replace=False)
@@ -217,7 +215,7 @@ def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
         ),
         ("spans", [query.model_copy(update={"patches": ()}) for query in paired]),
         ("both", paired),
-        ("scalars", ls_scalars(per_kind)),
+        ("scalars", scalars(per_kind)),
         ("hsc_scalars", hsc_scalars(per_kind)),
     ):
         fractions, searches = [], []
