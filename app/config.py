@@ -109,8 +109,8 @@ SCALAR_COLUMNS = tuple(
     column for columns in SCALAR_SURVEYS.values() for column in columns
 )
 REDSHIFT = "redshift"
-REDSHIFT_SCALAR = len(SCALAR_COLUMNS)
-N_SCALARS = REDSHIFT_SCALAR + 1
+REDSHIFT_SCALAR = 0
+N_SCALARS = len(SCALAR_COLUMNS) + 1
 REDSHIFT_LIMIT = 6.0
 REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
     "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),

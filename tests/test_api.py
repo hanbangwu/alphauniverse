@@ -158,7 +158,7 @@ def test_similarity_spectrum_column_is_null_without_a_spectrum(
 
 
 def test_similarity_takes_scalars_alone(client: TestClient) -> None:
-    table = _similarity(client, galaxy=0, t=[0, 12], matches=5)
+    table = _similarity(client, galaxy=0, t=[1, 13], matches=5)
 
     assert table.column("galaxy")[0].as_py() == 0
     assert 1 < table.num_rows <= 6
@@ -173,9 +173,9 @@ def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
     stored = pq.read_table(artifact("encoded"), columns=["hsc", REDSHIFT])
     with_hsc = stored.column("hsc").is_valid().to_numpy()[galaxies]
     with_redshift = stored.column(REDSHIFT).is_valid().to_numpy()[galaxies]
-    hsc = scores[:, 12:REDSHIFT_SCALAR]
+    hsc = scores[:, 13:]
 
-    assert np.isfinite(scores[:, :12]).all()
+    assert np.isfinite(scores[:, 1:13]).all()
     np.testing.assert_array_equal(np.isfinite(hsc).all(axis=1), with_hsc)
     np.testing.assert_array_equal(np.isnan(hsc).all(axis=1), ~with_hsc)
     np.testing.assert_array_equal(
@@ -186,7 +186,7 @@ def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
 def test_hsc_scalars_of_a_galaxy_without_hsc_are_rejected(
     client: TestClient,
 ) -> None:
-    response = client.get("/search", params={"galaxy": 1, "t": [12]})
+    response = client.get("/search", params={"galaxy": 1, "t": [13]})
 
     assert response.status_code == 422
     [error] = response.json()["detail"]
@@ -254,7 +254,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_scalar
             "section": "hsc",
             "column": "a_g",
             "value": 1.5,
-            "scalar": 12,
+            "scalar": 13,
             "token": hsc.values[N_PATCHES].as_py(),
             "excluded": None,
         },

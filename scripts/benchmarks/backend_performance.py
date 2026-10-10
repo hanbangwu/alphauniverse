@@ -18,7 +18,7 @@ import pyarrow.parquet as pq
 
 from app.config import DATASET_REVISION, N_PATCHES
 from app.main import SPECTRUM_SURVEY
-from app.search import N_LS_SCALARS
+from app.search import FIRST_LS_SCALAR, N_LS_SCALARS
 from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     MATCHES,
@@ -93,7 +93,9 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "similarity scalars matches=32": lambda: get(
                 "/search",
                 galaxy=int(added.integers(galaxies)),
-                t=added.choice(N_LS_SCALARS, SCALARS, replace=False).tolist(),
+                t=(
+                    FIRST_LS_SCALAR + added.choice(N_LS_SCALARS, SCALARS, replace=False)
+                ).tolist(),
             ),
         } | {
             f"similarity matches={matches}": (

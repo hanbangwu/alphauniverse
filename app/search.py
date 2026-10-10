@@ -30,6 +30,8 @@ PROBE = 2048
 TRAIN_GALAXIES = 2048
 N_LS_SCALARS = len(SCALAR_SURVEYS[ANCHOR])
 N_HSC_SCALARS = len(SCALAR_SURVEYS["hsc"])
+FIRST_LS_SCALAR = REDSHIFT_SCALAR + 1
+FIRST_HSC_SCALAR = FIRST_LS_SCALAR + N_LS_SCALARS
 
 
 class Query(BaseModel):
@@ -64,7 +66,7 @@ class Query(BaseModel):
 
     @model_validator(mode="after")
     def hsc_scalars_need_hsc(self) -> Self:
-        hsc = any(N_LS_SCALARS <= scalar < REDSHIFT_SCALAR for scalar in self.scalars)
+        hsc = any(scalar >= FIRST_HSC_SCALAR for scalar in self.scalars)
         if hsc and not with_hsc()[self.galaxy]:
             raise ValueError(f"galaxy {self.galaxy} has no HSC match")
         return self
@@ -143,7 +145,7 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
             np.where(
                 scalars == REDSHIFT_SCALAR,
                 bounds()[query.galaxy + 1] - 1,
-                scalar_start + scalars,
+                scalar_start + scalars - FIRST_LS_SCALAR,
             ),
         )
     )
@@ -229,19 +231,19 @@ def scalar_maps(
     rows = index.reconstruct_batch(positions(first, N_LS_SCALARS))
     return np.hstack(
         (
+            optional_maps(
+                bounds()[order + 1] - 1,
+                with_redshift()[order],
+                direction,
+                width=1,
+                index=index,
+            ),
             score_maps(rows, direction, width=N_LS_SCALARS),
             optional_maps(
                 first + N_LS_SCALARS,
                 has_hsc,
                 direction,
                 width=N_HSC_SCALARS,
-                index=index,
-            ),
-            optional_maps(
-                bounds()[order + 1] - 1,
-                with_redshift()[order],
-                direction,
-                width=1,
                 index=index,
             ),
         )

@@ -25,6 +25,8 @@ from app.dataset import spectrum
 from app.main import SPECTRUM_SURVEY
 from app.search import (
     BATCH,
+    FIRST_HSC_SCALAR,
+    FIRST_LS_SCALAR,
     N_HSC_SCALARS,
     N_LS_SCALARS,
     NPROBE,
@@ -104,15 +106,13 @@ def direction(query: Query, galaxy: int, reference: Corpus) -> np.ndarray:
         query_rows.append(
             reference.span_rows[owners == galaxy][np.asarray(query.spans)]
         )
+    ls = scalars[(scalars >= FIRST_LS_SCALAR) & (scalars < FIRST_HSC_SCALAR)]
     query_rows.append(
-        reference.ls_scalar_rows[
-            galaxy * N_LS_SCALARS + scalars[scalars < N_LS_SCALARS]
-        ]
+        reference.ls_scalar_rows[galaxy * N_LS_SCALARS + ls - FIRST_LS_SCALAR]
     )
     query_rows.append(
         reference.hsc_scalar_rows[hsc_owners == galaxy][
-            scalars[(scalars >= N_LS_SCALARS) & (scalars < REDSHIFT_SCALAR)]
-            - N_LS_SCALARS
+            scalars[scalars >= FIRST_HSC_SCALAR] - FIRST_HSC_SCALAR
         ]
     )
     if REDSHIFT_SCALAR in query.scalars:
@@ -137,10 +137,10 @@ def exact_maps(
         reference.span_rows @ directions.T
     ).reshape(-1, N_SPANS, count)
     scalar_maps = np.full((galaxies, N_SCALARS, count), np.nan, dtype=np.float32)
-    scalar_maps[:, :N_LS_SCALARS] = (reference.ls_scalar_rows @ directions.T).reshape(
-        galaxies, N_LS_SCALARS, count
-    )
-    scalar_maps[reference.hsc_galaxies, N_LS_SCALARS:REDSHIFT_SCALAR] = (
+    scalar_maps[:, FIRST_LS_SCALAR:FIRST_HSC_SCALAR] = (
+        reference.ls_scalar_rows @ directions.T
+    ).reshape(galaxies, N_LS_SCALARS, count)
+    scalar_maps[reference.hsc_galaxies, FIRST_HSC_SCALAR:] = (
         reference.hsc_scalar_rows @ directions.T
     ).reshape(-1, N_HSC_SCALARS, count)
     scalar_maps[reference.redshift_galaxies, REDSHIFT_SCALAR] = (
@@ -244,7 +244,11 @@ def scalars(count: int) -> list[Query]:
     return [
         Query(
             galaxy=int(rng.integers(galaxy_count())),
-            t=tuple(rng.choice(N_LS_SCALARS, SCALARS, replace=False).tolist()),
+            t=tuple(
+                (
+                    FIRST_LS_SCALAR + rng.choice(N_LS_SCALARS, SCALARS, replace=False)
+                ).tolist()
+            ),
         )
         for _ in range(count)
     ]
@@ -258,8 +262,9 @@ def hsc_scalars(count: int) -> list[Query]:
             t=tuple(
                 np.concatenate(
                     (
-                        rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
-                        N_LS_SCALARS
+                        FIRST_LS_SCALAR
+                        + rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
+                        FIRST_HSC_SCALAR
                         + rng.choice(N_HSC_SCALARS, SCALARS // 2, replace=False),
                     )
                 ).tolist()

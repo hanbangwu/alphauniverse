@@ -43,8 +43,8 @@ from .config import (
     labels,
 )
 from .dataset import catalogue, image, redshift, spectrum, table
-from .search import Query as SearchQuery
 from .search import (
+    FIRST_LS_SCALAR,
     index,
     scalar_tokens,
     search,
@@ -52,6 +52,7 @@ from .search import (
     tokens,
     with_hsc,
 )
+from .search import Query as SearchQuery
 from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
@@ -267,7 +268,11 @@ def redshift_row(
 
 
 def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRow:
-    scalar = SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None
+    scalar = (
+        FIRST_LS_SCALAR + SCALAR_COLUMNS.index(column)
+        if column in SCALAR_COLUMNS
+        else None
+    )
     return TableRow(
         section=catalogue(column),
         column=column.partition("-")[0],
