@@ -245,14 +245,14 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
 
     stored = _stored("tokens")
     hsc, redshift = (stored.column(name)[0] for name in ("hsc", REDSHIFT))
-    plain = {"scalar": None, "token": None, "excluded": None}
+    plain = {"table_value": None, "token": None, "excluded": None}
     assert response.status_code == 200
     assert response.json() == [
         {
             "section": REDSHIFT,
             "column": "DESI Z",
             "value": 0.25,
-            "scalar": REDSHIFT_TABLE_VALUE,
+            "table_value": REDSHIFT_TABLE_VALUE,
             "token": redshift.values[0].as_py(),
             "excluded": None,
         },
@@ -262,7 +262,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             "section": REDSHIFT,
             "column": "SDSS Z",
             "value": 0.26,
-            "scalar": None,
+            "table_value": None,
             "token": None,
             "excluded": "AION takes one redshift: DESI's",
         },
@@ -272,7 +272,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             "section": "hsc",
             "column": "a_g",
             "value": 1.5,
-            "scalar": 13,
+            "table_value": 13,
             "token": hsc.values[N_IMAGE_TOKENS].as_py(),
             "excluded": None,
         },

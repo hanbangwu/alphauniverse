@@ -73,7 +73,7 @@ class TableRow(BaseModel):
     section: Catalogue | Literal["redshift"]
     column: str
     value: float | int | bool | None
-    scalar: int | None
+    table_value: int | None
     token: int | None
     excluded: str | None
 
@@ -252,7 +252,7 @@ def redshift_row(
         section=REDSHIFT,
         column=f"{survey.upper()} {column.partition('-')[0]}",
         value=values[column],
-        scalar=REDSHIFT_TABLE_VALUE if selectable else None,
+        table_value=REDSHIFT_TABLE_VALUE if selectable else None,
         token=token if selectable else None,
         excluded=excluded(values, survey, chosen) if first else None,
     )
@@ -268,7 +268,7 @@ def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRo
         section=catalogue(column),
         column=column.partition("-")[0],
         value=value,
-        scalar=table_value,
+        table_value=table_value,
         token=None if table_value is None else token_ids.get(column),
         excluded=None,
     )
