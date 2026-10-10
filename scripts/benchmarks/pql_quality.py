@@ -201,8 +201,8 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
         )
         for kind, query in selections(galaxy, rng).items():
             values = measured[kind]
-            scored = pql_query(query)
-            scores = pql.scores(scored)
+            likelihood_query = pql_query(query)
+            scores = pql.scores(likelihood_query)
             order = np.argsort(-scores, kind="stable")
             order = order[(order != galaxy) & known[order]]
             found, cosine = search(
@@ -214,7 +214,7 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
             if not query.spectrum_tokens:
                 continue
 
-            selected = pql.selection(scored)
+            selected = pql.selection(likelihood_query)
             forms = pql.query_forms(pql.row(galaxy), selected)
             unseen = next(iter(pql.sums(hidden_rows, selected, forms).values()))
             direction = centroid(query, index=built)[0]

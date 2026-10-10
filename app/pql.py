@@ -79,16 +79,13 @@ class Query(BaseModel):
     matches: Annotated[int, Field(ge=1, le=128)] = 32
 
     @model_validator(mode="after")
-    def some_slots(self) -> Self:
-        if not selection(self):
+    def selects_observed_slots(self) -> Self:
+        selected = selection(self)
+        if not selected:
             raise ValueError(
                 "select at least one image token, spectrum token or table value"
             )
-        return self
-
-    @model_validator(mode="after")
-    def selected_modes_are_observed(self) -> Self:
-        for mode in selection(self):
+        for mode in selected:
             column = OBSERVED_IN[mode]
             if not observed(column)[self.galaxy]:
                 raise ValueError(f"galaxy {self.galaxy} has no {MISSING[column]}")
@@ -147,7 +144,8 @@ def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:
 
 
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
-    return predictions().take(galaxies).combine_chunks().to_batches()[0]
+    rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
+    return pa.concat_tables(rows).combine_chunks().to_batches()[0]
 
 
 def row(galaxy: int) -> pa.RecordBatch:
@@ -324,10 +322,9 @@ def maps(
         for mode, form in every.items()
     }
     aligned["table_values"] = np.hstack([aligned.pop(mode) for mode in TABLES])
-    forms = query_forms(own, selection(query))
     selected = {
-        mode: log_overlaps(rows, mode, slice(None), form.mean(axis=0))
-        for mode, form in forms.items()
+        mode: log_overlaps(rows, mode, slice(None), every[mode][slots].mean(axis=0))
+        for mode, slots in selection(query).items()
         if mode not in TABLES
     }
     return aligned, selected

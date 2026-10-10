@@ -397,7 +397,7 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
             if sums is None
             else pa.array(sums, pa.float32())
         )
-    for column in ("hsc", "desi", "sdss", REDSHIFT):
+    for column in pql.MISSING:
         fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))
         columns.append(pa.array(pql.observed(column)[results.galaxies]))
     return arrow(pa.record_batch(columns, schema=pa.schema(fields)))

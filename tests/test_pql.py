@@ -11,9 +11,7 @@ from app.config import (
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     REDSHIFT,
-    REDSHIFT_VOCABULARY,
     SPECTRUM_TOKEN_RANK,
-    TABLE_VALUE_SURVEYS,
     TOP_CODES,
     VOCABULARY,
 )
@@ -34,10 +32,6 @@ SELECTED_SLOTS = {
     REDSHIFT: [0],
     "ls_table": [1, 5],
     "hsc_table": [2],
-}
-TABLE_COLUMNS = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
-    f"{survey}_table": (f"{survey}_table_values", len(columns), VOCABULARY)
-    for survey, columns in TABLE_VALUE_SURVEYS.items()
 }
 
 
@@ -75,7 +69,7 @@ def dense(rows: pa.Table, mode: str, kept: int) -> np.ndarray:
         return dense_image_tokens(rows, survey, kept)
     if kind == "spectrum":
         return dense_spectrum_tokens(rows, survey)
-    name, count, vocabulary = TABLE_COLUMNS[mode]
+    name, count, vocabulary = pql.TABLES[mode]
     return np.exp(column(rows, name, count, vocabulary))
 
 
@@ -133,7 +127,7 @@ def test_aligned_maps_overlap_each_slot_with_the_same_slot_of_the_query(
         np.testing.assert_allclose(aligned[mode], expected[mode], rtol=1e-4)
     np.testing.assert_allclose(
         aligned["table_values"],
-        np.hstack([expected[mode] for mode in TABLE_COLUMNS]),
+        np.hstack([expected[mode] for mode in pql.TABLES]),
         rtol=1e-4,
     )
 
