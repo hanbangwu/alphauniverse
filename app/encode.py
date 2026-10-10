@@ -131,9 +131,10 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
         "wavelength": ("lambda", torch.float32),
         "mask": ("mask", torch.bool),
     }
+    kept = np.asarray(row["lambda"]) > 0
     samples = {
         argument: torch.as_tensor(
-            np.asarray([row[field]]), dtype=dtype, device=device()
+            np.asarray(row[field])[kept][None], dtype=dtype, device=device()
         )
         for argument, (field, dtype) in fields.items()
     }

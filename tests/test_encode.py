@@ -98,11 +98,6 @@ def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
     } == TOKENS
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="trailing lambda = -1 padding zeroes the SDSS codec input (#50)",
-)
 def test_padded_sdss_spectra_keep_their_flux() -> None:
     with torch.inference_mode():
         first, second = (
