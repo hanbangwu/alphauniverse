@@ -30,7 +30,7 @@ def _with_spectrum() -> np.ndarray:
     return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
-def test_artifact_downloads(client: TestClient, tree) -> None:
+def test_artifact_downloads(client: TestClient) -> None:
     response = client.get("/downloads/encoded")
 
     assert response.status_code == 200

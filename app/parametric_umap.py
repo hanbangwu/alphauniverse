@@ -4,7 +4,6 @@ from typing import NamedTuple
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
@@ -185,12 +184,10 @@ def fit_parametric_umap(training: np.ndarray, validation: np.ndarray) -> Paramet
 
 def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     for survey in TOKEN_SURVEYS:
-        scanner = source("encoded").scanner(
-            columns=["galaxy", survey],
-            batch_size=CHUNK,
-            filter=ds.field(survey).is_valid(),
-        )
-        for batch in scanner.to_batches():
+        for stored in source("encoded").to_batches(
+            columns=["galaxy", survey], batch_size=CHUNK
+        ):
+            batch = stored.filter(stored.column(survey).is_valid())
             cells = batch.column(survey)
             offsets = np.asarray(cells.offsets, dtype=np.intp)
             yield (
@@ -204,10 +201,7 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
 
 def embedding_count() -> int:
     table = source("encoded").to_table(columns=list(TOKEN_SURVEYS))
-    return sum(
-        pc.sum(pc.list_value_length(table.column(survey))).as_py()
-        for survey in TOKEN_SURVEYS
-    )
+    return sum(pc.sum(pc.list_value_length(column)).as_py() for column in table.columns)
 
 
 def sample() -> np.ndarray:

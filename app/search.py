@@ -73,7 +73,7 @@ class Query(BaseModel):
 @cache
 def source(role: str) -> ds.Dataset:
     return ds.dataset(
-        str(artifact(role)),
+        artifact(role),
         format=ARTIFACTS[role],
         filesystem=LocalFileSystem(use_mmap=True),
     )
@@ -299,9 +299,7 @@ def generate_index() -> None:
     built.train(training)
     del training
 
-    for batch in dataset.to_batches(
-        columns=columns, batch_size=BATCH, batch_readahead=1
-    ):
+    for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
         built.add(blocks(batch))
 
     faiss.write_index(built, str(artifact("search_index")))
