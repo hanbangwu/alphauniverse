@@ -98,22 +98,17 @@ def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
     } == TOKENS
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="trailing lambda = -1 padding zeroes the SDSS codec input (#50)",
-)
-def test_padded_sdss_spectra_keep_their_flux() -> None:
+def test_spectrum_padding_does_not_change_its_tokens() -> None:
+    padded = spectrum(np.random.default_rng(1), 3800, 200)
+    unpadded = {field: values[:3800] for field, values in padded.items()}
+
     with torch.inference_mode():
         first, second = (
-            encode_module.spectrum(
-                encode_module.SDSSSpectrum,
-                spectrum(np.random.default_rng(seed), 3800, 200),
-            )
-            for seed in (1, 2)
+            encode_module.spectrum(encode_module.SDSSSpectrum, row)
+            for row in (padded, unpadded)
         )
 
-    assert not torch.equal(first, second)
+    assert torch.equal(first, second)
 
 
 def test_each_survey_lands_in_its_own_cell_images_first() -> None:
