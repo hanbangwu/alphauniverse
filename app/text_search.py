@@ -16,6 +16,8 @@ from .dataset import dataset
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
+IMAGE_BATCH = 1024
+
 
 class TextQuery(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -46,7 +48,12 @@ def generate_pairs() -> None:
         held[galaxies] += np.diff(offsets)
     aion = (sums / held[:, None]).astype(np.float32)
     images = data.select_columns([RGB_COLUMN]).cast_column(RGB_COLUMN, Image())
-    gemma = text_model().encode(list(images[RGB_COLUMN]), prompt_name="Document")
+    gemma = np.concatenate(
+        [
+            text_model().encode(batch[RGB_COLUMN], prompt_name="Document")
+            for batch in images.iter(batch_size=IMAGE_BATCH)
+        ]
+    )
 
     pq.write_table(
         pa.table(
