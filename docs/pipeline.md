@@ -48,7 +48,7 @@ A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 27
 
 ## `generate_predictions`
 
-For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the 576 cells and the scalars of the Legacy Survey and HSC images, and spans 1 to 272 of the DESI and SDSS spectra. The decoder predicts 128 slots at a time, in an order drawn with `SEED`; as in AION's default, the slots of one call attend to each other. Nothing reads the predictions at serve time yet.
+For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the redshift, the 576 cells and the scalars of the Legacy Survey and HSC images, and spans 1 to 272 of the DESI and SDSS spectra. The decoder predicts 128 slots at a time, in an order drawn with `SEED`; as in AION's default, the slots of one call attend to each other. Nothing reads the predictions at serve time yet.
 
 The job makes two passes over `tokens`. The first predicts only the spans and accumulates, per spectrum survey, the sum and the sum of outer products of every span's probabilities; their covariance's top 256 eigenvectors and the mean form **`prediction_basis`**, an `np.savez` of:
 
@@ -61,6 +61,7 @@ The second predicts every slot and writes **`predictions`**, an uncompressed Arr
 
 ```
 galaxy:                    int32
+redshift:                  fixed_size_list<float16, 1025>      -- the redshift's log-probabilities over AION's 1,025 `tok_z` codes
 ls_codes, hsc_codes:       fixed_size_list<uint16, 576 × 64>   -- each cell's 64 most probable codes, most probable first
 ls_log_probabilities, ...: fixed_size_list<float16, 576 × 64>  -- their log-probabilities
 ls_tails, hsc_tails:       fixed_size_list<float32, 576>       -- log of each cell's remaining mass
@@ -71,7 +72,7 @@ desi_offsets, ...:         fixed_size_list<float32, 272>       -- per span, coef
 desi_steps, ...:           fixed_size_list<float32, 272>
 ```
 
-A span's probabilities are `mean + coefficients @ directions`. A row takes 494,340 B: 149,760 per survey's cells, 24,576 and 26,624 for the scalars, 71,808 per survey's spans and 4 for `galaxy`.
+A span's probabilities are `mean + coefficients @ directions`. A row takes 496,390 B: 2,050 for the redshift, 149,760 per survey's cells, 24,576 and 26,624 for the scalars, 71,808 per survey's spans and 4 for `galaxy`. AION's `tok_z` has 1,025 codes where its codec emits 0 to 1023; all 1,025 are stored as AION gives them.
 
 ## `generate_projections`
 
