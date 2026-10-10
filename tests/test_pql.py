@@ -88,6 +88,12 @@ def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.n
     return np.exp(log_overlaps(mode, gallery, query) - np.log(query.max(axis=-1)))
 
 
+def similarity(query: pql.Query) -> np.ndarray:
+    selected = pql.selection(query)
+    forms = pql.query_forms(pql.row(query.galaxy), selected)
+    return pql.similarity(pql.fractions(selected, forms, pql.scan(selected, forms)))
+
+
 @pytest.fixture(scope="module")
 def table(tree: Path) -> pa.Table:
     return pql.predictions()
@@ -238,10 +244,10 @@ def test_a_repeated_slot_counts_once(tree: Path) -> None:
 def test_similarity_ranks_galaxies_as_the_score_does(query: pql.Query) -> None:
     totals = pql.parts(query)
 
-    similarity = pql.similarity(pql.fractions(query, totals))
+    similarities = similarity(query)
 
     np.testing.assert_array_equal(
-        np.argsort(-similarity, kind="stable"),
+        np.argsort(-similarities, kind="stable"),
         np.argsort(-pql.combine(totals), kind="stable"),
     )
 
@@ -252,13 +258,13 @@ def test_one_mode_similarity_is_the_mean_fraction_of_the_best_overlap(
     single = pql.Query(galaxy=GALAXY, table_values=(2, 6))
     own = dense(table.slice(GALAXY, 1), "ls_table", TOP_CODES)[0, [1, 5]]
 
-    similarity = pql.similarity(pql.fractions(single, pql.parts(single)))
+    similarities = similarity(single)
 
     overlaps = log_overlaps(
         "ls_table", dense(table, "ls_table", pql.KEPT)[:, [1, 5]], own
     )
     expected = np.exp((overlaps - np.log(own.max(axis=-1))).mean(axis=1))
-    np.testing.assert_allclose(similarity, expected, rtol=1e-4)
+    np.testing.assert_allclose(similarities, expected, rtol=1e-4)
 
 
 def test_similarity_of_image_and_table_modes_is_at_most_one(query: pql.Query) -> None:
