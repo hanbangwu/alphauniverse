@@ -34,7 +34,7 @@
       color={similarity.imageMap ? similarity.imageHeat : palette}
       opacity={similarity.imageMap ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
       galaxy={similarity.galaxy}
-      title={similarity.imageMap ? similarity.score : similarity.caption}
+      title={similarity.imageMap ? similarity.overlap : similarity.caption}
       selected={view.imageTokens.value}
       ontoggle={(index) => view.imageTokens.toggle(index)}
       busy={!tokens.data && !tokens.isError}

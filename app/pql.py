@@ -89,7 +89,9 @@ class Query(BaseModel):
 class Results(NamedTuple):
     galaxies: np.ndarray
     scores: np.ndarray
+    similarity: np.ndarray
     sums: dict[str, np.ndarray]
+    similarities: dict[str, np.ndarray]
     aligned: dict[str, np.ndarray]
     selected: dict[str, np.ndarray]
 
@@ -324,9 +326,43 @@ def maps(
     return aligned, selected
 
 
+def best_overlaps(
+    own: pa.RecordBatch, selected: dict[str, np.ndarray]
+) -> dict[str, float]:
+    best = {}
+    for mode, form in query_forms(own, selected).items():
+        if mode in IMAGE_MODES:
+            peaks = np.log(form.max(axis=-1))
+        elif mode in SPECTRUM_MODES:
+            mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
+            peaks = np.log((mean + form @ directions).max(axis=-1))
+        else:
+            peaks = form.max(axis=-1)
+        best[mode] = float(peaks.sum())
+    return best
+
+
+def fractions(query: Query, totals: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    selected = selection(query)
+    best = best_overlaps(row(query.galaxy), selected)
+    return {
+        mode: (values - best[mode]) / len(selected[mode])
+        for mode, values in totals.items()
+    }
+
+
+def similarity(fractions: dict[str, np.ndarray]) -> np.ndarray:
+    if len(fractions) == 1:
+        return np.exp(next(iter(fractions.values())))
+    weights = {mode: 1 / values.std() for mode, values in fractions.items()}
+    weighted = sum(weights[mode] * values for mode, values in fractions.items())
+    return np.exp(weighted / sum(weights.values()))
+
+
 def search(query: Query) -> Results:
     totals = parts(query)
     scored = combine(totals)
+    shares = fractions(query, totals)
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
@@ -334,6 +370,8 @@ def search(query: Query) -> Results:
     return Results(
         galaxies,
         scored[galaxies],
+        similarity(shares)[galaxies],
         {mode: values[galaxies] for mode, values in totals.items()},
+        {mode: np.exp(values[galaxies]) for mode, values in shares.items()},
         *maps(query, galaxies),
     )

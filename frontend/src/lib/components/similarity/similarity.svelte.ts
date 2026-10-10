@@ -92,7 +92,10 @@ export class Similarity {
     }))
   }
 
-  readonly score = (value: number): string => `${SIMILARITY.short} ${value.toFixed(DECIMALS)}`
+  readonly score = (value: number): string =>
+    `${SIMILARITY.short} ${Math.min(1, value).toFixed(DECIMALS)}`
+
+  readonly overlap: Caption = (value) => `overlap ${Math.exp(value).toPrecision(DECIMALS)}`
 
   readonly caption: Caption = (value) => `token ${value}`
 
@@ -105,7 +108,7 @@ export class Similarity {
   }
 
   scoreAt(index: number): number {
-    return this.#result.data?.scores[index] ?? 0
+    return this.#result.data?.similarities[index] ?? 0
   }
 
   imageMapAt(index: number): Float32Array {

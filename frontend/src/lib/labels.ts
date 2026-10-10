@@ -8,7 +8,7 @@ export type Labels<T extends string> = Record<T, Label>
 
 export type Choice<T extends string> = Label & { value: T }
 
-export const SIMILARITY = { short: 'cos sim' } as const
+export const SIMILARITY = { short: 'similarity' } as const
 
 export const OBSERVED: Record<string, { has: string; label: string }> = {
   hsc_image: { has: 'has_hsc', label: 'HSC image' },

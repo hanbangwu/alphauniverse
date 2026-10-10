@@ -159,7 +159,7 @@ export function similarityQuery(request: SimilarityQuery | null) {
             const tableValueMaps = table.getChild('table_values')!.getChildAt<Float32>(0)!.toArray()
             return {
               galaxies: table.getChild('galaxy')!.toArray(),
-              scores: table.getChild('score')!.toArray(),
+              similarities: table.getChild('similarity')!.toArray(),
               imageMaps: shownMaps(table, 'ls_image'),
               spectrumMaps: shownMaps(table, 'desi_spectrum'),
               tableValueMap: matchMean(tableValueMaps, table.numRows),

@@ -228,3 +228,37 @@ def test_a_repeated_slot_counts_once(tree: Path) -> None:
 
     for mode, values in once.items():
         np.testing.assert_array_equal(repeated[mode], values)
+
+
+def test_similarity_ranks_galaxies_as_the_score_does(query: pql.Query) -> None:
+    totals = pql.parts(query)
+
+    similarity = pql.similarity(pql.fractions(query, totals))
+
+    np.testing.assert_array_equal(
+        np.argsort(-similarity, kind="stable"),
+        np.argsort(-pql.combine(totals), kind="stable"),
+    )
+
+
+def test_one_mode_similarity_is_the_mean_fraction_of_the_best_overlap(
+    table: pa.Table,
+) -> None:
+    single = pql.Query(galaxy=GALAXY, table_values=(2, 6))
+    own = dense(table.slice(GALAXY, 1), "ls_table", TOP_CODES)[0, [1, 5]]
+
+    similarity = pql.similarity(pql.fractions(single, pql.parts(single)))
+
+    overlaps = log_overlaps(
+        "ls_table", dense(table, "ls_table", pql.KEPT)[:, [1, 5]], own
+    )
+    expected = np.exp((overlaps - np.log(own.max(axis=-1))).mean(axis=1))
+    np.testing.assert_allclose(similarity, expected, rtol=1e-4)
+
+
+def test_similarity_of_image_and_table_modes_is_at_most_one(query: pql.Query) -> None:
+    results = pql.search(query.model_copy(update={"matches": 11}))
+
+    for mode, values in results.similarities.items():
+        if mode not in SPECTRUM_MODES:
+            assert (values <= 1 + 1e-6).all(), mode

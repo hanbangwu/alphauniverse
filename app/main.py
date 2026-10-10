@@ -372,8 +372,13 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     fields = [
         pa.field("galaxy", pa.int32(), nullable=False),
         pa.field("score", pa.float32(), nullable=False),
+        pa.field("similarity", pa.float32(), nullable=False),
     ]
-    columns = [pa.array(results.galaxies), pa.array(results.scores)]
+    columns = [
+        pa.array(results.galaxies),
+        pa.array(results.scores),
+        pa.array(results.similarity, pa.float32()),
+    ]
     for mode, values in results.aligned.items():
         fields.append(pa.field(mode, pa.list_(item, values.shape[1]), nullable=False))
         columns.append(
@@ -400,6 +405,13 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
             pa.nulls(count, pa.float32())
             if sums is None
             else pa.array(sums, pa.float32())
+        )
+        fields.append(pa.field(f"{mode}_similarity", pa.float32()))
+        shares = results.similarities.get(mode)
+        columns.append(
+            pa.nulls(count, pa.float32())
+            if shares is None
+            else pa.array(shares, pa.float32())
         )
     for column in OBSERVATIONS:
         fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))

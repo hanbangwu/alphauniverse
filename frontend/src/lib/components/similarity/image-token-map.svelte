@@ -16,5 +16,5 @@
   {values}
   grid={similarity.grid}
   color={similarity.imageHeat}
-  title={similarity.score}
+  title={similarity.overlap}
 />
