@@ -38,9 +38,8 @@ uv run --group build pytest tests/test_encode.py tests/test_predictions.py tests
 
 - They build AION and its codecs with random weights from the configs in `tests/aion/`, copied from `polymathic-ai/aion-base`. No test downloads weights.
 - `tests/test_predictions.py` runs `generate_predictions` in its own tree on a copy of the shared tree's `tokens`: rewriting the shared `predictions` would break the memory map `app.pql` holds.
-- `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, and checks the results match.
+- `tests/test_parametric_umap.py` trains the projector for one epoch on a four-galaxy tree, twice, and checks the results match. It also checks that `scan` returns each chosen embedding in the order asked and rejects a sample past the streamed embeddings.
 - `tests/test_alignment.py` checks that `fit_linear` recovers a known affine map and that `recall` is 1 for an exact prediction. Nothing loads EmbeddingGemma, so `generate_pairs`, `text_model` and `embed_queries` in `app/text_search.py` are untested.
-- `test_padded_sdss_spectra_keep_their_flux` is `xfail(strict=True)`: SDSS spectra end in `lambda = -1` padding that zeroes the codec input. Remove the mark once that is fixed.
 
 ## Frontend
 

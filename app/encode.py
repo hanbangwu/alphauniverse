@@ -131,9 +131,10 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
         "wavelength": ("lambda", torch.float32),
         "mask": ("mask", torch.bool),
     }
+    kept = np.asarray(row["lambda"]) > 0
     samples = {
         argument: torch.as_tensor(
-            np.asarray([row[field]]), dtype=dtype, device=device()
+            np.asarray(row[field])[kept][None], dtype=dtype, device=device()
         )
         for argument, (field, dtype) in fields.items()
     }
@@ -242,7 +243,7 @@ def generate_embeddings() -> None:
         role: pq.ParquetWriter(artifact(role), schemas[role], compression="zstd")
         for role in STORES
     }
-    rows: dict[str, list[dict]] = {role: [] for role in STORES}
+    batches: dict[str, list[pa.RecordBatch]] = {role: [] for role in STORES}
 
     for galaxy in tqdm(range(len(data)), desc="encode"):
         row = data[galaxy]
@@ -269,16 +270,16 @@ def generate_embeddings() -> None:
             survey: row[column] is not None for survey, column in FLAG_SURVEYS.items()
         }
         for role in STORES:
-            rows[role].append({"galaxy": galaxy, **cells[role], **flags})
-            if len(rows[role]) == 1024:
-                writers[role].write_table(
-                    pa.Table.from_pylist(rows[role], schema=schemas[role])
+            batches[role].append(
+                pa.RecordBatch.from_pylist(
+                    [{"galaxy": galaxy, **cells[role], **flags}], schema=schemas[role]
                 )
-                rows[role].clear()
+            )
+            if len(batches[role]) == 1024:
+                writers[role].write_table(pa.Table.from_batches(batches[role]))
+                batches[role].clear()
 
     for role in STORES:
-        if rows[role]:
-            writers[role].write_table(
-                pa.Table.from_pylist(rows[role], schema=schemas[role])
-            )
+        if batches[role]:
+            writers[role].write_table(pa.Table.from_batches(batches[role]))
         writers[role].close()
