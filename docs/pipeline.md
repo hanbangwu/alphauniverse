@@ -1,6 +1,6 @@
 # Build pipeline
 
-Six Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`. `generate_pairs` reads the dataset and `encoded`, `generate_alignment` reads `pairs`, and `generate_aion_gemma_space` reads `pairs` and `alignment`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
+Seven Modal jobs; the README has the commands. Embeddings come first, then the index and the projections, which read `encoded`, and `generate_predictions`, which reads `tokens`. `generate_pairs` reads the dataset and `encoded`, `generate_alignment` reads `pairs`, and `generate_aion_gemma_space` reads `pairs` and `alignment`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
 Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
@@ -44,6 +44,33 @@ Within an image cell the patches come first and the survey's scalars follow. A s
 Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image patches**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **scalars**; then, if the galaxy has an HSC match, HSC's 13 scalars. HSC's image patches are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
 
 A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h`, where `s` and `h` count the galaxies before it that have a spectrum and an HSC match. The index does not store this layout: the app rebuilds it at startup from which galaxies have a spectrum and an HSC match in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
+
+## `generate_predictions`
+
+For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the 576 cells and the scalars of the Legacy Survey and HSC images, and spans 1 to 272 of the DESI and SDSS spectra. The decoder predicts 128 slots at a time, in an order drawn with seed 0, and none of them sees another. Nothing reads the predictions at serve time yet.
+
+The job makes two passes over `tokens`. The first predicts only the spans and accumulates, per spectrum survey, the sum and the sum of outer products of every span's probabilities; their covariance's top 256 eigenvectors and the mean form **`prediction_basis`**, an `np.savez` of:
+
+```
+desi_mean, sdss_mean:             float64 (1024,)
+desi_directions, sdss_directions: float64 (256, 1024)
+```
+
+The second predicts every slot and writes **`predictions`**, an uncompressed Arrow IPC file meant to be memory-mapped, in batches of 256 rows:
+
+```
+galaxy:                    int32
+ls_codes, hsc_codes:       fixed_size_list<uint16, 576 × 64>   -- each cell's 64 most probable codes, most probable first
+ls_log_probabilities, ...: fixed_size_list<float16, 576 × 64>  -- their log-probabilities
+ls_tails, hsc_tails:       fixed_size_list<float32, 576>       -- log of each cell's remaining mass
+ls_scalars:                fixed_size_list<float16, 12 × 1024> -- every scalar's log-probabilities
+hsc_scalars:               fixed_size_list<float16, 13 × 1024>
+desi_coefficients, ...:    fixed_size_list<uint8, 272 × 256>   -- each span's probabilities projected on the basis
+desi_offsets, ...:         fixed_size_list<float32, 272>       -- per span, coefficient = offset + code × step
+desi_steps, ...:           fixed_size_list<float32, 272>
+```
+
+A span's probabilities are `mean + coefficients @ directions`. A row takes 494,340 B: 149,760 per survey's cells, 24,576 and 26,624 for the scalars, 71,808 per survey's spans and 4 for `galaxy`.
 
 ## `generate_projections`
 

@@ -6,6 +6,7 @@ Two halves, connected only by files on disk: the build pipeline, Modal jobs that
 hanbangwu/alphauniverse-cosmos (Hugging Face)
 └── generate_embeddings       GPU ─▶ encoded · codebook · tokens
     ├── generate_index        CPU ─▶ search_index
+    ├── generate_predictions  GPU ─▶ predictions · prediction_basis
     ├── generate_projections  GPU ─▶ mean_points · full_points · parametric_umap
     └── generate_pairs        GPU ─▶ pairs
         └── generate_alignment GPU ─▶ alignment
@@ -32,7 +33,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | ------------------ | --------------------------------------------- | ------------------------------------------------------------------------ |
 | `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/downloads/{role}`                            |
 | `codebook`         | same, the encoder's input embeddings          | `/downloads/{role}`                                                      |
-| `tokens`           | same, token ids                               | startup, `/search`, the token and galaxy endpoints, `/downloads/{role}`  |
+| `tokens`           | same, token ids                               | startup, `/search`, token and galaxy endpoints, downloads, predictions   |
 | `search_index`     | faiss IVF over patches, spans and scalars     | `/search`                                                                |
 | `mean_points`      | one 2-d point per galaxy                      | `/meta`, `/projections/mean`                                             |
 | `full_points`      | one 2-d point per embedding                   | `/projections/full`                                                      |
@@ -40,6 +41,8 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `pairs`            | AION and EmbeddingGemma embeddings per galaxy | `generate_alignment`, `generate_aion_gemma_space`, `text_search_quality` |
 | `alignment`        | the AION to EmbeddingGemma maps' weights      | `generate_aion_gemma_space`, `text_search_quality`                       |
 | `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space  | `/search/text`                                                           |
+| `predictions`      | AION's predicted codes at every slot          | nothing at serve time                                                    |
+| `prediction_basis` | the span predictions' PCA basis per survey    | nothing at serve time                                                    |
 
 `docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image`, `/galaxy/{g}/spectrum` and `/galaxy/{g}/table` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux. `/galaxy/{g}/table` returns every numeric and boolean column whose name ends in one of the six catalogue suffixes, null where that catalogue has no match; each of the 25 scalars AION encodes (12 Legacy Survey, then 13 HSC, `SCALAR_SURVEYS` in `app/config.py`) carries its index.
 
