@@ -8,7 +8,14 @@ export type Labels<T extends string> = Record<T, Label>
 
 export type Choice<T extends string> = Label & { value: T }
 
-export const SIMILARITY = { short: 'cos sim' } as const
+export const SIMILARITY = { short: 'similarity' } as const
+
+export const OBSERVATIONS: Record<string, string> = {
+  hsc: 'HSC match',
+  desi: 'DESI spectrum',
+  sdss: 'SDSS spectrum',
+  redshift: 'redshift'
+}
 
 export const SURVEYS: Labels<keyof Galaxy> = {
   ls: { label: 'Legacy Survey DR10' },

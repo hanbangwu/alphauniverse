@@ -2,6 +2,7 @@ import { type RGB, continuous } from '$lib/color'
 import { similarityQuery } from '$lib/data/queries'
 import { extent, mask, row } from '$lib/data/scores'
 import type { Extent, SimilarityQuery, SimilarityResult } from '$lib/data/similarity'
+import { errorMessage } from '$lib/errors'
 import { must } from '$lib/invariant'
 import { SIMILARITY } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
@@ -68,6 +69,10 @@ export class Similarity {
     })
   }
 
+  get error(): string | null {
+    return this.#result.isError ? errorMessage(this.#result.error) : null
+  }
+
   get stale(): boolean {
     return this.#result.isPlaceholderData
   }
@@ -87,7 +92,8 @@ export class Similarity {
     }))
   }
 
-  readonly score = (value: number): string => `${SIMILARITY.short} ${value.toFixed(DECIMALS)}`
+  readonly score = (value: number): string =>
+    `${SIMILARITY.short} ${Math.min(1, value).toFixed(DECIMALS)}`
 
   readonly caption: Caption = (value) => `token ${value}`
 
@@ -95,8 +101,12 @@ export class Similarity {
 
   readonly maskTitle: Caption = (value) => (value ? 'masked' : 'unmasked')
 
+  predictedAt(index: number): string[] {
+    return this.#result.data?.predicted[index] ?? []
+  }
+
   scoreAt(index: number): number {
-    return this.#result.data?.scores[index] ?? 0
+    return this.#result.data?.similarities[index] ?? 0
   }
 
   imageMapAt(index: number): Float32Array {

@@ -7,8 +7,13 @@
 </script>
 
 <span class="text-sm font-medium">Whole dataset</span>
+<p class="text-xs text-muted-foreground">
+  Matches are compared at the same place in the image and the same observed wavelength.
+</p>
 
-{#if !similarity.imageMaps}
+{#if similarity.error}
+  <p role="alert" class="text-sm text-destructive">{similarity.error}</p>
+{:else if !similarity.imageMaps}
   <div class="grid h-24 place-content-center">
     <Spinner class="size-6" />
   </div>

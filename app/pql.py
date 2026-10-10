@@ -89,7 +89,10 @@ class Query(BaseModel):
 class Results(NamedTuple):
     galaxies: np.ndarray
     scores: np.ndarray
+    similarity: np.ndarray
     sums: dict[str, np.ndarray]
+    similarities: dict[str, np.ndarray]
+    predicted: list[list[str]]
     aligned: dict[str, np.ndarray]
     selected: dict[str, np.ndarray]
 
@@ -266,6 +269,21 @@ def log_overlaps(
     return table_value_overlaps(table_value_log_probabilities(rows, mode, slots), form)
 
 
+def log_peaks(mode: str, form: np.ndarray) -> np.ndarray:
+    if mode in IMAGE_MODES:
+        return np.log(form.max(axis=-1))
+    if mode in SPECTRUM_MODES:
+        mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
+        return np.log((mean + form @ directions).max(axis=-1))
+    return form.max(axis=-1)
+
+
+def slot_similarities(
+    rows: pa.RecordBatch, mode: str, slots: np.ndarray | slice, form: np.ndarray
+) -> np.ndarray:
+    return np.exp(log_overlaps(rows, mode, slots, form) - log_peaks(mode, form))
+
+
 def sums(
     rows: pa.RecordBatch,
     selected: dict[str, np.ndarray],
@@ -277,9 +295,20 @@ def sums(
     }
 
 
-def parts(query: Query) -> dict[str, np.ndarray]:
+def selected_forms(
+    query: Query,
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     selected = selection(query)
-    forms = query_forms(row(query.galaxy), selected)
+    return selected, query_forms(row(query.galaxy), selected)
+
+
+def parts(query: Query) -> dict[str, np.ndarray]:
+    return scan(*selected_forms(query))
+
+
+def scan(
+    selected: dict[str, np.ndarray], forms: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
     totals = {mode: np.empty(predictions().num_rows) for mode in selected}
     start = 0
     for rows in predictions().to_batches():
@@ -312,21 +341,56 @@ def maps(
         own, dict.fromkeys((*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES), slice(None))
     )
     aligned = {
-        mode: log_overlaps(rows, mode, slice(None), form)
+        mode: slot_similarities(rows, mode, slice(None), form)
         for mode, form in every.items()
     }
     aligned["table_values"] = np.hstack([aligned.pop(mode) for mode in TABLE_MODES])
     selected = {
-        mode: log_overlaps(rows, mode, slice(None), every[mode][slots].mean(axis=0))
+        mode: slot_similarities(
+            rows, mode, slice(None), every[mode][slots].mean(axis=0)
+        )
         for mode, slots in selection(query).items()
         if mode not in TABLE_MODES
     }
     return aligned, selected
 
 
+def fractions(
+    forms: dict[str, np.ndarray], totals: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
+    return {
+        mode: (values - log_peaks(mode, forms[mode]).sum()) / len(forms[mode])
+        for mode, values in totals.items()
+    }
+
+
+def similarity(fractions: dict[str, np.ndarray]) -> np.ndarray:
+    if len(fractions) == 1:
+        return np.exp(next(iter(fractions.values())))
+    weights = {mode: 1 / values.std() for mode, values in fractions.items()}
+    weighted = sum(weights[mode] * values for mode, values in fractions.items())
+    return np.exp(weighted / sum(weights.values()))
+
+
+def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
+    needed = {
+        OBSERVED_IN[mode] for mode in selection(query).keys() & OBSERVED_IN.keys()
+    }
+    return [
+        [
+            column
+            for column in OBSERVATIONS
+            if column in needed and not observed(column)[galaxy]
+        ]
+        for galaxy in galaxies.tolist()
+    ]
+
+
 def search(query: Query) -> Results:
-    totals = parts(query)
+    selected, forms = selected_forms(query)
+    totals = scan(selected, forms)
     scored = combine(totals)
+    shares = fractions(forms, totals)
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
@@ -334,6 +398,9 @@ def search(query: Query) -> Results:
     return Results(
         galaxies,
         scored[galaxies],
+        similarity(shares)[galaxies],
         {mode: values[galaxies] for mode, values in totals.items()},
+        {mode: np.exp(values[galaxies]) for mode, values in shares.items()},
+        predicted(query, galaxies),
         *maps(query, galaxies),
     )

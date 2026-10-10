@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { SPECTRUM_SURVEY } from '$lib/data/spectra'
+  import { OBSERVATIONS } from '$lib/labels'
   import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenMap from './image-token-map.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
@@ -14,6 +16,10 @@
 
   const similarity = getSimilarity()
   const values = $derived(similarity.imageMapAt(index))
+  const predicted = $derived(similarity.predictedAt(index))
+  const elsewhere = $derived(
+    predicted.filter((column) => column !== SPECTRUM_SURVEY).map((column) => OBSERVATIONS[column])
+  )
 </script>
 
 <div class="flex flex-col gap-5 pt-6">
@@ -22,5 +28,16 @@
     <ImageTokenMap {values} />
     <ImageTokenMask {values} />
   </div>
-  <SpectrumPanel {galaxy} map={similarity.spectrumMapAt(index)} />
+  {#if elsewhere.length}
+    <p class="text-xs text-muted-foreground">
+      No {elsewhere.join(', ')}: matched on AION's prediction
+    </p>
+  {/if}
+  <SpectrumPanel
+    {galaxy}
+    map={similarity.spectrumMapAt(index)}
+    absent={predicted.includes(SPECTRUM_SURVEY)
+      ? "No DESI spectrum: matched on AION's prediction"
+      : undefined}
+  />
 </div>

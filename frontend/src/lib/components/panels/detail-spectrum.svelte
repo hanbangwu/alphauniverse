@@ -3,6 +3,7 @@
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery } from '$lib/data/queries'
   import { SPECTRUM_SURVEY, hasSpectrum } from '$lib/data/spectra'
+  import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -33,6 +34,6 @@
 
 {#if spectrum.isError}
   <p class="text-xs leading-relaxed text-destructive">
-    {'detail' in spectrum.error ? spectrum.error.detail : spectrum.error.message}
+    {errorMessage(spectrum.error)}
   </p>
 {/if}

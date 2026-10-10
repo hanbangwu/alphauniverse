@@ -14,7 +14,7 @@ import { matchMean } from './scores'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
-import { type Float32, type Table, tableFromIPC } from 'apache-arrow'
+import { type Float32, type Table, type Utf8, type Vector, tableFromIPC } from 'apache-arrow'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
@@ -149,10 +149,14 @@ export function similarityQuery(request: SimilarityQuery | null) {
             const tableValueMaps = table.getChild('table_values')!.getChildAt<Float32>(0)!.toArray()
             return {
               galaxies: table.getChild('galaxy')!.toArray(),
-              scores: table.getChild('score')!.toArray(),
+              similarities: table.getChild('similarity')!.toArray(),
               imageMaps: shownMaps(table, 'ls_image'),
               spectrumMaps: shownMaps(table, 'desi_spectrum'),
-              tableValueMap: matchMean(tableValueMaps, table.numRows)
+              tableValueMap: matchMean(tableValueMaps, table.numRows),
+              predicted: Array.from(
+                table.getChild('predicted')!,
+                (row: Vector<Utf8>) => Array.from(row) as string[]
+              )
             }
           },
     placeholderData: keepPreviousData,

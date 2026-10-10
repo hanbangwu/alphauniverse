@@ -182,6 +182,13 @@ def test_only_selected_modes_have_a_selection_map_and_a_sum(
         "sdss_spectrum_sum",
         "ls_table_sum",
     }
+    similar = {
+        name
+        for name in table.column_names
+        if name.endswith("_similarity") and table.column(name).null_count == 0
+    }
+    assert similar == {"sdss_spectrum_similarity", "ls_table_similarity"}
+    assert table.column("similarity").null_count == 0
 
 
 def test_has_flags_say_which_galaxies_observed_each_mode(client: TestClient) -> None:

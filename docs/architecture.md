@@ -79,12 +79,16 @@ A query is one galaxy and a selection from it: image tokens of its Legacy Survey
 3. A mode's sum is the sum of its slots' log overlaps, in nats. One mode ranks by its sum; several rank by the mean of each mode's sum standardised over every galaxy.
 4. The answer is the query galaxy's row, then the `matches` best other galaxies, or every other galaxy if the dataset holds fewer.
 
-Each row carries its `score`, `{mode}_sum` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, and two kinds of map:
+Each row carries its `score`, its `similarity`, `{mode}_sum` and `{mode}_similarity` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, `predicted` (the observations its selected modes need that it lacks, each once: `hsc`, `desi`, `sdss`, `redshift`), and two kinds of map.
 
-- **Aligned maps** (`ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum`, `table_values`), for every mode: at each slot, the log overlap of the galaxy's and the query galaxy's predictions at that slot. A mode's sum is its aligned map summed over the selected slots.
-- **Selection maps** (`{mode}_selection`), for each selected image or spectrum mode, null otherwise: at each slot, the log overlap with the mean of the query's predictions over its selected slots of that mode.
+A mode's similarity is exp ℓ_m, where ℓ_m is the mean over its selected slots of the log overlap minus the log of the query's largest probability at that slot. An overlap is at most that largest probability, so the similarity is in (0, 1]: the geometric mean fraction of the best overlap any galaxy could reach. The row's `similarity` is exp Σ_m w_m ℓ_m, with w_m proportional to 1/std(ℓ_m) over every galaxy and summing to 1; it orders galaxies as `score` does. A PCA spectrum overlap can exceed the query's largest probability slightly, and with it a spectrum similarity exceeds 1; the dialog shows at most 1.
 
-Every map comes from predictions, so a galaxy without a mode has maps for it too; the `has_` flags say which modes it observed. The dialog shows a match's Legacy Survey image map and DESI spectrum map: the selection map when that mode is selected, the aligned map otherwise.
+The maps:
+
+- **Aligned maps** (`ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum`, `table_values`), for every mode: at each slot, the overlap of the galaxy's and the query galaxy's predictions at that slot, divided by the query's largest probability there. A mode's similarity is the geometric mean of its aligned map over the selected slots.
+- **Selection maps** (`{mode}_selection`), for each selected image or spectrum mode, null otherwise: at each slot, the overlap with the mean of the query's predictions over its selected slots of that mode, divided by that mean's largest probability.
+
+Every map comes from predictions, so a galaxy without a mode has maps for it too; the `has_` flags say which modes it observed. The dialog shows a match's Legacy Survey image map and DESI spectrum map: the selection map when that mode is selected, the aligned map otherwise; hovering a token shows its similarity, at most 1. Each match shows its `similarity`. A match without a selected mode says it matched on AION's prediction: in its spectrum panel for the DESI spectrum, under its image for the others. The match list says matches are compared at the same place in the image and the same observed wavelength. A failed request shows the API's message where its result would be.
 
 ## Text search
 
@@ -122,7 +126,7 @@ Image token grids are Apache ECharts custom series, one rect per image token on 
 
 Spectra are Apache ECharts line charts. The app serves and shows only DESI spectra; a galaxy without one shows no spectrum. The dialog's interactive chart shades one area per spectrum token, laid out from `spectrum_origin` and `spectrum_width` in `/meta` and coloured like the token grid. It holds the selected spectrum tokens in `view.spectrum_tokens`, which join the selected image tokens in the query. It zooms on the wheel and pans on drag, since 272 spectrum tokens do not fit a panel a few hundred pixels wide.
 
-Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by section, Redshift first. Each encoded table value has a checkbox; the checked ones are `view.table_values` and join the query. An encoded table value without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor; a row with `excluded` has a disabled checkbox and is grey and italic, with the reason under its name. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes, on viridis over the 26 values, the matches' mean aligned overlap with the query galaxy at that value. A checked row has a 1 px `SELECTED` outline, as a selected spectrum token does.
+Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by section, Redshift first. Each encoded table value has a checkbox; the checked ones are `view.table_values` and join the query. An encoded table value without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor; a row with `excluded` has a disabled checkbox and is grey and italic, with the reason under its name. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes, on viridis over the 26 values, the matches' mean aligned map at that value. A checked row has a 1 px `SELECTED` outline, as a selected spectrum token does.
 
 ## Deployment
 

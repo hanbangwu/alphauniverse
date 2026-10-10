@@ -6,8 +6,9 @@ export type Extent = readonly [number, number]
 
 export interface SimilarityResult {
   galaxies: Int32Array
-  scores: Float32Array
+  similarities: Float32Array
   imageMaps: Float32Array
   spectrumMaps: Float32Array
   tableValueMap: Float32Array
+  predicted: string[][]
 }
