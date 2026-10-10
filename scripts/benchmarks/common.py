@@ -101,13 +101,14 @@ def environment() -> dict[str, Any]:
 def memory() -> dict[str, float]:
     resident = {"files": 0, "anonymous": 0}
     kind = "anonymous"
-    for line in Path("/proc/self/smaps").read_text().splitlines():
-        fields = line.split()
-        if fields[0] == "Rss:":
-            resident[kind] += int(fields[1])
-        elif not fields[0].endswith(":"):
-            file_backed = len(fields) > 5 and fields[5].startswith("/")
-            kind = "files" if file_backed else "anonymous"
+    with open("/proc/self/smaps") as smaps:
+        for line in smaps:
+            fields = line.split()
+            if fields[0] == "Rss:":
+                resident[kind] += int(fields[1])
+            elif not fields[0].endswith(":"):
+                file_backed = len(fields) > 5 and fields[5].startswith("/")
+                kind = "files" if file_backed else "anonymous"
     return {
         "peak_rss_mib": round(
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1
