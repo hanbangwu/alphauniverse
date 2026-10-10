@@ -10,7 +10,7 @@ import {
 } from '$lib/api'
 import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
-import { row } from './scores'
+import { matchMean } from './scores'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
@@ -152,7 +152,7 @@ export function similarityQuery(request: SimilarityQuery | null) {
               scores: table.getChild('score')!.toArray(),
               imageMaps: shownMaps(table, 'ls_image'),
               spectrumMaps: shownMaps(table, 'desi_spectrum'),
-              tableValueMap: row(tableValueMaps, 0, tableValueMaps.length / table.numRows)
+              tableValueMap: matchMean(tableValueMaps, table.numRows)
             }
           },
     placeholderData: keepPreviousData,
