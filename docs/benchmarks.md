@@ -10,6 +10,7 @@ Every benchmark runs on Modal and measures the production artifacts on the volum
 | `projection_quality`  | how the projector keeps neighbours           | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
 | `text_search_quality` | text queries against catalogue cuts          | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
 | `pql_quality`         | PQL scoring against `search()`               | Modal, a build-image container with a GPU | `docs/benchmarks/pql_quality.json`         |
+| `compression_quality` | the prediction store's compression schemes   | Modal, a build-image container with a GPU | `docs/benchmarks/compression_quality.json` |
 
 ```sh
 uv run modal run -m scripts.benchmarks.search_performance   # --runs, default 30
@@ -18,6 +19,7 @@ uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, defaul
 uv run modal run -m scripts.benchmarks.projection_quality
 uv run modal run -m scripts.benchmarks.text_search_quality
 uv run modal run -m scripts.benchmarks.pql_quality          # --sample, default 1000
+uv run modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -271,6 +273,19 @@ A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 1
 - `availability` and `evidence` (span queries): over 20 coin flips that show each other sampled galaxy with or without its spectrum, the share with a spectrum among the top 32 minus its share overall, for galaxies at another redshift (|Δz|/(1+z) ≥ 0.01) and at the same one.
 
 It needs `predictions` and `prediction_basis` from `generate_predictions`. Unmeasured.
+
+## `compression_quality`
+
+Measures how each way of storing a predicted distribution changes PQL's scores and rankings, for every mode in `app.predictions.MODES`. It needs only `tokens`: it predicts its own galaxies densely, on the same container as `pql_quality`, with a 24-hour timeout.
+
+- **Galaxies** (`SEED`): `--sample` scored galaxies, every galaxy with SDSS first, then galaxies with HSC or DESI up to half the sample, the rest from all galaxies; and `--fit` other galaxies whose predictions fit each mode's PCA basis, so every scored galaxy is out of sample. Image modes are held in fp16, the rest in fp32.
+- **Schemes** (`scripts/benchmarks/compression.py`, 218 per mode): the store's current scheme; dense; the top k codes; the fewest codes holding mass p; and PCA coefficients. Top-k and top-p either spread the rest of the mass evenly or drop it, and every scheme is stored at fp32, fp16, bf16, 8 bits or 4 bits. The levels are listed in #214.
+- **Queries**: `--queries` galaxies per mode, drawn from those observing it, each with selections of one slot, a block or window, and all slots, as in `selections`. Each query is scored against the sample and against a copy of itself predicted with the mode's tokens hidden.
+- **Per scheme**: bytes per galaxy and for the corpus; the median and 99th percentile of |log overlap − exact|; one query's scan of 16 slots on the CPU; and per selection size, with the gallery compressed alone and with both sides compressed, the Spearman correlation of the summed score with the dense one, top-10 and top-32 overlap, identity (the hidden copy ranks first) and the median top-10 |Δz|/(1+z).
+- **Choices**: per mode, the smallest scheme whose both-sides figures meet `TARGETS` at every size; and for corpus totals of 1, 2, 4 and 8 GB, the schemes that maximise the lowest median Spearman over modes and sizes.
+- **Check**: for the image modes, the log overlaps of 64 galaxies with fp16 and fp32 references.
+
+Unmeasured.
 
 ## Scaling ceilings
 
