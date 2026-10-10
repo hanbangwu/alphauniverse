@@ -76,10 +76,13 @@
             </Table.Row>
             {#each rows as row (row.column)}
               <Table.Row
-                class={row.scalar !== null && row.token === null
-                  ? 'cursor-not-allowed transition-none last:border-0'
-                  : 'transition-none last:border-0'}
+                class={[
+                  'transition-none last:border-0',
+                  row.scalar !== null && row.token === null && 'cursor-not-allowed',
+                  row.excluded !== null && 'text-muted-foreground italic'
+                ]}
                 style={fill(row)}
+                title={row.excluded ?? undefined}
               >
                 <Table.Cell class="px-0 py-1.5">
                   {#if row.scalar !== null}

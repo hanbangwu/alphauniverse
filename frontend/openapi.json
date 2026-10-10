@@ -417,9 +417,9 @@
               "items": {
                 "type": "integer",
                 "minimum": 0,
-                "exclusiveMaximum": 25
+                "exclusiveMaximum": 26
               },
-              "maxItems": 25,
+              "maxItems": 26,
               "default": [],
               "title": "T"
             }
@@ -671,6 +671,17 @@
               }
             ],
             "title": "Token"
+          },
+          "excluded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded"
           }
         },
         "type": "object",
@@ -679,7 +690,8 @@
           "column",
           "value",
           "scalar",
-          "token"
+          "token",
+          "excluded"
         ],
         "title": "TableRow"
       },
