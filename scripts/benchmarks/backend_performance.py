@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from functools import partial
+from itertools import cycle
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ import pyarrow.parquet as pq
 
 from app.config import DATASET_REVISION, N_PATCHES
 from app.main import SPECTRUM_SURVEY
+from app.search import N_LS_SCALARS
 from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     MATCHES,
@@ -29,11 +31,14 @@ from scripts.benchmarks.common import (
     server,
     summary,
 )
+from scripts.benchmarks.text_search_quality import CUTS
 
 image = serving_image.add_local_python_source("modal_app")
 
 CLIENTS = (1, 4, SERVING_MAX_INPUTS, 2 * SERVING_MAX_INPUTS)
 REPORT = Path("docs/benchmarks/backend_performance.json")
+SCALARS = 4
+TEXTS = tuple(text for text, _ in CUTS)
 
 
 def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
@@ -74,12 +79,21 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             return int(rng.integers(galaxies))
 
         cold_similarity = round(elapsed(lambda: similarity(32)), 3)
+        cold_text_search = round(elapsed(lambda: get("/search/text", text=TEXTS[0])), 3)
+        texts = cycle(TEXTS)
 
         calls = {
             "meta": lambda: get("/meta"),
             "image": lambda: get(f"/galaxy/{galaxy()}/image"),
             "tokens": lambda: get(f"/galaxy/{galaxy()}/image/tokens"),
             "coverage": lambda: get(f"/galaxy/{galaxy()}"),
+            "table": lambda: get(f"/galaxy/{galaxy()}/table"),
+            "text search": lambda: get("/search/text", text=next(texts)),
+            "similarity scalars matches=32": lambda: get(
+                "/search",
+                galaxy=galaxy(),
+                t=rng.choice(N_LS_SCALARS, SCALARS, replace=False).tolist(),
+            ),
         } | {
             f"similarity matches={matches}": (
                 lambda matches=matches: similarity(matches)
@@ -146,6 +160,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
+            "cold_text_search_ms": cold_text_search,
             "warm": warm
             | {label: time_it(runs, call) for label, call in spectral_calls.items()},
             "concurrency": {
