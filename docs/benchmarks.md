@@ -179,6 +179,8 @@ A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit an
 
 - `patches`: 4 patches of a galaxy drawn from all galaxies.
 - `paired_patches`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 patches and 4 spans inside its observed range, queried with the patches, the spans, and both.
+- `scalars`: 4 Legacy Survey scalars of a galaxy drawn from all galaxies.
+- `hsc_scalars`: 2 Legacy Survey and 2 HSC scalars of a galaxy drawn from galaxies with an HSC match.
 
 A query's recall is the share of its exact 32 galaxies that `search()` returns at the served `PROBE` and `NPROBE`. `exact_rankings` sets each query's direction from its galaxy's rows, then brute-forces the float32 embeddings in one streamed pass over `encoded`, `BATCH` galaxies at a time, keeping each galaxy's best score per query. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
 
@@ -199,9 +201,11 @@ A query's recall is the share of its exact 32 galaxies that `search()` returns a
 | 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
 | 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
+`scalars` and `hsc_scalars` are unmeasured: this run predates them.
+
 ## `projection_quality`
 
-A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and no GPU, redraws the projector's sample and its validation split, takes `SIZE` (10,000) validation rows, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
+A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and no GPU, redraws the projector's sample and its validation split, reads `SIZE` (10,000) of the validation rows from `encoded`, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
 
 - `preservation`: the mean share of a row's nearest neighbours by cosine distance in 768-d that are also its nearest in 2-d.
 - `trustworthiness`: scikit-learn's `trustworthiness`, cosine in 768-d, which penalises 2-d neighbours that are far apart in 768-d.
