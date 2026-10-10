@@ -79,12 +79,16 @@ A query is one galaxy and a selection from it: image tokens of its Legacy Survey
 3. A mode's sum is the sum of its slots' log overlaps, in nats. One mode ranks by its sum; several rank by the mean of each mode's sum standardised over every galaxy.
 4. The answer is the query galaxy's row, then the `matches` best other galaxies, or every other galaxy if the dataset holds fewer.
 
-Each row carries its `score`, `{mode}_sum` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, and two kinds of map:
+Each row carries its `score`, its `similarity`, `{mode}_sum` and `{mode}_similarity` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, and two kinds of map.
+
+A mode's similarity is exp ℓ_m, where ℓ_m is the mean over its selected slots of the log overlap minus the log of the query's largest probability at that slot. An overlap is at most that largest probability, so the similarity is in (0, 1]: the geometric mean fraction of the best overlap any galaxy could reach. The row's `similarity` is exp Σ_m w_m ℓ_m, with w_m proportional to 1/std(ℓ_m) over every galaxy and summing to 1; it orders galaxies as `score` does. A PCA spectrum overlap can exceed the query's largest probability slightly, and with it a spectrum similarity exceeds 1; the dialog shows at most 1.
+
+The maps:
 
 - **Aligned maps** (`ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum`, `table_values`), for every mode: at each slot, the log overlap of the galaxy's and the query galaxy's predictions at that slot. A mode's sum is its aligned map summed over the selected slots.
 - **Selection maps** (`{mode}_selection`), for each selected image or spectrum mode, null otherwise: at each slot, the log overlap with the mean of the query's predictions over its selected slots of that mode.
 
-Every map comes from predictions, so a galaxy without a mode has maps for it too; the `has_` flags say which modes it observed. The dialog shows a match's Legacy Survey image map and DESI spectrum map: the selection map when that mode is selected, the aligned map otherwise.
+Every map comes from predictions, so a galaxy without a mode has maps for it too; the `has_` flags say which modes it observed. The dialog shows a match's Legacy Survey image map and DESI spectrum map: the selection map when that mode is selected, the aligned map otherwise; hovering a token shows its overlap. Each match shows its `similarity`. A match without a selected mode says it matched on AION's prediction: in its spectrum panel for the DESI spectrum, under its image for the others. The match list says matches are compared at the same place in the image and the same observed wavelength. A failed request shows the API's message where its result would be.
 
 ## Text search
 
