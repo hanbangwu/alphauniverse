@@ -74,7 +74,7 @@ One row per galaxy, pairing AION's embedding of the galaxy with [EmbeddingGemma 
 - **AION**: the mean of the galaxy's `encoded` embeddings over every token of every survey.
 - **EmbeddingGemma**: its sentence-transformers embedding, L2-normalised and at full width, under the `Document` prompt, of the galaxy's `rgb` Legacy Survey cutout as the dataset stores it, uncropped.
 
-Every image goes to one `encode` call, which batches internally:
+Images go to `encode` `BATCH` (1,024) at a time, decoded one chunk at a time, and `encode` batches each chunk internally:
 
 ```
 galaxy: int32

@@ -16,7 +16,7 @@ from .dataset import dataset
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
-IMAGE_BATCH = 1024
+BATCH = 1024
 
 
 class TextQuery(BaseModel):
@@ -51,7 +51,7 @@ def generate_pairs() -> None:
     gemma = np.concatenate(
         [
             text_model().encode(batch[RGB_COLUMN], prompt_name="Document")
-            for batch in images.iter(batch_size=IMAGE_BATCH)
+            for batch in images.iter(batch_size=BATCH)
         ]
     )
 
