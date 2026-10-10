@@ -187,6 +187,7 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
         scanner = source("encoded").scanner(
             columns=["galaxy", survey],
             batch_size=CHUNK,
+            batch_readahead=1,
             filter=ds.field(survey).is_valid(),
         )
         for batch in scanner.to_batches():

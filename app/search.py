@@ -228,7 +228,7 @@ def search(
 def rows(cells: pa.Array | pa.ChunkedArray, start: int, stop: int | None) -> np.ndarray:
     flat = pc.list_flatten(pc.list_flatten(pc.list_slice(cells, start, stop)))
     embeddings = np.asarray(flat, dtype=np.float32).reshape(-1, DIM)
-    if not np.isfinite(embeddings).all():
+    if not np.isfinite(embeddings.sum()):
         raise ValueError("embeddings must be finite")
     faiss.normalize_L2(embeddings)
     return embeddings
@@ -293,7 +293,9 @@ def generate_index() -> None:
     built.train(training)
     del training
 
-    for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
+    for batch in dataset.to_batches(
+        columns=columns, batch_size=BATCH, batch_readahead=1
+    ):
         built.add(blocks(batch))
 
     faiss.write_index(built, str(artifact("search_index")))
