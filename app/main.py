@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 from contextlib import asynccontextmanager
 from io import BytesIO
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
+from astropy.convolution import Gaussian1DKernel, convolve
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -19,22 +20,40 @@ from .config import (
     DATASET_NAME,
     FLAG_SURVEYS,
     GRID,
-    N_PATCHES,
-    N_SPANS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
+    N_TABLE_VALUES,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    REDSHIFT_LIMIT,
+    REDSHIFT_TABLE_VALUE,
     SPECTRUM_ORIGIN,
+    SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
+    TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
+    Catalogue,
     Download,
     GalaxyIndex,
     Projection,
+    SpectrumSurvey,
     artifact,
     galaxy_count,
     labels,
 )
-from .dataset import image, spectrum
+from .dataset import catalogue, image, redshift, spectrum, table
+from .search import (
+    FIRST_LS_TABLE_VALUE,
+    index,
+    search,
+    starts,
+    table_value_tokens,
+    tokens,
+    with_hsc,
+)
 from .search import Query as SearchQuery
-from .search import index, search, starts, tokens
+from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
@@ -58,6 +77,20 @@ class Galaxy(BaseModel):
     sdss: bool
     gz10: bool
     provabgs: bool
+
+
+class TableRow(BaseModel):
+    section: Catalogue | Literal["redshift"]
+    column: str
+    value: float | int | bool | None
+    scalar: int | None
+    token: int | None
+    excluded: str | None
+
+
+class TextMatches(BaseModel):
+    galaxies: list[int]
+    scores: list[float]
 
 
 BINARY_OCTET: dict[str, Any] = {
@@ -106,6 +139,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     labels()
     index()
     starts()
+    with_hsc()
     yield
 
 
@@ -203,6 +237,75 @@ def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
     )
 
 
+def excluded(values: dict, survey: SpectrumSurvey, chosen: str | None) -> str | None:
+    value, _, warning = (values[column] for column in REDSHIFT_COLUMNS[survey])
+    if value is None or survey == chosen:
+        return None
+    if warning:
+        return f"flagged by {survey.upper()}"
+    if not value <= REDSHIFT_LIMIT:
+        return f"above AION's redshift limit, {REDSHIFT_LIMIT:g}"
+    return f"AION takes one redshift: {chosen.upper()}'s"
+
+
+def redshift_row(
+    column: str,
+    survey: SpectrumSurvey,
+    values: dict,
+    chosen: str | None,
+    token: int | None,
+) -> TableRow:
+    first = column == REDSHIFT_COLUMNS[survey][0]
+    selectable = first and survey == chosen
+    return TableRow(
+        section=REDSHIFT,
+        column=f"{survey.upper()} {column.partition('-')[0]}",
+        value=values[column],
+        scalar=REDSHIFT_TABLE_VALUE if selectable else None,
+        token=token if selectable else None,
+        excluded=excluded(values, survey, chosen) if first else None,
+    )
+
+
+def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRow:
+    table_value = (
+        FIRST_LS_TABLE_VALUE + TABLE_VALUE_COLUMNS.index(column)
+        if column in TABLE_VALUE_COLUMNS
+        else None
+    )
+    return TableRow(
+        section=catalogue(column),
+        column=column.partition("-")[0],
+        value=value,
+        scalar=table_value,
+        token=None if table_value is None else token_ids.get(column),
+        excluded=None,
+    )
+
+
+@app.get(
+    "/galaxy/{galaxy}/table",
+)
+def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
+    token_ids = table_value_tokens(galaxy)
+    values = table(galaxy)
+    chosen = redshift(values)
+    shown = [
+        (column, survey)
+        for survey, columns in REDSHIFT_COLUMNS.items()
+        for column in columns
+    ]
+    redshifts = {column for column, _ in shown}
+    return [
+        redshift_row(column, survey, values, chosen, token_ids.get(REDSHIFT))
+        for column, survey in shown
+    ] + [
+        catalogue_row(column, value, token_ids)
+        for column, value in values.items()
+        if column not in redshifts
+    ]
+
+
 @app.get(
     "/galaxy/{galaxy}/image",
     response_class=Response,
@@ -224,7 +327,7 @@ def get_image(galaxy: GalaxyIndex) -> Response:
 def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     cell = tokens().column(ANCHOR)[galaxy]
     return Response(
-        np.asarray(cell.values)[:N_PATCHES].tobytes(),
+        np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
         media_type="application/octet-stream",
     )
 
@@ -233,12 +336,19 @@ def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     "/galaxy/{galaxy}/spectrum",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
+    description="The galaxy's spectrum for display, its flux smoothed with a "
+    f"Gaussian of sigma {SPECTRUM_SMOOTHING_SIGMA} pixels; masked pixels stay NaN.",
 )
 def get_spectrum(galaxy: GalaxyIndex) -> Response:
     table = spectrum(galaxy, SPECTRUM_SURVEY)
     if table is None:
         raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
-    return arrow(table)
+    flux = convolve(
+        table["flux"].to_numpy(),
+        Gaussian1DKernel(SPECTRUM_SMOOTHING_SIGMA),
+        preserve_nan=True,
+    )
+    return arrow(table.set_column(1, "flux", pa.array(flux, pa.float32())))
 
 
 @app.get(
@@ -261,29 +371,43 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": ARROW_STREAM}},
 )
 def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, values, spans = search(query, index=index())
+    galaxies, scores, values, spectrum_tokens, table_values = search(
+        query, index=index()
+    )
 
     item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
         [
             pa.field("galaxy", pa.int32(), nullable=False),
             pa.field("score", pa.float32(), nullable=False),
-            pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
-            pa.field("spectrum", pa.list_(item, N_SPANS)),
+            pa.field("map", pa.list_(item, N_IMAGE_TOKENS), nullable=False),
+            pa.field("spectrum", pa.list_(item, N_SPECTRUM_TOKENS)),
+            pa.field("scalars", pa.list_(item, N_TABLE_VALUES), nullable=False),
         ]
     )
     batch = pa.record_batch(
         [
             pa.array(galaxies),
             pa.array(scores),
-            pa.FixedSizeListArray.from_arrays(pa.array(values.reshape(-1)), N_PATCHES),
             pa.FixedSizeListArray.from_arrays(
-                pa.array(spans.reshape(-1)),
-                N_SPANS,
-                mask=pa.array(np.isnan(spans[:, 0])),
+                pa.array(values.reshape(-1)), N_IMAGE_TOKENS
+            ),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(spectrum_tokens.reshape(-1)),
+                N_SPECTRUM_TOKENS,
+                mask=pa.array(np.isnan(spectrum_tokens[:, 0])),
+            ),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(table_values.reshape(-1)), N_TABLE_VALUES
             ),
         ],
         schema=schema,
     )
 
     return arrow(batch)
+
+
+@app.get("/search/text")
+def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
+    galaxies, scores = text_search(query)
+    return TextMatches(galaxies=galaxies.tolist(), scores=scores.tolist())

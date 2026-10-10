@@ -2,7 +2,6 @@ from functools import cache
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
 import torch
 import torchvision.transforms.functional as F
 from aion import AION
@@ -40,6 +39,7 @@ from aion.modalities import (
     Scalar,
     SDSSSpectrum,
     Spectrum,
+    Z,
 )
 from tqdm import tqdm
 
@@ -47,45 +47,60 @@ from .config import (
     ANCHOR,
     CROP_PIXELS,
     FLAG_SURVEYS,
-    HSC,
-    LS,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
     STORES,
+    TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
-    artifact,
     device,
     store_schema,
+    store_writer,
 )
-from .dataset import dataset
+from .dataset import dataset, redshift
 
-LS_SCALARS = (
-    (LegacySurveyEBV, f"EBV{LS}"),
-    (LegacySurveyFluxG, f"FLUX_G{LS}"),
-    (LegacySurveyFluxR, f"FLUX_R{LS}"),
-    (LegacySurveyFluxI, f"FLUX_I{LS}"),
-    (LegacySurveyFluxZ, f"FLUX_Z{LS}"),
-    (LegacySurveyFluxW1, f"FLUX_W1{LS}"),
-    (LegacySurveyFluxW2, f"FLUX_W2{LS}"),
-    (LegacySurveyFluxW3, f"FLUX_W3{LS}"),
-    (LegacySurveyFluxW4, f"FLUX_W4{LS}"),
-    (LegacySurveyShapeR, f"SHAPE_R{LS}"),
-    (LegacySurveyShapeE1, f"SHAPE_E1{LS}"),
-    (LegacySurveyShapeE2, f"SHAPE_E2{LS}"),
+BATCH = 128
+
+LS_TABLE_VALUES = tuple(
+    zip(
+        (
+            LegacySurveyEBV,
+            LegacySurveyFluxG,
+            LegacySurveyFluxR,
+            LegacySurveyFluxI,
+            LegacySurveyFluxZ,
+            LegacySurveyFluxW1,
+            LegacySurveyFluxW2,
+            LegacySurveyFluxW3,
+            LegacySurveyFluxW4,
+            LegacySurveyShapeR,
+            LegacySurveyShapeE1,
+            LegacySurveyShapeE2,
+        ),
+        TABLE_VALUE_SURVEYS[ANCHOR],
+        strict=True,
+    )
 )
 
-HSC_SCALARS = (
-    (HSCAG, f"a_g{HSC}"),
-    (HSCAR, f"a_r{HSC}"),
-    (HSCAI, f"a_i{HSC}"),
-    (HSCAZ, f"a_z{HSC}"),
-    (HSCAY, f"a_y{HSC}"),
-    (HSCMagG, f"g_cmodel_mag{HSC}"),
-    (HSCMagR, f"r_cmodel_mag{HSC}"),
-    (HSCMagI, f"i_cmodel_mag{HSC}"),
-    (HSCMagZ, f"z_cmodel_mag{HSC}"),
-    (HSCMagY, f"y_cmodel_mag{HSC}"),
-    (HSCShape11, f"i_sdssshape_shape11{HSC}"),
-    (HSCShape22, f"i_sdssshape_shape22{HSC}"),
-    (HSCShape12, f"i_sdssshape_shape12{HSC}"),
+HSC_TABLE_VALUES = tuple(
+    zip(
+        (
+            HSCAG,
+            HSCAR,
+            HSCAI,
+            HSCAZ,
+            HSCAY,
+            HSCMagG,
+            HSCMagR,
+            HSCMagI,
+            HSCMagZ,
+            HSCMagY,
+            HSCShape11,
+            HSCShape22,
+            HSCShape12,
+        ),
+        TABLE_VALUE_SURVEYS["hsc"],
+        strict=True,
+    )
 )
 
 
@@ -120,9 +135,10 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
         "wavelength": ("lambda", torch.float32),
         "mask": ("mask", torch.bool),
     }
+    kept = np.asarray(row["lambda"]) > 0
     samples = {
         argument: torch.as_tensor(
-            np.asarray([row[field]]), dtype=dtype, device=device()
+            np.asarray(row[field])[kept][None], dtype=dtype, device=device()
         )
         for argument, (field, dtype) in fields.items()
     }
@@ -152,7 +168,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
-                for modality, column in LS_SCALARS
+                for modality, column in LS_TABLE_VALUES
             },
         }
     }
@@ -165,7 +181,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
-                for modality, column in HSC_SCALARS
+                for modality, column in HSC_TABLE_VALUES
             },
         }
     if row[TOKEN_SURVEYS["desi"]] is not None:
@@ -176,6 +192,8 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
         groups["sdss"] = {
             SDSSSpectrum.token_key: spectrum(SDSSSpectrum, row[TOKEN_SURVEYS["sdss"]])
         }
+    if (survey := redshift(row)) is not None:
+        groups[REDSHIFT] = {Z.token_key: scalar(Z, row[REDSHIFT_COLUMNS[survey][0]])}
     return groups
 
 
@@ -220,11 +238,8 @@ def by_survey(
 def generate_embeddings() -> None:
     data = dataset()
     schemas = {role: store_schema(role) for role in STORES}
-    writers = {
-        role: pq.ParquetWriter(artifact(role), schemas[role], compression="zstd")
-        for role in STORES
-    }
-    rows: dict[str, list[dict]] = {role: [] for role in STORES}
+    writers = {role: store_writer(role) for role in STORES}
+    batches: dict[str, list[pa.RecordBatch]] = {role: [] for role in STORES}
 
     for galaxy in tqdm(range(len(data)), desc="encode"):
         row = data[galaxy]
@@ -251,16 +266,16 @@ def generate_embeddings() -> None:
             survey: row[column] is not None for survey, column in FLAG_SURVEYS.items()
         }
         for role in STORES:
-            rows[role].append({"galaxy": galaxy, **cells[role], **flags})
-            if len(rows[role]) == 1024:
-                writers[role].write_table(
-                    pa.Table.from_pylist(rows[role], schema=schemas[role])
+            batches[role].append(
+                pa.RecordBatch.from_pylist(
+                    [{"galaxy": galaxy, **cells[role], **flags}], schema=schemas[role]
                 )
-                rows[role].clear()
+            )
+            if len(batches[role]) == BATCH:
+                writers[role].write_batch(pa.concat_batches(batches[role]))
+                batches[role].clear()
 
     for role in STORES:
-        if rows[role]:
-            writers[role].write_table(
-                pa.Table.from_pylist(rows[role], schema=schemas[role])
-            )
+        if batches[role]:
+            writers[role].write_batch(pa.concat_batches(batches[role]))
         writers[role].close()

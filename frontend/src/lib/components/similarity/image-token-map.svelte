@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PatchPanel from './patch-panel.svelte'
+  import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   interface Props {
@@ -11,7 +11,7 @@
   const similarity = getSimilarity()
 </script>
 
-<PatchPanel
+<ImageTokenPanel
   label="Image Tokens"
   {values}
   grid={similarity.grid}

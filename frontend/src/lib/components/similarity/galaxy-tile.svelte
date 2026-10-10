@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PatchFrame from '$lib/components/common/patch-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import { getSimilarity } from './similarity.svelte'
 
@@ -15,9 +15,9 @@
 
 <div class="flex flex-1 flex-col gap-2">
   <span class="text-sm font-medium">
-    Galaxy #{galaxy}{score === undefined ? '' : `: ${similarity.score(score)}`}
+    #{galaxy}{score === undefined ? '' : `: ${similarity.score(score)}`}
   </span>
-  <PatchFrame>
+  <PanelFrame>
     <GalaxyThumb {galaxy} />
-  </PatchFrame>
+  </PanelFrame>
 </div>

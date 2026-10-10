@@ -12,9 +12,15 @@ export class SearchState {
     return Number.isInteger(value) && value >= minimum && value <= maximum ? value : null
   }
 
-  request(galaxy: number | null, patches: number[], spans: number[]): SimilarityQuery | null {
+  request(
+    galaxy: number | null,
+    imageTokens: number[],
+    spectrumTokens: number[],
+    tableValues: number[]
+  ): SimilarityQuery | null {
     const matches = this.count
-    if (galaxy === null || matches === null || patches.length + spans.length === 0) return null
-    return { galaxy, p: patches, s: spans, matches }
+    if (galaxy === null || matches === null) return null
+    if (imageTokens.length + spectrumTokens.length + tableValues.length === 0) return null
+    return { galaxy, p: imageTokens, s: spectrumTokens, t: tableValues, matches }
   }
 }

@@ -35,12 +35,13 @@ CROP_PIXELS = 96
 DIM = 768
 
 GRID = 24
-N_PATCHES = GRID**2
+N_IMAGE_TOKENS = GRID**2
 
 SPECTRUM_ORIGIN = 3500.0
+SPECTRUM_SMOOTHING_SIGMA = 2
 SPECTRUM_SURVEY: SpectrumSurvey = "desi"
 SPECTRUM_TOKEN_WIDTH = 32 * 0.8
-N_SPANS = 8704 // 32
+N_SPECTRUM_TOKENS = 8704 // 32
 
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
@@ -67,16 +68,82 @@ FLAG_SURVEYS: dict[str, str] = {
 }
 RGB_COLUMN = f"rgb{LS}"
 
+TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
+    ANCHOR: tuple(
+        f"{name}{LS}"
+        for name in (
+            "EBV",
+            "FLUX_G",
+            "FLUX_R",
+            "FLUX_I",
+            "FLUX_Z",
+            "FLUX_W1",
+            "FLUX_W2",
+            "FLUX_W3",
+            "FLUX_W4",
+            "SHAPE_R",
+            "SHAPE_E1",
+            "SHAPE_E2",
+        )
+    ),
+    "hsc": tuple(
+        f"{name}{HSC}"
+        for name in (
+            "a_g",
+            "a_r",
+            "a_i",
+            "a_z",
+            "a_y",
+            "g_cmodel_mag",
+            "r_cmodel_mag",
+            "i_cmodel_mag",
+            "z_cmodel_mag",
+            "y_cmodel_mag",
+            "i_sdssshape_shape11",
+            "i_sdssshape_shape22",
+            "i_sdssshape_shape12",
+        )
+    ),
+}
+TABLE_VALUE_COLUMNS = tuple(
+    column for columns in TABLE_VALUE_SURVEYS.values() for column in columns
+)
+REDSHIFT = "redshift"
+REDSHIFT_TABLE_VALUE = 0
+N_TABLE_VALUES = len(TABLE_VALUE_COLUMNS) + 1
+REDSHIFT_LIMIT = 6.0
+REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
+    "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),
+    "sdss": (f"Z{SDSS}", f"Z_ERR{SDSS}", f"ZWARNING{SDSS}"),
+}
+STORE_COLUMNS = (*TOKEN_SURVEYS, REDSHIFT)
+
+Catalogue = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
+CATALOGUES: dict[str, Catalogue] = {
+    LS: ANCHOR,
+    HSC: "hsc",
+    DESI: "desi",
+    SDSS: "sdss",
+    GZ10: "gz10",
+    PROVABGS: "provabgs",
+}
+
 N_MORPHOLOGIES = 10
 
+GEMMA = "google/embeddinggemma-2"
+GEMMA_DIM = 768
+
 ARTIFACTS: dict[str, str] = {
-    "encoded": "parquet",
+    "encoded": "arrow",
     "search_index": "faiss",
     "codebook": "parquet",
-    "tokens": "parquet",
+    "tokens": "arrow",
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
+    "pairs": "parquet",
+    "alignment": "pt",
+    "aion_gemma_space": "npy",
 }
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
@@ -93,9 +160,24 @@ def store_schema(role: str) -> pa.Schema:
     )
     return pa.schema(
         [pa.field("galaxy", pa.int32())]
-        + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
+        + [pa.field(survey, cell) for survey in STORE_COLUMNS]
         + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
     )
+
+
+def store_writer(role: str) -> pq.ParquetWriter | pa.ipc.RecordBatchFileWriter:
+    if ARTIFACTS[role] == "arrow":
+        return pa.ipc.new_file(artifact(role), store_schema(role))
+    return pq.ParquetWriter(artifact(role), store_schema(role), compression="zstd")
+
+
+PAIRS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("aion", pa.list_(pa.float32(), DIM)),
+        pa.field("gemma", pa.list_(pa.float32(), GEMMA_DIM)),
+    ]
+)
 
 
 POINTS = pa.schema(

@@ -15,7 +15,7 @@ from typing import Any
 import faiss
 import numpy as np
 
-from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count, labels
+from app.config import DATASET_REVISION, N_IMAGE_TOKENS, artifact, galaxy_count, labels
 from app.search import (
     Query,
     candidates,
@@ -24,24 +24,27 @@ from app.search import (
     rank,
     score_maps,
     search,
-    span_maps,
+    spectrum_token_maps,
     starts,
+    table_value_maps,
     tokens,
     vectors,
 )
 from modal_app import (
+    CACHE_PATH,
     SERVING_CPU,
     SERVING_MEMORY,
     app,
-    fastapi_app,
+    cache_volume,
     serving_image,
 )
 from scripts.benchmarks.common import (
+    IMAGE_TOKENS,
     MATCHES,
-    PATCHES,
     elapsed,
     environment,
     git,
+    memory,
     queries,
     server,
     summary,
@@ -49,7 +52,15 @@ from scripts.benchmarks.common import (
 
 image = serving_image.add_local_python_source("modal_app")
 
-STAGES = ["centroid", "candidates", "vectors", "score_maps", "span_maps", "rank"]
+STAGES = [
+    "centroid",
+    "candidates",
+    "vectors",
+    "score_maps",
+    "spectrum_token_maps",
+    "table_value_maps",
+    "rank",
+]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
@@ -115,17 +126,19 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
     marks.append(mark())
     rows = vectors(order, index=built)
     marks.append(mark())
-    scored = score_maps(rows, direction, width=N_PATCHES)
+    scored = score_maps(rows, direction, width=N_IMAGE_TOKENS)
     marks.append(mark())
-    spectral_scores = span_maps(order, direction, index=built)
+    spectral_scores = spectrum_token_maps(order, direction, index=built)
     marks.append(mark())
-    rank(order, scored, spectral_scores)
+    table_value_scores = table_value_maps(order, direction, index=built)
+    marks.append(mark())
+    rank(order, scored, spectral_scores, table_value_scores)
     marks.append(mark())
     return usages(STAGES, marks)
 
 
 def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
-    batch = queries(runs + 1, PATCHES, matches)
+    batch = queries(runs + 1, IMAGE_TOKENS, matches)
     search(batch[0], index=built)
     return summary(
         [elapsed(partial(search, query, index=built)) for query in batch[1:]]
@@ -138,7 +151,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = load_times()
     built = index()
 
-    batch = queries(runs + 1, PATCHES, matches)
+    batch = queries(runs + 1, IMAGE_TOKENS, matches)
     cold = stage_times(batch[0], built)
     samples: dict[str, list[dict[str, float]]] = {name: [] for name in STAGES}
 
@@ -178,6 +191,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
             "loads": {name: rounded(usage) for name, usage in loads.items()},
             "stages": {name: rounded(mean) for name, mean in means.items()},
         },
+        "memory": memory(),
     }
 
 
@@ -185,7 +199,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     image=image,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
-    volumes=fastapi_app.spec.volumes,
+    volumes={CACHE_PATH: cache_volume},
     timeout=6 * 60 * 60,
 )
 def benchmark_search_performance(
@@ -216,7 +230,7 @@ def benchmark_search_performance(
         except (ValueError, IndexError):
             result = {"error": f"no report on stdout: {completed.stdout[-2000:]}"}
         rounds[name].append(result | {"position": position})
-    return report | {"rounds": rounds}
+    return report | {"rounds": rounds, "memory": memory()}
 
 
 @app.local_entrypoint()

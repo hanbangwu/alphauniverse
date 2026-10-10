@@ -2,33 +2,45 @@ import io
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
+import pyarrow.compute as pc
 import pytest
+from datasets import Dataset
 from fastapi.testclient import TestClient
 
+from app import dataset as dataset_module
 from app.config import (
     ANCHOR,
+    DESI,
     FLAG_SURVEYS,
+    N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
-    N_PATCHES,
+    REDSHIFT,
+    REDSHIFT_TABLE_VALUE,
+    SDSS,
     SPECTRUM_SURVEYS,
+    TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
 )
+from app.dataset import table_columns
 
 ARROW = "application/vnd.apache.arrow.stream"
 
 
+def _stored(role: str) -> pa.Table:
+    return pa.ipc.open_file(artifact(role)).read_all()
+
+
 def _with_spectrum() -> np.ndarray:
-    stored = pq.read_table(artifact("encoded"), columns=list(SPECTRUM_SURVEYS))
+    stored = _stored("encoded").select(list(SPECTRUM_SURVEYS))
     return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
-def test_artifact_downloads(client: TestClient, tree) -> None:
+def test_artifact_downloads(client: TestClient) -> None:
     response = client.get("/downloads/encoded")
 
     assert response.status_code == 200
-    assert len(response.content) == (tree / "encoded.parquet").stat().st_size
+    assert len(response.content) == artifact("encoded").stat().st_size
 
 
 def test_meta_reports_a_count_per_morphology_without_the_dataset(
@@ -81,22 +93,22 @@ def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     assert client.get("/downloads/codebook").status_code == 404
 
 
-def test_image_tokens_are_that_galaxys_stored_patch_tokens(
+def test_image_tokens_are_that_galaxys_stored_image_token_ids(
     client: TestClient, galaxies: int
 ) -> None:
     galaxy = galaxies - 1
-    cell = pq.read_table(artifact("tokens"), columns=[ANCHOR]).column(ANCHOR)[galaxy]
+    cell = _stored("tokens").column(ANCHOR)[galaxy]
 
     response = client.get(f"/galaxy/{galaxy}/image/tokens")
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
-    np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_PATCHES])
+    np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_IMAGE_TOKENS])
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
-    stored = pq.read_table(artifact("tokens"), filters=[("galaxy", "==", galaxy)])
+    stored = _stored("tokens").filter(pc.field("galaxy") == galaxy)
     rows = client.get(f"/galaxy/{galaxy}").json()
 
     assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
@@ -105,14 +117,14 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
 
 
 def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:
-    tokens = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    tokens = _stored("tokens").column("desi")
     untokenised = tokens.is_valid().to_pylist().index(False)
 
     assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
 
 
 def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    column = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    column = _stored("tokens").column("desi")
     galaxy = column.is_valid().to_pylist().index(True)
     cell = column[galaxy]
 
@@ -134,8 +146,8 @@ def test_similarity_returns_one_arrow_batch(client: TestClient) -> None:
     table = _similarity(client, galaxy=2, p=[100, 101], matches=5)
 
     assert 1 < table.num_rows <= 6
-    assert table.column_names == ["galaxy", "score", "map", "spectrum"]
-    assert len(table.column("map")[0]) == N_PATCHES
+    assert table.column_names == ["galaxy", "score", "map", "spectrum", "scalars"]
+    assert len(table.column("map")[0]) == N_IMAGE_TOKENS
 
 
 def test_similarity_spectrum_column_is_null_without_a_spectrum(
@@ -149,11 +161,117 @@ def test_similarity_spectrum_column_is_null_without_a_spectrum(
     )
 
 
-def test_similarity_without_patches_or_spans_is_rejected(client: TestClient) -> None:
+def test_similarity_takes_table_values_alone(client: TestClient) -> None:
+    table = _similarity(client, galaxy=0, t=[1, 13], matches=5)
+
+    assert table.column("galaxy")[0].as_py() == 0
+    assert 1 < table.num_rows <= 6
+
+
+def test_every_galaxy_has_table_value_scores_where_it_has_table_values(
+    client: TestClient,
+) -> None:
+    table = _similarity(client, galaxy=1, p=[100], matches=5)
+    galaxies = table.column("galaxy").to_numpy()
+    scores = np.asarray(table.column("scalars").to_pylist())
+    stored = _stored("encoded")
+    with_hsc = stored.column("hsc").is_valid().to_numpy()[galaxies]
+    with_redshift = stored.column(REDSHIFT).is_valid().to_numpy()[galaxies]
+    hsc = scores[:, 13:]
+
+    assert np.isfinite(scores[:, 1:13]).all()
+    np.testing.assert_array_equal(np.isfinite(hsc).all(axis=1), with_hsc)
+    np.testing.assert_array_equal(np.isnan(hsc).all(axis=1), ~with_hsc)
+    np.testing.assert_array_equal(
+        np.isfinite(scores[:, REDSHIFT_TABLE_VALUE]), with_redshift
+    )
+
+
+def test_hsc_table_values_of_a_galaxy_without_hsc_are_rejected(
+    client: TestClient,
+) -> None:
+    response = client.get("/search", params={"galaxy": 1, "t": [13]})
+
+    assert response.status_code == 422
+    [error] = response.json()["detail"]
+    assert "galaxy 1 has no HSC match" in error["msg"]
+
+
+def test_the_redshift_needs_a_usable_redshift_and_not_an_hsc_match(
+    client: TestClient,
+) -> None:
+    accepted = client.get("/search", params={"galaxy": 6, "t": [REDSHIFT_TABLE_VALUE]})
+    rejected = client.get("/search", params={"galaxy": 1, "t": [REDSHIFT_TABLE_VALUE]})
+
+    assert accepted.status_code == 200
+    assert rejected.status_code == 422
+    [error] = rejected.json()["detail"]
+    assert "galaxy 1 has no usable redshift" in error["msg"]
+
+
+def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_value(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = Dataset.from_dict(
+        {
+            TABLE_VALUE_SURVEYS["hsc"][0]: [1.5],
+            f"Z{DESI}": [0.25],
+            f"ZERR{DESI}": [1e-4],
+            f"ZWARN{DESI}": [False],
+            f"Z{SDSS}": [0.26],
+            f"Z_ERR{SDSS}": [2e-4],
+            f"ZWARNING{SDSS}": [False],
+        }
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    table_columns.cache_clear()
+
+    response = client.get("/galaxy/0/table")
+    table_columns.cache_clear()
+
+    stored = _stored("tokens")
+    hsc, redshift = (stored.column(name)[0] for name in ("hsc", REDSHIFT))
+    plain = {"scalar": None, "token": None, "excluded": None}
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "section": REDSHIFT,
+            "column": "DESI Z",
+            "value": 0.25,
+            "scalar": REDSHIFT_TABLE_VALUE,
+            "token": redshift.values[0].as_py(),
+            "excluded": None,
+        },
+        {"section": REDSHIFT, "column": "DESI ZERR", "value": 1e-4, **plain},
+        {"section": REDSHIFT, "column": "DESI ZWARN", "value": False, **plain},
+        {
+            "section": REDSHIFT,
+            "column": "SDSS Z",
+            "value": 0.26,
+            "scalar": None,
+            "token": None,
+            "excluded": "AION takes one redshift: DESI's",
+        },
+        {"section": REDSHIFT, "column": "SDSS Z_ERR", "value": 2e-4, **plain},
+        {"section": REDSHIFT, "column": "SDSS ZWARNING", "value": False, **plain},
+        {
+            "section": "hsc",
+            "column": "a_g",
+            "value": 1.5,
+            "scalar": 13,
+            "token": hsc.values[N_IMAGE_TOKENS].as_py(),
+            "excluded": None,
+        },
+    ]
+
+
+def test_similarity_without_image_tokens_or_spectrum_tokens_is_rejected(
+    client: TestClient,
+) -> None:
     assert client.get("/search", params={"galaxy": 0}).status_code == 422
 
 
-def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
+def test_spectrum_tokens_of_a_galaxy_without_a_spectrum_are_rejected(
     client: TestClient,
 ) -> None:
     galaxy = int(np.flatnonzero(~_with_spectrum())[0])
@@ -173,6 +291,7 @@ def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
         "/galaxy/{galaxy}",
         "/galaxy/{galaxy}/spectrum",
         "/galaxy/{galaxy}/spectrum/tokens",
+        "/galaxy/{galaxy}/table",
         "/search?galaxy={galaxy}&p=0",
     ],
 )
@@ -180,3 +299,10 @@ def test_galaxy_past_the_end_is_rejected(
     client: TestClient, galaxies: int, path: str
 ) -> None:
     assert client.get(path.format(galaxy=galaxies)).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "params", [{"text": ""}, {"text": "x" * 501}, {"text": "a", "matches": 0}]
+)
+def test_text_search_rejects_invalid_queries(client: TestClient, params: dict) -> None:
+    assert client.get("/search/text", params=params).status_code == 422

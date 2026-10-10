@@ -1,16 +1,29 @@
 <script lang="ts">
+  import { browser } from '$app/environment'
   import favicon from '$lib/assets/favicon.svg'
-  import { AppState, setApp } from '$lib/state/app.svelte'
+  import AppRoot from '$lib/components/app-root.svelte'
+  import { Spinner } from '$lib/components/ui/spinner'
+  import { metaQuery, pointsQuery } from '$lib/data/queries'
+  import { MosaicState } from '$lib/state/mosaic.svelte'
   import './layout.css'
-  import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query'
+  import { QueryClient, QueryClientProvider, createQuery } from '@tanstack/svelte-query'
   import { ModeWatcher } from 'mode-watcher'
-  import { untrack } from 'svelte'
+  import { onDestroy } from 'svelte'
 
-  let { data, children } = $props()
+  let { children } = $props()
 
-  const queries = new QueryClient()
+  const queries = new QueryClient({ defaultOptions: { queries: { enabled: browser } } })
+  const meta = createQuery(
+    () => metaQuery,
+    () => queries
+  )
+  const mosaic = new MosaicState()
 
-  setApp(untrack(() => new AppState(data.meta))).start()
+  createQuery(
+    () => pointsQuery(mosaic, 'mean', browser),
+    () => queries
+  )
+  onDestroy(() => mosaic.destroy())
 </script>
 
 <svelte:head>
@@ -23,6 +36,18 @@
 
 <QueryClientProvider client={queries}>
   <div class="h-dvh overflow-hidden">
-    {@render children()}
+    {#if meta.data}
+      <AppRoot meta={meta.data} {mosaic}>
+        {@render children()}
+      </AppRoot>
+    {:else if meta.isError}
+      <p role="alert" class="grid h-full place-content-center text-sm text-muted-foreground">
+        The server is unavailable. Reload the page to try again.
+      </p>
+    {:else}
+      <div class="grid h-full place-content-center">
+        <Spinner class="size-8" />
+      </div>
+    {/if}
   </div>
 </QueryClientProvider>
