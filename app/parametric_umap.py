@@ -3,6 +3,7 @@ from typing import NamedTuple
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 import torch
@@ -202,16 +203,10 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
 
 
 def embedding_count() -> int:
-    metadata = pq.read_metadata(artifact("encoded"))
-    columns = (
-        metadata.row_group(group).column(leaf)
-        for group in range(metadata.num_row_groups)
-        for leaf in range(metadata.num_columns)
-        if "." in metadata.schema.column(leaf).path
-    )
-    return (
-        sum(column.num_values - column.statistics.null_count for column in columns)
-        // DIM
+    table = source("encoded").to_table(columns=list(TOKEN_SURVEYS))
+    return sum(
+        pc.sum(pc.list_value_length(table.column(survey))).as_py()
+        for survey in TOKEN_SURVEYS
     )
 
 

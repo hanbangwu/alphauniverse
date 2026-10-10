@@ -126,7 +126,7 @@ GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
 
 ARTIFACTS: dict[str, str] = {
-    "encoded": "parquet",
+    "encoded": "arrow",
     "search_index": "faiss",
     "codebook": "parquet",
     "tokens": "parquet",
@@ -155,6 +155,12 @@ def store_schema(role: str) -> pa.Schema:
         + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
         + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
     )
+
+
+def store_writer(role: str) -> pq.ParquetWriter | pa.ipc.RecordBatchFileWriter:
+    if ARTIFACTS[role] == "arrow":
+        return pa.ipc.new_file(artifact(role), store_schema(role))
+    return pq.ParquetWriter(artifact(role), store_schema(role), compression="zstd")
 
 
 PAIRS = pa.schema(

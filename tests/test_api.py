@@ -20,12 +20,13 @@ from app.config import (
     artifact,
 )
 from app.dataset import table_columns
+from app.search import source
 
 ARROW = "application/vnd.apache.arrow.stream"
 
 
 def _with_spectrum() -> np.ndarray:
-    stored = pq.read_table(artifact("encoded"), columns=list(SPECTRUM_SURVEYS))
+    stored = source("encoded").to_table(columns=list(SPECTRUM_SURVEYS))
     return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
@@ -33,7 +34,7 @@ def test_artifact_downloads(client: TestClient, tree) -> None:
     response = client.get("/downloads/encoded")
 
     assert response.status_code == 200
-    assert len(response.content) == (tree / "encoded.parquet").stat().st_size
+    assert len(response.content) == artifact("encoded").stat().st_size
 
 
 def test_meta_reports_a_count_per_morphology_without_the_dataset(
@@ -167,7 +168,7 @@ def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
     table = _similarity(client, galaxy=1, p=[100], matches=5)
     galaxies = table.column("galaxy").to_numpy()
     scores = np.asarray(table.column("scalars").to_pylist())
-    with_hsc = pq.read_table(artifact("encoded"), columns=["hsc"]).column("hsc")
+    with_hsc = source("encoded").to_table(columns=["hsc"]).column("hsc")
 
     assert np.isfinite(scores[:, :12]).all()
     np.testing.assert_array_equal(
