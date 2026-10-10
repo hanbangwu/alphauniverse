@@ -68,7 +68,7 @@ FLAG_SURVEYS: dict[str, str] = {
 }
 RGB_COLUMN = f"rgb{LS}"
 
-SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
+TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
     ANCHOR: tuple(
         f"{name}{LS}"
         for name in (
@@ -105,12 +105,12 @@ SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
         )
     ),
 }
-SCALAR_COLUMNS = tuple(
-    column for columns in SCALAR_SURVEYS.values() for column in columns
+TABLE_VALUE_COLUMNS = tuple(
+    column for columns in TABLE_VALUE_SURVEYS.values() for column in columns
 )
 REDSHIFT = "redshift"
-REDSHIFT_SCALAR = 0
-N_SCALARS = len(SCALAR_COLUMNS) + 1
+REDSHIFT_TABLE_VALUE = 0
+N_TABLE_VALUES = len(TABLE_VALUE_COLUMNS) + 1
 REDSHIFT_LIMIT = 6.0
 REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
     "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),

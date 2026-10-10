@@ -64,8 +64,8 @@
 
     <TablePanel
       galaxy={similarity.galaxy}
-      selected={view.scalars.value}
-      ontoggle={(index) => view.scalars.toggle(index)}
+      selected={view.tableValues.value}
+      ontoggle={(index) => view.tableValues.toggle(index)}
     />
   </div>
 

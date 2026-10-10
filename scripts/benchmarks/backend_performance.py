@@ -16,13 +16,13 @@ import pyarrow.compute as pc
 
 from app.config import DATASET_REVISION, N_IMAGE_TOKENS
 from app.main import SPECTRUM_SURVEY
-from app.search import FIRST_LS_SCALAR, N_LS_SCALARS
+from app.search import FIRST_LS_TABLE_VALUE, N_LS_TABLE_VALUES
 from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
     MATCHES,
-    SCALARS,
     SPECTRUM_TOKENS,
+    TABLE_VALUES,
     elapsed,
     environment,
     git,
@@ -88,11 +88,12 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "coverage": lambda: get(f"/galaxy/{galaxy()}"),
             "table": lambda: get(f"/galaxy/{int(added.integers(galaxies))}/table"),
             "text search": lambda: get("/search/text", text=next(texts)),
-            "similarity scalars matches=32": lambda: get(
+            "similarity table values matches=32": lambda: get(
                 "/search",
                 galaxy=int(added.integers(galaxies)),
                 t=(
-                    FIRST_LS_SCALAR + added.choice(N_LS_SCALARS, SCALARS, replace=False)
+                    FIRST_LS_TABLE_VALUE
+                    + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist(),
             ),
         } | {

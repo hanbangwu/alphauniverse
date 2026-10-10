@@ -17,8 +17,8 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 | Survey             | Modality | Tokens per galaxy |
 | ------------------ | -------- | ----------------- |
-| Legacy Survey DR10 | image    | 576 + 12 scalars  |
-| HSC PDR3           | image    | 576 + 13 scalars  |
+| Legacy Survey DR10 | image    | 576 + 12 table values  |
+| HSC PDR3           | image    | 576 + 13 table values  |
 | DESI EDR SV3       | spectrum | 273               |
 | SDSS               | spectrum | 273               |
 

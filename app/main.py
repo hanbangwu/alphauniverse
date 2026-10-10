@@ -21,17 +21,17 @@ from .config import (
     FLAG_SURVEYS,
     GRID,
     N_IMAGE_TOKENS,
-    N_SCALARS,
     N_SPECTRUM_TOKENS,
+    N_TABLE_VALUES,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
-    REDSHIFT_SCALAR,
-    SCALAR_COLUMNS,
+    REDSHIFT_TABLE_VALUE,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
+    TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
     Catalogue,
     Download,
@@ -44,11 +44,11 @@ from .config import (
 )
 from .dataset import catalogue, image, redshift, spectrum, table
 from .search import (
-    FIRST_LS_SCALAR,
+    FIRST_LS_TABLE_VALUE,
     index,
-    scalar_tokens,
     search,
     starts,
+    table_value_tokens,
     tokens,
     with_hsc,
 )
@@ -261,24 +261,24 @@ def redshift_row(
         section=REDSHIFT,
         column=f"{survey.upper()} {column.partition('-')[0]}",
         value=values[column],
-        scalar=REDSHIFT_SCALAR if selectable else None,
+        scalar=REDSHIFT_TABLE_VALUE if selectable else None,
         token=token if selectable else None,
         excluded=excluded(values, survey, chosen) if first else None,
     )
 
 
 def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRow:
-    scalar = (
-        FIRST_LS_SCALAR + SCALAR_COLUMNS.index(column)
-        if column in SCALAR_COLUMNS
+    table_value = (
+        FIRST_LS_TABLE_VALUE + TABLE_VALUE_COLUMNS.index(column)
+        if column in TABLE_VALUE_COLUMNS
         else None
     )
     return TableRow(
         section=catalogue(column),
         column=column.partition("-")[0],
         value=value,
-        scalar=scalar,
-        token=None if scalar is None else token_ids.get(column),
+        scalar=table_value,
+        token=None if table_value is None else token_ids.get(column),
         excluded=None,
     )
 
@@ -287,7 +287,7 @@ def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRo
     "/galaxy/{galaxy}/table",
 )
 def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
-    token_ids = scalar_tokens(galaxy)
+    token_ids = table_value_tokens(galaxy)
     values = table(galaxy)
     chosen = redshift(values)
     shown = [
@@ -371,7 +371,9 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": ARROW_STREAM}},
 )
 def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, values, spectrum_tokens, scalars = search(query, index=index())
+    galaxies, scores, values, spectrum_tokens, table_values = search(
+        query, index=index()
+    )
 
     item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
@@ -380,7 +382,7 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
             pa.field("score", pa.float32(), nullable=False),
             pa.field("map", pa.list_(item, N_IMAGE_TOKENS), nullable=False),
             pa.field("spectrum", pa.list_(item, N_SPECTRUM_TOKENS)),
-            pa.field("scalars", pa.list_(item, N_SCALARS), nullable=False),
+            pa.field("scalars", pa.list_(item, N_TABLE_VALUES), nullable=False),
         ]
     )
     batch = pa.record_batch(
@@ -395,7 +397,9 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
                 N_SPECTRUM_TOKENS,
                 mask=pa.array(np.isnan(spectrum_tokens[:, 0])),
             ),
-            pa.FixedSizeListArray.from_arrays(pa.array(scalars.reshape(-1)), N_SCALARS),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(table_values.reshape(-1)), N_TABLE_VALUES
+            ),
         ],
         schema=schema,
     )

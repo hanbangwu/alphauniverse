@@ -31,8 +31,8 @@ export class Similarity {
   readonly spectrumMaps: Float32Array | null
   readonly spectrumHeat: ((value: number) => RGB) | null
   readonly spectrumMap: Float32Array | null
-  readonly scalarMap: Float32Array | null
-  readonly scalarHeat: ((value: number) => RGB) | null
+  readonly tableValueMap: Float32Array | null
+  readonly tableValueHeat: ((value: number) => RGB) | null
   readonly tokens: Uint32Array | null
   readonly palette: ((value: number) => RGB) | null
 
@@ -47,7 +47,7 @@ export class Similarity {
         galaxy,
         app.view.imageTokens.value,
         app.view.spectrumTokens.value,
-        app.view.scalars.value
+        app.view.tableValues.value
       )
     )
     this.#result = createQuery(() => similarityQuery(this.#submitted))
@@ -64,10 +64,10 @@ export class Similarity {
       return low <= high ? continuous([low, high]) : null
     })
     this.spectrumMap = $derived(this.spectrumMaps ? this.spectrumMapAt(0) : null)
-    this.scalarMap = $derived(this.#result.data?.scalarMap ?? null)
-    this.scalarHeat = $derived.by(() => {
-      if (!this.scalarMap) return null
-      const [low, high] = extent(this.scalarMap)
+    this.tableValueMap = $derived(this.#result.data?.tableValueMap ?? null)
+    this.tableValueHeat = $derived.by(() => {
+      if (!this.tableValueMap) return null
+      const [low, high] = extent(this.tableValueMap)
       return low <= high ? continuous([low, high]) : null
     })
     this.tokens = $derived(this.#tokenMap.data ?? null)

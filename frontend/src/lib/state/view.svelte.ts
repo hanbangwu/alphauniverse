@@ -8,7 +8,7 @@ export class ViewState {
   readonly detail: EnumField<DetailView>
   readonly imageTokens = new IndexListField()
   readonly spectrumTokens = new IndexListField()
-  readonly scalars = new IndexListField()
+  readonly tableValues = new IndexListField()
   readonly explorer = new Field(false)
 
   constructor() {
@@ -28,7 +28,7 @@ export class ViewState {
     if (galaxy !== this.galaxy.value) {
       this.imageTokens.reset()
       this.spectrumTokens.reset()
-      this.scalars.reset()
+      this.tableValues.reset()
     }
     this.galaxy.value = galaxy
   }

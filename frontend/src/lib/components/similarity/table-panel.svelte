@@ -31,8 +31,8 @@
   function fill(row: TableRow): string | undefined {
     if (row.scalar === null || row.token === null) return undefined
     const picked = selected.includes(row.scalar)
-    const score = similarity.scalarMap?.[row.scalar] ?? NaN
-    const heat = similarity.scalarHeat
+    const score = similarity.tableValueMap?.[row.scalar] ?? NaN
+    const heat = similarity.tableValueHeat
     const style =
       heat && !Number.isNaN(score)
         ? paint(heat(score), 1)
@@ -86,13 +86,13 @@
               >
                 <Table.Cell class="px-0 py-1.5">
                   {#if row.scalar !== null}
-                    {@const scalar = row.scalar}
+                    {@const tableValue = row.scalar}
                     <input
                       type="checkbox"
                       class="accent-primary disabled:cursor-not-allowed"
-                      checked={selected.includes(scalar)}
+                      checked={selected.includes(tableValue)}
                       disabled={row.token === null}
-                      onchange={() => ontoggle(scalar)}
+                      onchange={() => ontoggle(tableValue)}
                       aria-label={`Query ${row.column}`}
                     />
                   {:else if row.excluded !== null}

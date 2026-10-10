@@ -15,10 +15,10 @@ from app.config import (
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     REDSHIFT,
-    REDSHIFT_SCALAR,
-    SCALAR_SURVEYS,
+    REDSHIFT_TABLE_VALUE,
     SDSS,
     SPECTRUM_SURVEYS,
+    TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
 )
@@ -161,14 +161,14 @@ def test_similarity_spectrum_column_is_null_without_a_spectrum(
     )
 
 
-def test_similarity_takes_scalars_alone(client: TestClient) -> None:
+def test_similarity_takes_table_values_alone(client: TestClient) -> None:
     table = _similarity(client, galaxy=0, t=[1, 13], matches=5)
 
     assert table.column("galaxy")[0].as_py() == 0
     assert 1 < table.num_rows <= 6
 
 
-def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
+def test_every_galaxy_has_table_value_scores_where_it_has_table_values(
     client: TestClient,
 ) -> None:
     table = _similarity(client, galaxy=1, p=[100], matches=5)
@@ -183,11 +183,11 @@ def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
     np.testing.assert_array_equal(np.isfinite(hsc).all(axis=1), with_hsc)
     np.testing.assert_array_equal(np.isnan(hsc).all(axis=1), ~with_hsc)
     np.testing.assert_array_equal(
-        np.isfinite(scores[:, REDSHIFT_SCALAR]), with_redshift
+        np.isfinite(scores[:, REDSHIFT_TABLE_VALUE]), with_redshift
     )
 
 
-def test_hsc_scalars_of_a_galaxy_without_hsc_are_rejected(
+def test_hsc_table_values_of_a_galaxy_without_hsc_are_rejected(
     client: TestClient,
 ) -> None:
     response = client.get("/search", params={"galaxy": 1, "t": [13]})
@@ -200,8 +200,8 @@ def test_hsc_scalars_of_a_galaxy_without_hsc_are_rejected(
 def test_the_redshift_needs_a_usable_redshift_and_not_an_hsc_match(
     client: TestClient,
 ) -> None:
-    accepted = client.get("/search", params={"galaxy": 6, "t": [REDSHIFT_SCALAR]})
-    rejected = client.get("/search", params={"galaxy": 1, "t": [REDSHIFT_SCALAR]})
+    accepted = client.get("/search", params={"galaxy": 6, "t": [REDSHIFT_TABLE_VALUE]})
+    rejected = client.get("/search", params={"galaxy": 1, "t": [REDSHIFT_TABLE_VALUE]})
 
     assert accepted.status_code == 200
     assert rejected.status_code == 422
@@ -209,12 +209,12 @@ def test_the_redshift_needs_a_usable_redshift_and_not_an_hsc_match(
     assert "galaxy 1 has no usable redshift" in error["msg"]
 
 
-def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_scalar(
+def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_value(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = Dataset.from_dict(
         {
-            SCALAR_SURVEYS["hsc"][0]: [1.5],
+            TABLE_VALUE_SURVEYS["hsc"][0]: [1.5],
             f"Z{DESI}": [0.25],
             f"ZERR{DESI}": [1e-4],
             f"ZWARN{DESI}": [False],
@@ -238,7 +238,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_scalar
             "section": REDSHIFT,
             "column": "DESI Z",
             "value": 0.25,
-            "scalar": REDSHIFT_SCALAR,
+            "scalar": REDSHIFT_TABLE_VALUE,
             "token": redshift.values[0].as_py(),
             "excluded": None,
         },

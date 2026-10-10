@@ -22,11 +22,11 @@ from app.search import (
     centroid,
     index,
     rank,
-    scalar_maps,
     score_maps,
     search,
     spectrum_token_maps,
     starts,
+    table_value_maps,
     tokens,
     vectors,
 )
@@ -58,7 +58,7 @@ STAGES = [
     "vectors",
     "score_maps",
     "spectrum_token_maps",
-    "scalar_maps",
+    "table_value_maps",
     "rank",
 ]
 KINDS = ("wall", "user", "system")
@@ -130,9 +130,9 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
     marks.append(mark())
     spectral_scores = spectrum_token_maps(order, direction, index=built)
     marks.append(mark())
-    scalar_scores = scalar_maps(order, direction, index=built)
+    table_value_scores = table_value_maps(order, direction, index=built)
     marks.append(mark())
-    rank(order, scored, spectral_scores, scalar_scores)
+    rank(order, scored, spectral_scores, table_value_scores)
     marks.append(mark())
     return usages(STAGES, marks)
 

@@ -22,7 +22,7 @@ from app.config import (
     device,
     store_schema,
 )
-from app.search import N_HSC_SCALARS, N_LS_SCALARS, blocks, source
+from app.search import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, blocks, source
 from scripts.fixture import TOKENS, forget
 
 torch = pytest.importorskip("torch")
@@ -54,7 +54,7 @@ def spectrum(rng: np.random.Generator, samples: int, padding: int) -> dict:
 
 def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
     rng = np.random.default_rng(seed)
-    scalars = encode_module.LS_SCALARS + encode_module.HSC_SCALARS
+    table_values = encode_module.LS_TABLE_VALUES + encode_module.HSC_TABLE_VALUES
     present = {"desi": desi, "sdss": sdss}
     redshifts = {
         column: value if present[survey] else None
@@ -71,7 +71,7 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
         ),
         TOKEN_SURVEYS["desi"]: spectrum(rng, 7781, 0) if desi else None,
         TOKEN_SURVEYS["sdss"]: spectrum(rng, 3800, 200) if sdss else None,
-        **{column: float(rng.random()) + 0.5 for _, column in scalars},
+        **{column: float(rng.random()) + 0.5 for _, column in table_values},
         FLAG_SURVEYS["gz10"]: int(rng.integers(10)),
         FLAG_SURVEYS["provabgs"]: None,
     }
@@ -171,9 +171,9 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
             columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
         )
         assert blocks(table).shape == (
-            len(rows) * (N_IMAGE_TOKENS + N_LS_SCALARS)
+            len(rows) * (N_IMAGE_TOKENS + N_LS_TABLE_VALUES)
             + spectra * (N_SPECTRUM_TOKENS + 1)
-            + hsc * N_HSC_SCALARS,
+            + hsc * N_HSC_TABLE_VALUES,
             DIM,
         )
     finally:

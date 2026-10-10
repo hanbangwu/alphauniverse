@@ -84,7 +84,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 `read_index` and `make_direct_map` are step 2's split, which takes the cold reads; `index` then finds those pages. `faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
 
-**Stages**, 4 image tokens, 32 matches. The run predates `scalar_maps`, which the script now times:
+**Stages**, 4 image tokens, 32 matches. The run predates `table_value_maps`, which the script now times:
 
 | Stage         | First query | Warm p50    | Warm share |
 | ------------- | ----------- | ----------- | ---------- |
@@ -93,7 +93,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 | **`vectors`** | 88.0 ms     | **79.8 ms** | **91.5 %** |
 | `score_maps`  | 7.59 ms     | 1.51 ms     | 1.7 %      |
 | `spectrum_token_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
-| `scalar_maps` | unmeasured  | unmeasured  |            |
+| `table_value_maps` | unmeasured  | unmeasured  |            |
 | `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
 | Total         | 131.0 ms    | 87.2 ms     |            |
 
@@ -115,7 +115,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 `modal run` starts an ephemeral `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A 1-CPU client in a separate container times, in order:
 
 1. one cold `/meta`, one cold `/search`, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
-2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey scalars at 32 matches, and `/search` with 4 image tokens at 8, 32 and 128 matches;
+2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey table values at 32 matches, and `/search` with 4 image tokens at 8, 32 and 128 matches;
 3. warm: both spectrum routes, and `/search` at 32 matches with 4 spectrum tokens, alone and with 4 image tokens, on galaxies with a DESI spectrum and spectrum tokens inside its observed range;
 4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 image tokens at 32 matches.
 
@@ -141,7 +141,7 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 | 4 image tokens, 128 matches  | 429 ms | 503 ms |
 | 4 spectrum tokens                 | 253 ms | 276 ms |
 | 4 image tokens and 4 spectrum tokens   | 237 ms | 258 ms |
-| 4 Legacy Survey scalars | 231 ms | 264 ms |
+| 4 Legacy Survey table values | 231 ms | 264 ms |
 
 `matches` sets the cost. Over the 128 ms `/meta` floor, 32 matches add 225 − 128 = 97 ms at p50, and 128 add 429 − 128 = 301 ms.
 
@@ -179,8 +179,8 @@ A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit an
 
 - `image_tokens`: 4 image tokens of a galaxy drawn from all galaxies.
 - `paired_image_tokens`, `spectrum_tokens`, `both`: one draw of galaxies with a DESI spectrum, each with 4 image tokens and 4 spectrum tokens inside its observed range, queried with the image tokens, the spectrum tokens, and both.
-- `scalars`: 4 Legacy Survey scalars of a galaxy drawn from all galaxies.
-- `hsc_scalars`: 2 Legacy Survey and 2 HSC scalars of a galaxy drawn from galaxies with an HSC match.
+- `table_values`: 4 Legacy Survey table values of a galaxy drawn from all galaxies.
+- `hsc_table_values`: 2 Legacy Survey and 2 HSC table values of a galaxy drawn from galaxies with an HSC match.
 
 A query's recall is the share of its exact 32 galaxies that `search()` returns at the served `PROBE` and `NPROBE`. `exact_rankings` sets each query's direction from its galaxy's rows, then brute-forces the float32 embeddings in one streamed pass over `encoded`, `BATCH` galaxies at a time, keeping each galaxy's best score per query. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
 
@@ -201,7 +201,7 @@ A query's recall is the share of its exact 32 galaxies that `search()` returns a
 | 4 spectrum tokens               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
 | 4 image tokens and 4 spectrum tokens | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
-`scalars` and `hsc_scalars` are unmeasured: this run predates them.
+`table_values` and `hsc_table_values` are unmeasured: this run predates them.
 
 ## `projection_quality`
 

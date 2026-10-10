@@ -14,13 +14,13 @@ from .config import (
     ARTIFACTS,
     DIM,
     N_IMAGE_TOKENS,
-    N_SCALARS,
     N_SPECTRUM_TOKENS,
+    N_TABLE_VALUES,
     REDSHIFT,
-    REDSHIFT_SCALAR,
-    SCALAR_SURVEYS,
+    REDSHIFT_TABLE_VALUE,
     SEED,
     SPECTRUM_SURVEYS,
+    TABLE_VALUE_SURVEYS,
     GalaxyIndex,
     artifact,
 )
@@ -30,10 +30,10 @@ NLIST = 16384
 NPROBE = 64
 PROBE = 2048
 TRAIN_GALAXIES = 2048
-N_LS_SCALARS = len(SCALAR_SURVEYS[ANCHOR])
-N_HSC_SCALARS = len(SCALAR_SURVEYS["hsc"])
-FIRST_LS_SCALAR = REDSHIFT_SCALAR + 1
-FIRST_HSC_SCALAR = FIRST_LS_SCALAR + N_LS_SCALARS
+N_LS_TABLE_VALUES = len(TABLE_VALUE_SURVEYS[ANCHOR])
+N_HSC_TABLE_VALUES = len(TABLE_VALUE_SURVEYS["hsc"])
+FIRST_LS_TABLE_VALUE = REDSHIFT_TABLE_VALUE + 1
+FIRST_HSC_TABLE_VALUE = FIRST_LS_TABLE_VALUE + N_LS_TABLE_VALUES
 
 
 class Query(BaseModel):
@@ -48,17 +48,17 @@ class Query(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_SPECTRUM_TOKENS)], ...],
         Field(alias="s", max_length=N_SPECTRUM_TOKENS),
     ] = ()
-    scalars: Annotated[
-        tuple[Annotated[int, Field(ge=0, lt=N_SCALARS)], ...],
-        Field(alias="t", max_length=N_SCALARS),
+    table_values: Annotated[
+        tuple[Annotated[int, Field(ge=0, lt=N_TABLE_VALUES)], ...],
+        Field(alias="t", max_length=N_TABLE_VALUES),
     ] = ()
     matches: Annotated[int, Field(ge=1, le=128)] = 32
 
     @model_validator(mode="after")
     def some_tokens(self) -> Self:
-        if not (self.image_tokens or self.spectrum_tokens or self.scalars):
+        if not (self.image_tokens or self.spectrum_tokens or self.table_values):
             raise ValueError(
-                "select at least one image token, spectrum token or scalar"
+                "select at least one image token, spectrum token or table value"
             )
         return self
 
@@ -69,15 +69,20 @@ class Query(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def hsc_scalars_need_hsc(self) -> Self:
-        hsc = any(scalar >= FIRST_HSC_SCALAR for scalar in self.scalars)
+    def hsc_table_values_need_hsc(self) -> Self:
+        hsc = any(
+            table_value >= FIRST_HSC_TABLE_VALUE for table_value in self.table_values
+        )
         if hsc and not with_hsc()[self.galaxy]:
             raise ValueError(f"galaxy {self.galaxy} has no HSC match")
         return self
 
     @model_validator(mode="after")
     def redshift_needs_a_redshift(self) -> Self:
-        if REDSHIFT_SCALAR in self.scalars and not with_redshift()[self.galaxy]:
+        if (
+            REDSHIFT_TABLE_VALUE in self.table_values
+            and not with_redshift()[self.galaxy]
+        ):
             raise ValueError(f"galaxy {self.galaxy} has no usable redshift")
         return self
 
@@ -116,15 +121,15 @@ def layout(
 ) -> np.ndarray:
     sizes = (
         N_IMAGE_TOKENS
-        + N_LS_SCALARS
+        + N_LS_TABLE_VALUES
         + has_spectrum * N_SPECTRUM_TOKENS
-        + has_hsc * N_HSC_SCALARS
+        + has_hsc * N_HSC_TABLE_VALUES
         + has_redshift
     )
     return np.concatenate(([0], np.cumsum(sizes)))
 
 
-def scalar_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
+def table_value_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
     return first + N_IMAGE_TOKENS + has_spectrum * N_SPECTRUM_TOKENS
 
 
@@ -144,16 +149,16 @@ def positions(first: np.ndarray, width: int) -> np.ndarray:
 
 def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
     start = starts()[query.galaxy]
-    scalar_start = scalar_starts(start, with_spectrum()[query.galaxy])
-    scalars = np.asarray(query.scalars, dtype=np.int64)
+    table_value_start = table_value_starts(start, with_spectrum()[query.galaxy])
+    table_values = np.asarray(query.table_values, dtype=np.int64)
     ids = np.concatenate(
         (
             start + np.asarray(query.image_tokens, dtype=np.int64),
             start + N_IMAGE_TOKENS + np.asarray(query.spectrum_tokens, dtype=np.int64),
             np.where(
-                scalars == REDSHIFT_SCALAR,
+                table_values == REDSHIFT_TABLE_VALUE,
                 bounds()[query.galaxy + 1] - 1,
-                scalar_start + scalars - FIRST_LS_SCALAR,
+                table_value_start + table_values - FIRST_LS_TABLE_VALUE,
             ),
         )
     )
@@ -162,10 +167,10 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
     return direction
 
 
-def scalar_tokens(galaxy: int) -> dict[str, int]:
+def table_value_tokens(galaxy: int) -> dict[str, int]:
     found = {
         column: int(token)
-        for survey, columns in SCALAR_SURVEYS.items()
+        for survey, columns in TABLE_VALUE_SURVEYS.items()
         if (cell := tokens().column(survey)[galaxy]).is_valid
         for column, token in zip(
             columns, np.asarray(cell.values)[N_IMAGE_TOKENS:], strict=True
@@ -231,12 +236,12 @@ def spectrum_token_maps(
     )
 
 
-def scalar_maps(
+def table_value_maps(
     order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
     has_spectrum, has_hsc = with_spectrum()[order], with_hsc()[order]
-    first = scalar_starts(starts()[order], has_spectrum)
-    rows = index.reconstruct_batch(positions(first, N_LS_SCALARS))
+    first = table_value_starts(starts()[order], has_spectrum)
+    rows = index.reconstruct_batch(positions(first, N_LS_TABLE_VALUES))
     return np.hstack(
         (
             optional_maps(
@@ -246,12 +251,12 @@ def scalar_maps(
                 width=1,
                 index=index,
             ),
-            score_maps(rows, direction, width=N_LS_SCALARS),
+            score_maps(rows, direction, width=N_LS_TABLE_VALUES),
             optional_maps(
-                first + N_LS_SCALARS,
+                first + N_LS_TABLE_VALUES,
                 has_hsc,
                 direction,
-                width=N_HSC_SCALARS,
+                width=N_HSC_TABLE_VALUES,
                 index=index,
             ),
         )
@@ -273,7 +278,7 @@ def search(
         order,
         score_maps(vectors(order, index=index), direction, width=N_IMAGE_TOKENS),
         spectrum_token_maps(order, direction, index=index),
-        scalar_maps(order, direction, index=index),
+        table_value_maps(order, direction, index=index),
     )
 
 
@@ -305,20 +310,22 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
     has_redshift = pc.is_valid(batch.column(REDSHIFT)).to_numpy(zero_copy_only=False)
     bounds = layout(has_spectrum, has_hsc, has_redshift)
     first = bounds[:-1]
-    scalar_first = scalar_starts(first, has_spectrum)
+    table_value_first = table_value_starts(first, has_spectrum)
     built = np.empty((bounds[-1], DIM), dtype=np.float32)
     built[positions(first, N_IMAGE_TOKENS)] = image_tokens(batch.column(ANCHOR))
     if has_spectrum.any():
         built[positions(first[has_spectrum] + N_IMAGE_TOKENS, N_SPECTRUM_TOKENS)] = (
             spectral(spectra.drop_null())
         )
-    built[positions(scalar_first, N_LS_SCALARS)] = rows(
+    built[positions(table_value_first, N_LS_TABLE_VALUES)] = rows(
         batch.column(ANCHOR), N_IMAGE_TOKENS, None
     )
     if has_hsc.any():
-        built[positions(scalar_first[has_hsc] + N_LS_SCALARS, N_HSC_SCALARS)] = rows(
-            batch.column("hsc"), N_IMAGE_TOKENS, None
-        )
+        built[
+            positions(
+                table_value_first[has_hsc] + N_LS_TABLE_VALUES, N_HSC_TABLE_VALUES
+            )
+        ] = rows(batch.column("hsc"), N_IMAGE_TOKENS, None)
     if has_redshift.any():
         built[bounds[1:][has_redshift] - 1] = rows(batch.column(REDSHIFT), 0, None)
     return built

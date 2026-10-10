@@ -11,21 +11,21 @@ from app.config import (
     DIM,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
-    REDSHIFT_SCALAR,
+    REDSHIFT_TABLE_VALUE,
 )
 from app.search import (
-    N_HSC_SCALARS,
-    N_LS_SCALARS,
+    N_HSC_TABLE_VALUES,
+    N_LS_TABLE_VALUES,
     NLIST,
     Query,
     centroid,
     image_tokens,
     index,
     rank,
-    scalar_maps,
     search,
     source,
     starts,
+    table_value_maps,
     with_hsc,
     with_redshift,
     with_spectrum,
@@ -107,8 +107,8 @@ def test_a_search_that_finds_too_few_looks_further(
         {"galaxy": 9, "s": (40, 41), "matches": 2},
         {"galaxy": 6, "p": (3,), "s": (100,), "matches": 2},
         {"galaxy": 0, "t": (2, 15), "matches": 2},
-        {"galaxy": 6, "t": (REDSHIFT_SCALAR,), "matches": 2},
-        {"galaxy": 0, "p": (64,), "t": (15, REDSHIFT_SCALAR), "matches": 2},
+        {"galaxy": 6, "t": (REDSHIFT_TABLE_VALUE,), "matches": 2},
+        {"galaxy": 0, "p": (64,), "t": (15, REDSHIFT_TABLE_VALUE), "matches": 2},
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
@@ -121,9 +121,9 @@ def test_approximate_ranking_agrees_with_exact(
         expected_scores,
         expected_maps,
         expected_spectral_maps,
-        expected_scalar_maps,
+        expected_table_value_maps,
     ) = exact_ranking(query.model_copy(update={"matches": query.matches + 1}))
-    found, found_scores, maps, spectral_maps, found_scalar_maps = search(
+    found, found_scores, maps, spectral_maps, found_table_value_maps = search(
         query, index=built
     )
 
@@ -135,7 +135,7 @@ def test_approximate_ranking_agrees_with_exact(
         spectral_maps, expected_spectral_maps[:-1], atol=SCORE_TOLERANCE
     )
     np.testing.assert_allclose(
-        found_scalar_maps, expected_scalar_maps[:-1], atol=SCORE_TOLERANCE
+        found_table_value_maps, expected_table_value_maps[:-1], atol=SCORE_TOLERANCE
     )
 
 
@@ -159,9 +159,9 @@ def test_ids_stay_contiguous_across_add_batches(
         built = index()
         assert (
             built.ntotal
-            == galaxies * (N_IMAGE_TOKENS + N_LS_SCALARS)
+            == galaxies * (N_IMAGE_TOKENS + N_LS_TABLE_VALUES)
             + with_spectrum().sum() * N_SPECTRUM_TOKENS
-            + with_hsc().sum() * N_HSC_SCALARS
+            + with_hsc().sum() * N_HSC_TABLE_VALUES
             + with_redshift().sum()
         )
 
@@ -174,24 +174,24 @@ def test_ids_stay_contiguous_across_add_batches(
         forget()
 
 
-def test_selected_scalars_join_the_direction(built: faiss.Index) -> None:
+def test_selected_table_values_join_the_direction(built: faiss.Index) -> None:
     stored = source("encoded").take([0], columns=[ANCHOR, "hsc"])
     ls, hsc = (
         np.asarray(stored.column(survey)[0].as_py(), dtype=np.float32)
         for survey in (ANCHOR, "hsc")
     )
-    scalars = np.stack((ls[N_IMAGE_TOKENS + 1], hsc[N_IMAGE_TOKENS + 2]))
-    faiss.normalize_L2(scalars)
-    expected = np.vstack((built.reconstruct(int(starts()[0]) + 3)[None], scalars)).mean(
-        axis=0, keepdims=True
-    )
+    table_values = np.stack((ls[N_IMAGE_TOKENS + 1], hsc[N_IMAGE_TOKENS + 2]))
+    faiss.normalize_L2(table_values)
+    expected = np.vstack(
+        (built.reconstruct(int(starts()[0]) + 3)[None], table_values)
+    ).mean(axis=0, keepdims=True)
     faiss.normalize_L2(expected)
 
     direction = centroid(Query(galaxy=0, p=(3,), t=(2, 15)), index=built)
 
     np.testing.assert_allclose(direction, expected, atol=SCORE_TOLERANCE)
     np.testing.assert_allclose(
-        scalar_maps(np.array([0]), direction, index=built)[0, [2, 15]],
-        (scalars @ direction.T)[:, 0],
+        table_value_maps(np.array([0]), direction, index=built)[0, [2, 15]],
+        (table_values @ direction.T)[:, 0],
         atol=SCORE_TOLERANCE,
     )

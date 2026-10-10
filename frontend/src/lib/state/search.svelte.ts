@@ -16,11 +16,11 @@ export class SearchState {
     galaxy: number | null,
     imageTokens: number[],
     spectrumTokens: number[],
-    scalars: number[]
+    tableValues: number[]
   ): SimilarityQuery | null {
     const matches = this.count
     if (galaxy === null || matches === null) return null
-    if (imageTokens.length + spectrumTokens.length + scalars.length === 0) return null
-    return { galaxy, p: imageTokens, s: spectrumTokens, t: scalars, matches }
+    if (imageTokens.length + spectrumTokens.length + tableValues.length === 0) return null
+    return { galaxy, p: imageTokens, s: spectrumTokens, t: tableValues, matches }
   }
 }

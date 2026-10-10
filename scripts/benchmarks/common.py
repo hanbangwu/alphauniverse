@@ -29,7 +29,7 @@ from modal_app import (
 
 IMAGE_TOKENS = 4
 SPECTRUM_TOKENS = 4
-SCALARS = 4
+TABLE_VALUES = 4
 MATCHES = (8, 32, 128)
 
 
