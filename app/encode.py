@@ -51,9 +51,9 @@ from .config import (
     SCALAR_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
-    VECTOR_ENCODING,
     artifact,
     device,
+    store_encoding,
     store_schema,
 )
 from .dataset import dataset
@@ -238,7 +238,7 @@ def generate_embeddings() -> None:
             artifact(role),
             schemas[role],
             compression="zstd",
-            **({} if role == "tokens" else VECTOR_ENCODING),
+            **store_encoding(role),
         )
         for role in STORES
     }

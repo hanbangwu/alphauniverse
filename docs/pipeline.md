@@ -23,7 +23,7 @@ For each galaxy: tokenise every modality it has, run all its tokens through the 
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
-Galaxies are encoded one at a time and written in row groups of `ROW_GROUP` (128). In `encoded` and `codebook`, vector columns use byte-stream-split encoding without a dictionary.
+Galaxies are encoded one at a time and written in row groups of `ROW_GROUP` (128). `encoded` and `codebook` are written without dictionary encoding, their vector columns with byte-stream-split, which readers decode from pyarrow 16 on.
 
 Three stores are written, with the same columns:
 

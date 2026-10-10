@@ -14,12 +14,12 @@ from app.config import (
     N_MORPHOLOGIES,
     N_PATCHES,
     TOKEN_SURVEYS,
-    VECTOR_ENCODING,
     artifact,
     build_dir,
     galaxy_count,
     labels,
     points,
+    store_encoding,
     store_schema,
 )
 from app.search import (
@@ -43,7 +43,7 @@ TOKENS: dict[str, int] = {
 STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
 
 CLUSTERS = 64
-ROW_GROUP = 5
+FIXTURE_ROW_GROUP = 5
 NOISE = 0.05
 
 
@@ -96,9 +96,9 @@ def _store(
             schema=store_schema(role),
         ),
         artifact(role),
-        row_group_size=ROW_GROUP,
+        row_group_size=FIXTURE_ROW_GROUP,
         compression="zstd",
-        **({} if role == "tokens" else VECTOR_ENCODING),
+        **store_encoding(role),
     )
 
 

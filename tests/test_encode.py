@@ -140,7 +140,7 @@ def test_each_survey_lands_in_its_own_cell_images_first() -> None:
     )
 
 
-def test_generated_stores_have_their_schemas_and_the_index_layout(
+def test_generated_stores_have_their_schemas_row_groups_and_the_index_layout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = [
@@ -156,6 +156,7 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
     build_dir().mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
+    monkeypatch.setattr(encode_module, "ROW_GROUP", 2)
     forget()
 
     try:
@@ -163,6 +164,24 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
 
         for role in STORES:
             assert pq.read_schema(artifact(role)).equals(store_schema(role))
+            metadata = pq.read_metadata(artifact(role))
+            assert [
+                metadata.row_group(group).num_rows
+                for group in range(metadata.num_row_groups)
+            ] == [2, 1]
+        for role in ("encoded", "codebook"):
+            metadata = pq.read_metadata(artifact(role))
+            vectors = [
+                column
+                for column in range(metadata.num_columns)
+                if metadata.schema.column(column).path.endswith("element.list.element")
+            ]
+            assert len(vectors) == len(TOKEN_SURVEYS)
+            for column in vectors:
+                assert (
+                    "BYTE_STREAM_SPLIT"
+                    in metadata.row_group(0).column(column).encodings
+                )
         table = source("encoded").to_table(columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS])
         assert blocks(table).shape == (
             len(rows) * (N_PATCHES + N_LS_SCALARS)

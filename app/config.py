@@ -143,12 +143,6 @@ Download = Literal["encoded", "codebook", "tokens"]
 
 STORES = ("encoded", "codebook", "tokens")
 ROW_GROUP = 128
-VECTOR_ENCODING = {
-    "use_dictionary": False,
-    "use_byte_stream_split": [
-        f"{survey}.list.element.list.element" for survey in TOKEN_SURVEYS
-    ],
-}
 
 
 def store_schema(role: str) -> pa.Schema:
@@ -162,6 +156,17 @@ def store_schema(role: str) -> pa.Schema:
         + [pa.field(survey, cell) for survey in TOKEN_SURVEYS]
         + [pa.field(survey, pa.bool_()) for survey in FLAG_SURVEYS]
     )
+
+
+def store_encoding(role: str) -> dict[str, object]:
+    if role == "tokens":
+        return {}
+    return {
+        "use_dictionary": False,
+        "use_byte_stream_split": [
+            f"{survey}.list.element.list.element" for survey in TOKEN_SURVEYS
+        ],
+    }
 
 
 PAIRS = pa.schema(
