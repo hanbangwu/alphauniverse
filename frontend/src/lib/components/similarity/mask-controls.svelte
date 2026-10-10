@@ -2,25 +2,23 @@
   import { Button } from '$lib/components/ui/button'
   import { Slider } from '$lib/components/ui/slider'
   import type { Extent } from '$lib/data/similarity'
-  import { getMask } from '$lib/state/app.svelte'
-  import { DECIMALS } from '$lib/state/mask.svelte'
+  import { DECIMALS, type Threshold } from '$lib/state/mask.svelte'
 
   interface Props {
     domain: Extent
+    control: Threshold
   }
 
-  let { domain }: Props = $props()
+  let { domain, control }: Props = $props()
 
-  const display = getMask()
-
-  const threshold = $derived(display.at(domain))
+  const threshold = $derived(control.at(domain))
 </script>
 
 <div class="flex items-center gap-3">
   <Slider
     type="single"
     value={threshold}
-    onValueChange={(value) => (display.override.value = value)}
+    onValueChange={(value) => (control.override.value = value)}
     min={domain[0]}
     max={domain[1]}
     step={(domain[1] - domain[0]) / 200 || 0.001}
@@ -29,13 +27,13 @@
   <span class="w-14 text-right font-mono text-xs tabular-nums">
     {threshold.toFixed(DECIMALS)}
   </span>
-  <span class={display.pinned ? undefined : 'cursor-not-allowed'}>
+  <span class={control.pinned ? undefined : 'cursor-not-allowed'}>
     <Button
       variant="ghost"
       size="sm"
       class="text-xs"
-      disabled={!display.pinned}
-      onclick={() => display.override.reset()}
+      disabled={!control.pinned}
+      onclick={() => control.override.reset()}
     >
       Reset
     </Button>
