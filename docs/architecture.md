@@ -52,21 +52,22 @@ Eleven endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}`
 
 A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no body. An artifact's ETag is Starlette's, from the file's size and modification time, compared before the file is read. Every other successful response's ETag is an MD5 of its body, added by the route class every endpoint uses: the server still builds the response and saves only the transfer. Successful responses and 304s carry `Cache-Control: no-cache`, so a browser revalidates before each reuse.
 
-| Endpoint                      | Returns      |
-| ----------------------------- | ------------ |
-| `/meta`                       | JSON         |
-| `/projections/{projection}`   | the file     |
-| `/downloads/{role}`           | the file     |
-| `/galaxy/{g}`                 | JSON         |
-| `/galaxy/{g}/image`           | PNG          |
-| `/galaxy/{g}/image/tokens`    | raw `uint32` |
-| `/galaxy/{g}/spectrum`        | Arrow IPC    |
-| `/galaxy/{g}/spectrum/tokens` | raw `uint32` |
-| `/galaxy/{g}/table`           | JSON         |
-| `/search`                     | Arrow IPC    |
-| `/search/text`                | JSON         |
+| Endpoint                      | Returns       |
+| ----------------------------- | ------------- |
+| `/meta`                       | JSON          |
+| `/projections/{projection}`   | the file      |
+| `/downloads/{role}`           | the file      |
+| `/galaxy/{g}`                 | JSON          |
+| `/galaxy/{g}/image`           | PNG           |
+| `/galaxy/{g}/image/tokens`    | raw `uint32`  |
+| `/galaxy/{g}/spectrum`        | Arrow IPC     |
+| `/galaxy/{g}/spectrum/tokens` | raw `uint32`  |
+| `/galaxy/{g}/cosines/{mode}`  | raw `float32` |
+| `/galaxy/{g}/table`           | JSON          |
+| `/search`                     | Arrow IPC     |
+| `/search/text`                | JSON          |
 
-`/search` takes `galaxy`, the selected slots `ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum` and `table_values`, each repeated once per index, and `matches` (1–128, default 32). `/search/text` takes `text` (1–500 characters) and `matches` (1–128, default 32).
+`/search` takes `galaxy`, the selected slots `ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum` and `table_values`, each repeated once per index, and `matches` (1–128, default 32). `/search/text` takes `text` (1–500 characters) and `matches` (1–128, default 32). `/galaxy/{g}/cosines/{mode}`, for an image or spectrum mode, is the cosine between the galaxy's predicted distributions at every pair of its slots of that mode, n by n row-major (`pql.cosines`); spectrum distributions are rebuilt from their PCA coefficients.
 
 ## Similarity search
 
@@ -88,7 +89,7 @@ The maps:
 - **Aligned maps** (`ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum`, `table_values`), for every mode: at each slot, the overlap of the galaxy's and the query galaxy's predictions at that slot, divided by the query's largest probability there. A mode's similarity is the geometric mean of its aligned map over the selected slots.
 - **Selection maps** (`{mode}_selection`), for each selected image or spectrum mode, null otherwise: at each slot, the overlap with the mean of the query's predictions over its selected slots of that mode, divided by that mean's largest probability.
 
-Every map comes from predictions, so a galaxy without a mode has maps for it too; the `has_` flags say which modes it observed. The dialog shows a match's Legacy Survey image map and DESI spectrum map: the selection map when that mode is selected, the aligned map otherwise; hovering a token shows its similarity, at most 1. Each match shows its `similarity`. A match without a selected mode says it matched on AION's prediction: in its spectrum panel for the DESI spectrum, under its image for the others. The match list says matches are compared at the same place in the image and the same observed wavelength. A failed request shows the API's message where its result would be.
+Every map comes from predictions, so a galaxy without a mode has maps for it too; the `has_` flags say which modes it observed. The dialog shows a match's Legacy Survey image map and DESI spectrum map: the selection map when that mode is selected, the aligned map otherwise; hovering a token shows its similarity, at most 1. The query galaxy's own panels show, at each slot, its best cosine with the selected slots of that mode, from `/galaxy/{g}/cosines/{mode}`, updated on every click without a search; hovering a token shows its cosine. Each match shows its `similarity`. A match without a selected mode says it matched on AION's prediction: in its spectrum panel for the DESI spectrum, under its image for the others. The match list says matches are compared at the same place in the image and the same observed wavelength. A failed request shows the API's message where its result would be.
 
 ## Text search
 
@@ -122,7 +123,7 @@ The layout fetches `/meta` in the browser through TanStack Query, cached forever
 - **Row-level data** (tokens, coverage, table, spectra, similarity, text search) goes through the generated client into TanStack Query. Similarity and text search results never go stale and leave the cache 5 minutes after nothing reads them; everything else stays for the page session.
 - **The point sets** skip the JSON endpoints. DuckDB-WASM reads the parquet artifact from `/projections/{projection}` into a table, and Mosaic pushes the morphology filter into SQL so filtering the projection never round-trips to the server.
 
-Image token grids are Apache ECharts custom series, one rect per image token on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. Each grid is its own ECharts instance. In the similarity dialog the image sits over the image token grid, blended with `mix-blend-screen`. Before a search the grid is opaque and the image at `tokenAlpha` opacity, 0.3; while the pointer is over the panel the image is opaque and the grid takes `tokenAlpha` opacity, 0.3 or 0.8 when selected. After a search the grid shows the score map and both are opaque. Before a search the spectrum's token areas sit over the line at `tokenAlpha` opacity. A match row holds the galaxy's image, its score grid, a mask grid while the Mask switch beside the query galaxy's Image Tokens title is on, and a spectrum chart where it has a spectrum. The Invert switch sits beside the query galaxy's Image Mask title, and the threshold slider under its grid. Panel titles stay the same before and after a search. A match list is 32 rows by default and up to 128.
+Image token grids are Apache ECharts custom series, one rect per image token on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. Each grid is its own ECharts instance. In the similarity dialog the image sits over the image token grid, blended with `mix-blend-screen`. Before a search the grid is opaque and the image at `tokenAlpha` opacity, 0.3; while the pointer is over the panel the image is opaque and the grid takes `tokenAlpha` opacity, 0.3 or 0.8 when selected. Once an image token is selected the grid shows the cosine map and both are opaque; a match's grid shows its score map. Before a search the spectrum's token areas sit over the line at `tokenAlpha` opacity. A match row holds the galaxy's image, its score grid, a mask grid while the Mask switch beside the query galaxy's Image Tokens title is on, and a spectrum chart where it has a spectrum. The Invert switch sits beside the query galaxy's Image Mask title. The query mask thresholds the cosine map, on 0 to 1, with the slider under its grid; the match masks threshold the match maps, over their range, with a second slider at the top of the match list. Panel titles stay the same before and after a search. A match list is 32 rows by default and up to 128.
 
 Spectra are Apache ECharts line charts. The app serves and shows only DESI spectra; a galaxy without one shows no spectrum. The dialog's interactive chart shades one area per spectrum token, laid out from `spectrum_origin` and `spectrum_width` in `/meta` and coloured like the token grid. It holds the selected spectrum tokens in `view.spectrum_tokens`, which join the selected image tokens in the query. It zooms on the wheel and pans on drag, since 272 spectrum tokens do not fit a panel a few hundred pixels wide.
 
