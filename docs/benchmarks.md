@@ -22,6 +22,7 @@ uv run modal run -m scripts.benchmarks.text_search_quality
 - A pull request posts its run's report on the pull request and commits none; after a round, a docs pull request reruns the scripts on `main` and commits their reports.
 - Figures compare only within one run: not across runs, machines or thread layouts.
 - **Unmeasured** marks a figure read off the code.
+- A report records `memory`, read after the measured work: the process's peak resident set (`peak_rss_mib`, from `getrusage`), which counts the pages of memory-mapped files it read, such as the index, and the most pyarrow's memory pool held at once (`arrow_peak_mib`). Neither counts GPU memory. A figure covers everything the benchmark process held, including data the server never builds, such as `search_quality`'s exact reference or `index_split`'s separate copy of the index. In `search_performance` each round's subprocess records its own, if its version's code does, and so does the parent; Linux carries the parent's peak at that moment into a child at `exec`, so a round near the parent's figure may be reading the parent's. `backend_performance` records none, since its client cannot read the server's memory.
 
 ## From GitHub Actions
 
