@@ -2,6 +2,7 @@
   import { tokenAlpha, tokenColors } from '$lib/color'
   import { Switch } from '$lib/components/ui/switch'
   import { tokensQuery } from '$lib/data/queries'
+  import { errorMessage } from '$lib/errors'
   import { getApp } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
@@ -36,7 +37,7 @@
       title={similarity.imageMap ? similarity.score : similarity.caption}
       selected={view.imageTokens.value}
       ontoggle={(index) => view.imageTokens.toggle(index)}
-      busy={!tokens.data}
+      busy={!tokens.data && !tokens.isError}
       onhover={(value) => (hovered = value)}
       imageOpacity={similarity.imageMap || hovered ? undefined : tokenAlpha(false)}
     >
@@ -50,6 +51,11 @@
           Mask
         </label>
       {/snippet}
+      {#if tokens.isError}
+        <p role="alert" class="text-xs leading-relaxed text-destructive">
+          {errorMessage(tokens.error)}
+        </p>
+      {/if}
     </ImageTokenPanel>
 
     {#if similarity.imageMap && similarity.imageDomain}

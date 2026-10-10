@@ -3,6 +3,7 @@
   import { Input } from '$lib/components/ui/input'
   import { Spinner } from '$lib/components/ui/spinner'
   import { textSearchQuery } from '$lib/data/queries'
+  import { errorMessage } from '$lib/errors'
   import TextSearchResult from './text-search-result.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -30,7 +31,7 @@
   </form>
 
   {#if results.isError}
-    <p role="alert" class="text-sm text-destructive">The search failed.</p>
+    <p role="alert" class="text-sm text-destructive">{errorMessage(results.error)}</p>
   {:else if results.data}
     {@const { galaxies, scores } = results.data}
     <ol

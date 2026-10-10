@@ -4,6 +4,7 @@
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
   import { tableQuery } from '$lib/data/queries'
+  import { errorMessage } from '$lib/errors'
   import { SECTIONS } from '$lib/labels'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
@@ -56,7 +57,11 @@
   </div>
 
   <div class="aspect-square w-full overflow-y-auto rounded-lg border px-3">
-    {#if table.data}
+    {#if table.isError}
+      <p role="alert" class="py-3 text-xs leading-relaxed text-destructive">
+        {errorMessage(table.error)}
+      </p>
+    {:else if table.data}
       <Table.Root class="text-xs">
         <Table.Header>
           <Table.Row class="hover:bg-transparent">

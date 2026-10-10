@@ -8,7 +8,9 @@
 
 <span class="text-sm font-medium">Whole dataset</span>
 
-{#if !similarity.imageMaps}
+{#if similarity.error}
+  <p role="alert" class="text-sm text-destructive">{similarity.error}</p>
+{:else if !similarity.imageMaps}
   <div class="grid h-24 place-content-center">
     <Spinner class="size-6" />
   </div>

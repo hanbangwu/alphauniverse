@@ -2,6 +2,7 @@ import { type RGB, continuous } from '$lib/color'
 import { similarityQuery } from '$lib/data/queries'
 import { extent, mask, row } from '$lib/data/scores'
 import type { Extent, SimilarityQuery, SimilarityResult } from '$lib/data/similarity'
+import { errorMessage } from '$lib/errors'
 import { must } from '$lib/invariant'
 import { SIMILARITY } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
@@ -66,6 +67,10 @@ export class Similarity {
       const [low, high] = extent(this.tableValueMap)
       return low <= high ? continuous([low, high]) : null
     })
+  }
+
+  get error(): string | null {
+    return this.#result.isError ? errorMessage(this.#result.error) : null
   }
 
   get stale(): boolean {
