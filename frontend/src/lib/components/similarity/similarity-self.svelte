@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { tokenAlpha } from '$lib/color'
+  import { tokenAlpha, tokenColors } from '$lib/color'
   import { Switch } from '$lib/components/ui/switch'
+  import { tokensQuery } from '$lib/data/queries'
   import { getApp } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
@@ -9,9 +10,13 @@
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
   import TablePanel from './table-panel.svelte'
+  import { createQuery } from '@tanstack/svelte-query'
 
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
+
+  const tokens = createQuery(() => tokensQuery(similarity.galaxy))
+  const palette = $derived(tokens.data ? tokenColors(tokens.data) : null)
 
   let hovered = $state(false)
 </script>
@@ -23,15 +28,15 @@
     <ImageTokenPanel
       label="Image Tokens"
       describe="Click an image token to query it"
-      values={similarity.imageMap ?? similarity.tokens}
+      values={similarity.imageMap ?? tokens.data ?? null}
       grid={similarity.grid}
-      color={similarity.imageMap ? similarity.imageHeat : similarity.palette}
+      color={similarity.imageMap ? similarity.imageHeat : palette}
       opacity={similarity.imageMap ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
       galaxy={similarity.galaxy}
       title={similarity.imageMap ? similarity.score : similarity.caption}
       selected={view.imageTokens.value}
       ontoggle={(index) => view.imageTokens.toggle(index)}
-      busy={similarity.tokens === null}
+      busy={!tokens.data}
       onhover={(value) => (hovered = value)}
       imageOpacity={similarity.imageMap || hovered ? undefined : tokenAlpha(false)}
     >
