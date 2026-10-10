@@ -172,19 +172,28 @@ def overlaps(
     return (scalar_probabilities(rows, survey, slots) * form).sum(axis=-1)
 
 
+def sums(
+    rows: pa.RecordBatch,
+    selected: dict[str, np.ndarray],
+    forms: dict[str, np.ndarray],
+) -> dict[str, np.ndarray]:
+    return {
+        mode: np.log(overlaps(rows, mode, slots, forms[mode])).sum(axis=-1)
+        for mode, slots in selected.items()
+    }
+
+
 def parts(query: Query) -> dict[str, np.ndarray]:
     selected = selection(query)
     forms = query_forms(query, selected)
-    sums = {mode: np.empty(predictions().num_rows) for mode in selected}
+    totals = {mode: np.empty(predictions().num_rows) for mode in selected}
     start = 0
     for rows in predictions().to_batches():
         stop = start + rows.num_rows
-        for mode, slots in selected.items():
-            sums[mode][start:stop] = np.log(
-                overlaps(rows, mode, slots, forms[mode])
-            ).sum(axis=-1)
+        for mode, values in sums(rows, selected, forms).items():
+            totals[mode][start:stop] = values
         start = stop
-    return sums
+    return totals
 
 
 def combine(sums: dict[str, np.ndarray]) -> np.ndarray:
