@@ -6,6 +6,7 @@ from typing import Any, NamedTuple
 import faiss
 import modal
 import numpy as np
+import pyarrow as pa
 import pyarrow.compute as pc
 
 from app.config import (
@@ -19,6 +20,7 @@ from app.config import (
 from app.dataset import spectrum
 from app.main import SPECTRUM_SURVEY
 from app.search import (
+    BATCH,
     N_HSC_SCALARS,
     N_LS_SCALARS,
     NPROBE,
@@ -48,6 +50,7 @@ image = build_image.add_local_python_source("modal_app")
 
 MATCHES = Query.model_fields["matches"].default
 REPORT = Path("docs/benchmarks/search_quality.json")
+COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS]
 
 
 class Corpus(NamedTuple):
@@ -59,76 +62,117 @@ class Corpus(NamedTuple):
     hsc_galaxies: np.ndarray
 
 
-def corpus() -> Corpus:
-    cells = source("encoded").to_table(columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS])
+def corpus(cells: pa.Table | pa.RecordBatch) -> Corpus:
     spectra = spectrum_cells(cells)
     return Corpus(
         patches(cells.column(ANCHOR)),
         spectral(spectra.drop_null()),
-        np.flatnonzero(pc.is_valid(spectra).to_numpy()),
+        np.flatnonzero(pc.is_valid(spectra).to_numpy(zero_copy_only=False)),
         rows(cells.column(ANCHOR), N_PATCHES, None),
         rows(cells.column("hsc"), N_PATCHES, None),
-        np.flatnonzero(pc.is_valid(cells.column("hsc")).to_numpy()),
+        np.flatnonzero(pc.is_valid(cells.column("hsc")).to_numpy(zero_copy_only=False)),
     )
 
 
-def exact_ranking(
-    query: Query, reference: Corpus
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def direction(query: Query, galaxy: int, reference: Corpus) -> np.ndarray:
     owners = np.repeat(reference.spectrum_galaxies, N_SPANS)
     hsc_owners = np.repeat(reference.hsc_galaxies, N_HSC_SCALARS)
     scalars = np.asarray(query.scalars, dtype=np.int64)
     query_rows = []
     if query.patches:
         query_rows.append(
-            reference.patch_rows[query.galaxy * N_PATCHES + np.asarray(query.patches)]
+            reference.patch_rows[galaxy * N_PATCHES + np.asarray(query.patches)]
         )
     if query.spans:
         query_rows.append(
-            reference.span_rows[owners == query.galaxy][np.asarray(query.spans)]
+            reference.span_rows[owners == galaxy][np.asarray(query.spans)]
         )
     query_rows.append(
         reference.ls_scalar_rows[
-            query.galaxy * N_LS_SCALARS + scalars[scalars < N_LS_SCALARS]
+            galaxy * N_LS_SCALARS + scalars[scalars < N_LS_SCALARS]
         ]
     )
     query_rows.append(
-        reference.hsc_scalar_rows[hsc_owners == query.galaxy][
+        reference.hsc_scalar_rows[hsc_owners == galaxy][
             scalars[scalars >= N_LS_SCALARS] - N_LS_SCALARS
         ]
     )
-    direction = np.concatenate(query_rows).mean(axis=0, keepdims=True)
-    faiss.normalize_L2(direction)
-    patch_maps = (reference.patch_rows @ direction.T).reshape(-1, N_PATCHES)
-    spectral_maps = np.full((len(patch_maps), N_SPANS), np.nan, dtype=np.float32)
+    averaged = np.concatenate(query_rows).mean(axis=0, keepdims=True)
+    faiss.normalize_L2(averaged)
+    return averaged
+
+
+def exact_maps(
+    directions: np.ndarray, reference: Corpus
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    count = len(directions)
+    galaxies = len(reference.patch_rows) // N_PATCHES
+    patch_maps = (reference.patch_rows @ directions.T).reshape(
+        galaxies, N_PATCHES, count
+    )
+    spectral_maps = np.full((galaxies, N_SPANS, count), np.nan, dtype=np.float32)
     spectral_maps[reference.spectrum_galaxies] = (
-        reference.span_rows @ direction.T
-    ).reshape(-1, N_SPANS)
-    scalar_maps = np.full((len(patch_maps), N_SCALARS), np.nan, dtype=np.float32)
-    scalar_maps[:, :N_LS_SCALARS] = (reference.ls_scalar_rows @ direction.T).reshape(
-        -1, N_LS_SCALARS
+        reference.span_rows @ directions.T
+    ).reshape(-1, N_SPANS, count)
+    scalar_maps = np.full((galaxies, N_SCALARS, count), np.nan, dtype=np.float32)
+    scalar_maps[:, :N_LS_SCALARS] = (reference.ls_scalar_rows @ directions.T).reshape(
+        galaxies, N_LS_SCALARS, count
     )
     scalar_maps[reference.hsc_galaxies, N_LS_SCALARS:] = (
-        reference.hsc_scalar_rows @ direction.T
-    ).reshape(-1, N_HSC_SCALARS)
-    scores = np.fmax.reduce(
+        reference.hsc_scalar_rows @ directions.T
+    ).reshape(-1, N_HSC_SCALARS, count)
+    return patch_maps, spectral_maps, scalar_maps
+
+
+def best(
+    patch_maps: np.ndarray, spectral_maps: np.ndarray, scalar_maps: np.ndarray
+) -> np.ndarray:
+    return np.fmax.reduce(
         [
             patch_maps.max(axis=1),
             spectral_maps.max(axis=1),
             np.fmax.reduce(scalar_maps, axis=1),
         ]
     )
-    order = np.argsort(-scores, kind="stable")
-    chosen = np.concatenate(
-        ([query.galaxy], order[order != query.galaxy][: query.matches])
+
+
+def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
+    galaxies = np.unique([query.galaxy for query in batch])
+    taken = corpus(source("encoded").take(galaxies, columns=COLUMNS))
+    directions = np.concatenate(
+        [
+            direction(query, int(np.searchsorted(galaxies, query.galaxy)), taken)
+            for query in batch
+        ]
     )
-    return (
-        chosen,
-        scores[chosen],
-        patch_maps[chosen],
-        spectral_maps[chosen],
-        scalar_maps[chosen],
-    )
+    del taken
+    scores = np.empty((len(batch), source("encoded").count_rows()), dtype=np.float32)
+    start = 0
+    for cells in source("encoded").to_batches(
+        columns=COLUMNS, batch_size=BATCH, batch_readahead=1
+    ):
+        scores[:, start : start + cells.num_rows] = best(
+            *exact_maps(directions, corpus(cells))
+        ).T
+        start += cells.num_rows
+    rankings = []
+    for query, row in zip(batch, scores, strict=True):
+        order = np.argsort(-row, kind="stable")
+        rankings.append(
+            np.concatenate(
+                ([query.galaxy], order[order != query.galaxy][: query.matches])
+            )
+        )
+    return rankings
+
+
+def exact_ranking(
+    query: Query,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    chosen = exact_rankings([query])[0]
+    taken = corpus(source("encoded").take(chosen, columns=COLUMNS))
+    maps = exact_maps(direction(query, 0, taken), taken)
+    return chosen, best(*maps)[:, 0], *(found[..., 0] for found in maps)
 
 
 def wavelength(galaxy: int) -> np.ndarray:
@@ -166,31 +210,31 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     volumes={CACHE_PATH: cache_volume},
 )
 def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
-    reference = corpus()
     built = index()
     surveyed = source("tokens").to_table(columns=[SPECTRUM_SURVEY])
     paired = with_spans(
         per_kind,
         np.flatnonzero(pc.is_valid(surveyed.column(SPECTRUM_SURVEY)).to_numpy()),
     )
+    kinds = {
+        "patches": queries(per_kind, PATCHES, MATCHES),
+        "paired_patches": [query.model_copy(update={"spans": ()}) for query in paired],
+        "spans": [query.model_copy(update={"patches": ()}) for query in paired],
+        "both": paired,
+    }
+    expected = iter(
+        exact_rankings([query for batch in kinds.values() for query in batch])
+    )
 
     measured = {}
-    for kind, batch in (
-        ("patches", queries(per_kind, PATCHES, MATCHES)),
-        (
-            "paired_patches",
-            [query.model_copy(update={"spans": ()}) for query in paired],
-        ),
-        ("spans", [query.model_copy(update={"patches": ()}) for query in paired]),
-        ("both", paired),
-    ):
+    for kind, batch in kinds.items():
         fractions, searches = [], []
         for query in batch:
-            expected = exact_ranking(query, reference)[0][1:]
+            truth = next(expected)[1:]
             faiss.cvar.indexIVF_stats.reset()
             found = search(query, index=built)[0][1:]
             searches.append(faiss.cvar.indexIVF_stats.nq)
-            fractions.append(len(np.intersect1d(found, expected)) / len(expected))
+            fractions.append(len(np.intersect1d(found, truth)) / len(truth))
         measured[kind] = {
             "mean": round(float(np.mean(fractions)), 4),
             "min": round(float(np.min(fractions)), 4),

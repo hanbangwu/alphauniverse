@@ -28,11 +28,7 @@ from app.search import (
     with_hsc,
     with_spectrum,
 )
-from scripts.benchmarks.search_quality import (
-    Corpus,
-    corpus,
-    exact_ranking,
-)
+from scripts.benchmarks.search_quality import exact_ranking
 from scripts.fixture import build, forget
 
 SCORE_TOLERANCE = 1e-4
@@ -41,11 +37,6 @@ SCORE_TOLERANCE = 1e-4
 @pytest.fixture(scope="module")
 def built(tree) -> faiss.Index:
     return index()
-
-
-@pytest.fixture(scope="module")
-def reference(tree) -> Corpus:
-    return corpus()
 
 
 def test_search_is_deterministic(built: faiss.Index) -> None:
@@ -118,7 +109,6 @@ def test_a_search_that_finds_too_few_looks_further(
 )
 def test_approximate_ranking_agrees_with_exact(
     built: faiss.Index,
-    reference: Corpus,
     fields: dict[str, int | tuple[int, ...]],
 ) -> None:
     query = Query.model_validate(fields)
@@ -128,9 +118,7 @@ def test_approximate_ranking_agrees_with_exact(
         expected_maps,
         expected_spectral_maps,
         expected_scalar_maps,
-    ) = exact_ranking(
-        query.model_copy(update={"matches": query.matches + 1}), reference
-    )
+    ) = exact_ranking(query.model_copy(update={"matches": query.matches + 1}))
     found, found_scores, maps, spectral_maps, found_scalar_maps = search(
         query, index=built
     )
