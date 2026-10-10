@@ -48,7 +48,7 @@ A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 27
 
 ## `generate_predictions`
 
-For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the redshift, the 576 image tokens and the table values of the Legacy Survey and HSC images, and spectrum tokens 1 to 272 of the DESI and SDSS spectra. The decoder predicts 128 slots at a time, in an order drawn with `SEED`; as in AION's default, the slots of one call attend to each other. Nothing reads the predictions at serve time yet.
+For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the redshift, the 576 image tokens and the table values of the Legacy Survey and HSC images, and spectrum tokens 1 to 272 of the DESI and SDSS spectra. Each mode's slots are split into blocks of 128, in an order drawn with `SEED`, and the decoder predicts every block of a galaxy in one call; a slot attends only to the slots of its own block, as in AION's default call of 128. Nothing reads the predictions at serve time yet.
 
 The job makes two passes over `tokens`. The first predicts only the spectrum tokens and accumulates, per spectrum survey, the sum and the sum of outer products of every spectrum token's probabilities; their covariance's top 256 eigenvectors and the mean form **`prediction_basis`**, an `np.savez` of:
 

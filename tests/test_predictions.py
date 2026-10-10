@@ -138,3 +138,40 @@ def test_a_redshift_token_joins_the_context_only_where_the_galaxy_has_one(
     assert (None if found is None else found.tolist()) == (
         None if redshift is None else [redshift]
     )
+
+
+def test_one_batched_decode_matches_decoding_each_block_of_slots_alone(
+    tree: Path, random_weights: None
+) -> None:
+    torch = importlib.import_module("torch")
+    encode_module = importlib.import_module("app.encode")
+    aion = encode_module.model()
+    row = predictions_module.source("tokens").head(1).to_pylist()[0]
+    encoded, _, encoder_mask, _ = encode_module.context(predictions_module.inputs(row))
+
+    batched = predictions_module.decode(
+        encoded, encoder_mask, predictions_module.TARGETS
+    )
+
+    for key, positions in predictions_module.TARGETS.items():
+        embedding = aion.decoder_embeddings[key]
+        order = torch.randperm(
+            len(positions),
+            generator=torch.Generator().manual_seed(predictions_module.SEED),
+        )
+        states = torch.empty(len(positions), encoded.shape[-1])
+        for start in range(0, len(positions), predictions_module.CHUNK):
+            chosen = order[start : start + predictions_module.CHUNK]
+            with torch.inference_mode(), torch.autocast("cpu", dtype=torch.float16):
+                decoded = aion._decode(
+                    encoded,
+                    encoder_mask,
+                    aion.mask_token.expand(1, len(chosen), -1),
+                    embedding.pos_emb[:, torch.as_tensor(positions)[chosen]]
+                    + embedding.mod_emb,
+                    torch.zeros(1, len(chosen), len(chosen), dtype=torch.bool),
+                )
+            states[chosen] = decoded[0].float()
+        with torch.inference_mode():
+            alone = torch.log_softmax(embedding.forward_logits(states), dim=-1)
+        np.testing.assert_allclose(batched[key], alone.numpy(), atol=2e-3)
