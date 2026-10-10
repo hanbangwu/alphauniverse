@@ -1,9 +1,14 @@
+from collections.abc import Iterator
+
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 import torch
+from tqdm import tqdm
 
 from . import encode
-from .config import ANCHOR, DIM, N_PATCHES, N_SPANS, device
+from .config import ANCHOR, DIM, N_PATCHES, N_SPANS, TOKEN_SURVEYS, artifact, device
+from .search import source
 
 CHUNK = 128
 SEED = 0
@@ -11,6 +16,7 @@ TOP_CODES = 64
 SPAN_RANK = 256
 VOCABULARY = 1024
 LEVELS = 255
+BATCH = 256
 
 IMAGES = {ANCHOR: encode.LegacySurveyImage.token_key, "hsc": encode.HSCImage.token_key}
 SCALARS = {
@@ -167,3 +173,81 @@ def coefficients(
         offsets.astype(np.float32),
         steps.astype(np.float32),
     )
+
+
+def rows() -> Iterator[dict]:
+    for batch in source("tokens").to_batches(columns=["galaxy", *TOKEN_SURVEYS]):
+        yield from batch.to_pylist()
+
+
+def bases() -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    moments = {survey: Moments() for survey in SPECTRA}
+    count = pq.read_metadata(artifact("tokens")).num_rows
+    for row in tqdm(rows(), total=count, desc="span moments"):
+        predicted = predictions(inputs(row), SPAN_TARGETS)
+        for survey, key in SPECTRA.items():
+            moments[survey].add(np.exp(predicted[key]))
+    return {survey: moment.basis() for survey, moment in moments.items()}
+
+
+def record(
+    galaxy: int,
+    predicted: dict[str, np.ndarray],
+    fitted: dict[str, tuple[np.ndarray, np.ndarray]],
+) -> dict[str, np.ndarray]:
+    values: dict[str, np.ndarray] = {"galaxy": np.asarray([galaxy], dtype=np.int32)}
+    for survey, image_key in IMAGES.items():
+        codes, kept, tails = cells(predicted[image_key])
+        values[f"{survey}_codes"] = codes.reshape(-1)
+        values[f"{survey}_log_probabilities"] = kept.reshape(-1)
+        values[f"{survey}_tails"] = tails
+        values[f"{survey}_scalars"] = np.concatenate(
+            [predicted[key][0] for key in SCALARS[survey]]
+        ).astype(np.float16)
+    for survey, key in SPECTRA.items():
+        quantised, offsets, steps = coefficients(
+            np.exp(predicted[key]), *fitted[survey]
+        )
+        values[f"{survey}_coefficients"] = quantised.reshape(-1)
+        values[f"{survey}_offsets"] = offsets
+        values[f"{survey}_steps"] = steps
+    return values
+
+
+def batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
+    return pa.record_batch(
+        [
+            pa.array(np.concatenate([values[field.name] for values in records]))
+            if field.name == "galaxy"
+            else pa.FixedSizeListArray.from_arrays(
+                pa.array(np.concatenate([values[field.name] for values in records])),
+                field.type.list_size,
+            )
+            for field in PREDICTIONS
+        ],
+        schema=PREDICTIONS,
+    )
+
+
+def generate_predictions() -> None:
+    fitted = bases()
+    np.savez(
+        artifact("prediction_basis"),
+        **{
+            f"{survey}_{name}": value
+            for survey, pair in fitted.items()
+            for name, value in zip(("mean", "directions"), pair, strict=True)
+        },
+    )
+    count = pq.read_metadata(artifact("tokens")).num_rows
+    with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
+        records = []
+        for row in tqdm(rows(), total=count, desc="predict"):
+            records.append(
+                record(row["galaxy"], predictions(inputs(row), TARGETS), fitted)
+            )
+            if len(records) == BATCH:
+                writer.write_batch(batch(records))
+                records.clear()
+        if records:
+            writer.write_batch(batch(records))
