@@ -44,6 +44,7 @@ from scripts.benchmarks.common import (
     elapsed,
     environment,
     git,
+    memory,
     queries,
     server,
     summary,
@@ -190,6 +191,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
             "loads": {name: rounded(usage) for name, usage in loads.items()},
             "stages": {name: rounded(mean) for name, mean in means.items()},
         },
+        "memory": memory(),
     }
 
 
@@ -228,7 +230,7 @@ def benchmark_search_performance(
         except (ValueError, IndexError):
             result = {"error": f"no report on stdout: {completed.stdout[-2000:]}"}
         rounds[name].append(result | {"position": position})
-    return report | {"rounds": rounds}
+    return report | {"rounds": rounds, "memory": memory()}
 
 
 @app.local_entrypoint()

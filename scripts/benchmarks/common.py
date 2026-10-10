@@ -1,4 +1,5 @@
 import os
+import resource
 import subprocess
 import time
 from collections.abc import Callable
@@ -7,6 +8,7 @@ from typing import Any
 
 import faiss
 import numpy as np
+import pyarrow as pa
 from threadpoolctl import threadpool_info
 
 from app.config import (
@@ -93,6 +95,15 @@ def environment() -> dict[str, Any]:
         "faiss_threads": faiss.omp_get_max_threads(),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
         "thread_pools": threadpool_info(),
+    }
+
+
+def memory() -> dict[str, float]:
+    return {
+        "peak_rss_mib": round(
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1
+        ),
+        "arrow_peak_mib": round(pa.default_memory_pool().max_memory() / 2**20, 1),
     }
 
 

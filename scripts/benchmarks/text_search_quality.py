@@ -8,7 +8,7 @@ import numpy as np
 
 from app.config import DATASET_REVISION
 from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import environment, git
+from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-text-search")
 image = build_image.add_local_python_source("modal_app")
@@ -109,6 +109,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         "environment": environment(),
         "galaxies": len(galaxy),
         "queries": report,
+        "memory": memory(),
     }
 
 
