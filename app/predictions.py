@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from itertools import batched
+from typing import NamedTuple
 
 import numpy as np
 import pyarrow as pa
@@ -9,10 +10,12 @@ from tqdm import tqdm
 from . import encode
 from .config import (
     ANCHOR,
+    IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
     REDSHIFT,
+    REDSHIFT_VOCABULARY,
     SEED,
     SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
@@ -39,15 +42,50 @@ SPECTRA = {
 }
 REDSHIFT_KEY = encode.Z.token_key
 
+
+class Mode(NamedTuple):
+    name: str
+    keys: tuple[str, ...]
+    positions: np.ndarray
+    vocabulary: int
+    survey: str
+
+
+MODES = (
+    *(
+        Mode(
+            f"{survey}_image",
+            (key,),
+            np.arange(N_IMAGE_TOKENS),
+            IMAGE_VOCABULARY,
+            survey,
+        )
+        for survey, key in IMAGES.items()
+    ),
+    *(
+        Mode(
+            f"{survey}_spectrum",
+            (key,),
+            np.arange(1, N_SPECTRUM_TOKENS + 1),
+            VOCABULARY,
+            survey,
+        )
+        for survey, key in SPECTRA.items()
+    ),
+    *(
+        Mode(f"{survey}_table", keys, np.arange(1), VOCABULARY, survey)
+        for survey, keys in TABLE_VALUES.items()
+    ),
+    Mode(REDSHIFT, (REDSHIFT_KEY,), np.arange(1), REDSHIFT_VOCABULARY, REDSHIFT),
+)
 SPECTRUM_TOKEN_TARGETS = {
     key: np.arange(1, N_SPECTRUM_TOKENS + 1) for key in SPECTRA.values()
 }
-TARGETS = (
-    {key: np.arange(N_IMAGE_TOKENS) for key in IMAGES.values()}
-    | {key: np.arange(1) for keys in TABLE_VALUES.values() for key in keys}
-    | {REDSHIFT_KEY: np.arange(1)}
-    | SPECTRUM_TOKEN_TARGETS
-)
+TARGETS = {key: mode.positions for mode in MODES for key in mode.keys}
+
+
+def distributions(predicted: dict[str, np.ndarray], mode: Mode) -> np.ndarray:
+    return np.concatenate([predicted[key] for key in mode.keys])
 
 
 def inputs(row: dict) -> dict[str, torch.Tensor]:

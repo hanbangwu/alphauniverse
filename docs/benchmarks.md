@@ -12,6 +12,7 @@ The stored reports predate #215's rename and use the old names for image tokens 
 | `projection_quality`  | how the projector keeps neighbours           | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
 | `text_search_quality` | text queries against catalogue cuts          | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
 | `pql_quality`         | PQL scoring against `search()`               | Modal, a build-image container with a GPU | `docs/benchmarks/pql_quality.json`         |
+| `compression_quality` | the prediction store's compression schemes   | Modal, a build-image container with a GPU | `docs/benchmarks/compression_quality.json` |
 
 ```sh
 uv run modal run -m scripts.benchmarks.search_performance   # --runs, default 30
@@ -20,6 +21,7 @@ uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, defaul
 uv run modal run -m scripts.benchmarks.projection_quality
 uv run modal run -m scripts.benchmarks.text_search_quality
 uv run modal run -m scripts.benchmarks.pql_quality          # --sample, default 1000
+uv run modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -91,16 +93,16 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 **Stages**, 4 image tokens, 32 matches. The run predates `table_value_maps`, which the script now times:
 
-| Stage         | First query | Warm p50    | Warm share |
-| ------------- | ----------- | ----------- | ---------- |
-| `centroid`    | 0.72 ms     | 0.31 ms     | 0.4 %      |
-| `candidates`  | 21.8 ms     | 5.03 ms     | 5.8 %      |
-| **`vectors`** | 88.0 ms     | **79.8 ms** | **91.5 %** |
-| `score_maps`  | 7.59 ms     | 1.51 ms     | 1.7 %      |
-| `spectrum_token_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
-| `table_value_maps` | unmeasured  | unmeasured  |            |
-| `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
-| Total         | 131.0 ms    | 87.2 ms     |            |
+| Stage                 | First query | Warm p50    | Warm share |
+| --------------------- | ----------- | ----------- | ---------- |
+| `centroid`            | 0.72 ms     | 0.31 ms     | 0.4 %      |
+| `candidates`          | 21.8 ms     | 5.03 ms     | 5.8 %      |
+| **`vectors`**         | 88.0 ms     | **79.8 ms** | **91.5 %** |
+| `score_maps`          | 7.59 ms     | 1.51 ms     | 1.7 %      |
+| `spectrum_token_maps` | 12.5 ms     | 0.37 ms     | 0.4 %      |
+| `table_value_maps`    | unmeasured  | unmeasured  |            |
+| `rank`                | 0.35 ms     | 0.14 ms     | 0.2 %      |
+| Total                 | 131.0 ms    | 87.2 ms     |            |
 
 - **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 image token vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
 - `candidates` and `vectors` are faiss-parallel and `score_maps` contends with their threads, so stage figures compare only at the same thread configuration.
@@ -139,14 +141,14 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 **`/search`**, warm, 32 matches unless stated:
 
-| Query                   | p50    | p95    |
-| ----------------------- | ------ | ------ |
-| 4 image tokens, 8 matches    | 164 ms | 174 ms |
-| 4 image tokens               | 225 ms | 255 ms |
-| 4 image tokens, 128 matches  | 429 ms | 503 ms |
-| 4 spectrum tokens                 | 253 ms | 276 ms |
-| 4 image tokens and 4 spectrum tokens   | 237 ms | 258 ms |
-| 4 Legacy Survey table values | 231 ms | 264 ms |
+| Query                                | p50    | p95    |
+| ------------------------------------ | ------ | ------ |
+| 4 image tokens, 8 matches            | 164 ms | 174 ms |
+| 4 image tokens                       | 225 ms | 255 ms |
+| 4 image tokens, 128 matches          | 429 ms | 503 ms |
+| 4 spectrum tokens                    | 253 ms | 276 ms |
+| 4 image tokens and 4 spectrum tokens | 237 ms | 258 ms |
+| 4 Legacy Survey table values         | 231 ms | 264 ms |
 
 `matches` sets the cost. Over the 128 ms `/meta` floor, 32 matches add 225 − 128 = 97 ms at p50, and 128 add 429 − 128 = 301 ms.
 
@@ -199,11 +201,11 @@ A query's recall is the share of its exact 32 galaxies that `search()` returns a
 | Machine          | 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 1 |
 | Queries          | 100 per kind, `PROBE=2048`, `NPROBE=64`                                                                          |
 
-| Query                 | Drawn from | Mean  | Lowest | All 32 found | Searched again | Most searches |
-| --------------------- | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
-| 4 image tokens             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
-| 4 image tokens             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
-| 4 spectrum tokens               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
+| Query                                | Drawn from | Mean  | Lowest | All 32 found | Searched again | Most searches |
+| ------------------------------------ | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
+| 4 image tokens                       | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
+| 4 image tokens                       | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
+| 4 spectrum tokens                    | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
 | 4 image tokens and 4 spectrum tokens | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
 `table_values` and `hsc_table_values` are unmeasured: this run predates them.
@@ -273,6 +275,19 @@ A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 1
 - `availability` and `evidence` (spectrum token queries): over 20 coin flips that show each other sampled galaxy with or without its spectrum, the share with a spectrum among the top 32 minus its share overall, for galaxies at another redshift (|Δz|/(1+z) ≥ 0.01) and at the same one.
 
 It needs `predictions` and `prediction_basis` from `generate_predictions`. Unmeasured.
+
+## `compression_quality`
+
+Measures how each way of storing a predicted distribution changes PQL's scores and rankings, for every mode in `app.predictions.MODES`. Unlike the other benchmarks it predicts its own galaxies, densely, from `tokens`; it also reads `mean_points` for the galaxy count and the dataset for spectra's wavelengths and redshifts. Each mode runs in its own container, as `pql_quality`'s, with a 24-hour timeout, and the local entrypoint combines them.
+
+- **Galaxies** (`SEED`): `--sample` scored galaxies, up to half of them drawn from galaxies with SDSS, then from galaxies with HSC or DESI up to half the sample, the rest from all galaxies; and `--fit` other galaxies whose predictions fit the mode's PCA basis, so every scored galaxy is out of sample. Image modes are held in fp16, the rest in fp32.
+- **Schemes** (`scripts/benchmarks/compression.py`, 218 per mode): the store's current scheme, with the fit galaxies' basis for spectra; dense; the top k codes; the fewest codes holding mass p; and PCA coefficients. Top-k and top-p either spread the rest of the mass evenly or drop it, and every scheme is stored at fp32, fp16, bf16, 8 bits or 4 bits. The levels are listed in #214.
+- **Queries**: `--queries` galaxies per mode, drawn from those observing it, each with selections of one slot, a block or window, and all slots, as in `selections`. Each query is scored against the sample and against a copy of itself predicted with the mode's tokens hidden. For table values and the redshift, the exact reference, the current scheme and the dense log-probability schemes take the overlap as a log-sum-exp of the log-probabilities, as `app.pql` does; every other overlap is floored at float32's smallest normal number, and at `app.pql`'s spectrum token floor for PCA schemes.
+- **Per scheme**: bytes per galaxy; the share of floored overlaps; the median and 99th percentile of |log overlap − exact|; one query's scan of 16 slots on the CPU; and per selection size, with the gallery compressed alone and with both sides compressed, the Spearman correlation of the summed score with the dense one (tied ranks averaged), top-10 and top-32 overlap, identity (the hidden copy ranks first) and the median top-10 |Δz|/(1+z).
+- **Choices**: per mode, the smallest scheme whose both-sides figures meet `TARGETS` at every size (identity may not drop by more than its target); and for corpus totals of 1, 2, 4 and 8 GB, the schemes that maximise the lowest median Spearman over modes and sizes.
+- **Check**: for the image modes, the log overlaps of 64 galaxies with fp16 and fp32 references.
+
+The report is too large for the workflow's step summary; it is in the run's artifact. Unmeasured.
 
 ## Scaling ceilings
 
