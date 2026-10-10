@@ -27,11 +27,9 @@ from app.config import (
     galaxy_count,
     labels,
     points,
-    prediction_batch,
-    save_prediction_basis,
     store_schema,
 )
-from app.pql import basis, predictions
+from app.pql import basis, prediction_batch, predictions, save_prediction_basis
 from app.search import (
     generate_index,
     index,

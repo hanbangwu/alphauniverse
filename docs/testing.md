@@ -16,6 +16,7 @@ Tests need no Modal, GPU or network. `tests/test_dataset.py` replaces `dataset()
 - Embeddings cluster around fixed random centres. Uniform noise in 768 dimensions is nearly orthogonal, which would make every ranking arbitrary.
 - The 2-d points come from one fixed random projection in place of the trained parametric UMAP. One projection serves both point sets, as the projector does in production.
 - `aion_gemma_space` holds random unit vectors. The text search tests replace `embed_queries`, so no test loads EmbeddingGemma.
+- `predictions` holds random distributions in the stored forms; `prediction_basis` has a uniform mean and random orthonormal directions orthogonal to the all-ones vector, with span coefficients a few 1e-4 across, so every reconstructed span stays a distribution. They test the arithmetic, not production's spread of coefficients.
 - `codebook` and `parametric_umap` are left out: nothing served reads them, and their absence exercises the 404 path.
 
 Five tests in `tests/test_search.py` check what the shared tree cannot show:

@@ -20,9 +20,8 @@ from .config import (
     VOCABULARY,
     artifact,
     device,
-    prediction_batch,
-    save_prediction_basis,
 )
+from .pql import prediction_batch, save_prediction_basis
 from .search import source
 
 CHUNK = 128

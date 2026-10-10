@@ -17,7 +17,6 @@ from app.config import (
     SDSS,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
-    prediction_batch,
 )
 from app.dataset import dataset
 from app.search import (
@@ -111,7 +110,7 @@ def hidden(galaxies: np.ndarray) -> tuple[pa.RecordBatch, list[np.ndarray]]:
         records.append(predictions.record(row["galaxy"], predicted, fitted))
         tokens = encoded[0][torch.isin(modality[0], kept.to(modality.device))]
         rows.append(torch.nn.functional.normalize(tokens.float(), dim=-1).cpu().numpy())
-    return prediction_batch(records), rows
+    return pql.prediction_batch(records), rows
 
 
 def best(rows: list[np.ndarray], direction: np.ndarray) -> np.ndarray:
@@ -134,14 +133,18 @@ def bias(
     )
 
 
-def offset(z: np.ndarray, chosen: np.ndarray, galaxy: int) -> float:
-    return float(np.median(np.abs(z[chosen] - z[galaxy]) / (1 + z[galaxy])))
+def offset(redshift: np.ndarray, chosen: np.ndarray, galaxy: int) -> float:
+    return float(
+        np.median(np.abs(redshift[chosen] - redshift[galaxy]) / (1 + redshift[galaxy]))
+    )
 
 
 def interval(pql_values: list[float], cosine_values: list[float]) -> dict[str, Any]:
     paired = np.asarray([pql_values, cosine_values], dtype=np.float64)
     paired = paired[:, np.isfinite(paired).all(axis=0)]
     differences = paired[0] - paired[1]
+    if not len(differences):
+        return {"queries": 0}
     draws = np.random.default_rng(0).integers(
         len(differences), size=(RESAMPLES, len(differences))
     )
@@ -166,8 +169,8 @@ def interval(pql_values: list[float], cosine_values: list[float]) -> dict[str, A
 )
 def benchmark_pql_quality(sample: int) -> dict[str, Any]:
     built = index()
-    z = redshifts()
-    known = np.isfinite(z)
+    redshift = redshifts()
+    known = np.isfinite(redshift)
     rng = np.random.default_rng(0)
     galaxies = np.sort(
         rng.choice(np.flatnonzero(with_spectrum() & known), sample, replace=False)
@@ -185,7 +188,10 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
     )
     for position, galaxy in enumerate(galaxies.tolist()):
         others = np.arange(sample) != position
-        near = np.abs(z[galaxies] - z[galaxy]) / (1 + z[galaxy]) < NEAR
+        near = (
+            np.abs(redshift[galaxies] - redshift[galaxy]) / (1 + redshift[galaxy])
+            < NEAR
+        )
         for kind, query in selections(galaxy, rng).items():
             values = measured[kind]
             scores = pql.scores(query)
@@ -195,8 +201,8 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
                 query.model_copy(update={"matches": CANDIDATES}), index=built
             )[:2]
             matches = found[1:][known[found[1:]]]
-            values["redshift"]["pql"].append(offset(z, order[:TOP], galaxy))
-            values["redshift"]["cosine"].append(offset(z, matches[:TOP], galaxy))
+            values["redshift"]["pql"].append(offset(redshift, order[:TOP], galaxy))
+            values["redshift"]["cosine"].append(offset(redshift, matches[:TOP], galaxy))
             if not query.spans:
                 continue
 
