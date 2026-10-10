@@ -21,3 +21,14 @@ export function mask(values: ArrayLike<number>, threshold: number, invert: boole
 export function row(values: Float32Array, index: number, width: number): Float32Array {
   return values.subarray(index * width, (index + 1) * width)
 }
+
+export function matchMean(values: Float32Array, rows: number): Float32Array {
+  const width = values.length / rows
+  const mean = new Float32Array(width)
+  for (let index = 1; index < rows; index++) {
+    for (let slot = 0; slot < width; slot++) {
+      mean[slot] += values[index * width + slot] / (rows - 1)
+    }
+  }
+  return mean
+}

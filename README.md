@@ -8,19 +8,19 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 - **Explore the embedding space** - Every galaxy appears as a point in a parametric UMAP projection. There are two views: **mean**, one point per galaxy from its average embedding; and **full**, one point per embedding (all modalities share one map). Hovering or selecting a point shows the galaxy's morphology and image.
 - **Inspect a galaxy** - Selecting a point shows its Legacy Survey image or its DESI spectrum, smoothed for display, its morphology label, and which surveys it was crossmatched into.
-- **Search by token** - Search on a selected galaxy shows each of its 576 image tokens and 272 spectrum tokens. A Tabular Data table lists the galaxy's catalogue values; the 26 that AION encodes (25 photometric values and one redshift) can be checked, and after a search are shaded by their score. Click image tokens, spectrum tokens, values, or any mix, then press Search to find galaxies whose tokens are closest by cosine similarity. Each match shows a heatmap of its image token scores, and of its spectrum token scores where it has a spectrum; thresholding the image token heatmap gives zero-shot segmentation.
+- **Search by token** - Search on a selected galaxy shows each of its 576 image tokens and 272 spectrum tokens. A Tabular Data table lists the galaxy's catalogue values; the 26 that AION encodes (25 photometric values and one redshift) can be checked, and after a search are shaded by how well the matches agree with the selected galaxy on each. Click image tokens, spectrum tokens, values, or any mix, then press Search to find the galaxies whose AION predictions at those tokens and values agree most with the selected galaxy's (predictive query likelihood). Each match shows a heatmap of its image token scores, and of its spectrum token scores where it has a spectrum; thresholding the image token heatmap gives a mask.
 - **Search by text** - The Text Search tab beside the projection takes a description and lists the galaxies whose AION embeddings, mapped into [EmbeddingGemma](https://huggingface.co/google/embeddinggemma-2)'s space, lie nearest it, each with its cosine score and morphology. Clicking one selects it.
 
 ## Data
 
 `hanbangwu/alphauniverse-cosmos` is Legacy Survey DR10 south over COSMOS, crossmatched against HSC, DESI, SDSS, Galaxy Zoo 10 and PROVABGS. The image and spectrum surveys are tokenised:
 
-| Survey             | Modality | Tokens per galaxy |
-| ------------------ | -------- | ----------------- |
-| Legacy Survey DR10 | image    | 576 + 12 table values  |
-| HSC PDR3           | image    | 576 + 13 table values  |
-| DESI EDR SV3       | spectrum | 273               |
-| SDSS               | spectrum | 273               |
+| Survey             | Modality | Tokens per galaxy     |
+| ------------------ | -------- | --------------------- |
+| Legacy Survey DR10 | image    | 576 + 12 table values |
+| HSC PDR3           | image    | 576 + 13 table values |
+| DESI EDR SV3       | spectrum | 273                   |
+| SDSS               | spectrum | 273                   |
 
 A galaxy with a spectroscopic redshift also gets one redshift token: DESI's if it is unflagged and at most 6, else SDSS's under the same test, else none.
 
@@ -55,7 +55,7 @@ The dev build calls the API at `http://127.0.0.1:8000`, so start the local API f
 
 ```sh
 uv run modal run modal_app.py::generate_embeddings        # encode dataset
-uv run modal run modal_app.py::generate_index             # build the search index
+uv run modal run modal_app.py::generate_index             # build the cosine index the benchmarks compare against
 uv run modal run modal_app.py::generate_predictions       # AION's predictions at every slot
 uv run modal run modal_app.py::generate_projections       # fit and apply the projection
 uv run modal run modal_app.py::generate_pairs             # AION and EmbeddingGemma embeddings of each galaxy

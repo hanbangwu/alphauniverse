@@ -103,10 +103,9 @@ export class Similarity {
     return row(must(this.imageMaps, 'the image maps'), index, this.#imageTokenCount)
   }
 
-  spectrumMapAt(index: number): Float32Array | null {
+  spectrumMapAt(index: number): Float32Array {
     const maps = must(this.spectrumMaps, 'the spectrum maps')
-    const map = row(maps, index, maps.length / this.galaxies.length)
-    return Number.isNaN(map[0]) ? null : map
+    return row(maps, index, maps.length / this.galaxies.length)
   }
 
   maskOf(values: ArrayLike<number>): Uint8Array | null {

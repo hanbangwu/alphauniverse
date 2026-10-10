@@ -63,7 +63,9 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def parameters(matches: int) -> dict[str, Any]:
             return {
                 "galaxy": galaxy(),
-                "p": rng.choice(N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False).tolist(),
+                "ls_image": rng.choice(
+                    N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False
+                ).tolist(),
                 "matches": matches,
             }
 
@@ -91,7 +93,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "similarity table values matches=32": lambda: get(
                 "/search",
                 galaxy=int(added.integers(galaxies)),
-                t=(
+                table_values=(
                     FIRST_LS_TABLE_VALUE
                     + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist(),
@@ -143,10 +145,10 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             )
             return {
                 "galaxy": galaxy,
-                "p": rng.choice(
+                "ls_image": rng.choice(
                     N_IMAGE_TOKENS, image_token_count, replace=False
                 ).tolist(),
-                "s": rng.choice(
+                f"{SPECTRUM_SURVEY}_spectrum": rng.choice(
                     spectrum_tokens, SPECTRUM_TOKENS, replace=False
                 ).tolist(),
                 "matches": 32,

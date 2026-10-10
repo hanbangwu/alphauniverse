@@ -377,7 +377,7 @@
             }
           },
           {
-            "name": "p",
+            "name": "ls_image",
             "in": "query",
             "required": false,
             "schema": {
@@ -389,11 +389,27 @@
               },
               "maxItems": 576,
               "default": [],
-              "title": "P"
+              "title": "Ls Image"
             }
           },
           {
-            "name": "s",
+            "name": "hsc_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Hsc Image"
+            }
+          },
+          {
+            "name": "desi_spectrum",
             "in": "query",
             "required": false,
             "schema": {
@@ -405,11 +421,27 @@
               },
               "maxItems": 272,
               "default": [],
-              "title": "S"
+              "title": "Desi Spectrum"
             }
           },
           {
-            "name": "t",
+            "name": "sdss_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Sdss Spectrum"
+            }
+          },
+          {
+            "name": "table_values",
             "in": "query",
             "required": false,
             "schema": {
@@ -421,7 +453,7 @@
               },
               "maxItems": 26,
               "default": [],
-              "title": "T"
+              "title": "Table Values"
             }
           },
           {
@@ -658,7 +690,7 @@
             ],
             "title": "Value"
           },
-          "scalar": {
+          "table_value": {
             "anyOf": [
               {
                 "type": "integer"
@@ -667,7 +699,7 @@
                 "type": "null"
               }
             ],
-            "title": "Scalar"
+            "title": "Table Value"
           },
           "token": {
             "anyOf": [
@@ -697,7 +729,7 @@
           "section",
           "column",
           "value",
-          "scalar",
+          "table_value",
           "token",
           "excluded"
         ],

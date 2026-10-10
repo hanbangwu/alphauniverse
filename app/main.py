@@ -14,23 +14,26 @@ from fastapi.responses import FileResponse, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
+from . import pql
 from .config import (
     ANCHOR,
     DATASET_AUTHOR,
     DATASET_NAME,
     FLAG_SURVEYS,
     GRID,
+    IMAGE_MODES,
     N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
-    N_TABLE_VALUES,
+    OBSERVATIONS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     REDSHIFT_TABLE_VALUE,
+    SPECTRUM_MODES,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
+    TABLE_MODES,
     TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
     Catalogue,
@@ -43,16 +46,7 @@ from .config import (
     labels,
 )
 from .dataset import catalogue, image, redshift, spectrum, table
-from .search import (
-    FIRST_LS_TABLE_VALUE,
-    index,
-    search,
-    starts,
-    table_value_tokens,
-    tokens,
-    with_hsc,
-)
-from .search import Query as SearchQuery
+from .search import FIRST_LS_TABLE_VALUE, table_value_tokens, tokens
 from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
@@ -83,7 +77,7 @@ class TableRow(BaseModel):
     section: Catalogue | Literal["redshift"]
     column: str
     value: float | int | bool | None
-    scalar: int | None
+    table_value: int | None
     token: int | None
     excluded: str | None
 
@@ -137,9 +131,10 @@ class RevalidatedRoute(APIRoute):
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
     labels()
-    index()
-    starts()
-    with_hsc()
+    pql.predictions()
+    pql.basis()
+    for column in OBSERVATIONS:
+        pql.observed(column)
     yield
 
 
@@ -261,7 +256,7 @@ def redshift_row(
         section=REDSHIFT,
         column=f"{survey.upper()} {column.partition('-')[0]}",
         value=values[column],
-        scalar=REDSHIFT_TABLE_VALUE if selectable else None,
+        table_value=REDSHIFT_TABLE_VALUE if selectable else None,
         token=token if selectable else None,
         excluded=excluded(values, survey, chosen) if first else None,
     )
@@ -277,7 +272,7 @@ def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRo
         section=catalogue(column),
         column=column.partition("-")[0],
         value=value,
-        scalar=table_value,
+        table_value=table_value,
         token=None if table_value is None else token_ids.get(column),
         excluded=None,
     )
@@ -370,41 +365,46 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
 )
-def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, values, spectrum_tokens, table_values = search(
-        query, index=index()
-    )
-
+def get_search(query: Annotated[pql.Query, Query()]) -> Response:
+    results = pql.search(query)
+    count = len(results.galaxies)
     item = pa.field("item", pa.float32(), nullable=False)
-    schema = pa.schema(
-        [
-            pa.field("galaxy", pa.int32(), nullable=False),
-            pa.field("score", pa.float32(), nullable=False),
-            pa.field("map", pa.list_(item, N_IMAGE_TOKENS), nullable=False),
-            pa.field("spectrum", pa.list_(item, N_SPECTRUM_TOKENS)),
-            pa.field("scalars", pa.list_(item, N_TABLE_VALUES), nullable=False),
-        ]
-    )
-    batch = pa.record_batch(
-        [
-            pa.array(galaxies),
-            pa.array(scores),
+    fields = [
+        pa.field("galaxy", pa.int32(), nullable=False),
+        pa.field("score", pa.float32(), nullable=False),
+    ]
+    columns = [pa.array(results.galaxies), pa.array(results.scores)]
+    for mode, values in results.aligned.items():
+        fields.append(pa.field(mode, pa.list_(item, values.shape[1]), nullable=False))
+        columns.append(
             pa.FixedSizeListArray.from_arrays(
-                pa.array(values.reshape(-1)), N_IMAGE_TOKENS
-            ),
-            pa.FixedSizeListArray.from_arrays(
-                pa.array(spectrum_tokens.reshape(-1)),
-                N_SPECTRUM_TOKENS,
-                mask=pa.array(np.isnan(spectrum_tokens[:, 0])),
-            ),
-            pa.FixedSizeListArray.from_arrays(
-                pa.array(table_values.reshape(-1)), N_TABLE_VALUES
-            ),
-        ],
-        schema=schema,
-    )
-
-    return arrow(batch)
+                pa.array(values.reshape(-1), pa.float32()), values.shape[1]
+            )
+        )
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
+        width = results.aligned[mode].shape[1]
+        kind = pa.list_(item, width)
+        fields.append(pa.field(f"{mode}_selection", kind))
+        selected = results.selected.get(mode)
+        columns.append(
+            pa.nulls(count, kind)
+            if selected is None
+            else pa.FixedSizeListArray.from_arrays(
+                pa.array(selected.reshape(-1), pa.float32()), width
+            )
+        )
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES):
+        fields.append(pa.field(f"{mode}_sum", pa.float32()))
+        sums = results.sums.get(mode)
+        columns.append(
+            pa.nulls(count, pa.float32())
+            if sums is None
+            else pa.array(sums, pa.float32())
+        )
+    for column in OBSERVATIONS:
+        fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))
+        columns.append(pa.array(pql.observed(column)[results.galaxies]))
+    return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
 
 
 @app.get("/search/text")

@@ -10,11 +10,11 @@ import {
 } from '$lib/api'
 import type { Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
-import { row } from './scores'
+import { matchMean } from './scores'
 import type { SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
-import { type Float32, tableFromIPC } from 'apache-arrow'
+import { type Float32, type Table, tableFromIPC } from 'apache-arrow'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
@@ -131,6 +131,12 @@ export function morphologyQuery(mosaic: MosaicState, table: string | null, galax
   })
 }
 
+function shownMaps(table: Table, mode: string): Float32Array {
+  const selection = table.getChild(`${mode}_selection`)!
+  const shown = selection.nullCount === 0 ? selection : table.getChild(mode)!
+  return shown.getChildAt<Float32>(0)!.toArray()
+}
+
 export function similarityQuery(request: SimilarityQuery | null) {
   return queryOptions({
     queryKey: ['similarity', request] as const,
@@ -140,13 +146,13 @@ export function similarityQuery(request: SimilarityQuery | null) {
         : async ({ signal }): Promise<SimilarityResult> => {
             const { data } = await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
-            const tableValueMaps = table.getChild('scalars')!.getChildAt<Float32>(0)!.toArray()
+            const tableValueMaps = table.getChild('table_values')!.getChildAt<Float32>(0)!.toArray()
             return {
               galaxies: table.getChild('galaxy')!.toArray(),
               scores: table.getChild('score')!.toArray(),
-              imageMaps: table.getChild('map')!.getChildAt<Float32>(0)!.toArray(),
-              spectrumMaps: table.getChild('spectrum')!.getChildAt<Float32>(0)!.toArray(),
-              tableValueMap: row(tableValueMaps, 0, tableValueMaps.length / table.numRows)
+              imageMaps: shownMaps(table, 'ls_image'),
+              spectrumMaps: shownMaps(table, 'desi_spectrum'),
+              tableValueMap: matchMean(tableValueMaps, table.numRows)
             }
           },
     placeholderData: keepPreviousData,

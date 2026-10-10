@@ -187,6 +187,18 @@ SPECTRUM_TOKEN_RANK = 256
 IMAGE_VOCABULARY = 4375
 VOCABULARY = 1024
 REDSHIFT_VOCABULARY = 1025
+IMAGE_MODES = {f"{survey}_image": survey for survey in (ANCHOR, "hsc")}
+SPECTRUM_MODES = {f"{survey}_spectrum": survey for survey in SPECTRUM_SURVEYS}
+TABLE_MODES = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
+    f"{survey}_table": (f"{survey}_table_values", len(columns), VOCABULARY)
+    for survey, columns in TABLE_VALUE_SURVEYS.items()
+}
+OBSERVATIONS = {
+    "hsc": "HSC match",
+    "desi": "DESI spectrum",
+    "sdss": "SDSS spectrum",
+    REDSHIFT: "usable redshift",
+}
 
 PREDICTIONS = pa.schema(
     [

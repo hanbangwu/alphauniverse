@@ -3,27 +3,39 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pytest
+from pydantic import ValidationError
 
 from app import pql
 from app.config import (
-    ANCHOR,
+    IMAGE_MODES,
     IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
+    REDSHIFT,
+    SPECTRUM_MODES,
     SPECTRUM_TOKEN_RANK,
-    TABLE_VALUE_SURVEYS,
+    TABLE_MODES,
     TOP_CODES,
     VOCABULARY,
 )
-from app.search import FIRST_HSC_TABLE_VALUE, FIRST_LS_TABLE_VALUE, Query
 
-IMAGE_TOKENS = (0, 17, 300, 575)
-SPECTRUM_TOKENS = (40, 41, 42)
-TABLE_VALUES = (
-    FIRST_LS_TABLE_VALUE + 1,
-    FIRST_LS_TABLE_VALUE + 5,
-    FIRST_HSC_TABLE_VALUE + 2,
-)
+GALAXY = 0
+SELECTION = {
+    "ls_image": (0, 17, 300, 575),
+    "hsc_image": (5, 6, 7),
+    "desi_spectrum": (40, 41, 42),
+    "sdss_spectrum": (100,),
+    "table_values": (0, 2, 6, 15),
+}
+SELECTED_SLOTS = {
+    "ls_image": [0, 17, 300, 575],
+    "hsc_image": [5, 6, 7],
+    "desi_spectrum": [40, 41, 42],
+    "sdss_spectrum": [100],
+    REDSHIFT: [0],
+    "ls_table": [1, 5],
+    "hsc_table": [2],
+}
 
 
 def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
@@ -54,9 +66,21 @@ def dense_spectrum_tokens(rows: pa.Table, survey: str) -> np.ndarray:
     return mean + coefficients @ directions
 
 
-def dense_table_values(rows: pa.Table, survey: str) -> np.ndarray:
-    count = len(TABLE_VALUE_SURVEYS[survey])
-    return np.exp(column(rows, f"{survey}_table_values", count, VOCABULARY))
+def dense(rows: pa.Table, mode: str, kept: int) -> np.ndarray:
+    survey, _, kind = mode.partition("_")
+    if kind == "image":
+        return dense_image_tokens(rows, survey, kept)
+    if kind == "spectrum":
+        return dense_spectrum_tokens(rows, survey)
+    name, count, vocabulary = TABLE_MODES[mode]
+    return np.exp(column(rows, name, count, vocabulary))
+
+
+def log_overlaps(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.ndarray:
+    overlaps = (gallery * query).sum(axis=-1)
+    if mode.endswith("spectrum"):
+        overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
+    return np.log(overlaps)
 
 
 @pytest.fixture(scope="module")
@@ -65,112 +89,113 @@ def table(tree: Path) -> pa.Table:
 
 
 @pytest.fixture(scope="module")
-def query(tree: Path) -> Query:
-    return Query(
-        galaxy=0,
-        image_tokens=IMAGE_TOKENS,
-        spectrum_tokens=SPECTRUM_TOKENS,
-        table_values=TABLE_VALUES,
-    )
+def query(tree: Path) -> pql.Query:
+    return pql.Query(galaxy=GALAXY, **SELECTION)
 
 
 def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
-    table: pa.Table, query: Query
+    table: pa.Table, query: pql.Query
 ) -> None:
-    survey = pql.spectrum_survey(query.galaxy)
-    own = table.slice(query.galaxy, 1)
-    spectrum_tokens = dense_spectrum_tokens(table, survey)
-    expected = {
-        f"{ANCHOR}_image": np.einsum(
-            "gsv,sv->gs",
-            dense_image_tokens(table, ANCHOR, pql.KEPT)[:, IMAGE_TOKENS],
-            dense_image_tokens(own, ANCHOR, TOP_CODES)[0, IMAGE_TOKENS],
-        ),
-        f"{survey}_spectrum": np.maximum(
-            np.einsum(
-                "gsv,sv->gs",
-                spectrum_tokens[:, SPECTRUM_TOKENS],
-                spectrum_tokens[query.galaxy, SPECTRUM_TOKENS],
-            ),
-            pql.SPECTRUM_TOKEN_FLOOR,
-        ),
-        f"{ANCHOR}_table": np.einsum(
-            "gsv,sv->gs",
-            dense_table_values(table, ANCHOR)[:, [1, 5]],
-            dense_table_values(own, ANCHOR)[0, [1, 5]],
-        ),
-        "hsc_table": np.einsum(
-            "gsv,sv->gs",
-            dense_table_values(table, "hsc")[:, [2]],
-            dense_table_values(own, "hsc")[0, [2]],
-        ),
-    }
+    own = table.slice(GALAXY, 1)
 
     sums = pql.parts(query)
 
-    assert sums.keys() == expected.keys()
-    for mode, overlaps in expected.items():
-        np.testing.assert_allclose(sums[mode], np.log(overlaps).sum(axis=1), rtol=1e-4)
+    assert sums.keys() == SELECTED_SLOTS.keys()
+    for mode, slots in SELECTED_SLOTS.items():
+        expected = log_overlaps(
+            mode,
+            dense(table, mode, pql.KEPT)[:, slots],
+            dense(own, mode, TOP_CODES)[0, slots],
+        ).sum(axis=1)
+        np.testing.assert_allclose(sums[mode], expected, rtol=1e-4, err_msg=mode)
 
 
-def test_maps_overlap_every_slot_with_the_mean_of_the_selected_query_slots(
-    table: pa.Table, query: Query
+def test_aligned_maps_overlap_each_slot_with_the_same_slot_of_the_query(
+    table: pa.Table, query: pql.Query
 ) -> None:
-    survey = pql.spectrum_survey(query.galaxy)
     galaxies = np.asarray([3, 0])
-    own = table.slice(query.galaxy, 1)
+    own = table.slice(GALAXY, 1)
     shown = table.take(galaxies)
-    spectrum_tokens = dense_spectrum_tokens(table, survey)
 
-    image_token_maps, spectrum_token_maps, table_values = pql.maps(query, galaxies)
+    aligned, _ = pql.maps(query, galaxies)
 
+    expected = {
+        mode: log_overlaps(
+            mode, dense(shown, mode, pql.KEPT), dense(own, mode, TOP_CODES)[0]
+        )
+        for mode in SELECTED_SLOTS
+    }
+    assert aligned.keys() == {*IMAGE_MODES, *SPECTRUM_MODES, "table_values"}
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
+        np.testing.assert_allclose(aligned[mode], expected[mode], rtol=1e-4)
     np.testing.assert_allclose(
-        image_token_maps,
-        np.log(
-            dense_image_tokens(shown, ANCHOR, pql.KEPT)
-            @ dense_image_tokens(own, ANCHOR, TOP_CODES)[0, IMAGE_TOKENS].mean(axis=0)
-        ),
-        rtol=1e-4,
-    )
-    np.testing.assert_allclose(
-        spectrum_token_maps,
-        np.log(
-            np.maximum(
-                spectrum_tokens[galaxies]
-                @ spectrum_tokens[query.galaxy, SPECTRUM_TOKENS].mean(axis=0),
-                pql.SPECTRUM_TOKEN_FLOOR,
-            )
-        ),
-        rtol=1e-4,
-    )
-    np.testing.assert_allclose(
-        table_values,
-        np.log(
-            np.hstack(
-                [
-                    (
-                        dense_table_values(shown, catalogue)
-                        * dense_table_values(own, catalogue)
-                    ).sum(axis=-1)
-                    for catalogue in TABLE_VALUE_SURVEYS
-                ]
-            )
-        ),
+        aligned["table_values"],
+        np.hstack([expected[mode] for mode in TABLE_MODES]),
         rtol=1e-4,
     )
 
 
-def test_maps_of_unselected_modes_are_missing(tree: Path) -> None:
-    image_tokens, spectrum_tokens, _ = pql.maps(
-        Query(galaxy=0, table_values=(FIRST_LS_TABLE_VALUE,)), np.asarray([3])
+def test_selection_maps_overlap_every_slot_with_the_mean_of_the_selected_slots(
+    table: pa.Table, query: pql.Query
+) -> None:
+    galaxies = np.asarray([3, 0])
+    own = table.slice(GALAXY, 1)
+    shown = table.take(galaxies)
+
+    _, selected = pql.maps(query, galaxies)
+
+    assert selected.keys() == {*IMAGE_MODES, *SPECTRUM_MODES}
+    for mode in selected:
+        mean = dense(own, mode, TOP_CODES)[0, SELECTED_SLOTS[mode]].mean(axis=0)
+        np.testing.assert_allclose(
+            selected[mode],
+            log_overlaps(mode, dense(shown, mode, pql.KEPT), mean),
+            rtol=1e-4,
+            err_msg=mode,
+        )
+
+
+def test_unselected_image_and_spectrum_modes_have_no_selection_map(
+    tree: Path,
+) -> None:
+    aligned, selected = pql.maps(
+        pql.Query(galaxy=GALAXY, table_values=(1,)), np.asarray([3])
     )
 
-    assert np.isnan(image_tokens).all()
-    assert np.isnan(spectrum_tokens).all()
+    assert selected == {}
+    assert all(np.isfinite(values).all() for values in aligned.values())
+
+
+def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
+    query: pql.Query,
+) -> None:
+    matches = 4
+    ranked = query.model_copy(update={"matches": matches})
+
+    results = pql.search(ranked)
+
+    scores = pql.scores(ranked)
+    others = np.delete(np.arange(len(scores)), GALAXY)
+    best = others[np.argsort(-scores[others], kind="stable")][:matches]
+    assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
+    np.testing.assert_allclose(results.scores, scores[results.galaxies])
+    for mode, values in pql.parts(ranked).items():
+        np.testing.assert_allclose(results.sums[mode], values[results.galaxies])
+
+
+@pytest.mark.parametrize(
+    "selected",
+    [{"hsc_image": (0,)}, {"sdss_spectrum": (0,)}, {"table_values": (0,)}],
+)
+def test_a_selection_on_a_mode_the_query_galaxy_lacks_is_rejected(
+    tree: Path, selected: dict[str, tuple[int, ...]]
+) -> None:
+    with pytest.raises(ValidationError):
+        pql.Query(galaxy=1, **selected)
 
 
 def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
-    query: Query,
+    query: pql.Query,
 ) -> None:
     sums = pql.parts(query)
 
@@ -193,3 +218,13 @@ def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow(
 
     expected = np.log(np.exp(gallery.astype(np.float64) + query).sum(axis=-1))
     np.testing.assert_allclose(found, expected, rtol=1e-6)
+
+
+def test_a_repeated_slot_counts_once(tree: Path) -> None:
+    repeated = pql.parts(
+        pql.Query(galaxy=GALAXY, ls_image=(7, 7, 9), table_values=(2, 2))
+    )
+    once = pql.parts(pql.Query(galaxy=GALAXY, ls_image=(7, 9), table_values=(2,)))
+
+    for mode, values in once.items():
+        np.testing.assert_array_equal(repeated[mode], values)

@@ -29,20 +29,20 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 ## The artifacts
 
-| Role               | Shape                                         | Who reads it                                                             |
-| ------------------ | --------------------------------------------- | ------------------------------------------------------------------------ |
-| `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/downloads/{role}`                            |
-| `codebook`         | same, the encoder's input embeddings          | `/downloads/{role}`                                                      |
-| `tokens`           | same, token ids                               | startup, `/search`, token and galaxy endpoints, downloads, predictions   |
-| `search_index`     | faiss IVF over image tokens, spectrum tokens and table values     | `/search`                                                                |
-| `mean_points`      | one 2-d point per galaxy                      | `/meta`, `/projections/mean`                                             |
-| `full_points`      | one 2-d point per embedding                   | `/projections/full`                                                      |
-| `parametric_umap`  | the trained projector's weights               | nothing at serve time                                                    |
-| `pairs`            | AION and EmbeddingGemma embeddings per galaxy | `generate_alignment`, `generate_aion_gemma_space`, `text_search_quality` |
-| `alignment`        | the AION to EmbeddingGemma maps' weights      | `generate_aion_gemma_space`, `text_search_quality`                       |
-| `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space  | `/search/text`                                                           |
-| `predictions`      | AION's predicted codes at every slot          | `pql_quality`                                                            |
-| `prediction_basis` | the spectrum token predictions' PCA basis per survey    | `pql_quality`                                                            |
+| Role               | Shape                                                         | Who reads it                                                             |
+| ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `encoded`          | one row per galaxy, embeddings per survey                     | index build, projections, `/downloads/{role}`                            |
+| `codebook`         | same, the encoder's input embeddings                          | `/downloads/{role}`                                                      |
+| `tokens`           | same, token ids                                               | startup, `/search`, token and galaxy endpoints, downloads, predictions   |
+| `search_index`     | faiss IVF over image tokens, spectrum tokens and table values | `search_quality`, `search_performance`, `pql_quality` (#219)             |
+| `mean_points`      | one 2-d point per galaxy                                      | `/meta`, `/projections/mean`                                             |
+| `full_points`      | one 2-d point per embedding                                   | `/projections/full`                                                      |
+| `parametric_umap`  | the trained projector's weights                               | nothing at serve time                                                    |
+| `pairs`            | AION and EmbeddingGemma embeddings per galaxy                 | `generate_alignment`, `generate_aion_gemma_space`, `text_search_quality` |
+| `alignment`        | the AION to EmbeddingGemma maps' weights                      | `generate_aion_gemma_space`, `text_search_quality`                       |
+| `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space                  | `/search/text`                                                           |
+| `predictions`      | AION's predicted codes at every slot                          | startup, `/search`, `pql_quality`                                        |
+| `prediction_basis` | the spectrum token predictions' PCA basis per survey          | startup, `/search`, `pql_quality`                                        |
 
 `docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image`, `/galaxy/{g}/spectrum` and `/galaxy/{g}/table` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux. `/galaxy/{g}/table` returns every numeric and boolean column whose name ends in one of the six catalogue suffixes, null where that catalogue has no match; the `Z` row AION was given carries index 0, the redshift, and each of the 25 table values AION encodes carries its index: 1 to 12 Legacy Survey, then 13 to 25 HSC (`TABLE_VALUE_SURVEYS` in `app/config.py`). The DESI and SDSS redshift rows (`Z`, its error, its flag) come first, in the `redshift` section and named with their survey; every other row's section is its catalogue. Any other measured `Z` row has `excluded`, the reason: flagged by its survey, above AION's limit of 6, or not the one AION takes.
 
@@ -66,18 +66,25 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 | `/search`                     | Arrow IPC    |
 | `/search/text`                | JSON         |
 
-`/search` takes `galaxy`, the selected image tokens `p`, spectrum tokens `s` and table values `t`, each repeated once per index, and `matches` (1–128, default 32). `/search/text` takes `text` (1–500 characters) and `matches` (1–128, default 32).
+`/search` takes `galaxy`, the selected slots `ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum` and `table_values`, each repeated once per index, and `matches` (1–128, default 32). `/search/text` takes `text` (1–500 characters) and `matches` (1–128, default 32).
 
 ## Similarity search
 
-A query is one or more image tokens, spectral spectrum tokens and encoded table values of one galaxy. An HSC table value needs an HSC match, and the redshift (table value 0) a redshift token. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-image-token score map, a per-spectrum-token score map where it has a spectrum, and a per-table-value score map, NaN for the HSC table values where it has no HSC match and for the redshift where it has no redshift token.
+A query is one galaxy and a selection from it: image tokens of its Legacy Survey or HSC image, spectrum tokens of its DESI or SDSS spectrum, and table values, numbered as `/galaxy/{g}/table` numbers them (0 the redshift, 1 to 12 Legacy Survey, 13 to 25 HSC). Every selected mode must be one the galaxy has: the HSC image and HSC table values need an HSC match, a spectrum's tokens that spectrum, the redshift a redshift token.
 
-The search reads vectors back from the index by id, in the layout `docs/pipeline.md` gives:
+`app/pql.py` scores by predictive query likelihood (#199) from `predictions` and `prediction_basis`, which `lifespan` loads, by an exact scan of every galaxy:
 
-1. The query's vectors are averaged and normalised into one direction.
-2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`. If they hold fewer galaxies, the search runs again with both numbers doubled, until there are enough or it has probed every list for every vector. The lists probed are set per search, so the index that concurrent requests share is not changed. faiss scans them on its threads and starts no prefetch threads.
-3. Every image token, spectrum token and table value of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
-4. A galaxy's score is its best token score over its maps. The candidates are sorted by it, after the query galaxy.
+1. The selection splits into modes: each image survey, each spectrum survey, each catalogue's table values and the redshift.
+2. At each selected slot, a galaxy's overlap with the query is Σ_t p_q(t) p_g(t) over their predicted distributions. Image tokens use the query's 64 stored codes and the galaxy's top `KEPT` (16), each with the rest of its mass spread evenly; spectrum tokens use the PCA coefficients, floored at 0.1/1,024; table values and the redshift take a log-sum-exp of the stored log-probabilities.
+3. A mode's sum is the sum of its slots' log overlaps, in nats. One mode ranks by its sum; several rank by the mean of each mode's sum standardised over every galaxy.
+4. The answer is the query galaxy's row, then the `matches` best other galaxies, or every other galaxy if the dataset holds fewer.
+
+Each row carries its `score`, `{mode}_sum` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, and two kinds of map:
+
+- **Aligned maps** (`ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum`, `table_values`), for every mode: at each slot, the log overlap of the galaxy's and the query galaxy's predictions at that slot. A mode's sum is its aligned map summed over the selected slots.
+- **Selection maps** (`{mode}_selection`), for each selected image or spectrum mode, null otherwise: at each slot, the log overlap with the mean of the query's predictions over its selected slots of that mode.
+
+Every map comes from predictions, so a galaxy without a mode has maps for it too; the `has_` flags say which modes it observed. The dialog shows a match's Legacy Survey image map and DESI spectrum map: the selection map when that mode is selected, the aligned map otherwise.
 
 ## Text search
 
@@ -115,7 +122,7 @@ Image token grids are Apache ECharts custom series, one rect per image token on 
 
 Spectra are Apache ECharts line charts. The app serves and shows only DESI spectra; a galaxy without one shows no spectrum. The dialog's interactive chart shades one area per spectrum token, laid out from `spectrum_origin` and `spectrum_width` in `/meta` and coloured like the token grid. It holds the selected spectrum tokens in `view.spectrum_tokens`, which join the selected image tokens in the query. It zooms on the wheel and pans on drag, since 272 spectrum tokens do not fit a panel a few hundred pixels wide.
 
-Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by section, Redshift first. Each encoded table value has a checkbox; the checked ones are `view.table_values` and join the query. An encoded table value without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor; a row with `excluded` has a disabled checkbox and is grey and italic, with the reason under its name. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes the row's score on viridis over the 26 scores. A checked row has a 1 px `SELECTED` outline, as a selected spectrum token does.
+Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by section, Redshift first. Each encoded table value has a checkbox; the checked ones are `view.table_values` and join the query. An encoded table value without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor; a row with `excluded` has a disabled checkbox and is grey and italic, with the reason under its name. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes, on viridis over the 26 values, the matches' mean aligned overlap with the query galaxy at that value. A checked row has a 1 px `SELECTED` outline, as a selected spectrum token does.
 
 ## Deployment
 
