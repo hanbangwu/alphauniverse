@@ -4,6 +4,7 @@
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
   import { hasSpectrum } from '$lib/data/spectra'
+  import { errorMessage } from '$lib/errors'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -57,4 +58,9 @@
       </p>
     {/if}
   </PanelFrame>
+  {#if spectrum.isError}
+    <p role="alert" class="text-xs leading-relaxed text-destructive">
+      {errorMessage(spectrum.error)}
+    </p>
+  {/if}
 </div>

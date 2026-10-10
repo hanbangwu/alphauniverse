@@ -416,6 +416,9 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     for column in OBSERVATIONS:
         fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))
         columns.append(pa.array(pql.observed(column)[results.galaxies]))
+    observations = pa.list_(pa.field("item", pa.string(), nullable=False))
+    fields.append(pa.field("predicted", observations, nullable=False))
+    columns.append(pa.array(results.predicted, observations))
     return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
 
 

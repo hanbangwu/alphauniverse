@@ -79,7 +79,7 @@ A query is one galaxy and a selection from it: image tokens of its Legacy Survey
 3. A mode's sum is the sum of its slots' log overlaps, in nats. One mode ranks by its sum; several rank by the mean of each mode's sum standardised over every galaxy.
 4. The answer is the query galaxy's row, then the `matches` best other galaxies, or every other galaxy if the dataset holds fewer.
 
-Each row carries its `score`, its `similarity`, `{mode}_sum` and `{mode}_similarity` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, and two kinds of map.
+Each row carries its `score`, its `similarity`, `{mode}_sum` and `{mode}_similarity` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, `predicted` (the observations its selected modes need that it lacks, each once: `hsc`, `desi`, `sdss`, `redshift`), and two kinds of map.
 
 A mode's similarity is exp ℓ_m, where ℓ_m is the mean over its selected slots of the log overlap minus the log of the query's largest probability at that slot. An overlap is at most that largest probability, so the similarity is in (0, 1]: the geometric mean fraction of the best overlap any galaxy could reach. The row's `similarity` is exp Σ_m w_m ℓ_m, with w_m proportional to 1/std(ℓ_m) over every galaxy and summing to 1; it orders galaxies as `score` does. A PCA spectrum overlap can exceed the query's largest probability slightly, and with it a spectrum similarity exceeds 1; the dialog shows at most 1.
 

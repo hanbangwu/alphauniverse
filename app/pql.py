@@ -92,6 +92,7 @@ class Results(NamedTuple):
     similarity: np.ndarray
     sums: dict[str, np.ndarray]
     similarities: dict[str, np.ndarray]
+    predicted: list[list[str]]
     aligned: dict[str, np.ndarray]
     selected: dict[str, np.ndarray]
 
@@ -359,6 +360,20 @@ def similarity(fractions: dict[str, np.ndarray]) -> np.ndarray:
     return np.exp(weighted / sum(weights.values()))
 
 
+def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
+    needed = {
+        OBSERVED_IN[mode] for mode in selection(query).keys() & OBSERVED_IN.keys()
+    }
+    return [
+        [
+            column
+            for column in OBSERVATIONS
+            if column in needed and not observed(column)[galaxy]
+        ]
+        for galaxy in galaxies.tolist()
+    ]
+
+
 def search(query: Query) -> Results:
     totals = parts(query)
     scored = combine(totals)
@@ -373,5 +388,6 @@ def search(query: Query) -> Results:
         similarity(shares)[galaxies],
         {mode: values[galaxies] for mode, values in totals.items()},
         {mode: np.exp(values[galaxies]) for mode, values in shares.items()},
+        predicted(query, galaxies),
         *maps(query, galaxies),
     )

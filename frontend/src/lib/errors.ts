@@ -13,5 +13,5 @@ export function errorMessage(error: unknown): string {
         .join('; ')
     }
   }
-  return String(error)
+  return typeof error === 'string' && error ? error : 'The request failed.'
 }

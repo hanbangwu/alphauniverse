@@ -10,12 +10,11 @@ export type Choice<T extends string> = Label & { value: T }
 
 export const SIMILARITY = { short: 'similarity' } as const
 
-export const OBSERVED: Record<string, { has: string; label: string }> = {
-  hsc_image: { has: 'has_hsc', label: 'HSC image' },
-  desi_spectrum: { has: 'has_desi', label: 'DESI spectrum' },
-  sdss_spectrum: { has: 'has_sdss', label: 'SDSS spectrum' },
-  hsc_table: { has: 'has_hsc', label: 'HSC match' },
-  redshift: { has: 'has_redshift', label: 'redshift' }
+export const OBSERVATIONS: Record<string, string> = {
+  hsc: 'HSC match',
+  desi: 'DESI spectrum',
+  sdss: 'SDSS spectrum',
+  redshift: 'redshift'
 }
 
 export const SURVEYS: Labels<keyof Galaxy> = {

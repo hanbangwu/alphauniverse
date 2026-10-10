@@ -11,6 +11,7 @@ from app.config import (
     IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
+    OBSERVATIONS,
     REDSHIFT,
     SPECTRUM_MODES,
     SPECTRUM_TOKEN_RANK,
@@ -262,3 +263,16 @@ def test_similarity_of_image_and_table_modes_is_at_most_one(query: pql.Query) ->
     for mode, values in results.similarities.items():
         if mode not in SPECTRUM_MODES:
             assert (values <= 1 + 1e-6).all(), mode
+
+
+def test_predicted_lists_each_missing_observation_of_the_selection_once(
+    query: pql.Query,
+) -> None:
+    results = pql.search(query.model_copy(update={"matches": 11}))
+
+    for galaxy, missing in zip(
+        results.galaxies.tolist(), results.predicted, strict=True
+    ):
+        assert missing == [
+            column for column in OBSERVATIONS if not pql.observed(column)[galaxy]
+        ]
