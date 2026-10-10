@@ -14,8 +14,8 @@ from app.config import (
     LS,
     REDSHIFT_COLUMNS,
     RGB_COLUMN,
-    SCALAR_COLUMNS,
     SPECTRUM_SURVEYS,
+    TABLE_VALUE_COLUMNS,
 )
 from app.dataset import (
     encode,
@@ -106,7 +106,7 @@ def test_table_keeps_numeric_catalogue_columns(
 ) -> None:
     rows = Dataset.from_dict(
         {
-            SCALAR_COLUMNS[0]: [0.5, None],
+            TABLE_VALUE_COLUMNS[0]: [0.5, None],
             f"object_id{LS}": ["a", "b"],
             "_healpix_29": [1, 2],
             FLAG_SURVEYS["gz10"]: [None, 3],
@@ -115,7 +115,7 @@ def test_table_keeps_numeric_catalogue_columns(
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
     table_columns.cache_clear()
 
-    assert table(1) == {SCALAR_COLUMNS[0]: None, FLAG_SURVEYS["gz10"]: 3}
+    assert table(1) == {TABLE_VALUE_COLUMNS[0]: None, FLAG_SURVEYS["gz10"]: 3}
     table_columns.cache_clear()
 
 

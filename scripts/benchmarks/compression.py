@@ -5,8 +5,8 @@ import numpy as np
 import torch
 
 from app import pql
-from app.config import SPAN_RANK, TOP_CODES, VOCABULARY
-from app.predictions import Mode, cells, coefficients
+from app.config import SPECTRUM_TOKEN_RANK, TOP_CODES, VOCABULARY
+from app.predictions import Mode, coefficients, image_token_codes
 
 KS = (1, 2, 4, 8, 16, 32, 64, 128, 256)
 MASSES = (0.9, 0.99, 0.999)
@@ -294,13 +294,13 @@ class Current:
         flat = log_probabilities.reshape(-1, log_probabilities.shape[-1])
         flat = flat.float().cpu().numpy()
         if self.kind == "image":
-            parts = cells(flat)
+            parts = image_token_codes(flat)
             names = ("codes", "kept", "tails")
         else:
             parts = coefficients(
                 np.exp(flat),
                 self.basis.mean.cpu().numpy(),
-                self.basis.directions[:SPAN_RANK].cpu().numpy(),
+                self.basis.directions[:SPECTRUM_TOKEN_RANK].cpu().numpy(),
             )
             names = ("quantised", "offsets", "steps")
         return {
@@ -334,17 +334,17 @@ class Current:
             dense = spread[..., None].expand(*spread.shape, self.vocabulary).clone()
             return dense.scatter_(-1, codes, probabilities)
         if self.kind == "spectrum":
-            directions = self.basis.directions[:SPAN_RANK]
+            directions = self.basis.directions[:SPECTRUM_TOKEN_RANK]
             return self.basis.mean + self.projected(stored) @ directions
         return self.dense.decode(stored)
 
     def overlap(self, stored: Stored, query: torch.Tensor) -> torch.Tensor:
         if self.kind == "image":
             parts = [part.cpu().numpy() for part in self.image(stored, pql.KEPT)]
-            overlaps = pql.cell_overlaps(query.cpu().numpy(), *parts)
+            overlaps = pql.image_token_overlaps(query.cpu().numpy(), *parts)
             return torch.from_numpy(overlaps).to(query.device)
         if self.kind == "spectrum":
-            directions = self.basis.directions[:SPAN_RANK]
+            directions = self.basis.directions[:SPECTRUM_TOKEN_RANK]
             return query @ self.basis.mean + (
                 self.projected(stored) * (query @ directions.T)
             ).sum(dim=-1)

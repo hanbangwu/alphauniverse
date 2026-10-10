@@ -12,26 +12,26 @@ import pyarrow.compute as pc
 from app.config import (
     ANCHOR,
     DATASET_REVISION,
-    N_PATCHES,
-    N_SCALARS,
-    N_SPANS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
+    N_TABLE_VALUES,
     REDSHIFT,
-    REDSHIFT_SCALAR,
+    REDSHIFT_TABLE_VALUE,
     SPECTRUM_SURVEYS,
     galaxy_count,
 )
 from app.main import SPECTRUM_SURVEY
 from app.search import (
     BATCH,
-    FIRST_HSC_SCALAR,
-    FIRST_LS_SCALAR,
-    N_HSC_SCALARS,
-    N_LS_SCALARS,
+    FIRST_HSC_TABLE_VALUE,
+    FIRST_LS_TABLE_VALUE,
+    N_HSC_TABLE_VALUES,
+    N_LS_TABLE_VALUES,
     NPROBE,
     PROBE,
     Query,
+    image_tokens,
     index,
-    patches,
     rows,
     search,
     source,
@@ -41,13 +41,13 @@ from app.search import (
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import (
-    PATCHES,
-    SCALARS,
-    SPANS,
+    IMAGE_TOKENS,
+    SPECTRUM_TOKENS,
+    TABLE_VALUES,
     environment,
     git,
     memory,
-    observed_spans,
+    observed_spectrum_tokens,
     queries,
     wavelength,
 )
@@ -61,11 +61,11 @@ COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
 
 
 class Corpus(NamedTuple):
-    patch_rows: np.ndarray
-    span_rows: np.ndarray
+    image_token_rows: np.ndarray
+    spectrum_token_rows: np.ndarray
     spectrum_galaxies: np.ndarray
-    ls_scalar_rows: np.ndarray
-    hsc_scalar_rows: np.ndarray
+    ls_table_value_rows: np.ndarray
+    hsc_table_value_rows: np.ndarray
     hsc_galaxies: np.ndarray
     redshift_rows: np.ndarray
     redshift_galaxies: np.ndarray
@@ -74,11 +74,11 @@ class Corpus(NamedTuple):
 def corpus(cells: pa.Table | pa.RecordBatch) -> Corpus:
     spectra = spectrum_cells(cells)
     return Corpus(
-        patches(cells.column(ANCHOR)),
+        image_tokens(cells.column(ANCHOR)),
         spectral(spectra.drop_null()),
         np.flatnonzero(pc.is_valid(spectra).to_numpy(zero_copy_only=False)),
-        rows(cells.column(ANCHOR), N_PATCHES, None),
-        rows(cells.column("hsc"), N_PATCHES, None),
+        rows(cells.column(ANCHOR), N_IMAGE_TOKENS, None),
+        rows(cells.column("hsc"), N_IMAGE_TOKENS, None),
         np.flatnonzero(pc.is_valid(cells.column("hsc")).to_numpy(zero_copy_only=False)),
         rows(cells.column(REDSHIFT), 0, None),
         np.flatnonzero(
@@ -88,28 +88,36 @@ def corpus(cells: pa.Table | pa.RecordBatch) -> Corpus:
 
 
 def direction(query: Query, galaxy: int, reference: Corpus) -> np.ndarray:
-    owners = np.repeat(reference.spectrum_galaxies, N_SPANS)
-    hsc_owners = np.repeat(reference.hsc_galaxies, N_HSC_SCALARS)
-    scalars = np.asarray(query.scalars, dtype=np.int64)
+    owners = np.repeat(reference.spectrum_galaxies, N_SPECTRUM_TOKENS)
+    hsc_owners = np.repeat(reference.hsc_galaxies, N_HSC_TABLE_VALUES)
+    table_values = np.asarray(query.table_values, dtype=np.int64)
     query_rows = []
-    if query.patches:
+    if query.image_tokens:
         query_rows.append(
-            reference.patch_rows[galaxy * N_PATCHES + np.asarray(query.patches)]
+            reference.image_token_rows[
+                galaxy * N_IMAGE_TOKENS + np.asarray(query.image_tokens)
+            ]
         )
-    if query.spans:
+    if query.spectrum_tokens:
         query_rows.append(
-            reference.span_rows[owners == galaxy][np.asarray(query.spans)]
+            reference.spectrum_token_rows[owners == galaxy][
+                np.asarray(query.spectrum_tokens)
+            ]
         )
-    ls = scalars[(scalars >= FIRST_LS_SCALAR) & (scalars < FIRST_HSC_SCALAR)]
+    ls = table_values[
+        (table_values >= FIRST_LS_TABLE_VALUE) & (table_values < FIRST_HSC_TABLE_VALUE)
+    ]
     query_rows.append(
-        reference.ls_scalar_rows[galaxy * N_LS_SCALARS + ls - FIRST_LS_SCALAR]
-    )
-    query_rows.append(
-        reference.hsc_scalar_rows[hsc_owners == galaxy][
-            scalars[scalars >= FIRST_HSC_SCALAR] - FIRST_HSC_SCALAR
+        reference.ls_table_value_rows[
+            galaxy * N_LS_TABLE_VALUES + ls - FIRST_LS_TABLE_VALUE
         ]
     )
-    if REDSHIFT_SCALAR in query.scalars:
+    query_rows.append(
+        reference.hsc_table_value_rows[hsc_owners == galaxy][
+            table_values[table_values >= FIRST_HSC_TABLE_VALUE] - FIRST_HSC_TABLE_VALUE
+        ]
+    )
+    if REDSHIFT_TABLE_VALUE in query.table_values:
         query_rows.append(
             reference.redshift_rows[reference.redshift_galaxies == galaxy]
         )
@@ -122,35 +130,41 @@ def exact_maps(
     directions: np.ndarray, reference: Corpus
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     count = len(directions)
-    galaxies = len(reference.patch_rows) // N_PATCHES
-    patch_maps = (reference.patch_rows @ directions.T).reshape(
-        galaxies, N_PATCHES, count
+    galaxies = len(reference.image_token_rows) // N_IMAGE_TOKENS
+    image_token_maps = (reference.image_token_rows @ directions.T).reshape(
+        galaxies, N_IMAGE_TOKENS, count
     )
-    spectral_maps = np.full((galaxies, N_SPANS, count), np.nan, dtype=np.float32)
+    spectral_maps = np.full(
+        (galaxies, N_SPECTRUM_TOKENS, count), np.nan, dtype=np.float32
+    )
     spectral_maps[reference.spectrum_galaxies] = (
-        reference.span_rows @ directions.T
-    ).reshape(-1, N_SPANS, count)
-    scalar_maps = np.full((galaxies, N_SCALARS, count), np.nan, dtype=np.float32)
-    scalar_maps[:, FIRST_LS_SCALAR:FIRST_HSC_SCALAR] = (
-        reference.ls_scalar_rows @ directions.T
-    ).reshape(galaxies, N_LS_SCALARS, count)
-    scalar_maps[reference.hsc_galaxies, FIRST_HSC_SCALAR:] = (
-        reference.hsc_scalar_rows @ directions.T
-    ).reshape(-1, N_HSC_SCALARS, count)
-    scalar_maps[reference.redshift_galaxies, REDSHIFT_SCALAR] = (
+        reference.spectrum_token_rows @ directions.T
+    ).reshape(-1, N_SPECTRUM_TOKENS, count)
+    table_value_maps = np.full(
+        (galaxies, N_TABLE_VALUES, count), np.nan, dtype=np.float32
+    )
+    table_value_maps[:, FIRST_LS_TABLE_VALUE:FIRST_HSC_TABLE_VALUE] = (
+        reference.ls_table_value_rows @ directions.T
+    ).reshape(galaxies, N_LS_TABLE_VALUES, count)
+    table_value_maps[reference.hsc_galaxies, FIRST_HSC_TABLE_VALUE:] = (
+        reference.hsc_table_value_rows @ directions.T
+    ).reshape(-1, N_HSC_TABLE_VALUES, count)
+    table_value_maps[reference.redshift_galaxies, REDSHIFT_TABLE_VALUE] = (
         reference.redshift_rows @ directions.T
     )
-    return patch_maps, spectral_maps, scalar_maps
+    return image_token_maps, spectral_maps, table_value_maps
 
 
 def best(
-    patch_maps: np.ndarray, spectral_maps: np.ndarray, scalar_maps: np.ndarray
+    image_token_maps: np.ndarray,
+    spectral_maps: np.ndarray,
+    table_value_maps: np.ndarray,
 ) -> np.ndarray:
     return np.fmax.reduce(
         [
-            patch_maps.max(axis=1),
+            image_token_maps.max(axis=1),
             spectral_maps.max(axis=1),
-            np.fmax.reduce(scalar_maps, axis=1),
+            np.fmax.reduce(table_value_maps, axis=1),
         ]
     )
 
@@ -206,19 +220,22 @@ def exact_ranking(
     )
 
 
-def with_spans(count: int, holders: np.ndarray) -> list[Query]:
+def with_spectrum_tokens(count: int, holders: np.ndarray) -> list[Query]:
     rng = np.random.default_rng(1)
     return [
         Query(
             galaxy=int(galaxy),
             p=tuple(
-                int(patch) for patch in rng.choice(N_PATCHES, PATCHES, replace=False)
+                int(image_token)
+                for image_token in rng.choice(
+                    N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False
+                )
             ),
             s=tuple(
-                int(span)
-                for span in rng.choice(
-                    observed_spans(wavelength(int(galaxy))),
-                    SPANS,
+                int(spectrum_token)
+                for spectrum_token in rng.choice(
+                    observed_spectrum_tokens(wavelength(int(galaxy))),
+                    SPECTRUM_TOKENS,
                     replace=False,
                 )
             ),
@@ -227,14 +244,15 @@ def with_spans(count: int, holders: np.ndarray) -> list[Query]:
     ]
 
 
-def scalars(count: int) -> list[Query]:
+def table_values(count: int) -> list[Query]:
     rng = np.random.default_rng(2)
     return [
         Query(
             galaxy=int(rng.integers(galaxy_count())),
             t=tuple(
                 (
-                    FIRST_LS_SCALAR + rng.choice(N_LS_SCALARS, SCALARS, replace=False)
+                    FIRST_LS_TABLE_VALUE
+                    + rng.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist()
             ),
         )
@@ -242,7 +260,7 @@ def scalars(count: int) -> list[Query]:
     ]
 
 
-def hsc_scalars(count: int) -> list[Query]:
+def hsc_table_values(count: int) -> list[Query]:
     rng = np.random.default_rng(3)
     return [
         Query(
@@ -250,10 +268,14 @@ def hsc_scalars(count: int) -> list[Query]:
             t=tuple(
                 np.concatenate(
                     (
-                        FIRST_LS_SCALAR
-                        + rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
-                        FIRST_HSC_SCALAR
-                        + rng.choice(N_HSC_SCALARS, SCALARS // 2, replace=False),
+                        FIRST_LS_TABLE_VALUE
+                        + rng.choice(
+                            N_LS_TABLE_VALUES, TABLE_VALUES // 2, replace=False
+                        ),
+                        FIRST_HSC_TABLE_VALUE
+                        + rng.choice(
+                            N_HSC_TABLE_VALUES, TABLE_VALUES // 2, replace=False
+                        ),
                     )
                 ).tolist()
             ),
@@ -272,17 +294,21 @@ def hsc_scalars(count: int) -> list[Query]:
 def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
     built = index()
     surveyed = source("tokens").to_table(columns=[SPECTRUM_SURVEY])
-    paired = with_spans(
+    paired = with_spectrum_tokens(
         per_kind,
         np.flatnonzero(pc.is_valid(surveyed.column(SPECTRUM_SURVEY)).to_numpy()),
     )
     kinds = {
-        "patches": queries(per_kind, PATCHES, MATCHES),
-        "paired_patches": [query.model_copy(update={"spans": ()}) for query in paired],
-        "spans": [query.model_copy(update={"patches": ()}) for query in paired],
+        "image_tokens": queries(per_kind, IMAGE_TOKENS, MATCHES),
+        "paired_image_tokens": [
+            query.model_copy(update={"spectrum_tokens": ()}) for query in paired
+        ],
+        "spectrum_tokens": [
+            query.model_copy(update={"image_tokens": ()}) for query in paired
+        ],
         "both": paired,
-        "scalars": scalars(per_kind),
-        "hsc_scalars": hsc_scalars(per_kind),
+        "table_values": table_values(per_kind),
+        "hsc_table_values": hsc_table_values(per_kind),
     }
     expected = iter(
         exact_rankings([query for batch in kinds.values() for query in batch])

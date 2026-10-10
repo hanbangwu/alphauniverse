@@ -8,18 +8,22 @@ from app import pql
 from app.config import (
     ANCHOR,
     IMAGE_VOCABULARY,
-    N_PATCHES,
-    N_SPANS,
-    SCALAR_SURVEYS,
-    SPAN_RANK,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
+    SPECTRUM_TOKEN_RANK,
+    TABLE_VALUE_SURVEYS,
     TOP_CODES,
     VOCABULARY,
 )
-from app.search import FIRST_HSC_SCALAR, FIRST_LS_SCALAR, Query
+from app.search import FIRST_HSC_TABLE_VALUE, FIRST_LS_TABLE_VALUE, Query
 
-PATCHES = (0, 17, 300, 575)
-SPANS = (40, 41, 42)
-SCALARS = (FIRST_LS_SCALAR + 1, FIRST_LS_SCALAR + 5, FIRST_HSC_SCALAR + 2)
+IMAGE_TOKENS = (0, 17, 300, 575)
+SPECTRUM_TOKENS = (40, 41, 42)
+TABLE_VALUES = (
+    FIRST_LS_TABLE_VALUE + 1,
+    FIRST_LS_TABLE_VALUE + 5,
+    FIRST_HSC_TABLE_VALUE + 2,
+)
 
 
 def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
@@ -27,12 +31,12 @@ def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
     return values.astype(np.float64).reshape(rows.num_rows, *shape)
 
 
-def dense_cells(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
-    codes = column(rows, f"{survey}_codes", N_PATCHES, TOP_CODES).astype(np.int64)
+def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
+    codes = column(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES).astype(np.int64)
     probabilities = np.exp(
-        column(rows, f"{survey}_log_probabilities", N_PATCHES, TOP_CODES)
+        column(rows, f"{survey}_log_probabilities", N_IMAGE_TOKENS, TOP_CODES)
     )
-    rest = np.exp(column(rows, f"{survey}_tails", N_PATCHES)) + probabilities[
+    rest = np.exp(column(rows, f"{survey}_tails", N_IMAGE_TOKENS)) + probabilities[
         ..., kept:
     ].sum(axis=-1)
     dense = np.repeat(
@@ -42,17 +46,17 @@ def dense_cells(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
     return dense
 
 
-def dense_spans(rows: pa.Table, survey: str) -> np.ndarray:
+def dense_spectrum_tokens(rows: pa.Table, survey: str) -> np.ndarray:
     mean, directions, _, _ = pql.basis()[survey]
-    coefficients = column(rows, f"{survey}_offsets", N_SPANS, 1) + column(
-        rows, f"{survey}_coefficients", N_SPANS, SPAN_RANK
-    ) * column(rows, f"{survey}_steps", N_SPANS, 1)
+    coefficients = column(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS, 1) + column(
+        rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
+    ) * column(rows, f"{survey}_steps", N_SPECTRUM_TOKENS, 1)
     return mean + coefficients @ directions
 
 
-def dense_scalars(rows: pa.Table, survey: str) -> np.ndarray:
-    count = len(SCALAR_SURVEYS[survey])
-    return np.exp(column(rows, f"{survey}_scalars", count, VOCABULARY))
+def dense_table_values(rows: pa.Table, survey: str) -> np.ndarray:
+    count = len(TABLE_VALUE_SURVEYS[survey])
+    return np.exp(column(rows, f"{survey}_table_values", count, VOCABULARY))
 
 
 @pytest.fixture(scope="module")
@@ -62,7 +66,12 @@ def table(tree: Path) -> pa.Table:
 
 @pytest.fixture(scope="module")
 def query(tree: Path) -> Query:
-    return Query(galaxy=0, patches=PATCHES, spans=SPANS, scalars=SCALARS)
+    return Query(
+        galaxy=0,
+        image_tokens=IMAGE_TOKENS,
+        spectrum_tokens=SPECTRUM_TOKENS,
+        table_values=TABLE_VALUES,
+    )
 
 
 def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
@@ -70,26 +79,30 @@ def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
 ) -> None:
     survey = pql.spectrum_survey(query.galaxy)
     own = table.slice(query.galaxy, 1)
-    spans = dense_spans(table, survey)
+    spectrum_tokens = dense_spectrum_tokens(table, survey)
     expected = {
-        f"{ANCHOR}_cells": np.einsum(
+        f"{ANCHOR}_image": np.einsum(
             "gsv,sv->gs",
-            dense_cells(table, ANCHOR, pql.KEPT)[:, PATCHES],
-            dense_cells(own, ANCHOR, TOP_CODES)[0, PATCHES],
+            dense_image_tokens(table, ANCHOR, pql.KEPT)[:, IMAGE_TOKENS],
+            dense_image_tokens(own, ANCHOR, TOP_CODES)[0, IMAGE_TOKENS],
         ),
-        f"{survey}_spans": np.maximum(
-            np.einsum("gsv,sv->gs", spans[:, SPANS], spans[query.galaxy, SPANS]),
-            pql.SPAN_FLOOR,
+        f"{survey}_spectrum": np.maximum(
+            np.einsum(
+                "gsv,sv->gs",
+                spectrum_tokens[:, SPECTRUM_TOKENS],
+                spectrum_tokens[query.galaxy, SPECTRUM_TOKENS],
+            ),
+            pql.SPECTRUM_TOKEN_FLOOR,
         ),
-        f"{ANCHOR}_scalars": np.einsum(
+        f"{ANCHOR}_table": np.einsum(
             "gsv,sv->gs",
-            dense_scalars(table, ANCHOR)[:, [1, 5]],
-            dense_scalars(own, ANCHOR)[0, [1, 5]],
+            dense_table_values(table, ANCHOR)[:, [1, 5]],
+            dense_table_values(own, ANCHOR)[0, [1, 5]],
         ),
-        "hsc_scalars": np.einsum(
+        "hsc_table": np.einsum(
             "gsv,sv->gs",
-            dense_scalars(table, "hsc")[:, [2]],
-            dense_scalars(own, "hsc")[0, [2]],
+            dense_table_values(table, "hsc")[:, [2]],
+            dense_table_values(own, "hsc")[0, [2]],
         ),
     }
 
@@ -107,37 +120,39 @@ def test_maps_overlap_every_slot_with_the_mean_of_the_selected_query_slots(
     galaxies = np.asarray([3, 0])
     own = table.slice(query.galaxy, 1)
     shown = table.take(galaxies)
-    spans = dense_spans(table, survey)
+    spectrum_tokens = dense_spectrum_tokens(table, survey)
 
-    cells, span_maps, scalars = pql.maps(query, galaxies)
+    image_token_maps, spectrum_token_maps, table_values = pql.maps(query, galaxies)
 
     np.testing.assert_allclose(
-        cells,
+        image_token_maps,
         np.log(
-            dense_cells(shown, ANCHOR, pql.KEPT)
-            @ dense_cells(own, ANCHOR, TOP_CODES)[0, PATCHES].mean(axis=0)
+            dense_image_tokens(shown, ANCHOR, pql.KEPT)
+            @ dense_image_tokens(own, ANCHOR, TOP_CODES)[0, IMAGE_TOKENS].mean(axis=0)
         ),
         rtol=1e-4,
     )
     np.testing.assert_allclose(
-        span_maps,
+        spectrum_token_maps,
         np.log(
             np.maximum(
-                spans[galaxies] @ spans[query.galaxy, SPANS].mean(axis=0),
-                pql.SPAN_FLOOR,
+                spectrum_tokens[galaxies]
+                @ spectrum_tokens[query.galaxy, SPECTRUM_TOKENS].mean(axis=0),
+                pql.SPECTRUM_TOKEN_FLOOR,
             )
         ),
         rtol=1e-4,
     )
     np.testing.assert_allclose(
-        scalars,
+        table_values,
         np.log(
             np.hstack(
                 [
                     (
-                        dense_scalars(shown, catalogue) * dense_scalars(own, catalogue)
+                        dense_table_values(shown, catalogue)
+                        * dense_table_values(own, catalogue)
                     ).sum(axis=-1)
-                    for catalogue in SCALAR_SURVEYS
+                    for catalogue in TABLE_VALUE_SURVEYS
                 ]
             )
         ),
@@ -146,12 +161,12 @@ def test_maps_overlap_every_slot_with_the_mean_of_the_selected_query_slots(
 
 
 def test_maps_of_unselected_modes_are_missing(tree: Path) -> None:
-    cells, spans, _ = pql.maps(
-        Query(galaxy=0, scalars=(FIRST_LS_SCALAR,)), np.asarray([3])
+    image_tokens, spectrum_tokens, _ = pql.maps(
+        Query(galaxy=0, table_values=(FIRST_LS_TABLE_VALUE,)), np.asarray([3])
     )
 
-    assert np.isnan(cells).all()
-    assert np.isnan(spans).all()
+    assert np.isnan(image_tokens).all()
+    assert np.isnan(spectrum_tokens).all()
 
 
 def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(

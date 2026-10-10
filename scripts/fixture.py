@@ -12,16 +12,16 @@ from app.config import (
     DIM,
     GEMMA_DIM,
     IMAGE_VOCABULARY,
+    N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
-    N_PATCHES,
-    N_SPANS,
+    N_SPECTRUM_TOKENS,
     PREDICTIONS,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
-    SCALAR_SURVEYS,
-    SPAN_RANK,
     SPECTRUM_SURVEYS,
+    SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
+    TABLE_VALUE_SURVEYS,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -47,8 +47,8 @@ from app.search import (
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
-    ANCHOR: N_PATCHES + 12,
-    "hsc": N_PATCHES + 13,
+    ANCHOR: N_IMAGE_TOKENS + 12,
+    "hsc": N_IMAGE_TOKENS + 13,
     "desi": 273,
     "sdss": 273,
     REDSHIFT: 1,
@@ -117,7 +117,7 @@ def _log_softmax(logits: np.ndarray) -> np.ndarray:
 def _predictions(rng: np.random.Generator, galaxies: int) -> None:
     ones = np.ones((VOCABULARY, 1))
     orthogonal, _ = np.linalg.qr(
-        np.hstack((ones, rng.standard_normal((VOCABULARY, SPAN_RANK))))
+        np.hstack((ones, rng.standard_normal((VOCABULARY, SPECTRUM_TOKEN_RANK))))
     )
     save_prediction_basis(
         {
@@ -133,10 +133,10 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
                 np.float16
             ),
         }
-        for survey, scalars in SCALAR_SURVEYS.items():
-            mass = rng.dirichlet(np.full(TOP_CODES + 1, 0.3), size=N_PATCHES)
+        for survey, table_values in TABLE_VALUE_SURVEYS.items():
+            mass = rng.dirichlet(np.full(TOP_CODES + 1, 0.3), size=N_IMAGE_TOKENS)
             values[f"{survey}_codes"] = (
-                rng.random((N_PATCHES, IMAGE_VOCABULARY))
+                rng.random((N_IMAGE_TOKENS, IMAGE_VOCABULARY))
                 .argpartition(TOP_CODES, axis=1)[:, :TOP_CODES]
                 .astype(np.uint16)
                 .reshape(-1)
@@ -147,15 +147,15 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
                 .reshape(-1)
             )
             values[f"{survey}_tails"] = np.log(mass[:, -1]).astype(np.float32)
-            values[f"{survey}_scalars"] = (
-                _log_softmax(3 * rng.standard_normal((len(scalars), VOCABULARY)))
+            values[f"{survey}_table_values"] = (
+                _log_softmax(3 * rng.standard_normal((len(table_values), VOCABULARY)))
                 .astype(np.float16)
                 .reshape(-1)
             )
         for survey in SPECTRUM_SURVEYS:
-            steps = rng.uniform(1e-6, 3e-6, N_SPANS).astype(np.float32)
+            steps = rng.uniform(1e-6, 3e-6, N_SPECTRUM_TOKENS).astype(np.float32)
             values[f"{survey}_coefficients"] = rng.integers(
-                256, size=N_SPANS * SPAN_RANK, dtype=np.uint8
+                256, size=N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_RANK, dtype=np.uint8
             )
             values[f"{survey}_offsets"] = -128 * steps
             values[f"{survey}_steps"] = steps

@@ -18,25 +18,25 @@ import numpy as np
 from app import pql
 from app.config import (
     DATASET_REVISION,
-    N_PATCHES,
-    N_SPANS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
     artifact,
     galaxy_count,
     labels,
 )
 from app.search import (
-    FIRST_LS_SCALAR,
-    N_LS_SCALARS,
+    FIRST_LS_TABLE_VALUE,
+    N_LS_TABLE_VALUES,
     Query,
     candidates,
     centroid,
     index,
     rank,
-    scalar_maps,
     score_maps,
     search,
-    span_maps,
+    spectrum_token_maps,
     starts,
+    table_value_maps,
     tokens,
     vectors,
     with_spectrum,
@@ -50,9 +50,9 @@ from modal_app import (
     serving_image,
 )
 from scripts.benchmarks.common import (
+    IMAGE_TOKENS,
     MATCHES,
-    PATCHES,
-    SCALARS,
+    TABLE_VALUES,
     elapsed,
     environment,
     git,
@@ -69,14 +69,14 @@ STAGES = [
     "candidates",
     "vectors",
     "score_maps",
-    "span_maps",
-    "scalar_maps",
+    "spectrum_token_maps",
+    "table_value_maps",
     "rank",
 ]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
-SPAN_WINDOW = 16
+SPECTRUM_TOKEN_WINDOW = 16
 ENTRY = (
     "import json, sys, time\n"
     "start = time.perf_counter()\n"
@@ -139,19 +139,19 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
     marks.append(mark())
     rows = vectors(order, index=built)
     marks.append(mark())
-    scored = score_maps(rows, direction, width=N_PATCHES)
+    scored = score_maps(rows, direction, width=N_IMAGE_TOKENS)
     marks.append(mark())
-    spectral_scores = span_maps(order, direction, index=built)
+    spectral_scores = spectrum_token_maps(order, direction, index=built)
     marks.append(mark())
-    scalar_scores = scalar_maps(order, direction, index=built)
+    table_value_scores = table_value_maps(order, direction, index=built)
     marks.append(mark())
-    rank(order, scored, spectral_scores, scalar_scores)
+    rank(order, scored, spectral_scores, table_value_scores)
     marks.append(mark())
     return usages(STAGES, marks)
 
 
 def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
-    batch = queries(runs + 1, PATCHES, matches)
+    batch = queries(runs + 1, IMAGE_TOKENS, matches)
     search(batch[0], index=built)
     return summary(
         [elapsed(partial(search, query, index=built)) for query in batch[1:]]
@@ -161,23 +161,27 @@ def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any
 def pql_queries(count: int) -> dict[str, list[Query]]:
     rng = np.random.default_rng(4)
     holders = rng.choice(np.flatnonzero(with_spectrum()), count)
-    first = rng.integers(N_SPANS - SPAN_WINDOW + 1, size=count)
+    first = rng.integers(N_SPECTRUM_TOKENS - SPECTRUM_TOKEN_WINDOW + 1, size=count)
     return {
-        "patches": queries(count, PATCHES, MATCHES[1]),
-        "spans_16": [
-            Query(galaxy=int(galaxy), spans=tuple(range(start, start + SPAN_WINDOW)))
+        "image_tokens": queries(count, IMAGE_TOKENS, MATCHES[1]),
+        "spectrum_tokens_16": [
+            Query(
+                galaxy=int(galaxy),
+                spectrum_tokens=tuple(range(start, start + SPECTRUM_TOKEN_WINDOW)),
+            )
             for galaxy, start in zip(holders, first, strict=True)
         ],
-        "spans_all": [
-            Query(galaxy=int(galaxy), spans=tuple(range(N_SPANS))) for galaxy in holders
+        "spectrum_tokens_all": [
+            Query(galaxy=int(galaxy), spectrum_tokens=tuple(range(N_SPECTRUM_TOKENS)))
+            for galaxy in holders
         ],
         "table_values": [
             Query(
                 galaxy=int(rng.integers(galaxy_count())),
-                scalars=tuple(
+                table_values=tuple(
                     (
-                        FIRST_LS_SCALAR
-                        + rng.choice(N_LS_SCALARS, SCALARS, replace=False)
+                        FIRST_LS_TABLE_VALUE
+                        + rng.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                     ).tolist()
                 ),
             )
@@ -226,7 +230,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = load_times()
     built = index()
 
-    batch = queries(runs + 1, PATCHES, matches)
+    batch = queries(runs + 1, IMAGE_TOKENS, matches)
     cold = stage_times(batch[0], built)
     samples: dict[str, list[dict[str, float]]] = {name: [] for name in STAGES}
 

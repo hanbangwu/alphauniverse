@@ -74,7 +74,7 @@ def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
         "ls_image": columns["ls_codes"] * 2
         + columns["ls_log_probabilities"] * 2
         + columns["ls_tails"] * 4,
-        "ls_table": columns["ls_scalars"] * 2,
+        "ls_table": columns["ls_table_values"] * 2,
         "redshift": columns["redshift"] * 2,
     }
 

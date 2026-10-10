@@ -35,13 +35,13 @@ CROP_PIXELS = 96
 DIM = 768
 
 GRID = 24
-N_PATCHES = GRID**2
+N_IMAGE_TOKENS = GRID**2
 
 SPECTRUM_ORIGIN = 3500.0
 SPECTRUM_SMOOTHING_SIGMA = 2
 SPECTRUM_SURVEY: SpectrumSurvey = "desi"
 SPECTRUM_TOKEN_WIDTH = 32 * 0.8
-N_SPANS = 8704 // 32
+N_SPECTRUM_TOKENS = 8704 // 32
 
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
@@ -68,7 +68,7 @@ FLAG_SURVEYS: dict[str, str] = {
 }
 RGB_COLUMN = f"rgb{LS}"
 
-SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
+TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
     ANCHOR: tuple(
         f"{name}{LS}"
         for name in (
@@ -105,12 +105,12 @@ SCALAR_SURVEYS: dict[str, tuple[str, ...]] = {
         )
     ),
 }
-SCALAR_COLUMNS = tuple(
-    column for columns in SCALAR_SURVEYS.values() for column in columns
+TABLE_VALUE_COLUMNS = tuple(
+    column for columns in TABLE_VALUE_SURVEYS.values() for column in columns
 )
 REDSHIFT = "redshift"
-REDSHIFT_SCALAR = 0
-N_SCALARS = len(SCALAR_COLUMNS) + 1
+REDSHIFT_TABLE_VALUE = 0
+N_TABLE_VALUES = len(TABLE_VALUE_COLUMNS) + 1
 REDSHIFT_LIMIT = 6.0
 REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
     "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),
@@ -183,7 +183,7 @@ PAIRS = pa.schema(
 
 
 TOP_CODES = 64
-SPAN_RANK = 256
+SPECTRUM_TOKEN_RANK = 256
 IMAGE_VOCABULARY = 4375
 VOCABULARY = 1024
 REDSHIFT_VOCABULARY = 1025
@@ -195,16 +195,19 @@ PREDICTIONS = pa.schema(
     ]
     + [
         field
-        for survey, columns in SCALAR_SURVEYS.items()
+        for survey, columns in TABLE_VALUE_SURVEYS.items()
         for field in (
-            pa.field(f"{survey}_codes", pa.list_(pa.uint16(), N_PATCHES * TOP_CODES)),
+            pa.field(
+                f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * TOP_CODES)
+            ),
             pa.field(
                 f"{survey}_log_probabilities",
-                pa.list_(pa.float16(), N_PATCHES * TOP_CODES),
+                pa.list_(pa.float16(), N_IMAGE_TOKENS * TOP_CODES),
             ),
-            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_PATCHES)),
+            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
             pa.field(
-                f"{survey}_scalars", pa.list_(pa.float16(), len(columns) * VOCABULARY)
+                f"{survey}_table_values",
+                pa.list_(pa.float16(), len(columns) * VOCABULARY),
             ),
         )
     ]
@@ -213,10 +216,11 @@ PREDICTIONS = pa.schema(
         for survey in SPECTRUM_SURVEYS
         for field in (
             pa.field(
-                f"{survey}_coefficients", pa.list_(pa.uint8(), N_SPANS * SPAN_RANK)
+                f"{survey}_coefficients",
+                pa.list_(pa.uint8(), N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_RANK),
             ),
-            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPANS)),
-            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPANS)),
+            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
+            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
         )
     ]
 )

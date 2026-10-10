@@ -16,7 +16,7 @@ export class Similarity {
   readonly grid: number
 
   readonly #app: AppState = getApp()
-  readonly #patchCount: number = this.#app.meta.grid ** 2
+  readonly #imageTokenCount: number = this.#app.meta.grid ** 2
   readonly #tokenMap: CreateQueryResult<Uint32Array<ArrayBuffer>>
   readonly #result: CreateQueryResult<SimilarityResult>
   #submitted: SimilarityQuery | null = $state(null)
@@ -31,8 +31,8 @@ export class Similarity {
   readonly spectrumMaps: Float32Array | null
   readonly spectrumHeat: ((value: number) => RGB) | null
   readonly spectrumMap: Float32Array | null
-  readonly scalarMap: Float32Array | null
-  readonly scalarHeat: ((value: number) => RGB) | null
+  readonly tableValueMap: Float32Array | null
+  readonly tableValueHeat: ((value: number) => RGB) | null
   readonly tokens: Uint32Array | null
   readonly palette: ((value: number) => RGB) | null
 
@@ -45,9 +45,9 @@ export class Similarity {
     this.draft = $derived(
       app.search.request(
         galaxy,
-        app.view.patches.value,
-        app.view.spans.value,
-        app.view.scalars.value
+        app.view.imageTokens.value,
+        app.view.spectrumTokens.value,
+        app.view.tableValues.value
       )
     )
     this.#result = createQuery(() => similarityQuery(this.#submitted))
@@ -56,7 +56,7 @@ export class Similarity {
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
     this.imageDomain = $derived(this.imageMaps ? extent(this.imageMaps) : null)
     this.imageHeat = $derived(this.imageDomain ? continuous(this.imageDomain) : null)
-    this.imageMap = $derived(this.imageMaps ? row(this.imageMaps, 0, this.#patchCount) : null)
+    this.imageMap = $derived(this.imageMaps ? row(this.imageMaps, 0, this.#imageTokenCount) : null)
     this.spectrumMaps = $derived(this.#result.data?.spectrumMaps ?? null)
     this.spectrumHeat = $derived.by(() => {
       if (!this.spectrumMaps) return null
@@ -64,10 +64,10 @@ export class Similarity {
       return low <= high ? continuous([low, high]) : null
     })
     this.spectrumMap = $derived(this.spectrumMaps ? this.spectrumMapAt(0) : null)
-    this.scalarMap = $derived(this.#result.data?.scalarMap ?? null)
-    this.scalarHeat = $derived.by(() => {
-      if (!this.scalarMap) return null
-      const [low, high] = extent(this.scalarMap)
+    this.tableValueMap = $derived(this.#result.data?.tableValueMap ?? null)
+    this.tableValueHeat = $derived.by(() => {
+      if (!this.tableValueMap) return null
+      const [low, high] = extent(this.tableValueMap)
       return low <= high ? continuous([low, high]) : null
     })
     this.tokens = $derived(this.#tokenMap.data ?? null)
@@ -106,7 +106,7 @@ export class Similarity {
   }
 
   imageMapAt(index: number): Float32Array {
-    return row(must(this.imageMaps, 'the image maps'), index, this.#patchCount)
+    return row(must(this.imageMaps, 'the image maps'), index, this.#imageTokenCount)
   }
 
   spectrumMapAt(index: number): Float32Array | null {
