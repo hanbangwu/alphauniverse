@@ -12,11 +12,11 @@ export function hasSpectrum(galaxy: Galaxy): boolean {
   return galaxy[SPECTRUM_SURVEY]
 }
 
-export function spanAt(meta: Meta, wavelength: number): number {
+export function spectrumTokenAt(meta: Meta, wavelength: number): number {
   return Math.floor((wavelength - meta.spectrum_origin) / meta.spectrum_width)
 }
 
-export function spanOf(meta: Meta, index: number): Extent {
+export function spectrumTokenOf(meta: Meta, index: number): Extent {
   return [
     meta.spectrum_origin + index * meta.spectrum_width,
     meta.spectrum_origin + (index + 1) * meta.spectrum_width

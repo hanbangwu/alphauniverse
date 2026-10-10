@@ -2,6 +2,8 @@
 
 Every benchmark runs on Modal and measures the production artifacts on the volume.
 
+The stored reports predate #215's rename and use the old names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps`, `paired_patches` and `similarity scalars matches=32`.
+
 | Script                | Measures                                     | Runs on                                   | Report                                     |
 | --------------------- | -------------------------------------------- | ----------------------------------------- | ------------------------------------------ |
 | `search_performance`  | loads and `search()` stages, across commits  | Modal, a container with the server's spec | `docs/benchmarks/search_performance.json`  |
@@ -50,9 +52,9 @@ A container with the server's spec runs, per version:
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
 2. `read_index` and `make_direct_map`, the two calls `index()` loads with, timed on a separate copy, so in the first round they take the index's cold reads;
 3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `tokens` (which `starts` loads), `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
-4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
+4. the stages of `search()`, first query and warm, at 4 image tokens and 32 matches;
 5. `search()` whole at 8, 32 and 128 matches.
-6. where the version has `app/pql.py`, its loads (`predictions`, `basis`) and, first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 4 patches, 16 contiguous spans, all 272 spans and 4 Legacy Survey table values. These are reported under `pql`, outside `total_p50_ms`.
+6. where the version has `app/pql.py`, its loads (`predictions`, `basis`) and, first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 4 image tokens, 16 contiguous spectrum tokens, all 272 spectrum tokens and 4 Legacy Survey table values. These are reported under `pql`, outside `total_p50_ms`.
 
 The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. Cold reads are charged to user time: in the last run's first round, `make_direct_map` took 8,465 ms of wall time and 8,310 ms of user CPU, none of system. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
 
@@ -87,7 +89,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 `read_index` and `make_direct_map` are step 2's split, which takes the cold reads; `index` then finds those pages. `faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
 
-**Stages**, 4 patches, 32 matches. The run predates `scalar_maps`, which the script now times:
+**Stages**, 4 image tokens, 32 matches. The run predates `table_value_maps`, which the script now times:
 
 | Stage         | First query | Warm p50    | Warm share |
 | ------------- | ----------- | ----------- | ---------- |
@@ -95,15 +97,15 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 | `candidates`  | 21.8 ms     | 5.03 ms     | 5.8 %      |
 | **`vectors`** | 88.0 ms     | **79.8 ms** | **91.5 %** |
 | `score_maps`  | 7.59 ms     | 1.51 ms     | 1.7 %      |
-| `span_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
-| `scalar_maps` | unmeasured  | unmeasured  |            |
+| `spectrum_token_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
+| `table_value_maps` | unmeasured  | unmeasured  |            |
 | `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
 | Total         | 131.0 ms    | 87.2 ms     |            |
 
-- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 patch vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
+- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 image token vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
 - `candidates` and `vectors` are faiss-parallel and `score_maps` contends with their threads, so stage figures compare only at the same thread configuration.
 
-**Whole `search()`**, 4 patches, warm p50:
+**Whole `search()`**, 4 image tokens, warm p50:
 
 | Matches | p50      |
 | ------- | -------- |
@@ -118,9 +120,9 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 `modal run` starts an ephemeral `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A 1-CPU client in a separate container times, in order:
 
 1. one cold `/meta`, one cold `/search`, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
-2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey scalars at 32 matches, and `/search` with 4 patches at 8, 32 and 128 matches;
-3. warm: both spectrum routes, and `/search` at 32 matches with 4 spans, alone and with 4 patches, on galaxies with a DESI spectrum and spans inside its observed range;
-4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 patches at 32 matches.
+2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey table values at 32 matches, and `/search` with 4 image tokens at 8, 32 and 128 matches;
+3. warm: both spectrum routes, and `/search` at 32 matches with 4 spectrum tokens, alone and with 4 image tokens, on galaxies with a DESI spectrum and spectrum tokens inside its observed range;
+4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 image tokens at 32 matches.
 
 Latency includes Modal's ingress, not the starter's network. Only the checked-out commit is timed.
 
@@ -139,12 +141,12 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 | Query                   | p50    | p95    |
 | ----------------------- | ------ | ------ |
-| 4 patches, 8 matches    | 164 ms | 174 ms |
-| 4 patches               | 225 ms | 255 ms |
-| 4 patches, 128 matches  | 429 ms | 503 ms |
-| 4 spans                 | 253 ms | 276 ms |
-| 4 patches and 4 spans   | 237 ms | 258 ms |
-| 4 Legacy Survey scalars | 231 ms | 264 ms |
+| 4 image tokens, 8 matches    | 164 ms | 174 ms |
+| 4 image tokens               | 225 ms | 255 ms |
+| 4 image tokens, 128 matches  | 429 ms | 503 ms |
+| 4 spectrum tokens                 | 253 ms | 276 ms |
+| 4 image tokens and 4 spectrum tokens   | 237 ms | 258 ms |
+| 4 Legacy Survey table values | 231 ms | 264 ms |
 
 `matches` sets the cost. Over the 128 ms `/meta` floor, 32 matches add 225 − 128 = 97 ms at p50, and 128 add 429 − 128 = 301 ms.
 
@@ -180,10 +182,10 @@ All but `/search/text` are within 140 − 126 = 14 ms at p50; `/search/text` add
 
 A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and the volume, runs `--per-kind` queries of each kind at 32 matches:
 
-- `patches`: 4 patches of a galaxy drawn from all galaxies.
-- `paired_patches`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 patches and 4 spans inside its observed range, queried with the patches, the spans, and both.
-- `scalars`: 4 Legacy Survey scalars of a galaxy drawn from all galaxies.
-- `hsc_scalars`: 2 Legacy Survey and 2 HSC scalars of a galaxy drawn from galaxies with an HSC match.
+- `image_tokens`: 4 image tokens of a galaxy drawn from all galaxies.
+- `paired_image_tokens`, `spectrum_tokens`, `both`: one draw of galaxies with a DESI spectrum, each with 4 image tokens and 4 spectrum tokens inside its observed range, queried with the image tokens, the spectrum tokens, and both.
+- `table_values`: 4 Legacy Survey table values of a galaxy drawn from all galaxies.
+- `hsc_table_values`: 2 Legacy Survey and 2 HSC table values of a galaxy drawn from galaxies with an HSC match.
 
 A query's recall is the share of its exact 32 galaxies that `search()` returns at the served `PROBE` and `NPROBE`. `exact_rankings` sets each query's direction from its galaxy's rows, then brute-forces the float32 embeddings in one streamed pass over `encoded`, `BATCH` galaxies at a time, keeping each galaxy's best score per query. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
 
@@ -199,12 +201,12 @@ A query's recall is the share of its exact 32 galaxies that `search()` returns a
 
 | Query                 | Drawn from | Mean  | Lowest | All 32 found | Searched again | Most searches |
 | --------------------- | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
-| 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
-| 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
-| 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
-| 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
+| 4 image tokens             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
+| 4 image tokens             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
+| 4 spectrum tokens               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
+| 4 image tokens and 4 spectrum tokens | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
-`scalars` and `hsc_scalars` are unmeasured: this run predates them.
+`table_values` and `hsc_table_values` are unmeasured: this run predates them.
 
 ## `projection_quality`
 
@@ -264,11 +266,11 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 ## `pql_quality`
 
-A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, and encodes it so for cosine, with the job's own code. Per galaxy it queries 16 contiguous observed spans of its first spectrum survey, all its observed spans, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy and by `search()` at 128 matches, and reports, PQL against cosine with a 95% bootstrap interval over queries:
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, and encodes it so for cosine, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy and by `search()` at 128 matches, and reports, PQL against cosine with a 95% bootstrap interval over queries:
 
 - `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
-- `identity` (span queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.
-- `availability` and `evidence` (span queries): over 20 coin flips that show each other sampled galaxy with or without its spectrum, the share with a spectrum among the top 32 minus its share overall, for galaxies at another redshift (|Δz|/(1+z) ≥ 0.01) and at the same one.
+- `identity` (spectrum token queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.
+- `availability` and `evidence` (spectrum token queries): over 20 coin flips that show each other sampled galaxy with or without its spectrum, the share with a spectrum among the top 32 minus its share overall, for galaxies at another redshift (|Δz|/(1+z) ≥ 0.01) and at the same one.
 
 It needs `predictions` and `prediction_basis` from `generate_predictions`. Unmeasured.
 

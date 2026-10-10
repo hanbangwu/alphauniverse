@@ -9,8 +9,8 @@ import pytest
 from app.config import (
     ANCHOR,
     IMAGE_VOCABULARY,
-    N_PATCHES,
-    N_SPANS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
     PREDICTIONS,
     REDSHIFT,
     STORE_COLUMNS,
@@ -57,43 +57,47 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
     assert table["galaxy"].to_pylist() == list(range(galaxies))
     redshift = np.exp(column(table, REDSHIFT).astype(np.float64))
     np.testing.assert_allclose(redshift.reshape(galaxies, -1).sum(-1), 1, atol=0.02)
-    for survey, keys in predictions_module.SCALARS.items():
+    for survey, keys in predictions_module.TABLE_VALUES.items():
         kept = np.exp(column(table, f"{survey}_log_probabilities").astype(np.float64))
         tails = np.exp(column(table, f"{survey}_tails").astype(np.float64))
-        scalars = np.exp(column(table, f"{survey}_scalars").astype(np.float64))
+        table_values = np.exp(
+            column(table, f"{survey}_table_values").astype(np.float64)
+        )
         np.testing.assert_allclose(
-            kept.reshape(galaxies, N_PATCHES, -1).sum(-1)
-            + tails.reshape(galaxies, N_PATCHES),
+            kept.reshape(galaxies, N_IMAGE_TOKENS, -1).sum(-1)
+            + tails.reshape(galaxies, N_IMAGE_TOKENS),
             1,
             atol=0.02,
         )
         np.testing.assert_allclose(
-            scalars.reshape(galaxies, len(keys), -1).sum(-1), 1, atol=0.02
+            table_values.reshape(galaxies, len(keys), -1).sum(-1), 1, atol=0.02
         )
     for survey in predictions_module.SPECTRA:
         quantised = column(table, f"{survey}_coefficients").reshape(
-            galaxies, N_SPANS, -1
+            galaxies, N_SPECTRUM_TOKENS, -1
         )
-        offsets = column(table, f"{survey}_offsets").reshape(galaxies, N_SPANS, 1)
-        steps = column(table, f"{survey}_steps").reshape(galaxies, N_SPANS, 1)
-        spans = (
+        offsets = column(table, f"{survey}_offsets").reshape(
+            galaxies, N_SPECTRUM_TOKENS, 1
+        )
+        steps = column(table, f"{survey}_steps").reshape(galaxies, N_SPECTRUM_TOKENS, 1)
+        spectrum_tokens = (
             basis[f"{survey}_mean"]
             + (offsets + quantised * steps) @ basis[f"{survey}_directions"]
         )
-        np.testing.assert_allclose(spans.sum(-1), 1, atol=0.02)
+        np.testing.assert_allclose(spectrum_tokens.sum(-1), 1, atol=0.02)
 
 
-def test_kept_cell_codes_are_the_most_probable_in_descending_order() -> None:
+def test_kept_image_token_codes_are_the_most_probable_in_descending_order() -> None:
     log_probabilities = np.log(
         np.random.default_rng(1).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
     )
 
-    codes, _, _ = predictions_module.cells(log_probabilities)
+    codes, _, _ = predictions_module.image_token_codes(log_probabilities)
 
     assert np.array_equal(codes, np.argsort(-log_probabilities, axis=1)[:, :TOP_CODES])
 
 
-def test_span_basis_from_moments_matches_a_direct_principal_component_analysis(
+def test_spectrum_token_basis_from_moments_matches_a_direct_principal_component_analysis(
     distributions: np.ndarray,
 ) -> None:
     moments = predictions_module.Moments()
@@ -111,7 +115,7 @@ def test_span_basis_from_moments_matches_a_direct_principal_component_analysis(
     )
 
 
-def test_span_coefficients_round_to_within_half_a_step_of_the_projection(
+def test_spectrum_token_coefficients_round_to_within_half_a_step_of_the_projection(
     distributions: np.ndarray,
 ) -> None:
     moments = predictions_module.Moments()
@@ -132,7 +136,7 @@ def test_a_redshift_token_joins_the_context_only_where_the_galaxy_has_one(
     redshift: list[int] | None,
 ) -> None:
     row = {survey: None for survey in STORE_COLUMNS} | {
-        ANCHOR: list(range(N_PATCHES + 12)),
+        ANCHOR: list(range(N_IMAGE_TOKENS + 12)),
         REDSHIFT: redshift,
     }
 

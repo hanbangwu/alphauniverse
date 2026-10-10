@@ -21,10 +21,10 @@ from app.config import (
 )
 from app.dataset import dataset
 from app.search import (
-    FIRST_HSC_SCALAR,
-    FIRST_LS_SCALAR,
-    N_HSC_SCALARS,
-    N_LS_SCALARS,
+    FIRST_HSC_TABLE_VALUE,
+    FIRST_LS_TABLE_VALUE,
+    N_HSC_TABLE_VALUES,
+    N_LS_TABLE_VALUES,
     Query,
     bounds,
     centroid,
@@ -39,7 +39,7 @@ from scripts.benchmarks.common import (
     environment,
     git,
     memory,
-    observed_spans,
+    observed_spectrum_tokens,
     wavelength,
 )
 
@@ -67,26 +67,28 @@ def redshifts() -> np.ndarray:
 
 
 def selections(galaxy: int, rng: np.random.Generator) -> dict[str, Query]:
-    observed = observed_spans(wavelength(galaxy)).tolist()
+    observed = observed_spectrum_tokens(wavelength(galaxy)).tolist()
     start = int(rng.integers(max(len(observed) - WINDOW, 0) + 1))
     kinds = {
-        "spans_16": Query(galaxy=galaxy, spans=tuple(observed[start : start + WINDOW])),
-        "spans_all": Query(galaxy=galaxy, spans=tuple(observed)),
+        "spectrum_tokens_16": Query(
+            galaxy=galaxy, spectrum_tokens=tuple(observed[start : start + WINDOW])
+        ),
+        "spectrum_tokens_all": Query(galaxy=galaxy, spectrum_tokens=tuple(observed)),
         "ls_table": Query(
             galaxy=galaxy,
-            scalars=tuple(
+            table_values=tuple(
                 (
-                    FIRST_LS_SCALAR
-                    + rng.choice(N_LS_SCALARS, TABLE_VALUES, replace=False)
+                    FIRST_LS_TABLE_VALUE
+                    + rng.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist()
             ),
         ),
     }
     if with_hsc()[galaxy]:
-        chosen = FIRST_HSC_SCALAR + rng.choice(
-            N_HSC_SCALARS, TABLE_VALUES, replace=False
+        chosen = FIRST_HSC_TABLE_VALUE + rng.choice(
+            N_HSC_TABLE_VALUES, TABLE_VALUES, replace=False
         )
-        kinds["hsc_table"] = Query(galaxy=galaxy, scalars=tuple(chosen.tolist()))
+        kinds["hsc_table"] = Query(galaxy=galaxy, table_values=tuple(chosen.tolist()))
     return kinds
 
 
@@ -101,8 +103,8 @@ def hidden(galaxies: np.ndarray) -> tuple[pa.RecordBatch, list[np.ndarray]]:
             encode.model().modality_info[key]["id"]
             for key in (
                 predictions.IMAGES[ANCHOR],
-                *predictions.SCALARS[ANCHOR],
-                *predictions.SCALARS["hsc"],
+                *predictions.TABLE_VALUES[ANCHOR],
+                *predictions.TABLE_VALUES["hsc"],
             )
         ]
     )
@@ -210,7 +212,7 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
             matches = found[1:][known[found[1:]]]
             values["redshift"]["pql"].append(offset(redshift, order[:TOP], galaxy))
             values["redshift"]["cosine"].append(offset(redshift, matches[:TOP], galaxy))
-            if not query.spans:
+            if not query.spectrum_tokens:
                 continue
 
             selected = pql.selection(query)

@@ -10,12 +10,12 @@ from . import encode
 from .config import (
     ANCHOR,
     DIM,
-    N_PATCHES,
-    N_SPANS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
     PREDICTIONS,
     REDSHIFT,
     SEED,
-    SPAN_RANK,
+    SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
     TOP_CODES,
     VOCABULARY,
@@ -30,9 +30,9 @@ LEVELS = np.iinfo(np.uint8).max
 BATCH = 256
 
 IMAGES = {ANCHOR: encode.LegacySurveyImage.token_key, "hsc": encode.HSCImage.token_key}
-SCALARS = {
-    ANCHOR: tuple(modality.token_key for modality, _ in encode.LS_SCALARS),
-    "hsc": tuple(modality.token_key for modality, _ in encode.HSC_SCALARS),
+TABLE_VALUES = {
+    ANCHOR: tuple(modality.token_key for modality, _ in encode.LS_TABLE_VALUES),
+    "hsc": tuple(modality.token_key for modality, _ in encode.HSC_TABLE_VALUES),
 }
 SPECTRA = {
     "desi": encode.DESISpectrum.token_key,
@@ -40,12 +40,14 @@ SPECTRA = {
 }
 REDSHIFT_KEY = encode.Z.token_key
 
-SPAN_TARGETS = {key: np.arange(1, N_SPANS + 1) for key in SPECTRA.values()}
+SPECTRUM_TOKEN_TARGETS = {
+    key: np.arange(1, N_SPECTRUM_TOKENS + 1) for key in SPECTRA.values()
+}
 TARGETS = (
-    {key: np.arange(N_PATCHES) for key in IMAGES.values()}
-    | {key: np.arange(1) for keys in SCALARS.values() for key in keys}
+    {key: np.arange(N_IMAGE_TOKENS) for key in IMAGES.values()}
+    | {key: np.arange(1) for keys in TABLE_VALUES.values() for key in keys}
     | {REDSHIFT_KEY: np.arange(1)}
-    | SPAN_TARGETS
+    | SPECTRUM_TOKEN_TARGETS
 )
 
 
@@ -57,9 +59,9 @@ def inputs(row: dict) -> dict[str, torch.Tensor]:
         if row[survey] is None:
             continue
         ids = torch.as_tensor(row[survey], dtype=torch.int64)[None]
-        tokens[image_key] = ids[:, :N_PATCHES]
-        for offset, key in enumerate(SCALARS[survey]):
-            tokens[key] = ids[:, N_PATCHES + offset : N_PATCHES + offset + 1]
+        tokens[image_key] = ids[:, :N_IMAGE_TOKENS]
+        for offset, key in enumerate(TABLE_VALUES[survey]):
+            tokens[key] = ids[:, N_IMAGE_TOKENS + offset : N_IMAGE_TOKENS + offset + 1]
     for survey, key in SPECTRA.items():
         if row[survey] is not None:
             tokens[key] = torch.as_tensor(row[survey], dtype=torch.int64)[None]
@@ -102,7 +104,7 @@ def predictions(
     }
 
 
-def cells(
+def image_token_codes(
     log_probabilities: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     candidates = np.argpartition(-log_probabilities, TOP_CODES - 1, axis=1)[
@@ -135,7 +137,7 @@ class Moments:
     def basis(self) -> tuple[np.ndarray, np.ndarray]:
         mean = self.total / self.count
         _, vectors = np.linalg.eigh(self.products / self.count - np.outer(mean, mean))
-        return mean, vectors[:, ::-1][:, :SPAN_RANK].T
+        return mean, vectors[:, ::-1][:, :SPECTRUM_TOKEN_RANK].T
 
 
 def coefficients(
@@ -163,8 +165,8 @@ def rows(description: str) -> Iterator[dict]:
 
 def bases() -> dict[str, tuple[np.ndarray, np.ndarray]]:
     moments = {survey: Moments() for survey in SPECTRA}
-    for row in rows("span moments"):
-        predicted = predictions(inputs(row), SPAN_TARGETS)
+    for row in rows("spectrum token moments"):
+        predicted = predictions(inputs(row), SPECTRUM_TOKEN_TARGETS)
         for survey, key in SPECTRA.items():
             moments[survey].add(np.exp(predicted[key]))
     return {survey: moment.basis() for survey, moment in moments.items()}
@@ -180,12 +182,12 @@ def record(
         REDSHIFT: predicted[REDSHIFT_KEY][0].astype(np.float16),
     }
     for survey, image_key in IMAGES.items():
-        codes, kept, tails = cells(predicted[image_key])
+        codes, kept, tails = image_token_codes(predicted[image_key])
         values[f"{survey}_codes"] = codes.reshape(-1)
         values[f"{survey}_log_probabilities"] = kept.reshape(-1)
         values[f"{survey}_tails"] = tails
-        values[f"{survey}_scalars"] = np.concatenate(
-            [predicted[key][0] for key in SCALARS[survey]]
+        values[f"{survey}_table_values"] = np.concatenate(
+            [predicted[key][0] for key in TABLE_VALUES[survey]]
         ).astype(np.float16)
     for survey, key in SPECTRA.items():
         quantised, offsets, steps = coefficients(

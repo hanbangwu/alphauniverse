@@ -6,20 +6,20 @@ import pyarrow as pa
 from .config import (
     ANCHOR,
     IMAGE_VOCABULARY,
-    N_PATCHES,
-    N_SPANS,
+    N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
     PREDICTIONS,
-    SCALAR_SURVEYS,
-    SPAN_RANK,
     SPECTRUM_SURVEYS,
+    SPECTRUM_TOKEN_RANK,
+    TABLE_VALUE_SURVEYS,
     TOP_CODES,
     VOCABULARY,
     artifact,
 )
-from .search import FIRST_HSC_SCALAR, FIRST_LS_SCALAR, Query, tokens
+from .search import FIRST_HSC_TABLE_VALUE, FIRST_LS_TABLE_VALUE, Query, tokens
 
 KEPT = 16
-SPAN_FLOOR = 0.1 / VOCABULARY
+SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
 
 
 def prediction_batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
@@ -85,45 +85,49 @@ def spectrum_survey(galaxy: int) -> str | None:
 
 
 def selection(query: Query) -> dict[str, np.ndarray]:
-    scalars = np.asarray(query.scalars, dtype=np.int64)
+    table_values = np.asarray(query.table_values, dtype=np.int64)
     selected = {
-        f"{ANCHOR}_cells": np.asarray(query.patches, dtype=np.int64),
-        f"{ANCHOR}_scalars": scalars[
-            (scalars >= FIRST_LS_SCALAR) & (scalars < FIRST_HSC_SCALAR)
+        f"{ANCHOR}_image": np.asarray(query.image_tokens, dtype=np.int64),
+        f"{ANCHOR}_table": table_values[
+            (table_values >= FIRST_LS_TABLE_VALUE)
+            & (table_values < FIRST_HSC_TABLE_VALUE)
         ]
-        - FIRST_LS_SCALAR,
-        "hsc_scalars": scalars[scalars >= FIRST_HSC_SCALAR] - FIRST_HSC_SCALAR,
+        - FIRST_LS_TABLE_VALUE,
+        "hsc_table": table_values[table_values >= FIRST_HSC_TABLE_VALUE]
+        - FIRST_HSC_TABLE_VALUE,
     }
-    if query.spans:
+    if query.spectrum_tokens:
         survey = spectrum_survey(query.galaxy)
-        selected[f"{survey}_spans"] = np.asarray(query.spans, dtype=np.int64)
+        selected[f"{survey}_spectrum"] = np.asarray(
+            query.spectrum_tokens, dtype=np.int64
+        )
     return {mode: slots for mode, slots in selected.items() if len(slots)}
 
 
-def top_cells(
+def top_image_tokens(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray, kept: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    codes = array(rows, f"{survey}_codes", N_PATCHES, TOP_CODES)[:, slots, :kept]
+    codes = array(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES)[:, slots, :kept]
     probabilities = np.exp(
-        array(rows, f"{survey}_log_probabilities", N_PATCHES, TOP_CODES)[:, slots],
+        array(rows, f"{survey}_log_probabilities", N_IMAGE_TOKENS, TOP_CODES)[:, slots],
         dtype=np.float32,
     )
-    rest = np.exp(array(rows, f"{survey}_tails", N_PATCHES)[:, slots]) + (
+    rest = np.exp(array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots]) + (
         probabilities[..., kept:].sum(axis=-1)
     )
     return codes, probabilities[..., :kept], rest / (IMAGE_VOCABULARY - kept)
 
 
-def dense_cells(
+def dense_image_tokens(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
-    codes, probabilities, spread = top_cells(rows, survey, slots, TOP_CODES)
+    codes, probabilities, spread = top_image_tokens(rows, survey, slots, TOP_CODES)
     dense = np.repeat(spread[..., None], IMAGE_VOCABULARY, axis=-1)
     np.put_along_axis(dense, codes.astype(np.intp), probabilities, axis=-1)
     return dense
 
 
-def cell_overlaps(
+def image_token_overlaps(
     query: np.ndarray,
     codes: np.ndarray,
     probabilities: np.ndarray,
@@ -139,36 +143,41 @@ def cell_overlaps(
     )
 
 
-def span_coefficients(
+def spectrum_token_coefficients(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
-    quantised = array(rows, f"{survey}_coefficients", N_SPANS, SPAN_RANK)[:, slots]
-    offsets = array(rows, f"{survey}_offsets", N_SPANS)[:, slots]
-    steps = array(rows, f"{survey}_steps", N_SPANS)[:, slots]
+    quantised = array(
+        rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
+    )[:, slots]
+    offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[:, slots]
+    steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[:, slots]
     return offsets[..., None] + quantised * steps[..., None]
 
 
-def span_overlaps(
+def spectrum_token_overlaps(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray, query: np.ndarray
 ) -> np.ndarray:
     _, _, mean_square, projected_mean = basis()[survey]
     weights = projected_mean + query
-    quantised = array(rows, f"{survey}_coefficients", N_SPANS, SPAN_RANK)[:, slots]
+    quantised = array(
+        rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
+    )[:, slots]
     overlaps = (
         mean_square
         + query @ projected_mean
-        + array(rows, f"{survey}_offsets", N_SPANS)[:, slots] * weights.sum(axis=-1)
-        + array(rows, f"{survey}_steps", N_SPANS)[:, slots]
+        + array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[:, slots]
+        * weights.sum(axis=-1)
+        + array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[:, slots]
         * np.einsum("...r,...r->...", quantised, weights)
     )
-    return np.maximum(overlaps, SPAN_FLOOR)
+    return np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR)
 
 
-def scalar_probabilities(
+def table_value_probabilities(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
-    count = len(SCALAR_SURVEYS[survey])
-    stored = array(rows, f"{survey}_scalars", count, VOCABULARY)[:, slots]
+    count = len(TABLE_VALUE_SURVEYS[survey])
+    stored = array(rows, f"{survey}_table_values", count, VOCABULARY)[:, slots]
     return np.exp(stored.astype(np.float32))
 
 
@@ -178,12 +187,12 @@ def query_forms(
     forms = {}
     for mode, slots in selected.items():
         survey, kind = mode.split("_")
-        if kind == "cells":
-            forms[mode] = dense_cells(own, survey, slots)[0]
-        elif kind == "spans":
-            forms[mode] = span_coefficients(own, survey, slots)[0]
+        if kind == "image":
+            forms[mode] = dense_image_tokens(own, survey, slots)[0]
+        elif kind == "spectrum":
+            forms[mode] = spectrum_token_coefficients(own, survey, slots)[0]
         else:
-            forms[mode] = scalar_probabilities(own, survey, slots)[0]
+            forms[mode] = table_value_probabilities(own, survey, slots)[0]
     return forms
 
 
@@ -191,11 +200,11 @@ def overlaps(
     rows: pa.RecordBatch, mode: str, slots: np.ndarray, form: np.ndarray
 ) -> np.ndarray:
     survey, kind = mode.split("_")
-    if kind == "cells":
-        return cell_overlaps(form, *top_cells(rows, survey, slots, KEPT))
-    if kind == "spans":
-        return span_overlaps(rows, survey, slots, form)
-    return (scalar_probabilities(rows, survey, slots) * form).sum(axis=-1)
+    if kind == "image":
+        return image_token_overlaps(form, *top_image_tokens(rows, survey, slots, KEPT))
+    if kind == "spectrum":
+        return spectrum_token_overlaps(rows, survey, slots, form)
+    return (table_value_probabilities(rows, survey, slots) * form).sum(axis=-1)
 
 
 def sums(
@@ -241,27 +250,30 @@ def maps(
     own = row(query.galaxy)
     forms = query_forms(own, selection(query))
     rows = gathered(galaxies)
-    cells = np.full((len(galaxies), N_PATCHES), np.nan)
-    spans = np.full((len(galaxies), N_SPANS), np.nan)
+    image_tokens = np.full((len(galaxies), N_IMAGE_TOKENS), np.nan)
+    spectrum_tokens = np.full((len(galaxies), N_SPECTRUM_TOKENS), np.nan)
     for mode, form in forms.items():
         survey, kind = mode.split("_")
-        if kind == "cells":
-            cells = np.log(
-                cell_overlaps(
-                    form.mean(axis=0), *top_cells(rows, survey, slice(None), KEPT)
+        if kind == "image":
+            image_tokens = np.log(
+                image_token_overlaps(
+                    form.mean(axis=0),
+                    *top_image_tokens(rows, survey, slice(None), KEPT),
                 )
             )
-        elif kind == "spans":
-            spans = np.log(span_overlaps(rows, survey, slice(None), form.mean(axis=0)))
-    scalars = np.hstack(
+        elif kind == "spectrum":
+            spectrum_tokens = np.log(
+                spectrum_token_overlaps(rows, survey, slice(None), form.mean(axis=0))
+            )
+    table_values = np.hstack(
         [
             np.log(
                 (
-                    scalar_probabilities(rows, survey, slice(None))
-                    * scalar_probabilities(own, survey, slice(None))
+                    table_value_probabilities(rows, survey, slice(None))
+                    * table_value_probabilities(own, survey, slice(None))
                 ).sum(axis=-1)
             )
-            for survey in SCALAR_SURVEYS
+            for survey in TABLE_VALUE_SURVEYS
         ]
     )
-    return cells, spans, scalars
+    return image_tokens, spectrum_tokens, table_values
