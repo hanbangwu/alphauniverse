@@ -1,6 +1,4 @@
 import importlib
-import json
-from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +17,6 @@ from app.config import (
     TOKEN_SURVEYS,
     artifact,
     build_dir,
-    device,
     store_schema,
 )
 from app.search import N_HSC_SCALARS, N_LS_SCALARS, blocks, source
@@ -27,9 +24,8 @@ from scripts.fixture import TOKENS, forget
 
 torch = pytest.importorskip("torch")
 encode_module = importlib.import_module("app.encode")
-codec_config = importlib.import_module("aion.codecs.config")
 
-CONFIGS = Path(__file__).parent / "aion"
+pytestmark = pytest.mark.usefixtures("random_weights")
 
 
 def image(rng: np.random.Generator, bands: list[str]) -> dict[str, list]:
@@ -66,27 +62,6 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
         FLAG_SURVEYS["gz10"]: int(rng.integers(10)),
         FLAG_SURVEYS["provabgs"]: None,
     }
-
-
-@pytest.fixture(scope="module", autouse=True)
-def random_weights() -> Iterator[None]:
-    def load(codec_class: type, repository: str, modality: type) -> object:
-        torch.manual_seed(0)
-        path = CONFIGS / "codecs" / modality.name / "config.json"
-        return codec_class(**json.loads(path.read_text())).eval()
-
-    torch.manual_seed(0)
-    config = json.loads((CONFIGS / "config.json").read_text())
-    network = encode_module.AION(config | {"encoder_depth": 1, "decoder_depth": 1})
-    network = network.to(device()).eval()
-    network.requires_grad_(False)
-    encode_module.CodecManager._load_codec_from_hf.cache_clear()
-    with pytest.MonkeyPatch.context() as patch:
-        for codec_class in set(codec_config.MODALITY_CODEC_MAPPING.values()):
-            patch.setattr(codec_class, "from_pretrained", classmethod(load))
-        patch.setattr(encode_module, "model", lambda: network)
-        yield
-    encode_module.CodecManager._load_codec_from_hf.cache_clear()
 
 
 def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
