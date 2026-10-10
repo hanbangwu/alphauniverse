@@ -23,6 +23,7 @@ from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     MATCHES,
     PATCHES,
+    SCALARS,
     SPANS,
     elapsed,
     environment,
@@ -37,7 +38,6 @@ image = serving_image.add_local_python_source("modal_app")
 
 CLIENTS = (1, 4, SERVING_MAX_INPUTS, 2 * SERVING_MAX_INPUTS)
 REPORT = Path("docs/benchmarks/backend_performance.json")
-SCALARS = 4
 TEXTS = tuple(text for text, _ in CUTS)
 
 
