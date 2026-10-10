@@ -16,7 +16,7 @@ export class Similarity {
   readonly grid: number
 
   readonly #app: AppState = getApp()
-  readonly #patchCount: number = this.#app.meta.grid ** 2
+  readonly #imageTokenCount: number = this.#app.meta.grid ** 2
   readonly #tokenMap: CreateQueryResult<Uint32Array<ArrayBuffer>>
   readonly #result: CreateQueryResult<SimilarityResult>
   #submitted: SimilarityQuery | null = $state(null)
@@ -45,7 +45,7 @@ export class Similarity {
     this.draft = $derived(
       app.search.request(
         galaxy,
-        app.view.patches.value,
+        app.view.imageTokens.value,
         app.view.spans.value,
         app.view.scalars.value
       )
@@ -56,7 +56,7 @@ export class Similarity {
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
     this.imageDomain = $derived(this.imageMaps ? extent(this.imageMaps) : null)
     this.imageHeat = $derived(this.imageDomain ? continuous(this.imageDomain) : null)
-    this.imageMap = $derived(this.imageMaps ? row(this.imageMaps, 0, this.#patchCount) : null)
+    this.imageMap = $derived(this.imageMaps ? row(this.imageMaps, 0, this.#imageTokenCount) : null)
     this.spectrumMaps = $derived(this.#result.data?.spectrumMaps ?? null)
     this.spectrumHeat = $derived.by(() => {
       if (!this.spectrumMaps) return null
@@ -106,7 +106,7 @@ export class Similarity {
   }
 
   imageMapAt(index: number): Float32Array {
-    return row(must(this.imageMaps, 'the image maps'), index, this.#patchCount)
+    return row(must(this.imageMaps, 'the image maps'), index, this.#imageTokenCount)
   }
 
   spectrumMapAt(index: number): Float32Array | null {

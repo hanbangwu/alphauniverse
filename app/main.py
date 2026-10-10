@@ -20,7 +20,7 @@ from .config import (
     DATASET_NAME,
     FLAG_SURVEYS,
     GRID,
-    N_PATCHES,
+    N_IMAGE_TOKENS,
     N_SCALARS,
     N_SPANS,
     REDSHIFT,
@@ -327,7 +327,7 @@ def get_image(galaxy: GalaxyIndex) -> Response:
 def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     cell = tokens().column(ANCHOR)[galaxy]
     return Response(
-        np.asarray(cell.values)[:N_PATCHES].tobytes(),
+        np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
         media_type="application/octet-stream",
     )
 
@@ -378,7 +378,7 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
         [
             pa.field("galaxy", pa.int32(), nullable=False),
             pa.field("score", pa.float32(), nullable=False),
-            pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
+            pa.field("map", pa.list_(item, N_IMAGE_TOKENS), nullable=False),
             pa.field("spectrum", pa.list_(item, N_SPANS)),
             pa.field("scalars", pa.list_(item, N_SCALARS), nullable=False),
         ]
@@ -387,7 +387,9 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
         [
             pa.array(galaxies),
             pa.array(scores),
-            pa.FixedSizeListArray.from_arrays(pa.array(values.reshape(-1)), N_PATCHES),
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(values.reshape(-1)), N_IMAGE_TOKENS
+            ),
             pa.FixedSizeListArray.from_arrays(
                 pa.array(spans.reshape(-1)),
                 N_SPANS,

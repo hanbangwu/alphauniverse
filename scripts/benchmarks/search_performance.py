@@ -15,7 +15,7 @@ from typing import Any
 import faiss
 import numpy as np
 
-from app.config import DATASET_REVISION, N_PATCHES, artifact, galaxy_count, labels
+from app.config import DATASET_REVISION, N_IMAGE_TOKENS, artifact, galaxy_count, labels
 from app.search import (
     Query,
     candidates,
@@ -39,8 +39,8 @@ from modal_app import (
     serving_image,
 )
 from scripts.benchmarks.common import (
+    IMAGE_TOKENS,
     MATCHES,
-    PATCHES,
     elapsed,
     environment,
     git,
@@ -126,7 +126,7 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
     marks.append(mark())
     rows = vectors(order, index=built)
     marks.append(mark())
-    scored = score_maps(rows, direction, width=N_PATCHES)
+    scored = score_maps(rows, direction, width=N_IMAGE_TOKENS)
     marks.append(mark())
     spectral_scores = span_maps(order, direction, index=built)
     marks.append(mark())
@@ -138,7 +138,7 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
 
 
 def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
-    batch = queries(runs + 1, PATCHES, matches)
+    batch = queries(runs + 1, IMAGE_TOKENS, matches)
     search(batch[0], index=built)
     return summary(
         [elapsed(partial(search, query, index=built)) for query in batch[1:]]
@@ -151,7 +151,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = load_times()
     built = index()
 
-    batch = queries(runs + 1, PATCHES, matches)
+    batch = queries(runs + 1, IMAGE_TOKENS, matches)
     cold = stage_times(batch[0], built)
     samples: dict[str, list[dict[str, float]]] = {name: [] for name in STAGES}
 

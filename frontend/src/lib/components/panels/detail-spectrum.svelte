@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PatchFrame from '$lib/components/common/patch-frame.svelte'
+  import ImageTokenFrame from '$lib/components/common/image-token-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery } from '$lib/data/queries'
   import { SPECTRUM_SURVEY, hasSpectrum } from '$lib/data/spectra'
@@ -17,7 +17,7 @@
   const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
 </script>
 
-<PatchFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">
+<ImageTokenFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">
   {#if matched && spectrum.data}
     <SpectrumChart
       spectrum={spectrum.data}
@@ -29,7 +29,7 @@
       No spectrum
     </p>
   {/if}
-</PatchFrame>
+</ImageTokenFrame>
 
 {#if spectrum.isError}
   <p class="text-xs leading-relaxed text-destructive">

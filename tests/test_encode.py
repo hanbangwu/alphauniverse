@@ -11,7 +11,7 @@ from app.config import (
     CROP_PIXELS,
     DIM,
     FLAG_SURVEYS,
-    N_PATCHES,
+    N_IMAGE_TOKENS,
     N_SPANS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
@@ -137,7 +137,7 @@ def test_each_survey_lands_in_its_own_cell_images_first() -> None:
         (ANCHOR, encode_module.LegacySurveyImage.token_key),
         ("hsc", encode_module.HSCImage.token_key),
     ):
-        first = modality_mask[positions[survey][:N_PATCHES]]
+        first = modality_mask[positions[survey][:N_IMAGE_TOKENS]]
         assert np.all(first == identifiers[image_key])
     assert sorted(np.concatenate(list(positions.values()))) == list(
         range(len(modality_mask))
@@ -171,7 +171,7 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
             columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
         )
         assert blocks(table).shape == (
-            len(rows) * (N_PATCHES + N_LS_SCALARS)
+            len(rows) * (N_IMAGE_TOKENS + N_LS_SCALARS)
             + spectra * (N_SPANS + 1)
             + hsc * N_HSC_SCALARS,
             DIM,

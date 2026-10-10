@@ -14,13 +14,13 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from app.config import DATASET_REVISION, N_PATCHES
+from app.config import DATASET_REVISION, N_IMAGE_TOKENS
 from app.main import SPECTRUM_SURVEY
 from app.search import FIRST_LS_SCALAR, N_LS_SCALARS
 from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
+    IMAGE_TOKENS,
     MATCHES,
-    PATCHES,
     SCALARS,
     SPANS,
     elapsed,
@@ -63,7 +63,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def parameters(matches: int) -> dict[str, Any]:
             return {
                 "galaxy": galaxy(),
-                "p": rng.choice(N_PATCHES, PATCHES, replace=False).tolist(),
+                "p": rng.choice(N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False).tolist(),
                 "matches": matches,
             }
 
@@ -133,20 +133,22 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def spectrum(route: str) -> None:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
-        def span_query(patch_count: int) -> dict[str, Any]:
+        def span_query(image_token_count: int) -> dict[str, Any]:
             galaxy = int(rng.choice(holders))
             response = session.get(f"/galaxy/{galaxy}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
             spans = observed_spans(table.column("wavelength").to_numpy())
             return {
                 "galaxy": galaxy,
-                "p": rng.choice(N_PATCHES, patch_count, replace=False).tolist(),
+                "p": rng.choice(
+                    N_IMAGE_TOKENS, image_token_count, replace=False
+                ).tolist(),
                 "s": rng.choice(spans, SPANS, replace=False).tolist(),
                 "matches": 32,
             }
 
-        def span_similarity(patch_count: int) -> Callable[[], None]:
-            batch = iter([span_query(patch_count) for _ in range(runs + 1)])
+        def span_similarity(image_token_count: int) -> Callable[[], None]:
+            batch = iter([span_query(image_token_count) for _ in range(runs + 1)])
             return lambda: get("/search", **next(batch))
 
         spectral_calls = {
@@ -154,7 +156,9 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
         } | {
             "similarity spans matches=32": span_similarity(0),
-            "similarity patches and spans matches=32": span_similarity(PATCHES),
+            "similarity image tokens and spans matches=32": span_similarity(
+                IMAGE_TOKENS
+            ),
         }
         return {
             "environment": environment(),

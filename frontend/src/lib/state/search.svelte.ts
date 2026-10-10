@@ -14,13 +14,13 @@ export class SearchState {
 
   request(
     galaxy: number | null,
-    patches: number[],
+    imageTokens: number[],
     spans: number[],
     scalars: number[]
   ): SimilarityQuery | null {
     const matches = this.count
     if (galaxy === null || matches === null) return null
-    if (patches.length + spans.length + scalars.length === 0) return null
-    return { galaxy, p: patches, s: spans, t: scalars, matches }
+    if (imageTokens.length + spans.length + scalars.length === 0) return null
+    return { galaxy, p: imageTokens, s: spans, t: scalars, matches }
   }
 }

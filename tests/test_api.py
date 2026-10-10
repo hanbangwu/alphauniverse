@@ -12,8 +12,8 @@ from app.config import (
     ANCHOR,
     DESI,
     FLAG_SURVEYS,
+    N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
-    N_PATCHES,
     REDSHIFT,
     REDSHIFT_SCALAR,
     SCALAR_SURVEYS,
@@ -93,7 +93,7 @@ def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     assert client.get("/downloads/codebook").status_code == 404
 
 
-def test_image_tokens_are_that_galaxys_stored_patch_tokens(
+def test_image_tokens_are_that_galaxys_stored_image_tokens(
     client: TestClient, galaxies: int
 ) -> None:
     galaxy = galaxies - 1
@@ -103,7 +103,7 @@ def test_image_tokens_are_that_galaxys_stored_patch_tokens(
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
-    np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_PATCHES])
+    np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_IMAGE_TOKENS])
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
@@ -147,7 +147,7 @@ def test_similarity_returns_one_arrow_batch(client: TestClient) -> None:
 
     assert 1 < table.num_rows <= 6
     assert table.column_names == ["galaxy", "score", "map", "spectrum", "scalars"]
-    assert len(table.column("map")[0]) == N_PATCHES
+    assert len(table.column("map")[0]) == N_IMAGE_TOKENS
 
 
 def test_similarity_spectrum_column_is_null_without_a_spectrum(
@@ -259,13 +259,15 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_scalar
             "column": "a_g",
             "value": 1.5,
             "scalar": 13,
-            "token": hsc.values[N_PATCHES].as_py(),
+            "token": hsc.values[N_IMAGE_TOKENS].as_py(),
             "excluded": None,
         },
     ]
 
 
-def test_similarity_without_patches_or_spans_is_rejected(client: TestClient) -> None:
+def test_similarity_without_image_tokens_or_spans_is_rejected(
+    client: TestClient,
+) -> None:
     assert client.get("/search", params={"galaxy": 0}).status_code == 422
 
 

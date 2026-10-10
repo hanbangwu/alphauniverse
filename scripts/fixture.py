@@ -11,8 +11,8 @@ from app.config import (
     ANCHOR,
     DIM,
     GEMMA_DIM,
+    N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
-    N_PATCHES,
     REDSHIFT,
     STORE_COLUMNS,
     artifact,
@@ -37,8 +37,8 @@ from app.search import (
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
-    ANCHOR: N_PATCHES + 12,
-    "hsc": N_PATCHES + 13,
+    ANCHOR: N_IMAGE_TOKENS + 12,
+    "hsc": N_IMAGE_TOKENS + 13,
     "desi": 273,
     "sdss": 273,
     REDSHIFT: 1,

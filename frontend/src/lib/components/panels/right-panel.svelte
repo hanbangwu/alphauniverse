@@ -1,6 +1,6 @@
 <script lang="ts">
   import Segmented from '$lib/components/common/segmented.svelte'
-  import PatchSimilarity from '$lib/components/similarity/patch-similarity.svelte'
+  import ImageTokenSimilarity from '$lib/components/similarity/image-token-similarity.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
   import { morphologyQuery } from '$lib/data/queries'
@@ -56,7 +56,7 @@
       <CoverageTable {galaxy} />
 
       {#key galaxy}
-        <PatchSimilarity {galaxy} />
+        <ImageTokenSimilarity {galaxy} />
       {/key}
     {/if}
   </div>

@@ -48,7 +48,7 @@ A container with the server's spec runs, per version:
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
 2. `read_index` and `make_direct_map`, the two calls `index()` loads with, timed on a separate copy, so in the first round they take the index's cold reads;
 3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `tokens` (which `starts` loads), `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
-4. the stages of `search()`, first query and warm, at 4 patches and 32 matches;
+4. the stages of `search()`, first query and warm, at 4 image tokens and 32 matches;
 5. `search()` whole at 8, 32 and 128 matches.
 
 The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. Cold reads are charged to user time: in the last run's first round, `make_direct_map` took 8,465 ms of wall time and 8,310 ms of user CPU, none of system. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
@@ -84,7 +84,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 `read_index` and `make_direct_map` are step 2's split, which takes the cold reads; `index` then finds those pages. `faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
 
-**Stages**, 4 patches, 32 matches. The run predates `scalar_maps`, which the script now times:
+**Stages**, 4 image tokens, 32 matches. The run predates `scalar_maps`, which the script now times:
 
 | Stage         | First query | Warm p50    | Warm share |
 | ------------- | ----------- | ----------- | ---------- |
@@ -97,10 +97,10 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 | `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
 | Total         | 131.0 ms    | 87.2 ms     |            |
 
-- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 patch vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
+- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 image token vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
 - `candidates` and `vectors` are faiss-parallel and `score_maps` contends with their threads, so stage figures compare only at the same thread configuration.
 
-**Whole `search()`**, 4 patches, warm p50:
+**Whole `search()`**, 4 image tokens, warm p50:
 
 | Matches | p50      |
 | ------- | -------- |
@@ -115,9 +115,9 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 `modal run` starts an ephemeral `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A 1-CPU client in a separate container times, in order:
 
 1. one cold `/meta`, one cold `/search`, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
-2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey scalars at 32 matches, and `/search` with 4 patches at 8, 32 and 128 matches;
-3. warm: both spectrum routes, and `/search` at 32 matches with 4 spans, alone and with 4 patches, on galaxies with a DESI spectrum and spans inside its observed range;
-4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 patches at 32 matches.
+2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey scalars at 32 matches, and `/search` with 4 image tokens at 8, 32 and 128 matches;
+3. warm: both spectrum routes, and `/search` at 32 matches with 4 spans, alone and with 4 image tokens, on galaxies with a DESI spectrum and spans inside its observed range;
+4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 image tokens at 32 matches.
 
 Latency includes Modal's ingress, not the starter's network. Only the checked-out commit is timed.
 
@@ -136,11 +136,11 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 | Query                   | p50    | p95    |
 | ----------------------- | ------ | ------ |
-| 4 patches, 8 matches    | 164 ms | 174 ms |
-| 4 patches               | 225 ms | 255 ms |
-| 4 patches, 128 matches  | 429 ms | 503 ms |
+| 4 image tokens, 8 matches    | 164 ms | 174 ms |
+| 4 image tokens               | 225 ms | 255 ms |
+| 4 image tokens, 128 matches  | 429 ms | 503 ms |
 | 4 spans                 | 253 ms | 276 ms |
-| 4 patches and 4 spans   | 237 ms | 258 ms |
+| 4 image tokens and 4 spans   | 237 ms | 258 ms |
 | 4 Legacy Survey scalars | 231 ms | 264 ms |
 
 `matches` sets the cost. Over the 128 ms `/meta` floor, 32 matches add 225 − 128 = 97 ms at p50, and 128 add 429 − 128 = 301 ms.
@@ -177,8 +177,8 @@ All but `/search/text` are within 140 − 126 = 14 ms at p50; `/search/text` add
 
 A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and the volume, runs `--per-kind` queries of each kind at 32 matches:
 
-- `patches`: 4 patches of a galaxy drawn from all galaxies.
-- `paired_patches`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 patches and 4 spans inside its observed range, queried with the patches, the spans, and both.
+- `image_tokens`: 4 image tokens of a galaxy drawn from all galaxies.
+- `paired_image_tokens`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 image tokens and 4 spans inside its observed range, queried with the image tokens, the spans, and both.
 - `scalars`: 4 Legacy Survey scalars of a galaxy drawn from all galaxies.
 - `hsc_scalars`: 2 Legacy Survey and 2 HSC scalars of a galaxy drawn from galaxies with an HSC match.
 
@@ -196,10 +196,10 @@ A query's recall is the share of its exact 32 galaxies that `search()` returns a
 
 | Query                 | Drawn from | Mean  | Lowest | All 32 found | Searched again | Most searches |
 | --------------------- | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
-| 4 patches             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
-| 4 patches             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
+| 4 image tokens             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
+| 4 image tokens             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
 | 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
-| 4 patches and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
+| 4 image tokens and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
 `scalars` and `hsc_scalars` are unmeasured: this run predates them.
 

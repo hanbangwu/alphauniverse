@@ -12,7 +12,7 @@ import pyarrow as pa
 from threadpoolctl import threadpool_info
 
 from app.config import (
-    N_PATCHES,
+    N_IMAGE_TOKENS,
     N_SPANS,
     SPECTRUM_ORIGIN,
     SPECTRUM_TOKEN_WIDTH,
@@ -27,7 +27,7 @@ from modal_app import (
     SERVING_SCALEDOWN_WINDOW,
 )
 
-PATCHES = 4
+IMAGE_TOKENS = 4
 SPANS = 4
 SCALARS = 4
 MATCHES = (8, 32, 128)
@@ -47,14 +47,16 @@ def summary(samples: list[float]) -> dict[str, Any]:
     }
 
 
-def queries(count: int, patch_count: int, matches: int) -> list[Query]:
+def queries(count: int, image_token_count: int, matches: int) -> list[Query]:
     rng = np.random.default_rng(0)
     return [
         Query(
             galaxy=int(rng.integers(galaxy_count())),
             p=tuple(
-                int(patch)
-                for patch in rng.choice(N_PATCHES, patch_count, replace=False)
+                int(image_token)
+                for image_token in rng.choice(
+                    N_IMAGE_TOKENS, image_token_count, replace=False
+                )
             ),
             matches=matches,
         )

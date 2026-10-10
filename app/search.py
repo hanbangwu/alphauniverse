@@ -13,7 +13,7 @@ from .config import (
     ANCHOR,
     ARTIFACTS,
     DIM,
-    N_PATCHES,
+    N_IMAGE_TOKENS,
     N_SCALARS,
     N_SPANS,
     REDSHIFT,
@@ -40,9 +40,9 @@ class Query(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     galaxy: GalaxyIndex
-    patches: Annotated[
-        tuple[Annotated[int, Field(ge=0, lt=N_PATCHES)], ...],
-        Field(alias="p", max_length=N_PATCHES),
+    image_tokens: Annotated[
+        tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
+        Field(alias="p", max_length=N_IMAGE_TOKENS),
     ] = ()
     spans: Annotated[
         tuple[Annotated[int, Field(ge=0, lt=N_SPANS)], ...],
@@ -56,8 +56,8 @@ class Query(BaseModel):
 
     @model_validator(mode="after")
     def some_tokens(self) -> Self:
-        if not (self.patches or self.spans or self.scalars):
-            raise ValueError("select at least one patch, span or scalar")
+        if not (self.image_tokens or self.spans or self.scalars):
+            raise ValueError("select at least one image token, span or scalar")
         return self
 
     @model_validator(mode="after")
@@ -113,7 +113,7 @@ def layout(
     has_spectrum: np.ndarray, has_hsc: np.ndarray, has_redshift: np.ndarray
 ) -> np.ndarray:
     sizes = (
-        N_PATCHES
+        N_IMAGE_TOKENS
         + N_LS_SCALARS
         + has_spectrum * N_SPANS
         + has_hsc * N_HSC_SCALARS
@@ -123,7 +123,7 @@ def layout(
 
 
 def scalar_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
-    return first + N_PATCHES + has_spectrum * N_SPANS
+    return first + N_IMAGE_TOKENS + has_spectrum * N_SPANS
 
 
 @cache
@@ -146,8 +146,8 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
     scalars = np.asarray(query.scalars, dtype=np.int64)
     ids = np.concatenate(
         (
-            start + np.asarray(query.patches, dtype=np.int64),
-            start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
+            start + np.asarray(query.image_tokens, dtype=np.int64),
+            start + N_IMAGE_TOKENS + np.asarray(query.spans, dtype=np.int64),
             np.where(
                 scalars == REDSHIFT_SCALAR,
                 bounds()[query.galaxy + 1] - 1,
@@ -166,7 +166,7 @@ def scalar_tokens(galaxy: int) -> dict[str, int]:
         for survey, columns in SCALAR_SURVEYS.items()
         if (cell := tokens().column(survey)[galaxy]).is_valid
         for column, token in zip(
-            columns, np.asarray(cell.values)[N_PATCHES:], strict=True
+            columns, np.asarray(cell.values)[N_IMAGE_TOKENS:], strict=True
         )
     }
     if (cell := tokens().column(REDSHIFT)[galaxy]).is_valid:
@@ -196,7 +196,7 @@ def candidates(
 
 
 def vectors(order: np.ndarray, *, index: faiss.Index) -> np.ndarray:
-    return index.reconstruct_batch(positions(starts()[order], N_PATCHES))
+    return index.reconstruct_batch(positions(starts()[order], N_IMAGE_TOKENS))
 
 
 def score_maps(rows: np.ndarray, direction: np.ndarray, *, width: int) -> np.ndarray:
@@ -221,7 +221,7 @@ def span_maps(
     order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
     return optional_maps(
-        starts()[order] + N_PATCHES,
+        starts()[order] + N_IMAGE_TOKENS,
         with_spectrum()[order],
         direction,
         width=N_SPANS,
@@ -269,7 +269,7 @@ def search(
     order = candidates(query, direction, index=index)
     return rank(
         order,
-        score_maps(vectors(order, index=index), direction, width=N_PATCHES),
+        score_maps(vectors(order, index=index), direction, width=N_IMAGE_TOKENS),
         span_maps(order, direction, index=index),
         scalar_maps(order, direction, index=index),
     )
@@ -284,8 +284,8 @@ def rows(cells: pa.Array | pa.ChunkedArray, start: int, stop: int | None) -> np.
     return embeddings
 
 
-def patches(cells: pa.Array | pa.ChunkedArray) -> np.ndarray:
-    return rows(cells, 0, N_PATCHES)
+def image_tokens(cells: pa.Array | pa.ChunkedArray) -> np.ndarray:
+    return rows(cells, 0, N_IMAGE_TOKENS)
 
 
 def spectral(cells: pa.Array | pa.ChunkedArray) -> np.ndarray:
@@ -305,17 +305,17 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
     first = bounds[:-1]
     scalar_first = scalar_starts(first, has_spectrum)
     built = np.empty((bounds[-1], DIM), dtype=np.float32)
-    built[positions(first, N_PATCHES)] = patches(batch.column(ANCHOR))
+    built[positions(first, N_IMAGE_TOKENS)] = image_tokens(batch.column(ANCHOR))
     if has_spectrum.any():
-        built[positions(first[has_spectrum] + N_PATCHES, N_SPANS)] = spectral(
+        built[positions(first[has_spectrum] + N_IMAGE_TOKENS, N_SPANS)] = spectral(
             spectra.drop_null()
         )
     built[positions(scalar_first, N_LS_SCALARS)] = rows(
-        batch.column(ANCHOR), N_PATCHES, None
+        batch.column(ANCHOR), N_IMAGE_TOKENS, None
     )
     if has_hsc.any():
         built[positions(scalar_first[has_hsc] + N_LS_SCALARS, N_HSC_SCALARS)] = rows(
-            batch.column("hsc"), N_PATCHES, None
+            batch.column("hsc"), N_IMAGE_TOKENS, None
         )
     if has_redshift.any():
         built[bounds[1:][has_redshift] - 1] = rows(batch.column(REDSHIFT), 0, None)

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PatchFrame from '$lib/components/common/patch-frame.svelte'
+  import ImageTokenFrame from '$lib/components/common/image-token-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
 
   interface Props {
@@ -9,6 +9,6 @@
   let { galaxy }: Props = $props()
 </script>
 
-<PatchFrame>
+<ImageTokenFrame>
   <GalaxyThumb {galaxy} />
-</PatchFrame>
+</ImageTokenFrame>
