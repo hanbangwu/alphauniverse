@@ -5,7 +5,14 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-from app.config import N_PATCHES, N_SPANS, artifact
+from app.config import (
+    N_PATCHES,
+    N_SPANS,
+    PREDICTIONS,
+    TOP_CODES,
+    VOCABULARY,
+    artifact,
+)
 
 pytest.importorskip("torch")
 predictions_module = importlib.import_module("app.predictions")
@@ -26,9 +33,7 @@ def store(tree: Path, random_weights: None) -> tuple[pa.Table, dict[str, np.ndar
 
 @pytest.fixture(scope="module")
 def distributions() -> np.ndarray:
-    return np.random.default_rng(0).dirichlet(
-        np.full(predictions_module.VOCABULARY, 0.1), size=600
-    )
+    return np.random.default_rng(0).dirichlet(np.full(VOCABULARY, 0.1), size=600)
 
 
 def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
@@ -36,7 +41,7 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 ) -> None:
     table, basis = store
 
-    assert table.schema.equals(predictions_module.PREDICTIONS)
+    assert table.schema.equals(PREDICTIONS)
     assert table["galaxy"].to_pylist() == list(range(galaxies))
     for survey, keys in predictions_module.SCALARS.items():
         kept = np.exp(column(table, f"{survey}_log_probabilities").astype(np.float64))
@@ -71,9 +76,7 @@ def test_kept_cell_codes_are_the_most_probable_in_descending_order() -> None:
 
     codes, _, _ = predictions_module.cells(log_probabilities)
 
-    assert np.array_equal(
-        codes, np.argsort(-log_probabilities, axis=1)[:, : predictions_module.TOP_CODES]
-    )
+    assert np.array_equal(codes, np.argsort(-log_probabilities, axis=1)[:, :TOP_CODES])
 
 
 def test_span_basis_from_moments_matches_a_direct_principal_component_analysis(

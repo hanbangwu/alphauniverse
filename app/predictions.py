@@ -12,17 +12,18 @@ from .config import (
     DIM,
     N_PATCHES,
     N_SPANS,
+    PREDICTIONS,
     SEED,
+    SPAN_RANK,
     TOKEN_SURVEYS,
+    TOP_CODES,
+    VOCABULARY,
     artifact,
     device,
 )
 from .search import source
 
 CHUNK = 128
-TOP_CODES = 64
-SPAN_RANK = 256
-VOCABULARY = 1024
 LEVELS = np.iinfo(np.uint8).max
 BATCH = 256
 
@@ -35,36 +36,6 @@ SPECTRA = {
     "desi": encode.DESISpectrum.token_key,
     "sdss": encode.SDSSSpectrum.token_key,
 }
-
-PREDICTIONS = pa.schema(
-    [pa.field("galaxy", pa.int32())]
-    + [
-        field
-        for survey, keys in SCALARS.items()
-        for field in (
-            pa.field(f"{survey}_codes", pa.list_(pa.uint16(), N_PATCHES * TOP_CODES)),
-            pa.field(
-                f"{survey}_log_probabilities",
-                pa.list_(pa.float16(), N_PATCHES * TOP_CODES),
-            ),
-            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_PATCHES)),
-            pa.field(
-                f"{survey}_scalars", pa.list_(pa.float16(), len(keys) * VOCABULARY)
-            ),
-        )
-    ]
-    + [
-        field
-        for survey in SPECTRA
-        for field in (
-            pa.field(
-                f"{survey}_coefficients", pa.list_(pa.uint8(), N_SPANS * SPAN_RANK)
-            ),
-            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPANS)),
-            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPANS)),
-        )
-    ]
-)
 
 SPAN_TARGETS = {key: np.arange(1, N_SPANS + 1) for key in SPECTRA.values()}
 TARGETS = (

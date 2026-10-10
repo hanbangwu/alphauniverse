@@ -168,6 +168,42 @@ PAIRS = pa.schema(
 )
 
 
+TOP_CODES = 64
+SPAN_RANK = 256
+IMAGE_VOCABULARY = 4375
+VOCABULARY = 1024
+
+PREDICTIONS = pa.schema(
+    [pa.field("galaxy", pa.int32())]
+    + [
+        field
+        for survey, columns in SCALAR_SURVEYS.items()
+        for field in (
+            pa.field(f"{survey}_codes", pa.list_(pa.uint16(), N_PATCHES * TOP_CODES)),
+            pa.field(
+                f"{survey}_log_probabilities",
+                pa.list_(pa.float16(), N_PATCHES * TOP_CODES),
+            ),
+            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_PATCHES)),
+            pa.field(
+                f"{survey}_scalars", pa.list_(pa.float16(), len(columns) * VOCABULARY)
+            ),
+        )
+    ]
+    + [
+        field
+        for survey in SPECTRUM_SURVEYS
+        for field in (
+            pa.field(
+                f"{survey}_coefficients", pa.list_(pa.uint8(), N_SPANS * SPAN_RANK)
+            ),
+            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPANS)),
+            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPANS)),
+        )
+    ]
+)
+
+
 POINTS = pa.schema(
     [
         pa.field("galaxy", pa.int32(), nullable=False),
