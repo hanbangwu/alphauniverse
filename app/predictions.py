@@ -10,7 +10,6 @@ from tqdm import tqdm
 from . import encode
 from .config import (
     ANCHOR,
-    DIM,
     IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
@@ -107,39 +106,44 @@ def inputs(row: dict) -> dict[str, torch.Tensor]:
 
 
 @torch.inference_mode()
-def predict(
-    encoded: torch.Tensor, encoder_mask: torch.Tensor, key: str, positions: np.ndarray
-) -> np.ndarray:
+def decode(
+    encoded: torch.Tensor, encoder_mask: torch.Tensor, targets: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
     aion = encode.model()
-    embedding = aion.decoder_embeddings[key]
-    order = torch.randperm(
-        len(positions), generator=torch.Generator().manual_seed(SEED)
-    )
-    targets = torch.as_tensor(positions, device=device())
-    states = torch.empty(len(positions), DIM, device=device())
-    for start in range(0, len(positions), CHUNK):
-        chosen = order[start : start + CHUNK].to(device())
-        count = len(chosen)
-        with torch.autocast(device_type=device().type, dtype=torch.float16):
-            decoded = aion._decode(
-                encoded,
-                encoder_mask,
-                aion.mask_token.expand(1, count, -1),
-                embedding.pos_emb[:, targets[chosen]] + embedding.mod_emb,
-                torch.zeros(1, count, count, dtype=torch.bool, device=device()),
-            )
-        states[chosen] = decoded[0].float()
-    return torch.log_softmax(embedding.forward_logits(states), dim=-1).cpu().numpy()
+    orders, queries, blocks, first = {}, [], [], 0
+    for key, positions in targets.items():
+        embedding = aion.decoder_embeddings[key]
+        orders[key] = torch.randperm(
+            len(positions), generator=torch.Generator().manual_seed(SEED)
+        )
+        chosen = torch.as_tensor(positions)[orders[key]].to(device())
+        queries.append(embedding.pos_emb[:, chosen] + embedding.mod_emb)
+        blocks.append(first + torch.arange(len(positions)) // CHUNK)
+        first = int(blocks[-1][-1]) + 1
+    block = torch.cat(blocks).to(device())
+    with torch.autocast(device_type=device().type, dtype=torch.float16):
+        decoded = aion._decode(
+            encoded,
+            encoder_mask,
+            aion.mask_token.expand(1, len(block), -1),
+            torch.cat(queries, dim=1),
+            (block[:, None] != block[None, :])[None],
+        )
+    states = decoded[0].float().split([len(order) for order in orders.values()])
+    predicted = {}
+    for (key, order), state in zip(orders.items(), states, strict=True):
+        ordered = torch.empty_like(state)
+        ordered[order.to(device())] = state
+        logits = aion.decoder_embeddings[key].forward_logits(ordered)
+        predicted[key] = torch.log_softmax(logits, dim=-1).cpu().numpy()
+    return predicted
 
 
 def predictions(
     tokens: dict[str, torch.Tensor], targets: dict[str, np.ndarray]
 ) -> dict[str, np.ndarray]:
     encoded, _, encoder_mask, _ = encode.context(tokens)
-    return {
-        key: predict(encoded, encoder_mask, key, positions)
-        for key, positions in targets.items()
-    }
+    return decode(encoded, encoder_mask, targets)
 
 
 def image_token_codes(
