@@ -89,9 +89,8 @@ def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.n
 
 
 def similarity(query: pql.Query) -> np.ndarray:
-    selected = pql.selection(query)
-    forms = pql.query_forms(pql.row(query.galaxy), selected)
-    return pql.similarity(pql.fractions(selected, forms, pql.scan(selected, forms)))
+    _, forms = pql.selected_forms(query)
+    return pql.similarity(pql.fractions(forms, pql.parts(query)))
 
 
 @pytest.fixture(scope="module")
@@ -192,6 +191,9 @@ def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
     np.testing.assert_allclose(results.scores, scores[results.galaxies])
     for mode, values in pql.parts(ranked).items():
         np.testing.assert_allclose(results.sums[mode], values[results.galaxies])
+    np.testing.assert_allclose(
+        results.similarity, similarity(ranked)[results.galaxies], rtol=1e-6
+    )
 
 
 @pytest.mark.parametrize(
@@ -242,13 +244,11 @@ def test_a_repeated_slot_counts_once(tree: Path) -> None:
 
 
 def test_similarity_ranks_galaxies_as_the_score_does(query: pql.Query) -> None:
-    totals = pql.parts(query)
-
     similarities = similarity(query)
 
     np.testing.assert_array_equal(
         np.argsort(-similarities, kind="stable"),
-        np.argsort(-pql.combine(totals), kind="stable"),
+        np.argsort(-pql.scores(query), kind="stable"),
     )
 
 

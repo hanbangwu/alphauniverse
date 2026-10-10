@@ -295,9 +295,15 @@ def sums(
     }
 
 
-def parts(query: Query) -> dict[str, np.ndarray]:
+def selected_forms(
+    query: Query,
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     selected = selection(query)
-    return scan(selected, query_forms(row(query.galaxy), selected))
+    return selected, query_forms(row(query.galaxy), selected)
+
+
+def parts(query: Query) -> dict[str, np.ndarray]:
+    return scan(*selected_forms(query))
 
 
 def scan(
@@ -350,12 +356,10 @@ def maps(
 
 
 def fractions(
-    selected: dict[str, np.ndarray],
-    forms: dict[str, np.ndarray],
-    totals: dict[str, np.ndarray],
+    forms: dict[str, np.ndarray], totals: dict[str, np.ndarray]
 ) -> dict[str, np.ndarray]:
     return {
-        mode: (values - log_peaks(mode, forms[mode]).sum()) / len(selected[mode])
+        mode: (values - log_peaks(mode, forms[mode]).sum()) / len(forms[mode])
         for mode, values in totals.items()
     }
 
@@ -383,11 +387,10 @@ def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
 
 
 def search(query: Query) -> Results:
-    selected = selection(query)
-    forms = query_forms(row(query.galaxy), selected)
+    selected, forms = selected_forms(query)
     totals = scan(selected, forms)
     scored = combine(totals)
-    shares = fractions(selected, forms, totals)
+    shares = fractions(forms, totals)
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
