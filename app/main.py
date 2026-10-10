@@ -21,15 +21,19 @@ from .config import (
     DATASET_NAME,
     FLAG_SURVEYS,
     GRID,
+    IMAGE_MODES,
     N_IMAGE_TOKENS,
+    OBSERVATIONS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     REDSHIFT_TABLE_VALUE,
+    SPECTRUM_MODES,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
+    TABLE_MODES,
     TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
     Catalogue,
@@ -129,7 +133,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     labels()
     pql.predictions()
     pql.basis()
-    for column in set(pql.OBSERVED_IN.values()):
+    for column in OBSERVATIONS:
         pql.observed(column)
     yield
 
@@ -377,7 +381,7 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
                 pa.array(values.reshape(-1), pa.float32()), values.shape[1]
             )
         )
-    for mode in (*pql.IMAGES, *pql.SPECTRA):
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
         width = results.aligned[mode].shape[1]
         kind = pa.list_(item, width)
         fields.append(pa.field(f"{mode}_selection", kind))
@@ -389,7 +393,7 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
                 pa.array(selected.reshape(-1), pa.float32()), width
             )
         )
-    for mode in (*pql.IMAGES, *pql.SPECTRA, *pql.TABLES):
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES):
         fields.append(pa.field(f"{mode}_sum", pa.float32()))
         sums = results.sums.get(mode)
         columns.append(
@@ -397,7 +401,7 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
             if sums is None
             else pa.array(sums, pa.float32())
         )
-    for column in pql.MISSING:
+    for column in OBSERVATIONS:
         fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))
         columns.append(pa.array(pql.observed(column)[results.galaxies]))
     return arrow(pa.record_batch(columns, schema=pa.schema(fields)))

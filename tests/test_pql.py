@@ -7,11 +7,14 @@ from pydantic import ValidationError
 
 from app import pql
 from app.config import (
+    IMAGE_MODES,
     IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     REDSHIFT,
+    SPECTRUM_MODES,
     SPECTRUM_TOKEN_RANK,
+    TABLE_MODES,
     TOP_CODES,
     VOCABULARY,
 )
@@ -69,7 +72,7 @@ def dense(rows: pa.Table, mode: str, kept: int) -> np.ndarray:
         return dense_image_tokens(rows, survey, kept)
     if kind == "spectrum":
         return dense_spectrum_tokens(rows, survey)
-    name, count, vocabulary = pql.TABLES[mode]
+    name, count, vocabulary = TABLE_MODES[mode]
     return np.exp(column(rows, name, count, vocabulary))
 
 
@@ -122,12 +125,12 @@ def test_aligned_maps_overlap_each_slot_with_the_same_slot_of_the_query(
         )
         for mode in SELECTED_SLOTS
     }
-    assert aligned.keys() == {*pql.IMAGES, *pql.SPECTRA, "table_values"}
-    for mode in (*pql.IMAGES, *pql.SPECTRA):
+    assert aligned.keys() == {*IMAGE_MODES, *SPECTRUM_MODES, "table_values"}
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
         np.testing.assert_allclose(aligned[mode], expected[mode], rtol=1e-4)
     np.testing.assert_allclose(
         aligned["table_values"],
-        np.hstack([expected[mode] for mode in pql.TABLES]),
+        np.hstack([expected[mode] for mode in TABLE_MODES]),
         rtol=1e-4,
     )
 
@@ -141,7 +144,7 @@ def test_selection_maps_overlap_every_slot_with_the_mean_of_the_selected_slots(
 
     _, selected = pql.maps(query, galaxies)
 
-    assert selected.keys() == {*pql.IMAGES, *pql.SPECTRA}
+    assert selected.keys() == {*IMAGE_MODES, *SPECTRUM_MODES}
     for mode in selected:
         mean = dense(own, mode, TOP_CODES)[0, SELECTED_SLOTS[mode]].mean(axis=0)
         np.testing.assert_allclose(
@@ -215,3 +218,13 @@ def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow(
 
     expected = np.log(np.exp(gallery.astype(np.float64) + query).sum(axis=-1))
     np.testing.assert_allclose(found, expected, rtol=1e-6)
+
+
+def test_a_repeated_slot_counts_once(tree: Path) -> None:
+    repeated = pql.parts(
+        pql.Query(galaxy=GALAXY, ls_image=(7, 7, 9), table_values=(2, 2))
+    )
+    once = pql.parts(pql.Query(galaxy=GALAXY, ls_image=(7, 9), table_values=(2,)))
+
+    for mode, values in once.items():
+        np.testing.assert_array_equal(repeated[mode], values)

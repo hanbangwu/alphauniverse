@@ -7,16 +7,18 @@ import pyarrow.compute as pc
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import (
-    ANCHOR,
+    IMAGE_MODES,
     IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     N_TABLE_VALUES,
+    OBSERVATIONS,
     PREDICTIONS,
     REDSHIFT,
-    REDSHIFT_VOCABULARY,
+    SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
+    TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TOP_CODES,
     VOCABULARY,
@@ -27,27 +29,19 @@ from .search import tokens
 
 KEPT = 16
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
-IMAGES = {f"{survey}_image": survey for survey in (ANCHOR, "hsc")}
-SPECTRA = {f"{survey}_spectrum": survey for survey in SPECTRUM_SURVEYS}
-TABLES = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
-    f"{survey}_table": (f"{survey}_table_values", len(columns), VOCABULARY)
-    for survey, columns in TABLE_VALUE_SURVEYS.items()
+OBSERVED_IN = {
+    mode: survey
+    for mode, survey in (
+        IMAGE_MODES
+        | SPECTRUM_MODES
+        | {f"{survey}_table": survey for survey in TABLE_VALUE_SURVEYS}
+        | {REDSHIFT: REDSHIFT}
+    ).items()
+    if survey in OBSERVATIONS
 }
 TABLE_SLOTS = [
-    (mode, slot) for mode, (_, count, _) in TABLES.items() for slot in range(count)
+    (mode, slot) for mode, (_, count, _) in TABLE_MODES.items() for slot in range(count)
 ]
-OBSERVED_IN = (
-    IMAGES
-    | SPECTRA
-    | {f"{survey}_table": survey for survey in TABLE_VALUE_SURVEYS}
-    | {REDSHIFT: REDSHIFT}
-)
-MISSING = {
-    "hsc": "HSC match",
-    "desi": "DESI spectrum",
-    "sdss": "SDSS spectrum",
-    REDSHIFT: "usable redshift",
-}
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -85,10 +79,10 @@ class Query(BaseModel):
             raise ValueError(
                 "select at least one image token, spectrum token or table value"
             )
-        for mode in selected:
+        for mode in selected.keys() & OBSERVED_IN.keys():
             column = OBSERVED_IN[mode]
             if not observed(column)[self.galaxy]:
-                raise ValueError(f"galaxy {self.galaxy} has no {MISSING[column]}")
+                raise ValueError(f"galaxy {self.galaxy} has no {OBSERVATIONS[column]}")
         return self
 
 
@@ -153,15 +147,11 @@ def row(galaxy: int) -> pa.RecordBatch:
 
 
 def selection(query: Query) -> dict[str, np.ndarray]:
-    selected = {mode: getattr(query, mode) for mode in (*IMAGES, *SPECTRA)}
+    selected = {mode: getattr(query, mode) for mode in (*IMAGE_MODES, *SPECTRUM_MODES)}
     for table_value in query.table_values:
         mode, slot = TABLE_SLOTS[table_value]
         selected[mode] = (*selected.get(mode, ()), slot)
-    return {
-        mode: np.asarray(slots, dtype=np.int64)
-        for mode, slots in selected.items()
-        if len(slots)
-    }
+    return {mode: np.unique(slots) for mode, slots in selected.items() if len(slots)}
 
 
 def top_image_tokens(
@@ -236,7 +226,7 @@ def spectrum_token_overlaps(
 def table_value_log_probabilities(
     rows: pa.RecordBatch, mode: str, slots: slice | np.ndarray
 ) -> np.ndarray:
-    column, count, vocabulary = TABLES[mode]
+    column, count, vocabulary = TABLE_MODES[mode]
     return array(rows, column, count, vocabulary)[:, slots].astype(np.float32)
 
 
@@ -251,10 +241,12 @@ def query_forms(
 ) -> dict[str, np.ndarray]:
     forms = {}
     for mode, slots in selected.items():
-        if mode in IMAGES:
-            forms[mode] = dense_image_tokens(own, IMAGES[mode], slots)[0]
-        elif mode in SPECTRA:
-            forms[mode] = spectrum_token_coefficients(own, SPECTRA[mode], slots)[0]
+        if mode in IMAGE_MODES:
+            forms[mode] = dense_image_tokens(own, IMAGE_MODES[mode], slots)[0]
+        elif mode in SPECTRUM_MODES:
+            forms[mode] = spectrum_token_coefficients(own, SPECTRUM_MODES[mode], slots)[
+                0
+            ]
         else:
             forms[mode] = table_value_log_probabilities(own, mode, slots)[0]
     return forms
@@ -263,14 +255,14 @@ def query_forms(
 def log_overlaps(
     rows: pa.RecordBatch, mode: str, slots: np.ndarray | slice, form: np.ndarray
 ) -> np.ndarray:
-    if mode in IMAGES:
+    if mode in IMAGE_MODES:
         return np.log(
             image_token_overlaps(
-                form, *top_image_tokens(rows, IMAGES[mode], slots, KEPT)
+                form, *top_image_tokens(rows, IMAGE_MODES[mode], slots, KEPT)
             )
         )
-    if mode in SPECTRA:
-        return np.log(spectrum_token_overlaps(rows, SPECTRA[mode], slots, form))
+    if mode in SPECTRUM_MODES:
+        return np.log(spectrum_token_overlaps(rows, SPECTRUM_MODES[mode], slots, form))
     return table_value_overlaps(table_value_log_probabilities(rows, mode, slots), form)
 
 
@@ -316,16 +308,18 @@ def maps(
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     own = row(query.galaxy)
     rows = gathered(galaxies)
-    every = query_forms(own, dict.fromkeys((*IMAGES, *SPECTRA, *TABLES), slice(None)))
+    every = query_forms(
+        own, dict.fromkeys((*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES), slice(None))
+    )
     aligned = {
         mode: log_overlaps(rows, mode, slice(None), form)
         for mode, form in every.items()
     }
-    aligned["table_values"] = np.hstack([aligned.pop(mode) for mode in TABLES])
+    aligned["table_values"] = np.hstack([aligned.pop(mode) for mode in TABLE_MODES])
     selected = {
         mode: log_overlaps(rows, mode, slice(None), every[mode][slots].mean(axis=0))
         for mode, slots in selection(query).items()
-        if mode not in TABLES
+        if mode not in TABLE_MODES
     }
     return aligned, selected
 
