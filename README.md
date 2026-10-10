@@ -55,7 +55,6 @@ The dev build calls the API at `http://127.0.0.1:8000`, so start the local API f
 
 ```sh
 uv run modal run modal_app.py::generate_embeddings        # encode dataset
-uv run modal run modal_app.py::generate_index             # build the cosine index the benchmarks compare against
 uv run modal run modal_app.py::generate_predictions       # AION's predictions at every slot
 uv run modal run modal_app.py::generate_projections       # fit and apply the projection
 uv run modal run modal_app.py::generate_pairs             # AION and EmbeddingGemma embeddings of each galaxy

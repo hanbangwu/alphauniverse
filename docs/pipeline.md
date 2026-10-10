@@ -40,12 +40,6 @@ gz10, provabgs:      bool
 
 Within an image cell the image tokens come first and the survey's table values follow. A spectrum cell leads with the codec's normalisation token, then holds one token per 25.6 Å from 3500 Å. AION resamples every spectrum onto 8704 pixels of 0.8 Å from 3500 Å and downsamples by 32, so a spectrum cell holds 273 tokens whatever survey it came from: the normalisation token and 272 spectrum tokens.
 
-## `generate_index`
-
-Builds `IVF{nlist},SQfp16` over one block per galaxy, in galaxy order: the anchor survey's 576 **image tokens**; then, if the galaxy has a spectrum, the 272 spectral tokens of its first matched spectrum survey, DESI before SDSS, with the normalisation token dropped; then the anchor survey's 12 **table values**; then, if the galaxy has an HSC match, HSC's 13 table values; then, if it has a redshift token, its **redshift**. HSC's image tokens are not indexed. Inner product is the metric and rows are L2-normalised first, so inner product is cosine similarity. A row that is not finite fails the build.
-
-A vector's id is its position in that sequence: galaxy `g` starts at `588 g + 272 s + 13 h + r`, where `s`, `h` and `r` count the galaxies before it that have a spectrum, an HSC match and a redshift token. The index does not store this layout: `app/search.py` rebuilds it for the benchmark scripts from which galaxies have a spectrum, an HSC match and a redshift in `tokens`, so it holds only while `tokens` and `encoded` agree on that. One `generate_embeddings` run writes both.
-
 ## `generate_predictions`
 
 For each galaxy: run every token it has through the AION encoder in one pass, with no truncation, then decode AION's distribution over codes at every slot, whether or not the galaxy has that mode: the redshift, the 576 image tokens and the table values of the Legacy Survey and HSC images, and spectrum tokens 1 to 272 of the DESI and SDSS spectra. Each mode's slots are split into blocks of 128, in an order drawn with `SEED`, and the decoder predicts every block of a galaxy in one call; a slot attends only to the slots of its own block, as in AION's default call of 128. `/search` scores from them (`docs/architecture.md`).

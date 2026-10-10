@@ -19,14 +19,6 @@ Tests need no Modal, GPU or network. `tests/test_dataset.py` replaces `dataset()
 - `predictions` holds random distributions in the stored forms; `prediction_basis` has a uniform mean and random orthonormal directions orthogonal to the all-ones vector, with spectrum token coefficients a few 1e-4 across, so every reconstructed spectrum token stays a distribution. They test the arithmetic, not production's spread of coefficients.
 - `codebook` and `parametric_umap` are left out: nothing served reads them, and their absence exercises the 404 path.
 
-Five tests in `tests/test_search.py` check what the shared tree cannot show:
-
-- `test_approximate_ranking_agrees_with_exact` compares `search()` with `exact_ranking` in `scripts/benchmarks/search_quality.py`: the same search without the candidate step, a brute force over every token's float32 embedding in place of the index's fp16 copies. It asks for fewer matches than the corpus holds, so the candidate step must choose. It checks the galaxies, their order, each score and each image token, spectrum token and table value map (null where the galaxy has no spectrum or HSC match) to within `SCORE_TOLERANCE`, after asserting that the exact scores are more than twice that apart. On production data the two need not agree; `search_quality` measures how often they do.
-- `test_ids_stay_contiguous_across_add_batches` builds its own index with one galaxy per `add()` call, galaxies without a spectrum included, since the shared tree goes in with one call. A reordered or dropped batch would silently shift every galaxy id.
-- `test_embeddings_that_are_not_finite_are_rejected` passes `image_tokens()` a cell of infinities, which the shared tree never holds. `faiss.normalize_L2` would turn them into NaN silently.
-- `test_rank_keeps_the_query_first_and_each_row_together` calls `rank()` on arrays built in the test, since on the shared tree `candidates()` already returns galaxies in ranked order.
-- `test_a_search_that_finds_too_few_looks_further` changes `PROBE` and `NPROBE` so that the first search falls short, since at their defaults it finds every galaxy on the shared tree. It asks for one vector over one list, 16,384 (`NLIST`) vectors over one list, more than the shared tree holds, and one vector over every list, and checks that the answer starts with the query galaxy and holds `matches` other galaxies, or all of them when the tree holds fewer, none twice.
-
 `tests/test_pql.py` checks `app.pql`'s mode sums and maps against dense distributions rebuilt from the fixture's `predictions`.
 
 `test_selected_table_values_join_the_direction` checks the query direction and `table_value_maps` against the stored embeddings of a selected image token, a Legacy Survey table value and an HSC table value.
