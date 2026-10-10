@@ -11,6 +11,7 @@ import numpy as np
 import pyarrow as pa
 from threadpoolctl import threadpool_info
 
+from app import pql
 from app.config import (
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
@@ -64,6 +65,22 @@ def queries(count: int, image_token_count: int, matches: int) -> list[Query]:
         )
         for _ in range(count)
     ]
+
+
+def pql_query(query: Query) -> pql.Query:
+    spectrum = {}
+    if query.spectrum_tokens:
+        survey = next(
+            survey for survey in SPECTRUM_SURVEYS if pql.observed(survey)[query.galaxy]
+        )
+        spectrum[f"{survey}_spectrum"] = query.spectrum_tokens
+    return pql.Query(
+        galaxy=query.galaxy,
+        ls_image=query.image_tokens,
+        table_values=query.table_values,
+        matches=query.matches,
+        **spectrum,
+    )
 
 
 def wavelength(galaxy: int) -> np.ndarray:

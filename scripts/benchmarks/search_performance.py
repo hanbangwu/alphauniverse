@@ -57,6 +57,7 @@ from scripts.benchmarks.common import (
     environment,
     git,
     memory,
+    pql_query,
     queries,
     server,
     summary,
@@ -199,7 +200,7 @@ def pql_times(runs: int, matches: int) -> dict[str, Any]:
     timed = {}
     for kind, batch in pql_queries(runs + 1).items():
         samples = []
-        for query in batch:
+        for query in map(pql_query, batch):
             start = time.perf_counter()
             order = np.argsort(-pql.scores(query), kind="stable")[: matches + 1]
             scanned = time.perf_counter()
