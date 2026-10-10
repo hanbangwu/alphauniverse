@@ -20,13 +20,16 @@ from app.config import (
     artifact,
 )
 from app.dataset import table_columns
-from app.search import source
 
 ARROW = "application/vnd.apache.arrow.stream"
 
 
+def _stored(role: str) -> pa.Table:
+    return pa.ipc.open_file(artifact(role)).read_all()
+
+
 def _with_spectrum() -> np.ndarray:
-    stored = source("encoded").to_table(columns=list(SPECTRUM_SURVEYS))
+    stored = _stored("encoded").select(list(SPECTRUM_SURVEYS))
     return np.logical_or.reduce([column.is_valid().to_numpy() for column in stored])
 
 
@@ -91,7 +94,7 @@ def test_image_tokens_are_that_galaxys_stored_patch_tokens(
     client: TestClient, galaxies: int
 ) -> None:
     galaxy = galaxies - 1
-    cell = source("tokens").to_table(columns=[ANCHOR]).column(ANCHOR)[galaxy]
+    cell = _stored("tokens").column(ANCHOR)[galaxy]
 
     response = client.get(f"/galaxy/{galaxy}/image/tokens")
 
@@ -102,7 +105,7 @@ def test_image_tokens_are_that_galaxys_stored_patch_tokens(
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
-    stored = source("tokens").to_table(filter=pc.field("galaxy") == galaxy)
+    stored = _stored("tokens").filter(pc.field("galaxy") == galaxy)
     rows = client.get(f"/galaxy/{galaxy}").json()
 
     assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
@@ -111,14 +114,14 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
 
 
 def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:
-    tokens = source("tokens").to_table(columns=["desi"]).column("desi")
+    tokens = _stored("tokens").column("desi")
     untokenised = tokens.is_valid().to_pylist().index(False)
 
     assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
 
 
 def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    column = source("tokens").to_table(columns=["desi"]).column("desi")
+    column = _stored("tokens").column("desi")
     galaxy = column.is_valid().to_pylist().index(True)
     cell = column[galaxy]
 
@@ -168,7 +171,7 @@ def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
     table = _similarity(client, galaxy=1, p=[100], matches=5)
     galaxies = table.column("galaxy").to_numpy()
     scores = np.asarray(table.column("scalars").to_pylist())
-    with_hsc = source("encoded").to_table(columns=["hsc"]).column("hsc")
+    with_hsc = _stored("encoded").column("hsc")
 
     assert np.isfinite(scores[:, :12]).all()
     np.testing.assert_array_equal(
@@ -201,7 +204,7 @@ def test_table_rows_name_their_catalogue_and_scalar(
     response = client.get("/galaxy/0/table")
     table_columns.cache_clear()
 
-    hsc = source("tokens").to_table(columns=["hsc"]).column("hsc")[0]
+    hsc = _stored("tokens").column("hsc")[0]
     assert response.status_code == 200
     assert response.json() == [
         {
