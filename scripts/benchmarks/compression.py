@@ -370,7 +370,10 @@ class Current:
             return query @ self.basis.mean + (
                 self.projected(stored) * (query @ directions.T)
             ).sum(dim=-1)
-        return self.dense.overlap(stored, query)
+        overlaps = pql.table_value_overlaps(
+            load(stored).cpu().numpy(), query.log().cpu().numpy()
+        )
+        return torch.from_numpy(overlaps).exp().to(query.device)
 
     def bits(self, stored: Stored) -> int:
         return 8 * sum(

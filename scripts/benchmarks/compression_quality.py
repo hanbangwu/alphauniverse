@@ -2,6 +2,7 @@ import json
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -145,6 +146,54 @@ def chunks(
         )
 
 
+def logarithmic(scheme: Any, mode: Mode) -> bool:
+    if kind(mode) in ("image", "spectrum"):
+        return False
+    return (
+        scheme is None
+        or isinstance(scheme, compression.Current)
+        or (isinstance(scheme, compression.Dense) and scheme.precision.domain == "log")
+    )
+
+
+def exponentiated(log_probabilities: torch.Tensor) -> torch.Tensor:
+    return log_probabilities.float().exp()
+
+
+def shifted(log_probabilities: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    largest = log_probabilities.float().amax(dim=-1, keepdim=True)
+    return (log_probabilities.float() - largest).double().exp(), largest[..., 0].T
+
+
+def log_products(
+    form: torch.Tensor, decoded: torch.Tensor, unseen: torch.Tensor, minimum: float
+) -> tuple[torch.Tensor, torch.Tensor, int]:
+    form_values, form_largest = shifted(form)
+    decoded_values, decoded_largest = shifted(decoded)
+    unseen_values, unseen_largest = shifted(unseen)
+    overlaps = torch.einsum("qsv,gsv->sqg", form_values, decoded_values)
+    own = torch.einsum("qsv,qsv->sq", form_values, unseen_values)
+    return (
+        overlaps.clamp_min(minimum).log()
+        + form_largest[:, :, None]
+        + decoded_largest[:, None, :],
+        own.clamp_min(minimum).log() + form_largest + unseen_largest,
+        int((overlaps < minimum).sum()),
+    )
+
+
+def products(
+    form: torch.Tensor, decoded: torch.Tensor, unseen: torch.Tensor, minimum: float
+) -> tuple[torch.Tensor, torch.Tensor, int]:
+    overlaps = torch.einsum("qsv,gsv->sqg", form, decoded)
+    own = torch.einsum("qsv,qsv->sq", form, unseen)
+    return (
+        overlaps.clamp_min(minimum).log(),
+        own.clamp_min(minimum).log(),
+        int((overlaps < minimum).sum()),
+    )
+
+
 def log_overlaps(
     scheme: Any,
     mode: Mode,
@@ -157,32 +206,38 @@ def log_overlaps(
     shape = (gallery.shape[1], len(queries))
     found = {side: torch.empty(*shape, len(gallery), device=device) for side in sides}
     pairs = {side: torch.empty(*shape, device=device) for side in sides}
-    bits = 0
+    if logarithmic(scheme, mode):
+        overlap, minimum = log_products, torch.finfo(torch.float64).tiny
+        decode = compression.load
+        query_decode = compression.load
+        exact = torch.Tensor.float
+    else:
+        overlap, minimum = products, compression.floor(scheme, mode.vocabulary)
+        decode = scheme and scheme.decode
+        query_decode = scheme and partial(scheme.decode, side="query")
+        exact = exponentiated
+    bits = floored = 0
     for part, rows, unseen in chunks(gallery, hidden, device):
-        query = rows[queries].float().exp()
+        query = exact(rows[queries])
         if scheme is None:
-            decoded, decoded_unseen = rows.float().exp(), unseen.float().exp()
+            decoded, decoded_unseen = exact(rows), exact(unseen)
             forms = {"exact": query}
         else:
             stored = scheme.encode(rows)
             bits += scheme.bits(stored)
-            decoded = scheme.decode(stored)
-            decoded_unseen = scheme.decode(scheme.encode(unseen))
-            compressed = scheme.decode(scheme.encode(rows[queries]), side="query")
-            forms = {"gallery": query, "both": compressed}
+            decoded = decode(stored)
+            decoded_unseen = decode(scheme.encode(unseen))
+            forms = {
+                "gallery": query,
+                "both": query_decode(scheme.encode(rows[queries])),
+            }
         for side, form in forms.items():
-            found[side][part] = torch.einsum("qsv,gsv->sqg", form, decoded)
-            pairs[side][part] = torch.einsum("qsv,qsv->sq", form, decoded_unseen)
-    minimum = compression.floor(scheme, mode.vocabulary)
-    floored = float(
-        sum((values < minimum).float().mean() for values in found.values()) / len(found)
-    )
-    return (
-        {side: values.clamp_min(minimum).log() for side, values in found.items()},
-        {side: values.clamp_min(minimum).log() for side, values in pairs.items()},
-        bits,
-        floored,
-    )
+            found[side][part], pairs[side][part], below = overlap(
+                form, decoded, decoded_unseen, minimum
+            )
+            floored += below
+    total = sum(values.numel() for values in found.values())
+    return found, pairs, bits, floored / total
 
 
 def ranks(scores: torch.Tensor) -> torch.Tensor:

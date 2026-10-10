@@ -106,3 +106,25 @@ def test_top_p_keeps_the_fewest_codes_holding_the_mass() -> None:
     indices, mask = scheme.kept(probabilities.log())
 
     assert indices[mask].tolist() == [0, 1, 2]
+
+
+def test_dense_log_overlaps_match_float64_where_float32_probabilities_underflow() -> (
+    None
+):
+    quality = importlib.import_module("scripts.benchmarks.compression_quality")
+    mode = Mode("ls_table", ("key",), np.arange(SLOTS), 300, "ls")
+    gallery = np.full((4, SLOTS, mode.vocabulary), -120.0, dtype=np.float32)
+    gallery[np.arange(4), :, np.arange(4)] = 0
+    queries = np.asarray([0, 2])
+
+    found, pairs, _, floored = quality.log_overlaps(
+        None, mode, gallery, queries, gallery[queries], torch.device("cpu")
+    )
+
+    probabilities = np.exp(gallery.astype(np.float64))
+    exact = np.log((probabilities[queries, None] * probabilities[None]).sum(axis=-1))
+    np.testing.assert_allclose(
+        found["exact"].numpy(), exact.transpose(2, 0, 1), rtol=1e-6
+    )
+    np.testing.assert_allclose(pairs["exact"].numpy(), 0, atol=1e-6)
+    assert floored == 0
