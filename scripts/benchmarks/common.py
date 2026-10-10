@@ -15,9 +15,11 @@ from app.config import (
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     SPECTRUM_ORIGIN,
+    SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_WIDTH,
     galaxy_count,
 )
+from app.dataset import spectrum
 from app.search import Query
 from modal_app import (
     SERVING_CPU,
@@ -62,6 +64,12 @@ def queries(count: int, image_token_count: int, matches: int) -> list[Query]:
         )
         for _ in range(count)
     ]
+
+
+def wavelength(galaxy: int) -> np.ndarray:
+    tables = (spectrum(galaxy, survey) for survey in SPECTRUM_SURVEYS)
+    found = next(table for table in tables if table is not None)
+    return found.column("wavelength").to_numpy()
 
 
 def observed_spectrum_tokens(wavelength: np.ndarray) -> np.ndarray:

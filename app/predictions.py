@@ -11,19 +11,20 @@ from .config import (
     ANCHOR,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
+    PREDICTIONS,
     REDSHIFT,
     SEED,
+    SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
+    TOP_CODES,
+    VOCABULARY,
     artifact,
     device,
 )
+from .pql import prediction_batch, save_prediction_basis
 from .search import source
 
 CHUNK = 128
-TOP_CODES = 64
-SPECTRUM_TOKEN_RANK = 256
-VOCABULARY = 1024
-REDSHIFT_VOCABULARY = 1025
 LEVELS = np.iinfo(np.uint8).max
 BATCH = 256
 
@@ -37,42 +38,6 @@ SPECTRA = {
     "sdss": encode.SDSSSpectrum.token_key,
 }
 REDSHIFT_KEY = encode.Z.token_key
-
-PREDICTIONS = pa.schema(
-    [
-        pa.field("galaxy", pa.int32()),
-        pa.field(REDSHIFT, pa.list_(pa.float16(), REDSHIFT_VOCABULARY)),
-    ]
-    + [
-        field
-        for survey, keys in TABLE_VALUES.items()
-        for field in (
-            pa.field(
-                f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * TOP_CODES)
-            ),
-            pa.field(
-                f"{survey}_log_probabilities",
-                pa.list_(pa.float16(), N_IMAGE_TOKENS * TOP_CODES),
-            ),
-            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
-            pa.field(
-                f"{survey}_table_values", pa.list_(pa.float16(), len(keys) * VOCABULARY)
-            ),
-        )
-    ]
-    + [
-        field
-        for survey in SPECTRA
-        for field in (
-            pa.field(
-                f"{survey}_coefficients",
-                pa.list_(pa.uint8(), N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_RANK),
-            ),
-            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
-            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
-        )
-    ]
-)
 
 SPECTRUM_TOKEN_TARGETS = {
     key: np.arange(1, N_SPECTRUM_TOKENS + 1) for key in SPECTRA.values()
@@ -238,32 +203,13 @@ def record(
     return values
 
 
-def batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
-    columns = []
-    for field in PREDICTIONS:
-        flat = np.concatenate([values[field.name] for values in records])
-        columns.append(
-            pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
-            if pa.types.is_fixed_size_list(field.type)
-            else pa.array(flat)
-        )
-    return pa.record_batch(columns, schema=PREDICTIONS)
-
-
 def generate_predictions() -> None:
     fitted = bases()
-    np.savez(
-        artifact("prediction_basis"),
-        **{
-            f"{survey}_{name}": value
-            for survey, pair in fitted.items()
-            for name, value in zip(("mean", "directions"), pair, strict=True)
-        },
-    )
+    save_prediction_basis(fitted)
     with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
         for chunk in batched(rows("predict"), BATCH):
             writer.write_batch(
-                batch(
+                prediction_batch(
                     [
                         record(row["galaxy"], predictions(inputs(row), TARGETS), fitted)
                         for row in chunk

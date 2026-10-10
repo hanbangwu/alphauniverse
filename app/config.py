@@ -182,6 +182,50 @@ PAIRS = pa.schema(
 )
 
 
+TOP_CODES = 64
+SPECTRUM_TOKEN_RANK = 256
+IMAGE_VOCABULARY = 4375
+VOCABULARY = 1024
+REDSHIFT_VOCABULARY = 1025
+
+PREDICTIONS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field(REDSHIFT, pa.list_(pa.float16(), REDSHIFT_VOCABULARY)),
+    ]
+    + [
+        field
+        for survey, columns in TABLE_VALUE_SURVEYS.items()
+        for field in (
+            pa.field(
+                f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * TOP_CODES)
+            ),
+            pa.field(
+                f"{survey}_log_probabilities",
+                pa.list_(pa.float16(), N_IMAGE_TOKENS * TOP_CODES),
+            ),
+            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
+            pa.field(
+                f"{survey}_table_values",
+                pa.list_(pa.float16(), len(columns) * VOCABULARY),
+            ),
+        )
+    ]
+    + [
+        field
+        for survey in SPECTRUM_SURVEYS
+        for field in (
+            pa.field(
+                f"{survey}_coefficients",
+                pa.list_(pa.uint8(), N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_RANK),
+            ),
+            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
+            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
+        )
+    ]
+)
+
+
 POINTS = pa.schema(
     [
         pa.field("galaxy", pa.int32(), nullable=False),

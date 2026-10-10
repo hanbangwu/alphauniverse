@@ -1,4 +1,5 @@
 import importlib
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -7,11 +8,16 @@ import pytest
 
 from app.config import (
     ANCHOR,
+    IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
+    PREDICTIONS,
     REDSHIFT,
     STORE_COLUMNS,
+    TOP_CODES,
+    VOCABULARY,
     artifact,
+    build_dir,
 )
 
 pytest.importorskip("torch")
@@ -23,19 +29,23 @@ def column(table: pa.Table, name: str) -> np.ndarray:
 
 
 @pytest.fixture(scope="module")
-def store(tree: Path, random_weights: None) -> tuple[pa.Table, dict[str, np.ndarray]]:
-    predictions_module.generate_predictions()
-    with pa.memory_map(str(artifact("predictions"))) as source:
-        table = pa.ipc.open_file(source).read_all()
-    with np.load(artifact("prediction_basis")) as basis:
-        return table, dict(basis)
+def store(
+    tree: Path, random_weights: None, tmp_path_factory: pytest.TempPathFactory
+) -> tuple[pa.Table, dict[str, np.ndarray]]:
+    tokens = artifact("tokens")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path_factory.mktemp("store")))
+        build_dir().mkdir(parents=True)
+        shutil.copy(tokens, artifact("tokens"))
+        predictions_module.generate_predictions()
+        table = pa.ipc.open_file(pa.memory_map(str(artifact("predictions")))).read_all()
+        with np.load(artifact("prediction_basis")) as basis:
+            return table, dict(basis)
 
 
 @pytest.fixture(scope="module")
 def distributions() -> np.ndarray:
-    return np.random.default_rng(0).dirichlet(
-        np.full(predictions_module.VOCABULARY, 0.1), size=600
-    )
+    return np.random.default_rng(0).dirichlet(np.full(VOCABULARY, 0.1), size=600)
 
 
 def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
@@ -43,7 +53,7 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 ) -> None:
     table, basis = store
 
-    assert table.schema.equals(predictions_module.PREDICTIONS)
+    assert table.schema.equals(PREDICTIONS)
     assert table["galaxy"].to_pylist() == list(range(galaxies))
     redshift = np.exp(column(table, REDSHIFT).astype(np.float64))
     np.testing.assert_allclose(redshift.reshape(galaxies, -1).sum(-1), 1, atol=0.02)
@@ -79,14 +89,12 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 
 def test_kept_image_token_codes_are_the_most_probable_in_descending_order() -> None:
     log_probabilities = np.log(
-        np.random.default_rng(1).dirichlet(np.full(4375, 0.5), size=3)
+        np.random.default_rng(1).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
     )
 
     codes, _, _ = predictions_module.image_token_codes(log_probabilities)
 
-    assert np.array_equal(
-        codes, np.argsort(-log_probabilities, axis=1)[:, : predictions_module.TOP_CODES]
-    )
+    assert np.array_equal(codes, np.argsort(-log_probabilities, axis=1)[:, :TOP_CODES])
 
 
 def test_spectrum_token_basis_from_moments_matches_a_direct_principal_component_analysis(

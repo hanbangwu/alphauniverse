@@ -11,10 +11,19 @@ from app.config import (
     ANCHOR,
     DIM,
     GEMMA_DIM,
+    IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
+    N_SPECTRUM_TOKENS,
+    PREDICTIONS,
     REDSHIFT,
+    REDSHIFT_VOCABULARY,
+    SPECTRUM_SURVEYS,
+    SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
+    TABLE_VALUE_SURVEYS,
+    TOP_CODES,
+    VOCABULARY,
     artifact,
     build_dir,
     galaxy_count,
@@ -23,6 +32,7 @@ from app.config import (
     store_schema,
     store_writer,
 )
+from app.pql import basis, prediction_batch, predictions, save_prediction_basis
 from app.search import (
     bounds,
     generate_index,
@@ -99,6 +109,61 @@ def _store(
         )
 
 
+def _log_softmax(logits: np.ndarray) -> np.ndarray:
+    shifted = logits - logits.max(axis=-1, keepdims=True)
+    return shifted - np.log(np.exp(shifted).sum(axis=-1, keepdims=True))
+
+
+def _predictions(rng: np.random.Generator, galaxies: int) -> None:
+    ones = np.ones((VOCABULARY, 1))
+    orthogonal, _ = np.linalg.qr(
+        np.hstack((ones, rng.standard_normal((VOCABULARY, SPECTRUM_TOKEN_RANK))))
+    )
+    save_prediction_basis(
+        {
+            survey: (np.full(VOCABULARY, 1 / VOCABULARY), orthogonal[:, 1:].T)
+            for survey in SPECTRUM_SURVEYS
+        }
+    )
+    records = []
+    for galaxy in range(galaxies):
+        values = {
+            "galaxy": np.asarray([galaxy], dtype=np.int32),
+            REDSHIFT: _log_softmax(3 * rng.standard_normal(REDSHIFT_VOCABULARY)).astype(
+                np.float16
+            ),
+        }
+        for survey, table_values in TABLE_VALUE_SURVEYS.items():
+            mass = rng.dirichlet(np.full(TOP_CODES + 1, 0.3), size=N_IMAGE_TOKENS)
+            values[f"{survey}_codes"] = (
+                rng.random((N_IMAGE_TOKENS, IMAGE_VOCABULARY))
+                .argpartition(TOP_CODES, axis=1)[:, :TOP_CODES]
+                .astype(np.uint16)
+                .reshape(-1)
+            )
+            values[f"{survey}_log_probabilities"] = (
+                np.log(-np.sort(-mass[:, :TOP_CODES], axis=1))
+                .astype(np.float16)
+                .reshape(-1)
+            )
+            values[f"{survey}_tails"] = np.log(mass[:, -1]).astype(np.float32)
+            values[f"{survey}_table_values"] = (
+                _log_softmax(3 * rng.standard_normal((len(table_values), VOCABULARY)))
+                .astype(np.float16)
+                .reshape(-1)
+            )
+        for survey in SPECTRUM_SURVEYS:
+            steps = rng.uniform(1e-6, 3e-6, N_SPECTRUM_TOKENS).astype(np.float32)
+            values[f"{survey}_coefficients"] = rng.integers(
+                256, size=N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_RANK, dtype=np.uint8
+            )
+            values[f"{survey}_offsets"] = -128 * steps
+            values[f"{survey}_steps"] = steps
+        records.append(values)
+    with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
+        writer.write_batch(prediction_batch(records))
+
+
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     unit = rows.copy()
     faiss.normalize_L2(unit)
@@ -118,6 +183,8 @@ def forget() -> None:
         bounds,
         starts,
         aion_gemma_space,
+        predictions,
+        basis,
     ):
         cached.cache_clear()
 
@@ -164,6 +231,8 @@ def build(galaxies: int, seed: int = 0) -> Path:
         artifact("aion_gemma_space"),
         vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
     )
+
+    _predictions(rng, galaxies)
 
     forget()
     generate_index()
