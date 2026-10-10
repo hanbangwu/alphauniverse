@@ -179,7 +179,7 @@ A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit an
 - `patches`: 4 patches of a galaxy drawn from all galaxies.
 - `paired_patches`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 patches and 4 spans inside its observed range, queried with the patches, the spans, and both.
 
-A query's recall is the share of its exact 32 galaxies that `search()` returns at the served `PROBE` and `NPROBE`. `exact_rankings` finds them by brute force over float32 embeddings: it reads every query galaxy's rows to set the queries' directions, then reads `encoded` once, `BATCH` galaxies at a time, scoring every query against each batch in one matrix product and keeping only each galaxy's best score per query. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
+A query's recall is the share of its exact 32 galaxies that `search()` returns at the served `PROBE` and `NPROBE`. `exact_rankings` sets each query's direction from its galaxy's rows, then brute-forces the float32 embeddings in one streamed pass over `encoded`, `BATCH` galaxies at a time, keeping each galaxy's best score per query. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
 
 ### Last run
 

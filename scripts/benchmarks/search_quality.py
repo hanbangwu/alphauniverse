@@ -16,7 +16,6 @@ from app.config import (
     N_SCALARS,
     N_SPANS,
     SPECTRUM_SURVEYS,
-    galaxy_count,
 )
 from app.dataset import spectrum
 from app.main import SPECTRUM_SURVEY
@@ -102,7 +101,7 @@ def direction(query: Query, galaxy: int, reference: Corpus) -> np.ndarray:
     return found
 
 
-def score_maps(
+def exact_maps(
     directions: np.ndarray, reference: Corpus
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     count = len(directions)
@@ -145,24 +144,22 @@ def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
             for query in batch
         ]
     )
-    scores = np.empty((galaxy_count(), len(batch)), dtype=np.float32)
+    del taken
+    scores = np.empty((source("encoded").count_rows(), len(batch)), dtype=np.float32)
     start = 0
     for cells in source("encoded").to_batches(
         columns=COLUMNS, batch_size=BATCH, batch_readahead=1
     ):
         scores[start : start + cells.num_rows] = best(
-            *score_maps(directions, corpus(cells))
+            *exact_maps(directions, corpus(cells))
         )
         start += cells.num_rows
-    rankings = []
-    for query, column in zip(batch, scores.T, strict=True):
-        order = np.argsort(-column, kind="stable")
-        rankings.append(
-            np.concatenate(
-                ([query.galaxy], order[order != query.galaxy][: query.matches])
-            )
+    return [
+        np.concatenate(([query.galaxy], order[order != query.galaxy][: query.matches]))
+        for query, order in zip(
+            batch, np.argsort(-scores, axis=0, kind="stable").T, strict=True
         )
-    return rankings
+    ]
 
 
 def exact_ranking(
@@ -170,7 +167,7 @@ def exact_ranking(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     chosen = exact_rankings([query])[0]
     taken = corpus(source("encoded").take(chosen, columns=COLUMNS))
-    maps = score_maps(direction(query, 0, taken), taken)
+    maps = exact_maps(direction(query, 0, taken), taken)
     return chosen, best(*maps)[:, 0], *(found[..., 0] for found in maps)
 
 
