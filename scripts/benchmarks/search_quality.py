@@ -8,6 +8,7 @@ import modal
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.dataset as ds
 
 from app.config import (
     ANCHOR,
@@ -50,6 +51,11 @@ image = build_image.add_local_python_source("modal_app")
 MATCHES = Query.model_fields["matches"].default
 REPORT = Path("docs/benchmarks/search_quality.json")
 COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS]
+SCAN = {
+    "batch_size": BATCH,
+    "batch_readahead": 1,
+    "fragment_scan_options": ds.ParquetFragmentScanOptions(pre_buffer=False),
+}
 
 
 class Corpus(NamedTuple):
@@ -135,9 +141,15 @@ def best(
     )
 
 
+def galaxy_cells(galaxies: np.ndarray) -> pa.Table:
+    return source("encoded").to_table(
+        columns=COLUMNS, filter=pc.field("galaxy").isin(galaxies), **SCAN
+    )
+
+
 def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
     galaxies = np.unique([query.galaxy for query in batch])
-    taken = corpus(source("encoded").take(galaxies, columns=COLUMNS))
+    taken = corpus(galaxy_cells(galaxies))
     directions = np.concatenate(
         [
             direction(query, int(np.searchsorted(galaxies, query.galaxy)), taken)
@@ -147,9 +159,7 @@ def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
     del taken
     scores = np.empty((len(batch), source("encoded").count_rows()), dtype=np.float32)
     start = 0
-    for cells in source("encoded").to_batches(
-        columns=COLUMNS, batch_size=BATCH, batch_readahead=1
-    ):
+    for cells in source("encoded").to_batches(columns=COLUMNS, **SCAN):
         scores[:, start : start + cells.num_rows] = best(
             *exact_maps(directions, corpus(cells))
         ).T
@@ -169,9 +179,17 @@ def exact_ranking(
     query: Query,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     chosen = exact_rankings([query])[0]
-    taken = corpus(source("encoded").take(chosen, columns=COLUMNS))
-    maps = exact_maps(direction(query, 0, taken), taken)
-    return chosen, best(*maps)[:, 0], *(found[..., 0] for found in maps)
+    galaxies = np.sort(chosen)
+    taken = corpus(galaxy_cells(galaxies))
+    maps = exact_maps(
+        direction(query, int(np.searchsorted(galaxies, query.galaxy)), taken), taken
+    )
+    positions = np.searchsorted(galaxies, chosen)
+    return (
+        chosen,
+        best(*maps)[positions, 0],
+        *(found[positions, ..., 0] for found in maps),
+    )
 
 
 def wavelength(galaxy: int) -> np.ndarray:
