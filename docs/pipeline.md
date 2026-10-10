@@ -19,7 +19,7 @@ The serving app reads images and spectra from the dataset itself, from the copy 
 
 ## `generate_embeddings`
 
-For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
+For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id. A spectrum's padding samples (wavelength at or below zero) are dropped before tokenising, as the serving app drops them.
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
@@ -74,7 +74,7 @@ A span's probabilities are `mean + coefficients @ directions`. A row takes 494,3
 
 ## `generate_projections`
 
-Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. The first pass accumulates each galaxy's mean embedding over all its tokens, and draws `SAMPLE` (5,000,000) embeddings uniformly from the whole store. `train_test_split` holds out `VALIDATION` (30%) of the sample. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on the rest: UMAP's fuzzy simplicial set over the training rows weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. Each epoch logs `train/loss` and `validation/loss` to Weights & Biases when `WANDB_API_KEY` is set, and logs nothing otherwise; on Modal the job reads it from the `wandb-secret` secret; the validation loss is the same loss over the held-out rows' own fuzzy simplicial set, without gradients. The second pass projects every embedding.
+Fits a parametric UMAP on a sample of embeddings and applies it to every one, in two passes over `encoded`, survey by survey. `SAMPLE` (5,000,000) embeddings are drawn uniformly from the whole store, and `train_test_split` holds out `VALIDATION` (30%) of them. The first pass accumulates each galaxy's mean embedding over all its tokens and writes each drawn embedding into one array, training rows then validation rows. The projector, an MLP from a normalised 768-d embedding to 2-d, trains on the training rows: UMAP's fuzzy simplicial set over the training rows weights the edges between neighbours, and each step draws edges by weight, pulls their endpoints together, and pushes each edge's first endpoint away from `NEGATIVES` (5) random rows. Each epoch logs `train/loss` and `validation/loss` to Weights & Biases when `WANDB_API_KEY` is set, and logs nothing otherwise; on Modal the job reads it from the `wandb-secret` secret; the validation loss is the same loss over the held-out rows' own fuzzy simplicial set, without gradients. The second pass projects every embedding.
 
 The trained projector, **`parametric_umap`**, is a `torch.save` of:
 
@@ -101,7 +101,7 @@ One row per galaxy, pairing AION's embedding of the galaxy with [EmbeddingGemma 
 - **AION**: the mean of the galaxy's `encoded` embeddings over every token of every survey.
 - **EmbeddingGemma**: its sentence-transformers embedding, L2-normalised and at full width, under the `Document` prompt, of the galaxy's `rgb` Legacy Survey cutout as the dataset stores it, uncropped.
 
-Every image goes to one `encode` call, which batches internally:
+Images are decoded and passed to `encode` `BATCH` (1024) at a time:
 
 ```
 galaxy: int32

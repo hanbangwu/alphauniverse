@@ -205,7 +205,7 @@ A query's recall is the share of its exact 32 galaxies that `search()` returns a
 
 ## `projection_quality`
 
-A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and no GPU, redraws the projector's sample and its validation split, takes `SIZE` (10,000) validation rows, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
+A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and no GPU, redraws the projector's sample and its validation split, reads `SIZE` (10,000) of the validation rows from `encoded`, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
 
 - `preservation`: the mean share of a row's nearest neighbours by cosine distance in 768-d that are also its nearest in 2-d.
 - `trustworthiness`: scikit-learn's `trustworthiness`, cosine in 768-d, which penalises 2-d neighbours that are far apart in 768-d.
