@@ -18,7 +18,6 @@ from app import pql
 from app.config import (
     DATASET_REVISION,
     N_SPECTRUM_TOKENS,
-    SPECTRUM_SURVEYS,
     galaxy_count,
     labels,
 )
@@ -43,6 +42,7 @@ from scripts.benchmarks.common import (
     server,
     spectrum_query,
     summary,
+    with_spectrum,
 )
 
 image = serving_image.add_local_python_source("modal_app")
@@ -135,10 +135,7 @@ def whole_searches(runs: int, matches: int) -> dict[str, Any]:
 
 def kind_queries(count: int) -> dict[str, list[pql.Query]]:
     rng = np.random.default_rng(4)
-    with_spectrum = np.logical_or.reduce(
-        [pql.observed(survey) for survey in SPECTRUM_SURVEYS]
-    )
-    holders = rng.choice(np.flatnonzero(with_spectrum), count)
+    holders = rng.choice(np.flatnonzero(with_spectrum()), count)
     first = rng.integers(N_SPECTRUM_TOKENS - SPECTRUM_TOKEN_WINDOW + 1, size=count)
     return {
         "image_tokens": queries(count, IMAGE_TOKENS, MATCHES[1]),

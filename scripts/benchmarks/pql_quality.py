@@ -34,6 +34,7 @@ from scripts.benchmarks.common import (
     observed_spectrum_tokens,
     spectrum_query,
     wavelength,
+    with_spectrum,
 )
 
 app = modal.App("alphauniverse-pql-quality")
@@ -150,12 +151,9 @@ def interval(values: list[float]) -> dict[str, Any]:
 def benchmark_pql_quality(sample: int) -> dict[str, Any]:
     redshift = redshifts()
     known = np.isfinite(redshift)
-    with_spectrum = np.logical_or.reduce(
-        [pql.observed(survey) for survey in SPECTRUM_SURVEYS]
-    )
     rng = np.random.default_rng(0)
     galaxies = np.sort(
-        rng.choice(np.flatnonzero(with_spectrum & known), sample, replace=False)
+        rng.choice(np.flatnonzero(with_spectrum() & known), sample, replace=False)
     )
     hidden_rows = hidden(galaxies)
     flips = rng.random((FLIPS, sample)) < 0.5

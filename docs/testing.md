@@ -21,8 +21,6 @@ Tests need no Modal, GPU or network. `tests/test_dataset.py` replaces `dataset()
 
 `tests/test_pql.py` checks `app.pql`'s mode sums and maps against dense distributions rebuilt from the fixture's `predictions`.
 
-`test_selected_table_values_join_the_direction` checks the query direction and `table_value_maps` against the stored embeddings of a selected image token, a Legacy Survey table value and an HSC table value.
-
 The pipeline modules' tests need the `build` group, which every command above installs:
 
 ```sh

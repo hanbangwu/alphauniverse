@@ -65,6 +65,10 @@ def queries(count: int, image_token_count: int, matches: int) -> list[pql.Query]
     ]
 
 
+def with_spectrum() -> np.ndarray:
+    return np.logical_or.reduce([pql.observed(survey) for survey in SPECTRUM_SURVEYS])
+
+
 def spectrum_query(galaxy: int, slots: tuple[int, ...]) -> pql.Query:
     survey = next(survey for survey in SPECTRUM_SURVEYS if pql.observed(survey)[galaxy])
     return pql.Query(galaxy=galaxy, **{f"{survey}_spectrum": slots})
