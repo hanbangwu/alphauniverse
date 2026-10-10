@@ -19,7 +19,7 @@ The serving app reads images and spectra from the dataset itself, from the copy 
 
 ## `generate_embeddings`
 
-For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id.
+For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id. A spectrum's padding samples (wavelength at or below zero) are dropped before tokenising, as the serving app drops them.
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
