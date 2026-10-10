@@ -15,11 +15,11 @@ from app.config import (
     TOP_CODES,
     VOCABULARY,
 )
-from app.search import N_LS_SCALARS, Query
+from app.search import FIRST_HSC_SCALAR, FIRST_LS_SCALAR, Query
 
 PATCHES = (0, 17, 300, 575)
 SPANS = (40, 41, 42)
-SCALARS = (1, 5, N_LS_SCALARS + 2)
+SCALARS = (FIRST_LS_SCALAR + 1, FIRST_LS_SCALAR + 5, FIRST_HSC_SCALAR + 2)
 
 
 def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
@@ -146,7 +146,9 @@ def test_maps_overlap_every_slot_with_the_mean_of_the_selected_query_slots(
 
 
 def test_maps_of_unselected_modes_are_missing(tree: Path) -> None:
-    cells, spans, _ = pql.maps(Query(galaxy=0, scalars=(1,)), np.asarray([3]))
+    cells, spans, _ = pql.maps(
+        Query(galaxy=0, scalars=(FIRST_LS_SCALAR,)), np.asarray([3])
+    )
 
     assert np.isnan(cells).all()
     assert np.isnan(spans).all()

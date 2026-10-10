@@ -13,9 +13,10 @@ from .config import (
     N_PATCHES,
     N_SPANS,
     PREDICTIONS,
+    REDSHIFT,
     SEED,
     SPAN_RANK,
-    TOKEN_SURVEYS,
+    STORE_COLUMNS,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -37,17 +38,21 @@ SPECTRA = {
     "desi": encode.DESISpectrum.token_key,
     "sdss": encode.SDSSSpectrum.token_key,
 }
+REDSHIFT_KEY = encode.Z.token_key
 
 SPAN_TARGETS = {key: np.arange(1, N_SPANS + 1) for key in SPECTRA.values()}
 TARGETS = (
     {key: np.arange(N_PATCHES) for key in IMAGES.values()}
     | {key: np.arange(1) for keys in SCALARS.values() for key in keys}
+    | {REDSHIFT_KEY: np.arange(1)}
     | SPAN_TARGETS
 )
 
 
 def inputs(row: dict) -> dict[str, torch.Tensor]:
     tokens = {}
+    if row[REDSHIFT] is not None:
+        tokens[REDSHIFT_KEY] = torch.as_tensor(row[REDSHIFT], dtype=torch.int64)[None]
     for survey, image_key in IMAGES.items():
         if row[survey] is None:
             continue
@@ -151,7 +156,7 @@ def coefficients(
 def rows(description: str) -> Iterator[dict]:
     dataset = source("tokens")
     with tqdm(total=dataset.count_rows(), desc=description) as progress:
-        for batch in dataset.to_batches(columns=["galaxy", *TOKEN_SURVEYS]):
+        for batch in dataset.to_batches(columns=["galaxy", *STORE_COLUMNS]):
             yield from batch.to_pylist()
             progress.update(batch.num_rows)
 
@@ -170,7 +175,10 @@ def record(
     predicted: dict[str, np.ndarray],
     fitted: dict[str, tuple[np.ndarray, np.ndarray]],
 ) -> dict[str, np.ndarray]:
-    values: dict[str, np.ndarray] = {"galaxy": np.asarray([galaxy], dtype=np.int32)}
+    values: dict[str, np.ndarray] = {
+        "galaxy": np.asarray([galaxy], dtype=np.int32),
+        REDSHIFT: predicted[REDSHIFT_KEY][0].astype(np.float16),
+    }
     for survey, image_key in IMAGES.items():
         codes, kept, tails = cells(predicted[image_key])
         values[f"{survey}_codes"] = codes.reshape(-1)

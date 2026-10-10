@@ -264,10 +264,10 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 ## `pql_quality`
 
-A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra removed, and encodes it so for cosine, with the job's own code. Per galaxy it queries 16 contiguous observed spans of its first spectrum survey, all its observed spans, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy and by `search()` at 128 matches, and reports, PQL against cosine with a 95% bootstrap interval over queries:
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, and encodes it so for cosine, with the job's own code. Per galaxy it queries 16 contiguous observed spans of its first spectrum survey, all its observed spans, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy and by `search()` at 128 matches, and reports, PQL against cosine with a 95% bootstrap interval over queries:
 
 - `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
-- `identity` (span queries): whether the query galaxy, spectrum removed, ranks in the top 10 among every other galaxy.
+- `identity` (span queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.
 - `availability` and `evidence` (span queries): over 20 coin flips that show each other sampled galaxy with or without its spectrum, the share with a spectrum among the top 32 minus its share overall, for galaxies at another redshift (|Δz|/(1+z) ≥ 0.01) and at the same one.
 
 It needs `predictions` and `prediction_basis` from `generate_predictions`. Unmeasured.

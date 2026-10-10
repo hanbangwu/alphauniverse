@@ -44,7 +44,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `predictions`      | AION's predicted codes at every slot          | `pql_quality`                                                            |
 | `prediction_basis` | the span predictions' PCA basis per survey    | `pql_quality`                                                            |
 
-`docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image`, `/galaxy/{g}/spectrum` and `/galaxy/{g}/table` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux. `/galaxy/{g}/table` returns every numeric and boolean column whose name ends in one of the six catalogue suffixes, null where that catalogue has no match; each of the 25 scalars AION encodes (12 Legacy Survey, then 13 HSC, `SCALAR_SURVEYS` in `app/config.py`) carries its index.
+`docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image`, `/galaxy/{g}/spectrum` and `/galaxy/{g}/table` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux. `/galaxy/{g}/table` returns every numeric and boolean column whose name ends in one of the six catalogue suffixes, null where that catalogue has no match; the `Z` row AION was given carries index 0, the redshift, and each of the 25 scalars AION encodes carries its index: 1 to 12 Legacy Survey, then 13 to 25 HSC (`SCALAR_SURVEYS` in `app/config.py`). The DESI and SDSS redshift rows (`Z`, its error, its flag) come first, in the `redshift` section and named with their survey; every other row's section is its catalogue. Any other measured `Z` row has `excluded`, the reason: flagged by its survey, above AION's limit of 6, or not the one AION takes.
 
 ## The serving app
 
@@ -70,7 +70,7 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 
 ## Similarity search
 
-A query is one or more image patches, spectral spans and encoded scalars of one galaxy. An HSC scalar needs an HSC match. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-patch score map, a per-span score map where it has a spectrum, and a per-scalar score map, NaN for the HSC scalars where it has no HSC match.
+A query is one or more image patches, spectral spans and encoded scalars of one galaxy. An HSC scalar needs an HSC match, and the redshift (scalar 0) a redshift token. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-patch score map, a per-span score map where it has a spectrum, and a per-scalar score map, NaN for the HSC scalars where it has no HSC match and for the redshift where it has no redshift token.
 
 The search reads vectors back from the index by id, in the layout `docs/pipeline.md` gives:
 
@@ -115,7 +115,7 @@ Patch grids are Apache ECharts custom series, one rect per patch on a 24×24 val
 
 Spectra are Apache ECharts line charts. The app serves and shows only DESI spectra; a galaxy without one shows no spectrum. The dialog's interactive chart shades one area per spectrum token, laid out from `spectrum_origin` and `spectrum_width` in `/meta` and coloured like the token grid. It holds the selected spans in `view.spans`, which join the selected patches in the query. It zooms on the wheel and pans on drag, since 272 spans do not fit a panel a few hundred pixels wide.
 
-Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by catalogue. Each encoded scalar has a checkbox; the checked ones are `view.scalars` and join the query. An encoded scalar without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes the row's score on viridis over the 25 scores. A checked row has a 1 px `SELECTED` outline, as a selected span does.
+Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by section, Redshift first. Each encoded scalar has a checkbox; the checked ones are `view.scalars` and join the query. An encoded scalar without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor; a row with `excluded` has a disabled checkbox and is grey and italic, with the reason under its name. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes the row's score on viridis over the 26 scores. A checked row has a 1 px `SELECTED` outline, as a selected span does.
 
 ## Deployment
 

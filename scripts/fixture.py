@@ -16,10 +16,12 @@ from app.config import (
     N_PATCHES,
     N_SPANS,
     PREDICTIONS,
+    REDSHIFT,
+    REDSHIFT_VOCABULARY,
     SCALAR_SURVEYS,
     SPAN_RANK,
     SPECTRUM_SURVEYS,
-    TOKEN_SURVEYS,
+    STORE_COLUMNS,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -31,12 +33,14 @@ from app.config import (
 )
 from app.pql import basis, prediction_batch, predictions, save_prediction_basis
 from app.search import (
+    bounds,
     generate_index,
     index,
     source,
     starts,
     tokens,
     with_hsc,
+    with_redshift,
     with_spectrum,
 )
 from app.text_search import aion_gemma_space
@@ -46,9 +50,10 @@ TOKENS: dict[str, int] = {
     "hsc": N_PATCHES + 13,
     "desi": 273,
     "sdss": 273,
+    REDSHIFT: 1,
 }
 
-STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4}
+STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4, REDSHIFT: 6}
 
 CLUSTERS = 64
 NOISE = 0.05
@@ -61,12 +66,8 @@ def covered(survey: str, galaxy: int) -> bool:
 def _cells(
     rng: np.random.Generator, centres: np.ndarray, galaxies: int
 ) -> tuple[dict[str, list[np.ndarray | None]], dict[str, list[np.ndarray | None]]]:
-    embeddings: dict[str, list[np.ndarray | None]] = {
-        survey: [] for survey in TOKEN_SURVEYS
-    }
-    token_cells: dict[str, list[np.ndarray | None]] = {
-        survey: [] for survey in TOKEN_SURVEYS
-    }
+    embeddings: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
+    token_cells: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
 
     for galaxy in range(galaxies):
         for survey, count in TOKENS.items():
@@ -96,7 +97,7 @@ def _store(
                     survey: [
                         None if cell is None else list(cell) for cell in cells[survey]
                     ]
-                    for survey in TOKEN_SURVEYS
+                    for survey in STORE_COLUMNS
                 },
                 **flags,
             },
@@ -125,7 +126,12 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
     )
     records = []
     for galaxy in range(galaxies):
-        values = {"galaxy": np.asarray([galaxy], dtype=np.int32)}
+        values = {
+            "galaxy": np.asarray([galaxy], dtype=np.int32),
+            REDSHIFT: _log_softmax(3 * rng.standard_normal(REDSHIFT_VOCABULARY)).astype(
+                np.float16
+            ),
+        }
         for survey, scalars in SCALAR_SURVEYS.items():
             mass = rng.dirichlet(np.full(TOP_CODES + 1, 0.3), size=N_PATCHES)
             values[f"{survey}_codes"] = (
@@ -172,6 +178,8 @@ def forget() -> None:
         tokens,
         with_spectrum,
         with_hsc,
+        with_redshift,
+        bounds,
         starts,
         aion_gemma_space,
         predictions,

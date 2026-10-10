@@ -16,7 +16,7 @@ from .config import (
     VOCABULARY,
     artifact,
 )
-from .search import N_LS_SCALARS, Query, tokens
+from .search import FIRST_HSC_SCALAR, FIRST_LS_SCALAR, Query, tokens
 
 KEPT = 16
 SPAN_FLOOR = 0.1 / VOCABULARY
@@ -88,8 +88,11 @@ def selection(query: Query) -> dict[str, np.ndarray]:
     scalars = np.asarray(query.scalars, dtype=np.int64)
     selected = {
         f"{ANCHOR}_cells": np.asarray(query.patches, dtype=np.int64),
-        f"{ANCHOR}_scalars": scalars[scalars < N_LS_SCALARS],
-        "hsc_scalars": scalars[scalars >= N_LS_SCALARS] - N_LS_SCALARS,
+        f"{ANCHOR}_scalars": scalars[
+            (scalars >= FIRST_LS_SCALAR) & (scalars < FIRST_HSC_SCALAR)
+        ]
+        - FIRST_LS_SCALAR,
+        "hsc_scalars": scalars[scalars >= FIRST_HSC_SCALAR] - FIRST_HSC_SCALAR,
     }
     if query.spans:
         survey = spectrum_survey(query.galaxy)

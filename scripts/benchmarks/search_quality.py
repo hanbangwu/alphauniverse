@@ -16,12 +16,16 @@ from app.config import (
     N_PATCHES,
     N_SCALARS,
     N_SPANS,
+    REDSHIFT,
+    REDSHIFT_SCALAR,
     SPECTRUM_SURVEYS,
     galaxy_count,
 )
 from app.main import SPECTRUM_SURVEY
 from app.search import (
     BATCH,
+    FIRST_HSC_SCALAR,
+    FIRST_LS_SCALAR,
     N_HSC_SCALARS,
     N_LS_SCALARS,
     NPROBE,
@@ -54,7 +58,7 @@ image = build_image.add_local_python_source("modal_app")
 
 MATCHES = Query.model_fields["matches"].default
 REPORT = Path("docs/benchmarks/search_quality.json")
-COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS]
+COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
 SCAN = {
     "batch_size": BATCH,
     "batch_readahead": 1,
@@ -69,6 +73,8 @@ class Corpus(NamedTuple):
     ls_scalar_rows: np.ndarray
     hsc_scalar_rows: np.ndarray
     hsc_galaxies: np.ndarray
+    redshift_rows: np.ndarray
+    redshift_galaxies: np.ndarray
 
 
 def corpus(cells: pa.Table | pa.RecordBatch) -> Corpus:
@@ -80,6 +86,10 @@ def corpus(cells: pa.Table | pa.RecordBatch) -> Corpus:
         rows(cells.column(ANCHOR), N_PATCHES, None),
         rows(cells.column("hsc"), N_PATCHES, None),
         np.flatnonzero(pc.is_valid(cells.column("hsc")).to_numpy(zero_copy_only=False)),
+        rows(cells.column(REDSHIFT), 0, None),
+        np.flatnonzero(
+            pc.is_valid(cells.column(REDSHIFT)).to_numpy(zero_copy_only=False)
+        ),
     )
 
 
@@ -96,16 +106,19 @@ def direction(query: Query, galaxy: int, reference: Corpus) -> np.ndarray:
         query_rows.append(
             reference.span_rows[owners == galaxy][np.asarray(query.spans)]
         )
+    ls = scalars[(scalars >= FIRST_LS_SCALAR) & (scalars < FIRST_HSC_SCALAR)]
     query_rows.append(
-        reference.ls_scalar_rows[
-            galaxy * N_LS_SCALARS + scalars[scalars < N_LS_SCALARS]
-        ]
+        reference.ls_scalar_rows[galaxy * N_LS_SCALARS + ls - FIRST_LS_SCALAR]
     )
     query_rows.append(
         reference.hsc_scalar_rows[hsc_owners == galaxy][
-            scalars[scalars >= N_LS_SCALARS] - N_LS_SCALARS
+            scalars[scalars >= FIRST_HSC_SCALAR] - FIRST_HSC_SCALAR
         ]
     )
+    if REDSHIFT_SCALAR in query.scalars:
+        query_rows.append(
+            reference.redshift_rows[reference.redshift_galaxies == galaxy]
+        )
     averaged = np.concatenate(query_rows).mean(axis=0, keepdims=True)
     faiss.normalize_L2(averaged)
     return averaged
@@ -124,12 +137,15 @@ def exact_maps(
         reference.span_rows @ directions.T
     ).reshape(-1, N_SPANS, count)
     scalar_maps = np.full((galaxies, N_SCALARS, count), np.nan, dtype=np.float32)
-    scalar_maps[:, :N_LS_SCALARS] = (reference.ls_scalar_rows @ directions.T).reshape(
-        galaxies, N_LS_SCALARS, count
-    )
-    scalar_maps[reference.hsc_galaxies, N_LS_SCALARS:] = (
+    scalar_maps[:, FIRST_LS_SCALAR:FIRST_HSC_SCALAR] = (
+        reference.ls_scalar_rows @ directions.T
+    ).reshape(galaxies, N_LS_SCALARS, count)
+    scalar_maps[reference.hsc_galaxies, FIRST_HSC_SCALAR:] = (
         reference.hsc_scalar_rows @ directions.T
     ).reshape(-1, N_HSC_SCALARS, count)
+    scalar_maps[reference.redshift_galaxies, REDSHIFT_SCALAR] = (
+        reference.redshift_rows @ directions.T
+    )
     return patch_maps, spectral_maps, scalar_maps
 
 
@@ -222,7 +238,11 @@ def scalars(count: int) -> list[Query]:
     return [
         Query(
             galaxy=int(rng.integers(galaxy_count())),
-            t=tuple(rng.choice(N_LS_SCALARS, SCALARS, replace=False).tolist()),
+            t=tuple(
+                (
+                    FIRST_LS_SCALAR + rng.choice(N_LS_SCALARS, SCALARS, replace=False)
+                ).tolist()
+            ),
         )
         for _ in range(count)
     ]
@@ -236,8 +256,9 @@ def hsc_scalars(count: int) -> list[Query]:
             t=tuple(
                 np.concatenate(
                     (
-                        rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
-                        N_LS_SCALARS
+                        FIRST_LS_SCALAR
+                        + rng.choice(N_LS_SCALARS, SCALARS // 2, replace=False),
+                        FIRST_HSC_SCALAR
                         + rng.choice(N_HSC_SCALARS, SCALARS // 2, replace=False),
                     )
                 ).tolist()

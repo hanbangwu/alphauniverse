@@ -7,10 +7,13 @@ import pyarrow as pa
 import pytest
 
 from app.config import (
+    ANCHOR,
     IMAGE_VOCABULARY,
     N_PATCHES,
     N_SPANS,
     PREDICTIONS,
+    REDSHIFT,
+    STORE_COLUMNS,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -52,6 +55,8 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 
     assert table.schema.equals(PREDICTIONS)
     assert table["galaxy"].to_pylist() == list(range(galaxies))
+    redshift = np.exp(column(table, REDSHIFT).astype(np.float64))
+    np.testing.assert_allclose(redshift.reshape(galaxies, -1).sum(-1), 1, atol=0.02)
     for survey, keys in predictions_module.SCALARS.items():
         kept = np.exp(column(table, f"{survey}_log_probabilities").astype(np.float64))
         tails = np.exp(column(table, f"{survey}_tails").astype(np.float64))
@@ -120,3 +125,20 @@ def test_span_coefficients_round_to_within_half_a_step_of_the_projection(
     projected = (distributions[:5] - mean) @ directions.T
     error = np.abs(offsets[:, None] + quantised * steps[:, None] - projected)
     assert np.all(error <= steps[:, None] * 0.5001)
+
+
+@pytest.mark.parametrize("redshift", [None, [7]])
+def test_a_redshift_token_joins_the_context_only_where_the_galaxy_has_one(
+    redshift: list[int] | None,
+) -> None:
+    row = {survey: None for survey in STORE_COLUMNS} | {
+        ANCHOR: list(range(N_PATCHES + 12)),
+        REDSHIFT: redshift,
+    }
+
+    tokens = predictions_module.inputs(row)
+
+    found = tokens.get(predictions_module.REDSHIFT_KEY)
+    assert (None if found is None else found.tolist()) == (
+        None if redshift is None else [redshift]
+    )

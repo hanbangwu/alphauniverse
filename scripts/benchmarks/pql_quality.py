@@ -14,12 +14,15 @@ from app.config import (
     ANCHOR,
     DATASET_REVISION,
     DESI,
+    REDSHIFT,
     SDSS,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
 )
 from app.dataset import dataset
 from app.search import (
+    FIRST_HSC_SCALAR,
+    FIRST_LS_SCALAR,
     N_HSC_SCALARS,
     N_LS_SCALARS,
     Query,
@@ -72,12 +75,17 @@ def selections(galaxy: int, rng: np.random.Generator) -> dict[str, Query]:
         "ls_table": Query(
             galaxy=galaxy,
             scalars=tuple(
-                rng.choice(N_LS_SCALARS, TABLE_VALUES, replace=False).tolist()
+                (
+                    FIRST_LS_SCALAR
+                    + rng.choice(N_LS_SCALARS, TABLE_VALUES, replace=False)
+                ).tolist()
             ),
         ),
     }
     if with_hsc()[galaxy]:
-        chosen = N_LS_SCALARS + rng.choice(N_HSC_SCALARS, TABLE_VALUES, replace=False)
+        chosen = FIRST_HSC_SCALAR + rng.choice(
+            N_HSC_SCALARS, TABLE_VALUES, replace=False
+        )
         kinds["hsc_table"] = Query(galaxy=galaxy, scalars=tuple(chosen.tolist()))
     return kinds
 
@@ -101,7 +109,7 @@ def hidden(galaxies: np.ndarray) -> tuple[pa.RecordBatch, list[np.ndarray]]:
     table = source("tokens").to_table(columns=["galaxy", *TOKEN_SURVEYS])
     records, rows = [], []
     for row in table.take(galaxies).to_pylist():
-        row |= dict.fromkeys(SPECTRUM_SURVEYS)
+        row |= dict.fromkeys((*SPECTRUM_SURVEYS, REDSHIFT))
         encoded, _, mask, modality = encode.context(predictions.inputs(row))
         predicted = {
             key: predictions.predict(encoded, mask, key, positions)

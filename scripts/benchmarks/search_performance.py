@@ -25,6 +25,7 @@ from app.config import (
     labels,
 )
 from app.search import (
+    FIRST_LS_SCALAR,
     N_LS_SCALARS,
     Query,
     candidates,
@@ -174,7 +175,10 @@ def pql_queries(count: int) -> dict[str, list[Query]]:
             Query(
                 galaxy=int(rng.integers(galaxy_count())),
                 scalars=tuple(
-                    rng.choice(N_LS_SCALARS, SCALARS, replace=False).tolist()
+                    (
+                        FIRST_LS_SCALAR
+                        + rng.choice(N_LS_SCALARS, SCALARS, replace=False)
+                    ).tolist()
                 ),
             )
             for _ in range(count)
