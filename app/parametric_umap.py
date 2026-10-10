@@ -188,7 +188,7 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
         scanner = source("encoded").scanner(
             columns=["galaxy", survey],
             batch_size=CHUNK,
-            batch_readahead=max(1, 2 * group_rows // CHUNK),
+            batch_readahead=2 * group_rows // CHUNK,
             fragment_scan_options=ds.ParquetFragmentScanOptions(pre_buffer=False),
             filter=ds.field(survey).is_valid(),
         )
