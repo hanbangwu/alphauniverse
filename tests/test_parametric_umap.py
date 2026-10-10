@@ -1,12 +1,14 @@
 import importlib
 from collections.abc import Iterator
+from pathlib import Path
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
 
-from app.config import FLAG_SURVEYS, POINTS, artifact
+from app.config import FLAG_SURVEYS, POINTS, artifact, galaxy_count
 from scripts.fixture import build, forget
 
 pytest.importorskip("torch")
@@ -63,3 +65,17 @@ def test_projections_are_deterministic(runs: list[dict[str, pa.Table]]) -> None:
 
     for role in first:
         assert first[role].equals(second[role])
+
+
+def test_scan_returns_each_chosen_embedding_in_the_order_asked(tree: Path) -> None:
+    streamed = np.concatenate([values for _, _, values in umap_module._stream()])
+    chosen = np.random.default_rng(0).permutation(len(streamed))[: len(streamed) // 3]
+
+    _, taken = umap_module.scan(galaxy_count(), chosen)
+
+    np.testing.assert_array_equal(taken, streamed[chosen])
+
+
+def test_scan_rejects_a_sample_past_the_streamed_embeddings(tree: Path) -> None:
+    with pytest.raises(ValueError, match="streamed embeddings"):
+        umap_module.scan(galaxy_count(), np.array([umap_module.embedding_count()]))

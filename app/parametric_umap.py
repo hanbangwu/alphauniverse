@@ -237,6 +237,8 @@ def scan(count: int, chosen: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         first, last = np.searchsorted(ascending, (seen, seen + len(values)))
         taken[order[first:last]] = values[ascending[first:last] - seen]
         seen += len(values)
+    if len(chosen) and ascending[-1] >= seen:
+        raise ValueError(f"the sample reaches past the {seen} streamed embeddings")
 
     return (sums / held[:, None]).astype(dtype=np.float32), taken
 
