@@ -33,7 +33,12 @@ def basis() -> dict[str, tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
         for survey in SPECTRUM_SURVEYS:
             mean = stored[f"{survey}_mean"]
             directions = stored[f"{survey}_directions"]
-            fitted[survey] = (mean, directions, mean @ mean, directions @ mean)
+            fitted[survey] = (
+                mean,
+                directions,
+                np.float32(mean @ mean),
+                (directions @ mean).astype(np.float32),
+            )
         return fitted
 
 
@@ -43,6 +48,10 @@ def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:
 
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
     return predictions().take(galaxies).combine_chunks().to_batches()[0]
+
+
+def row(galaxy: int) -> pa.RecordBatch:
+    return predictions().slice(galaxy, 1).to_batches()[0]
 
 
 def spectrum_survey(galaxy: int) -> str | None:
@@ -60,47 +69,36 @@ def selection(query: Query) -> dict[str, np.ndarray]:
     scalars = np.asarray(query.scalars, dtype=np.int64)
     selected = {
         f"{ANCHOR}_cells": np.asarray(query.patches, dtype=np.int64),
-        f"{spectrum_survey(query.galaxy)}_spans": np.asarray(
-            query.spans, dtype=np.int64
-        ),
         f"{ANCHOR}_scalars": scalars[scalars < N_LS_SCALARS],
         "hsc_scalars": scalars[scalars >= N_LS_SCALARS] - N_LS_SCALARS,
     }
+    if query.spans:
+        survey = spectrum_survey(query.galaxy)
+        selected[f"{survey}_spans"] = np.asarray(query.spans, dtype=np.int64)
     return {mode: slots for mode, slots in selected.items() if len(slots)}
 
 
-def dense_cells(rows: pa.RecordBatch, survey: str) -> np.ndarray:
-    codes = array(rows, f"{survey}_codes", N_PATCHES, TOP_CODES).astype(np.int64)
-    kept = np.exp(
-        array(rows, f"{survey}_log_probabilities", N_PATCHES, TOP_CODES).astype(
-            np.float32
-        )
-    )
-    rest = np.exp(array(rows, f"{survey}_tails", N_PATCHES)) / (
-        IMAGE_VOCABULARY - TOP_CODES
-    )
-    dense = np.repeat(rest[..., None], IMAGE_VOCABULARY, axis=-1)
-    np.put_along_axis(dense, codes, kept, axis=-1)
-    return dense
-
-
 def top_cells(
-    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
+    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray, kept: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    codes = array(rows, f"{survey}_codes", N_PATCHES, TOP_CODES)[:, slots, :KEPT]
+    codes = array(rows, f"{survey}_codes", N_PATCHES, TOP_CODES)[:, slots, :kept]
     probabilities = np.exp(
-        array(rows, f"{survey}_log_probabilities", N_PATCHES, TOP_CODES)[
-            :, slots
-        ].astype(np.float32)
+        array(rows, f"{survey}_log_probabilities", N_PATCHES, TOP_CODES)[:, slots],
+        dtype=np.float32,
     )
     rest = np.exp(array(rows, f"{survey}_tails", N_PATCHES)[:, slots]) + (
-        probabilities[..., KEPT:].sum(axis=-1)
+        probabilities[..., kept:].sum(axis=-1)
     )
-    return (
-        codes.astype(np.int64),
-        probabilities[..., :KEPT],
-        rest / (IMAGE_VOCABULARY - KEPT),
-    )
+    return codes, probabilities[..., :kept], rest / (IMAGE_VOCABULARY - kept)
+
+
+def dense_cells(
+    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
+) -> np.ndarray:
+    codes, probabilities, spread = top_cells(rows, survey, slots, TOP_CODES)
+    dense = np.repeat(spread[..., None], IMAGE_VOCABULARY, axis=-1)
+    np.put_along_axis(dense, codes.astype(np.intp), probabilities, axis=-1)
+    return dense
 
 
 def cell_overlaps(
@@ -111,7 +109,7 @@ def cell_overlaps(
 ) -> np.ndarray:
     at_codes = np.take_along_axis(
         np.broadcast_to(query, (*codes.shape[:-1], query.shape[-1])),
-        codes,
+        codes.astype(np.intp),
         axis=-1,
     )
     return (probabilities * at_codes).sum(axis=-1) + spread * (
@@ -128,13 +126,18 @@ def span_coefficients(
     return offsets[..., None] + quantised * steps[..., None]
 
 
-def span_overlaps(query: np.ndarray, gallery: np.ndarray, survey: str) -> np.ndarray:
+def span_overlaps(
+    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray, query: np.ndarray
+) -> np.ndarray:
     _, _, mean_square, projected_mean = basis()[survey]
+    weights = projected_mean + query
+    quantised = array(rows, f"{survey}_coefficients", N_SPANS, SPAN_RANK)[:, slots]
     overlaps = (
         mean_square
         + query @ projected_mean
-        + gallery @ projected_mean
-        + (gallery * query).sum(axis=-1)
+        + array(rows, f"{survey}_offsets", N_SPANS)[:, slots] * weights.sum(axis=-1)
+        + array(rows, f"{survey}_steps", N_SPANS)[:, slots]
+        * np.einsum("...r,...r->...", quantised, weights)
     )
     return np.maximum(overlaps, SPAN_FLOOR)
 
@@ -147,17 +150,18 @@ def scalar_probabilities(
     return np.exp(stored.astype(np.float32))
 
 
-def query_forms(query: Query, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    row = gathered(np.asarray([query.galaxy]))
+def query_forms(
+    own: pa.RecordBatch, selected: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
     forms = {}
     for mode, slots in selected.items():
         survey, kind = mode.split("_")
         if kind == "cells":
-            forms[mode] = dense_cells(row, survey)[0, slots]
+            forms[mode] = dense_cells(own, survey, slots)[0]
         elif kind == "spans":
-            forms[mode] = span_coefficients(row, survey, slots)[0]
+            forms[mode] = span_coefficients(own, survey, slots)[0]
         else:
-            forms[mode] = scalar_probabilities(row, survey, slots)[0]
+            forms[mode] = scalar_probabilities(own, survey, slots)[0]
     return forms
 
 
@@ -166,9 +170,9 @@ def overlaps(
 ) -> np.ndarray:
     survey, kind = mode.split("_")
     if kind == "cells":
-        return cell_overlaps(form, *top_cells(rows, survey, slots))
+        return cell_overlaps(form, *top_cells(rows, survey, slots, KEPT))
     if kind == "spans":
-        return span_overlaps(form, span_coefficients(rows, survey, slots), survey)
+        return span_overlaps(rows, survey, slots, form)
     return (scalar_probabilities(rows, survey, slots) * form).sum(axis=-1)
 
 
@@ -185,7 +189,7 @@ def sums(
 
 def parts(query: Query) -> dict[str, np.ndarray]:
     selected = selection(query)
-    forms = query_forms(query, selected)
+    forms = query_forms(row(query.galaxy), selected)
     totals = {mode: np.empty(predictions().num_rows) for mode in selected}
     start = 0
     for rows in predictions().to_batches():
@@ -212,8 +216,8 @@ def scores(query: Query) -> np.ndarray:
 def maps(
     query: Query, galaxies: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    selected = selection(query)
-    forms = query_forms(query, selected)
+    own = row(query.galaxy)
+    forms = query_forms(own, selection(query))
     rows = gathered(galaxies)
     cells = np.full((len(galaxies), N_PATCHES), np.nan)
     spans = np.full((len(galaxies), N_SPANS), np.nan)
@@ -221,17 +225,12 @@ def maps(
         survey, kind = mode.split("_")
         if kind == "cells":
             cells = np.log(
-                cell_overlaps(form.mean(axis=0), *top_cells(rows, survey, slice(None)))
-            )
-        elif kind == "spans":
-            spans = np.log(
-                span_overlaps(
-                    form.mean(axis=0),
-                    span_coefficients(rows, survey, slice(None)),
-                    survey,
+                cell_overlaps(
+                    form.mean(axis=0), *top_cells(rows, survey, slice(None), KEPT)
                 )
             )
-    own = gathered(np.asarray([query.galaxy]))
+        elif kind == "spans":
+            spans = np.log(span_overlaps(rows, survey, slice(None), form.mean(axis=0)))
     scalars = np.hstack(
         [
             np.log(

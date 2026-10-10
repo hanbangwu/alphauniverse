@@ -19,7 +19,6 @@ from app.config import (
     SPECTRUM_SURVEYS,
     galaxy_count,
 )
-from app.dataset import spectrum
 from app.main import SPECTRUM_SURVEY
 from app.search import (
     BATCH,
@@ -47,6 +46,7 @@ from scripts.benchmarks.common import (
     memory,
     observed_spans,
     queries,
+    wavelength,
 )
 
 app = modal.App("alphauniverse-recall")
@@ -194,12 +194,6 @@ def exact_ranking(
         best(*maps)[positions, 0],
         *(found[positions, ..., 0] for found in maps),
     )
-
-
-def wavelength(galaxy: int) -> np.ndarray:
-    tables = (spectrum(galaxy, survey) for survey in SPECTRUM_SURVEYS)
-    found = next(table for table in tables if table is not None)
-    return found.column("wavelength").to_numpy()
 
 
 def with_spans(count: int, holders: np.ndarray) -> list[Query]:

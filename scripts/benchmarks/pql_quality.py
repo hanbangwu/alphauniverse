@@ -17,8 +17,9 @@ from app.config import (
     SDSS,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
+    prediction_batch,
 )
-from app.dataset import dataset, spectrum
+from app.dataset import dataset
 from app.search import (
     N_HSC_SCALARS,
     N_LS_SCALARS,
@@ -32,7 +33,13 @@ from app.search import (
     with_spectrum,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import environment, git, memory, observed_spans
+from scripts.benchmarks.common import (
+    environment,
+    git,
+    memory,
+    observed_spans,
+    wavelength,
+)
 
 app = modal.App("alphauniverse-pql-quality")
 image = build_image.add_local_python_source("modal_app")
@@ -58,8 +65,7 @@ def redshifts() -> np.ndarray:
 
 
 def selections(galaxy: int, rng: np.random.Generator) -> dict[str, Query]:
-    wavelength = spectrum(galaxy, pql.spectrum_survey(galaxy)).column("wavelength")
-    observed = observed_spans(wavelength.to_numpy()).tolist()
+    observed = observed_spans(wavelength(galaxy)).tolist()
     start = int(rng.integers(max(len(observed) - WINDOW, 0) + 1))
     kinds = {
         "spans_16": Query(galaxy=galaxy, spans=tuple(observed[start : start + WINDOW])),
@@ -105,7 +111,7 @@ def hidden(galaxies: np.ndarray) -> tuple[pa.RecordBatch, list[np.ndarray]]:
         records.append(predictions.record(row["galaxy"], predicted, fitted))
         tokens = encoded[0][torch.isin(modality[0], kept.to(modality.device))]
         rows.append(torch.nn.functional.normalize(tokens.float(), dim=-1).cpu().numpy())
-    return predictions.batch(records), rows
+    return prediction_batch(records), rows
 
 
 def best(rows: list[np.ndarray], direction: np.ndarray) -> np.ndarray:
@@ -182,7 +188,7 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
         near = np.abs(z[galaxies] - z[galaxy]) / (1 + z[galaxy]) < NEAR
         for kind, query in selections(galaxy, rng).items():
             values = measured[kind]
-            scores = pql.combine(pql.parts(query))
+            scores = pql.scores(query)
             order = np.argsort(-scores, kind="stable")
             order = order[(order != galaxy) & known[order]]
             found, cosine = search(
@@ -195,7 +201,7 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
                 continue
 
             selected = pql.selection(query)
-            forms = pql.query_forms(query, selected)
+            forms = pql.query_forms(pql.row(galaxy), selected)
             unseen = next(iter(pql.sums(hidden_rows, selected, forms).values()))
             direction = centroid(query, index=built)[0]
             unseen_cosine = best(hidden_tokens, direction)

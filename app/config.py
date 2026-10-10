@@ -204,6 +204,29 @@ PREDICTIONS = pa.schema(
 )
 
 
+def prediction_batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
+    columns = []
+    for field in PREDICTIONS:
+        flat = np.concatenate([values[field.name] for values in records])
+        columns.append(
+            pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
+            if pa.types.is_fixed_size_list(field.type)
+            else pa.array(flat)
+        )
+    return pa.record_batch(columns, schema=PREDICTIONS)
+
+
+def save_prediction_basis(fitted: dict[str, tuple[np.ndarray, np.ndarray]]) -> None:
+    np.savez(
+        artifact("prediction_basis"),
+        **{
+            f"{survey}_{name}": value
+            for survey, pair in fitted.items()
+            for name, value in zip(("mean", "directions"), pair, strict=True)
+        },
+    )
+
+
 POINTS = pa.schema(
     [
         pa.field("galaxy", pa.int32(), nullable=False),

@@ -27,6 +27,8 @@ from app.config import (
     galaxy_count,
     labels,
     points,
+    prediction_batch,
+    save_prediction_basis,
     store_schema,
 )
 from app.pql import basis, predictions
@@ -117,61 +119,44 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
     orthogonal, _ = np.linalg.qr(
         np.hstack((ones, rng.standard_normal((VOCABULARY, SPAN_RANK))))
     )
-    fitted = {
-        survey: (np.full(VOCABULARY, 1 / VOCABULARY), orthogonal[:, 1:].T)
-        for survey in SPECTRUM_SURVEYS
-    }
-    np.savez(
-        artifact("prediction_basis"),
-        **{
-            f"{survey}_{name}": value
-            for survey, pair in fitted.items()
-            for name, value in zip(("mean", "directions"), pair, strict=True)
-        },
+    save_prediction_basis(
+        {
+            survey: (np.full(VOCABULARY, 1 / VOCABULARY), orthogonal[:, 1:].T)
+            for survey in SPECTRUM_SURVEYS
+        }
     )
-    columns: dict[str, list[np.ndarray]] = {field.name: [] for field in PREDICTIONS}
+    records = []
     for galaxy in range(galaxies):
-        columns["galaxy"].append(np.asarray([galaxy], dtype=np.int32))
+        values = {"galaxy": np.asarray([galaxy], dtype=np.int32)}
         for survey, scalars in SCALAR_SURVEYS.items():
             mass = rng.dirichlet(np.full(TOP_CODES + 1, 0.3), size=N_PATCHES)
-            columns[f"{survey}_codes"].append(
+            values[f"{survey}_codes"] = (
                 rng.random((N_PATCHES, IMAGE_VOCABULARY))
                 .argpartition(TOP_CODES, axis=1)[:, :TOP_CODES]
                 .astype(np.uint16)
                 .reshape(-1)
             )
-            columns[f"{survey}_log_probabilities"].append(
+            values[f"{survey}_log_probabilities"] = (
                 np.log(-np.sort(-mass[:, :TOP_CODES], axis=1))
                 .astype(np.float16)
                 .reshape(-1)
             )
-            columns[f"{survey}_tails"].append(np.log(mass[:, -1]).astype(np.float32))
-            columns[f"{survey}_scalars"].append(
+            values[f"{survey}_tails"] = np.log(mass[:, -1]).astype(np.float32)
+            values[f"{survey}_scalars"] = (
                 _log_softmax(3 * rng.standard_normal((len(scalars), VOCABULARY)))
                 .astype(np.float16)
                 .reshape(-1)
             )
         for survey in SPECTRUM_SURVEYS:
             steps = rng.uniform(1e-6, 3e-6, N_SPANS).astype(np.float32)
-            columns[f"{survey}_coefficients"].append(
-                rng.integers(256, size=N_SPANS * SPAN_RANK, dtype=np.uint8)
+            values[f"{survey}_coefficients"] = rng.integers(
+                256, size=N_SPANS * SPAN_RANK, dtype=np.uint8
             )
-            columns[f"{survey}_offsets"].append(-128 * steps)
-            columns[f"{survey}_steps"].append(steps)
+            values[f"{survey}_offsets"] = -128 * steps
+            values[f"{survey}_steps"] = steps
+        records.append(values)
     with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
-        writer.write_batch(
-            pa.record_batch(
-                [
-                    pa.FixedSizeListArray.from_arrays(
-                        np.concatenate(columns[field.name]), field.type.list_size
-                    )
-                    if pa.types.is_fixed_size_list(field.type)
-                    else pa.array(np.concatenate(columns[field.name]))
-                    for field in PREDICTIONS
-                ],
-                schema=PREDICTIONS,
-            )
-        )
+        writer.write_batch(prediction_batch(records))
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:

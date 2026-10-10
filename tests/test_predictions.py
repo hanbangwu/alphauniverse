@@ -7,6 +7,7 @@ import pyarrow as pa
 import pytest
 
 from app.config import (
+    IMAGE_VOCABULARY,
     N_PATCHES,
     N_SPANS,
     PREDICTIONS,
@@ -79,7 +80,7 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 
 def test_kept_cell_codes_are_the_most_probable_in_descending_order() -> None:
     log_probabilities = np.log(
-        np.random.default_rng(1).dirichlet(np.full(4375, 0.5), size=3)
+        np.random.default_rng(1).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
     )
 
     codes, _, _ = predictions_module.cells(log_probabilities)

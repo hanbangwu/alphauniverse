@@ -20,6 +20,8 @@ from .config import (
     VOCABULARY,
     artifact,
     device,
+    prediction_batch,
+    save_prediction_basis,
 )
 from .search import source
 
@@ -188,32 +190,13 @@ def record(
     return values
 
 
-def batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
-    columns = []
-    for field in PREDICTIONS:
-        flat = np.concatenate([values[field.name] for values in records])
-        columns.append(
-            pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
-            if pa.types.is_fixed_size_list(field.type)
-            else pa.array(flat)
-        )
-    return pa.record_batch(columns, schema=PREDICTIONS)
-
-
 def generate_predictions() -> None:
     fitted = bases()
-    np.savez(
-        artifact("prediction_basis"),
-        **{
-            f"{survey}_{name}": value
-            for survey, pair in fitted.items()
-            for name, value in zip(("mean", "directions"), pair, strict=True)
-        },
-    )
+    save_prediction_basis(fitted)
     with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
         for chunk in batched(rows("predict"), BATCH):
             writer.write_batch(
-                batch(
+                prediction_batch(
                     [
                         record(row["galaxy"], predictions(inputs(row), TARGETS), fitted)
                         for row in chunk
