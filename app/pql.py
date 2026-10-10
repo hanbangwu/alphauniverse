@@ -1,5 +1,5 @@
 from functools import cache
-from typing import Annotated, Self
+from typing import Annotated, NamedTuple, Self
 
 import numpy as np
 import pyarrow as pa
@@ -93,6 +93,14 @@ class Query(BaseModel):
             if not observed(column)[self.galaxy]:
                 raise ValueError(f"galaxy {self.galaxy} has no {MISSING[column]}")
         return self
+
+
+class Results(NamedTuple):
+    galaxies: np.ndarray
+    scores: np.ndarray
+    sums: dict[str, np.ndarray]
+    aligned: dict[str, np.ndarray]
+    selected: dict[str, np.ndarray]
 
 
 def prediction_batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
@@ -323,3 +331,18 @@ def maps(
         if mode not in TABLES
     }
     return aligned, selected
+
+
+def search(query: Query) -> Results:
+    totals = parts(query)
+    scored = combine(totals)
+    order = np.argsort(-scored, kind="stable")
+    galaxies = np.concatenate(
+        ([query.galaxy], order[order != query.galaxy][: query.matches])
+    )
+    return Results(
+        galaxies,
+        scored[galaxies],
+        {mode: values[galaxies] for mode, values in totals.items()},
+        *maps(query, galaxies),
+    )

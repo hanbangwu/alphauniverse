@@ -169,6 +169,23 @@ def test_unselected_image_and_spectrum_modes_have_no_selection_map(
     assert all(np.isfinite(values).all() for values in aligned.values())
 
 
+def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
+    query: pql.Query,
+) -> None:
+    matches = 4
+    ranked = query.model_copy(update={"matches": matches})
+
+    results = pql.search(ranked)
+
+    scores = pql.scores(ranked)
+    others = np.delete(np.arange(len(scores)), GALAXY)
+    best = others[np.argsort(-scores[others], kind="stable")][:matches]
+    assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
+    np.testing.assert_allclose(results.scores, scores[results.galaxies])
+    for mode, values in pql.parts(ranked).items():
+        np.testing.assert_allclose(results.sums[mode], values[results.galaxies])
+
+
 @pytest.mark.parametrize(
     "selected",
     [{"hsc_image": (0,)}, {"sdss_spectrum": (0,)}, {"table_values": (0,)}],
