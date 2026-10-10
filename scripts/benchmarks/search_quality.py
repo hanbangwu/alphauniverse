@@ -1,4 +1,5 @@
 import json
+import resource
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -60,6 +61,59 @@ SCAN = {
     "batch_readahead": 1,
     "fragment_scan_options": ds.ParquetFragmentScanOptions(pre_buffer=False),
 }
+
+
+SNAPSHOTS: list[dict[str, Any]] = []
+
+
+def snapshot(label: str) -> None:
+    entry: dict[str, Any] = {"label": label}
+    try:
+        status = dict(
+            line.split(":", 1) for line in open("/proc/self/status") if ":" in line
+        )
+        for key in ("VmRSS", "VmHWM", "RssAnon", "RssFile", "RssShmem", "VmSwap"):
+            if key in status:
+                entry[key] = status[key].strip()
+    except OSError as error:
+        entry["status_error"] = str(error)
+    pool = pa.default_memory_pool()
+    entry["arrow_allocated_mib"] = round(pool.bytes_allocated() / 2**20, 1)
+    entry["arrow_peak_mib"] = round(pool.max_memory() / 2**20, 1)
+    entry["arrow_backend"] = pool.backend_name
+    entry["peak_rss_mib"] = round(
+        resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1
+    )
+    try:
+        resident: dict[str, int] = {}
+        path = "[anonymous]"
+        for line in open("/proc/self/smaps"):
+            fields = line.split()
+            if fields and "-" in fields[0] and len(fields) >= 5:
+                path = fields[5] if len(fields) > 5 else "[anonymous]"
+            elif fields and fields[0] == "Rss:":
+                resident[path] = resident.get(path, 0) + int(fields[1])
+        entry["top_rss_mib"] = {
+            name: round(kib / 1024, 1)
+            for name, kib in sorted(resident.items(), key=lambda item: -item[1])[:10]
+        }
+    except OSError as error:
+        entry["smaps_error"] = str(error)
+    try:
+        for name in ("memory.current", "memory.peak", "memory.max"):
+            entry[name] = open(f"/sys/fs/cgroup/{name}").read().strip()
+        stat = dict(
+            line.split() for line in open("/sys/fs/cgroup/memory.stat") if line.strip()
+        )
+        entry["cgroup_stat_mib"] = {
+            key: round(int(stat[key]) / 2**20, 1)
+            for key in ("anon", "file", "file_mapped", "shmem", "kernel")
+            if key in stat
+        }
+    except OSError as error:
+        entry["cgroup_error"] = str(error)
+    SNAPSHOTS.append(entry)
+    print(json.dumps(entry), flush=True)
 
 
 class Corpus(NamedTuple):
@@ -160,6 +214,7 @@ def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
             for query in batch
         ]
     )
+    snapshot("exact: query rows taken")
     del taken
     scores = np.empty((len(batch), source("encoded").count_rows()), dtype=np.float32)
     start = 0
@@ -168,6 +223,9 @@ def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
             *exact_maps(directions, corpus(cells))
         ).T
         start += cells.num_rows
+        if start % (BATCH * 16) == 0:
+            snapshot(f"exact: {start} galaxies scored")
+    snapshot("exact: pass done")
     rankings = []
     for query, row in zip(batch, scores, strict=True):
         order = np.argsort(-row, kind="stable")
@@ -261,12 +319,15 @@ def hsc_scalars(count: int) -> list[Query]:
     volumes={CACHE_PATH: cache_volume},
 )
 def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
+    snapshot("start")
     built = index()
+    snapshot("index loaded")
     surveyed = source("tokens").to_table(columns=[SPECTRUM_SURVEY])
     paired = with_spans(
         per_kind,
         np.flatnonzero(pc.is_valid(surveyed.column(SPECTRUM_SURVEY)).to_numpy()),
     )
+    snapshot("spans drawn (dataset read)")
     kinds = {
         "patches": queries(per_kind, PATCHES, MATCHES),
         "paired_patches": [query.model_copy(update={"spans": ()}) for query in paired],
@@ -275,6 +336,7 @@ def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
         "scalars": scalars(per_kind),
         "hsc_scalars": hsc_scalars(per_kind),
     }
+    snapshot("queries built")
     expected = iter(
         exact_rankings([query for batch in kinds.values() for query in batch])
     )
@@ -295,6 +357,7 @@ def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
             "looked_further": round(float(np.mean(np.greater(searches, 1))), 4),
             "most_searches": max(searches),
         }
+        snapshot(f"searched {kind}")
 
     return {
         "environment": environment(),
@@ -303,6 +366,7 @@ def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
         "matches": MATCHES,
         "recall": measured,
         "memory": memory(),
+        "snapshots": SNAPSHOTS,
     }
 
 
