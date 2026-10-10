@@ -80,7 +80,7 @@ def test_successful_responses_must_be_revalidated_before_reuse(
 
 
 def test_internal_artifact_is_not_downloadable(client: TestClient) -> None:
-    assert client.get("/downloads/search_index").status_code == 422
+    assert client.get("/downloads/predictions").status_code == 422
 
 
 def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:

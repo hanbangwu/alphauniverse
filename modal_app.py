@@ -84,21 +84,6 @@ def generate_projections() -> None:
 
 @app.function(
     image=build_image,
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_index() -> None:
-    from app.config import build_dir
-    from app.search import generate_index
-
-    build_dir().mkdir(parents=True, exist_ok=True)
-    generate_index()
-
-
-@app.function(
-    image=build_image,
     gpu="L4",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
