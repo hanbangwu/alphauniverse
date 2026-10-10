@@ -16,6 +16,8 @@ from app.config import (
     N_PATCHES,
     N_SCALARS,
     N_SPANS,
+    REDSHIFT,
+    REDSHIFT_SCALAR,
     SPECTRUM_SURVEYS,
     galaxy_count,
 )
@@ -54,7 +56,7 @@ image = build_image.add_local_python_source("modal_app")
 
 MATCHES = Query.model_fields["matches"].default
 REPORT = Path("docs/benchmarks/search_quality.json")
-COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS]
+COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
 SCAN = {
     "batch_size": BATCH,
     "batch_readahead": 1,
@@ -69,6 +71,8 @@ class Corpus(NamedTuple):
     ls_scalar_rows: np.ndarray
     hsc_scalar_rows: np.ndarray
     hsc_galaxies: np.ndarray
+    redshift_rows: np.ndarray
+    redshift_galaxies: np.ndarray
 
 
 def corpus(cells: pa.Table | pa.RecordBatch) -> Corpus:
@@ -80,6 +84,10 @@ def corpus(cells: pa.Table | pa.RecordBatch) -> Corpus:
         rows(cells.column(ANCHOR), N_PATCHES, None),
         rows(cells.column("hsc"), N_PATCHES, None),
         np.flatnonzero(pc.is_valid(cells.column("hsc")).to_numpy(zero_copy_only=False)),
+        rows(cells.column(REDSHIFT), 0, None),
+        np.flatnonzero(
+            pc.is_valid(cells.column(REDSHIFT)).to_numpy(zero_copy_only=False)
+        ),
     )
 
 
@@ -103,9 +111,14 @@ def direction(query: Query, galaxy: int, reference: Corpus) -> np.ndarray:
     )
     query_rows.append(
         reference.hsc_scalar_rows[hsc_owners == galaxy][
-            scalars[scalars >= N_LS_SCALARS] - N_LS_SCALARS
+            scalars[(scalars >= N_LS_SCALARS) & (scalars < REDSHIFT_SCALAR)]
+            - N_LS_SCALARS
         ]
     )
+    if REDSHIFT_SCALAR in query.scalars:
+        query_rows.append(
+            reference.redshift_rows[reference.redshift_galaxies == galaxy]
+        )
     averaged = np.concatenate(query_rows).mean(axis=0, keepdims=True)
     faiss.normalize_L2(averaged)
     return averaged
@@ -127,9 +140,12 @@ def exact_maps(
     scalar_maps[:, :N_LS_SCALARS] = (reference.ls_scalar_rows @ directions.T).reshape(
         galaxies, N_LS_SCALARS, count
     )
-    scalar_maps[reference.hsc_galaxies, N_LS_SCALARS:] = (
+    scalar_maps[reference.hsc_galaxies, N_LS_SCALARS:REDSHIFT_SCALAR] = (
         reference.hsc_scalar_rows @ directions.T
     ).reshape(-1, N_HSC_SCALARS, count)
+    scalar_maps[reference.redshift_galaxies, REDSHIFT_SCALAR] = (
+        reference.redshift_rows @ directions.T
+    )
     return patch_maps, spectral_maps, scalar_maps
 
 
