@@ -1,4 +1,5 @@
 import numpy as np
+import pyarrow as pa
 import torch
 
 from . import encode
@@ -6,6 +7,10 @@ from .config import ANCHOR, DIM, N_PATCHES, N_SPANS, device
 
 CHUNK = 128
 SEED = 0
+TOP_CODES = 64
+SPAN_RANK = 256
+VOCABULARY = 1024
+LEVELS = 255
 
 IMAGES = {ANCHOR: encode.LegacySurveyImage.token_key, "hsc": encode.HSCImage.token_key}
 SCALARS = {
@@ -16,6 +21,36 @@ SPECTRA = {
     "desi": encode.DESISpectrum.token_key,
     "sdss": encode.SDSSSpectrum.token_key,
 }
+
+PREDICTIONS = pa.schema(
+    [pa.field("galaxy", pa.int32())]
+    + [
+        field
+        for survey, keys in SCALARS.items()
+        for field in (
+            pa.field(f"{survey}_codes", pa.list_(pa.uint16(), N_PATCHES * TOP_CODES)),
+            pa.field(
+                f"{survey}_log_probabilities",
+                pa.list_(pa.float16(), N_PATCHES * TOP_CODES),
+            ),
+            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_PATCHES)),
+            pa.field(
+                f"{survey}_scalars", pa.list_(pa.float16(), len(keys) * VOCABULARY)
+            ),
+        )
+    ]
+    + [
+        field
+        for survey in SPECTRA
+        for field in (
+            pa.field(
+                f"{survey}_coefficients", pa.list_(pa.uint8(), N_SPANS * SPAN_RANK)
+            ),
+            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPANS)),
+            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPANS)),
+        )
+    ]
+)
 
 SPAN_TARGETS = {key: np.arange(1, N_SPANS + 1) for key in SPECTRA.values()}
 TARGETS = (
@@ -86,3 +121,49 @@ def predictions(
         key: predict(encoded, encoder_mask, key, positions)
         for key, positions in targets.items()
     }
+
+
+def cells(
+    log_probabilities: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    codes = np.argsort(-log_probabilities, axis=1, kind="stable")[:, :TOP_CODES]
+    kept = np.take_along_axis(log_probabilities, codes, axis=1).astype(np.float64)
+    mass = np.minimum(np.exp(kept).sum(axis=1), np.nextafter(1.0, 0.0))
+    return (
+        codes.astype(np.uint16),
+        kept.astype(np.float16),
+        np.log1p(-mass).astype(np.float32),
+    )
+
+
+class Moments:
+    def __init__(self) -> None:
+        self.count = 0
+        self.total = np.zeros(VOCABULARY)
+        self.products = np.zeros((VOCABULARY, VOCABULARY))
+
+    def add(self, probabilities: np.ndarray) -> None:
+        rows = probabilities.astype(np.float64)
+        self.count += len(rows)
+        self.total += rows.sum(axis=0)
+        self.products += rows.T @ rows
+
+    def basis(self) -> tuple[np.ndarray, np.ndarray]:
+        mean = self.total / self.count
+        _, vectors = np.linalg.eigh(self.products / self.count - np.outer(mean, mean))
+        return mean, vectors[:, ::-1][:, :SPAN_RANK].T
+
+
+def coefficients(
+    probabilities: np.ndarray, mean: np.ndarray, directions: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    projected = (probabilities - mean) @ directions.T
+    offsets = projected.min(axis=1)
+    steps = (
+        np.maximum(projected.max(axis=1) - offsets, np.finfo(np.float32).tiny) / LEVELS
+    )
+    return (
+        np.rint((projected - offsets[:, None]) / steps[:, None]).astype(np.uint8),
+        offsets.astype(np.float32),
+        steps.astype(np.float32),
+    )
