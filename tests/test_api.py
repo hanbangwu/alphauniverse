@@ -265,13 +265,13 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_scalar
     ]
 
 
-def test_similarity_without_image_tokens_or_spans_is_rejected(
+def test_similarity_without_image_tokens_or_spectrum_tokens_is_rejected(
     client: TestClient,
 ) -> None:
     assert client.get("/search", params={"galaxy": 0}).status_code == 422
 
 
-def test_spans_of_a_galaxy_without_a_spectrum_are_rejected(
+def test_spectrum_tokens_of_a_galaxy_without_a_spectrum_are_rejected(
     client: TestClient,
 ) -> None:
     galaxy = int(np.flatnonzero(~_with_spectrum())[0])

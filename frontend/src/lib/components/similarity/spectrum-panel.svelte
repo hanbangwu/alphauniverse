@@ -46,7 +46,7 @@
         {selected}
         {ontoggle}
         label={ontoggle
-          ? 'Scroll to zoom, drag to pan, click a span to select its token'
+          ? 'Scroll to zoom, drag to pan, click a spectrum token to select it'
           : `Spectrum of galaxy ${galaxy}`}
         class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
       />

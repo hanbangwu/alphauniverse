@@ -33,7 +33,7 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 | `encoded`          | one row per galaxy, embeddings per survey     | index build, projections, `/downloads/{role}`                            |
 | `codebook`         | same, the encoder's input embeddings          | `/downloads/{role}`                                                      |
 | `tokens`           | same, token ids                               | startup, `/search`, the token and galaxy endpoints, `/downloads/{role}`  |
-| `search_index`     | faiss IVF over image tokens, spans and scalars     | `/search`                                                                |
+| `search_index`     | faiss IVF over image tokens, spectrum tokens and scalars     | `/search`                                                                |
 | `mean_points`      | one 2-d point per galaxy                      | `/meta`, `/projections/mean`                                             |
 | `full_points`      | one 2-d point per embedding                   | `/projections/full`                                                      |
 | `parametric_umap`  | the trained projector's weights               | nothing at serve time                                                    |
@@ -63,17 +63,17 @@ A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no
 | `/search`                     | Arrow IPC    |
 | `/search/text`                | JSON         |
 
-`/search` takes `galaxy`, the selected image tokens `p`, spans `s` and scalars `t`, each repeated once per index, and `matches` (1–128, default 32). `/search/text` takes `text` (1–500 characters) and `matches` (1–128, default 32).
+`/search` takes `galaxy`, the selected image tokens `p`, spectrum tokens `s` and scalars `t`, each repeated once per index, and `matches` (1–128, default 32). `/search/text` takes `text` (1–500 characters) and `matches` (1–128, default 32).
 
 ## Similarity search
 
-A query is one or more image tokens, spectral spans and encoded scalars of one galaxy. An HSC scalar needs an HSC match, and the redshift (scalar 0) a redshift token. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-image-token score map, a per-span score map where it has a spectrum, and a per-scalar score map, NaN for the HSC scalars where it has no HSC match and for the redshift where it has no redshift token.
+A query is one or more image tokens, spectrum tokens and encoded scalars of one galaxy. An HSC scalar needs an HSC match, and the redshift (scalar 0) a redshift token. The answer is the query galaxy, then `matches` other galaxies, or every other galaxy if the dataset holds fewer, ranked, each with a per-image-token score map, a per-spectrum-token score map where it has a spectrum, and a per-scalar score map, NaN for the HSC scalars where it has no HSC match and for the redshift where it has no redshift token.
 
 The search reads vectors back from the index by id, in the layout `docs/pipeline.md` gives:
 
 1. The query's vectors are averaged and normalised into one direction.
 2. The index returns the `PROBE` (2048) vectors nearest that direction, probing `NPROBE` (64) of its lists. The galaxies they belong to, in order of first appearance and without the query galaxy, are the candidates, cut to `matches`. If they hold fewer galaxies, the search runs again with both numbers doubled, until there are enough or it has probed every list for every vector. The lists probed are set per search, so the index that concurrent requests share is not changed. faiss scans them on its threads and starts no prefetch threads.
-3. Every image token, span and scalar of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
+3. Every image token, spectrum token and scalar of the query galaxy and each candidate is scored by its cosine with the direction, giving the score maps.
 4. A galaxy's score is its best token score over its maps. The candidates are sorted by it, after the query galaxy.
 
 ## Text search
@@ -94,12 +94,12 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
 │   │   └── GalaxyTooltip     hovered or selected galaxy: image, id, morphology
 │   └── TextSearch        Text Search: text box, ranked galaxies
 └── RightPanel       selected galaxy: image or spectrum, morphology, crossmatches
-    └── ImageTokenSimilarity   dialog: query image tokens, spans and scalars, match count, Search, ranked matches
+    └── ImageTokenSimilarity   dialog: query image tokens, spectrum tokens and scalars, match count, Search, ranked matches
 ```
 
 App-wide state is plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`. The similarity dialog keeps its own state, including the last search submitted, beside its components in `similarity.svelte.ts`.
 
-- The selected image tokens, spans and scalars and the match count are a draft: `/search` runs only when Search, or Enter in the count box, submits them. A newly selected galaxy starts with no results. While a search runs, the previous results stay on screen, dimmed.
+- The selected image tokens, spectrum tokens and scalars and the match count are a draft: `/search` runs only when Search, or Enter in the count box, submits them. A newly selected galaxy starts with no results. While a search runs, the previous results stay on screen, dimmed.
 - `Field<T>` and its subclasses wrap a `$state` value with normalisation (sorting and deduping index lists), so components never validate.
 - The match count is kept as the typed text. `SearchState` checks it against bounds that `state/schema.ts` reads from `/search`'s parameters in `openapi.json`, so they come from the API contract.
 
@@ -110,9 +110,9 @@ The layout fetches `/meta` in the browser through TanStack Query, cached forever
 
 Image token grids are Apache ECharts custom series, one rect per image token on a 24×24 value grid, with selection and hover outlines drawn as rect strokes. Each grid is its own ECharts instance. In the similarity dialog the image sits over the image token grid, blended with `mix-blend-screen`. Before a search the grid is opaque and the image at `tokenAlpha` opacity, 0.3; while the pointer is over the panel the image is opaque and the grid takes `tokenAlpha` opacity, 0.3 or 0.8 when selected. After a search the grid shows the score map and both are opaque. Before a search the spectrum's token areas sit over the line at `tokenAlpha` opacity. A match row holds the galaxy's image, its score grid, a mask grid while the Mask switch beside the query galaxy's Image Tokens title is on, and a spectrum chart where it has a spectrum. The Invert switch sits beside the query galaxy's Image Mask title, and the threshold slider under its grid. Panel titles stay the same before and after a search. A match list is 32 rows by default and up to 128.
 
-Spectra are Apache ECharts line charts. The app serves and shows only DESI spectra; a galaxy without one shows no spectrum. The dialog's interactive chart shades one area per spectrum token, laid out from `spectrum_origin` and `spectrum_width` in `/meta` and coloured like the token grid. It holds the selected spans in `view.spans`, which join the selected image tokens in the query. It zooms on the wheel and pans on drag, since 272 spans do not fit a panel a few hundred pixels wide.
+Spectra are Apache ECharts line charts. The app serves and shows only DESI spectra; a galaxy without one shows no spectrum. The dialog's interactive chart shades one area per spectrum token, laid out from `spectrum_origin` and `spectrum_width` in `/meta` and coloured like the token grid. It holds the selected spectrum tokens in `view.spectrumTokens`, which join the selected image tokens in the query. It zooms on the wheel and pans on drag, since 272 spectrum tokens do not fit a panel a few hundred pixels wide.
 
-Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by section, Redshift first. Each encoded scalar has a checkbox; the checked ones are `view.scalars` and join the query. An encoded scalar without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor; a row with `excluded` has a disabled checkbox and is grey and italic, with the reason under its name. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes the row's score on viridis over the 26 scores. A checked row has a 1 px `SELECTED` outline, as a selected span does.
+Right of the image panels, the dialog's Tabular Data table lists `/galaxy/{g}/table` grouped by section, Redshift first. Each encoded scalar has a checkbox; the checked ones are `view.scalars` and join the query. An encoded scalar without a token, because its catalogue has no match, has a disabled checkbox and the not-allowed cursor; a row with `excluded` has a disabled checkbox and is grey and italic, with the reason under its name. Before a search an encoded row's background takes its token's colour, ranked as the token grid's are, at `tokenAlpha` opacity; after a search it takes the row's score on viridis over the 26 scores. A checked row has a 1 px `SELECTED` outline, as a selected spectrum token does.
 
 ## Deployment
 

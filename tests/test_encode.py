@@ -12,7 +12,7 @@ from app.config import (
     DIM,
     FLAG_SURVEYS,
     N_IMAGE_TOKENS,
-    N_SPANS,
+    N_SPECTRUM_TOKENS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     SPECTRUM_SURVEYS,
@@ -172,7 +172,7 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
         )
         assert blocks(table).shape == (
             len(rows) * (N_IMAGE_TOKENS + N_LS_SCALARS)
-            + spectra * (N_SPANS + 1)
+            + spectra * (N_SPECTRUM_TOKENS + 1)
             + hsc * N_HSC_SCALARS,
             DIM,
         )

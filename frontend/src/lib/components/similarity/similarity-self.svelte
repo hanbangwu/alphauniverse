@@ -72,7 +72,7 @@
   <SpectrumPanel
     galaxy={similarity.galaxy}
     map={similarity.spectrumMap}
-    selected={view.spans.value}
-    ontoggle={(index) => view.spans.toggle(index)}
+    selected={view.spectrumTokens.value}
+    ontoggle={(index) => view.spectrumTokens.toggle(index)}
   />
 </div>

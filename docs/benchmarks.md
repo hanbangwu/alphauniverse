@@ -92,7 +92,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 | `candidates`  | 21.8 ms     | 5.03 ms     | 5.8 %      |
 | **`vectors`** | 88.0 ms     | **79.8 ms** | **91.5 %** |
 | `score_maps`  | 7.59 ms     | 1.51 ms     | 1.7 %      |
-| `span_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
+| `spectrum_token_maps`   | 12.5 ms     | 0.37 ms     | 0.4 %      |
 | `scalar_maps` | unmeasured  | unmeasured  |            |
 | `rank`        | 0.35 ms     | 0.14 ms     | 0.2 %      |
 | Total         | 131.0 ms    | 87.2 ms     |            |
@@ -116,7 +116,7 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 1. one cold `/meta`, one cold `/search`, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
 2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey scalars at 32 matches, and `/search` with 4 image tokens at 8, 32 and 128 matches;
-3. warm: both spectrum routes, and `/search` at 32 matches with 4 spans, alone and with 4 image tokens, on galaxies with a DESI spectrum and spans inside its observed range;
+3. warm: both spectrum routes, and `/search` at 32 matches with 4 spectrum tokens, alone and with 4 image tokens, on galaxies with a DESI spectrum and spectrum tokens inside its observed range;
 4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 image tokens at 32 matches.
 
 Latency includes Modal's ingress, not the starter's network. Only the checked-out commit is timed.
@@ -139,8 +139,8 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 | 4 image tokens, 8 matches    | 164 ms | 174 ms |
 | 4 image tokens               | 225 ms | 255 ms |
 | 4 image tokens, 128 matches  | 429 ms | 503 ms |
-| 4 spans                 | 253 ms | 276 ms |
-| 4 image tokens and 4 spans   | 237 ms | 258 ms |
+| 4 spectrum tokens                 | 253 ms | 276 ms |
+| 4 image tokens and 4 spectrum tokens   | 237 ms | 258 ms |
 | 4 Legacy Survey scalars | 231 ms | 264 ms |
 
 `matches` sets the cost. Over the 128 ms `/meta` floor, 32 matches add 225 − 128 = 97 ms at p50, and 128 add 429 − 128 = 301 ms.
@@ -178,7 +178,7 @@ All but `/search/text` are within 140 − 126 = 14 ms at p50; `/search/text` add
 A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and the volume, runs `--per-kind` queries of each kind at 32 matches:
 
 - `image_tokens`: 4 image tokens of a galaxy drawn from all galaxies.
-- `paired_image_tokens`, `spans`, `both`: one draw of galaxies with a DESI spectrum, each with 4 image tokens and 4 spans inside its observed range, queried with the image tokens, the spans, and both.
+- `paired_image_tokens`, `spectrum_tokens`, `both`: one draw of galaxies with a DESI spectrum, each with 4 image tokens and 4 spectrum tokens inside its observed range, queried with the image tokens, the spectrum tokens, and both.
 - `scalars`: 4 Legacy Survey scalars of a galaxy drawn from all galaxies.
 - `hsc_scalars`: 2 Legacy Survey and 2 HSC scalars of a galaxy drawn from galaxies with an HSC match.
 
@@ -198,8 +198,8 @@ A query's recall is the share of its exact 32 galaxies that `search()` returns a
 | --------------------- | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
 | 4 image tokens             | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
 | 4 image tokens             | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
-| 4 spans               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
-| 4 image tokens and 4 spans | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
+| 4 spectrum tokens               | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
+| 4 image tokens and 4 spectrum tokens | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
 
 `scalars` and `hsc_scalars` are unmeasured: this run predates them.
 

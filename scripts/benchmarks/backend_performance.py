@@ -22,11 +22,11 @@ from scripts.benchmarks.common import (
     IMAGE_TOKENS,
     MATCHES,
     SCALARS,
-    SPANS,
+    SPECTRUM_TOKENS,
     elapsed,
     environment,
     git,
-    observed_spans,
+    observed_spectrum_tokens,
     server,
     summary,
 )
@@ -133,30 +133,36 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def spectrum(route: str) -> None:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
-        def span_query(image_token_count: int) -> dict[str, Any]:
+        def spectrum_token_query(image_token_count: int) -> dict[str, Any]:
             galaxy = int(rng.choice(holders))
             response = session.get(f"/galaxy/{galaxy}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
-            spans = observed_spans(table.column("wavelength").to_numpy())
+            spectrum_tokens = observed_spectrum_tokens(
+                table.column("wavelength").to_numpy()
+            )
             return {
                 "galaxy": galaxy,
                 "p": rng.choice(
                     N_IMAGE_TOKENS, image_token_count, replace=False
                 ).tolist(),
-                "s": rng.choice(spans, SPANS, replace=False).tolist(),
+                "s": rng.choice(
+                    spectrum_tokens, SPECTRUM_TOKENS, replace=False
+                ).tolist(),
                 "matches": 32,
             }
 
-        def span_similarity(image_token_count: int) -> Callable[[], None]:
-            batch = iter([span_query(image_token_count) for _ in range(runs + 1)])
+        def spectrum_token_similarity(image_token_count: int) -> Callable[[], None]:
+            batch = iter(
+                [spectrum_token_query(image_token_count) for _ in range(runs + 1)]
+            )
             return lambda: get("/search", **next(batch))
 
         spectral_calls = {
             name: lambda route=route: spectrum(route)
             for name, route in (("spectrum", ""), ("spectrum tokens", "/tokens"))
         } | {
-            "similarity spans matches=32": span_similarity(0),
-            "similarity image tokens and spans matches=32": span_similarity(
+            "similarity spectrum tokens matches=32": spectrum_token_similarity(0),
+            "similarity image tokens and spectrum tokens matches=32": spectrum_token_similarity(
                 IMAGE_TOKENS
             ),
         }

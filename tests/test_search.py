@@ -10,7 +10,7 @@ from app.config import (
     ANCHOR,
     DIM,
     N_IMAGE_TOKENS,
-    N_SPANS,
+    N_SPECTRUM_TOKENS,
     REDSHIFT_SCALAR,
 )
 from app.search import (
@@ -62,7 +62,7 @@ def test_rank_keeps_the_query_first_and_each_row_together() -> None:
         ],
         dtype=np.float32,
     )
-    span_scores = np.array(
+    spectrum_token_scores = np.array(
         [[0.1, 0.2], [0.3, 0.25], [np.nan, np.nan], [0.8, 0.0], [0.1, 0.4]],
         dtype=np.float32,
     )
@@ -71,11 +71,11 @@ def test_rank_keeps_the_query_first_and_each_row_together() -> None:
         order[rows],
         np.array([0.6, 0.9, 0.8, 0.3, -0.2], dtype=np.float32),
         image_token_scores[rows],
-        span_scores[rows],
+        spectrum_token_scores[rows],
     )
 
     for found, wanted in zip(
-        rank(order, image_token_scores, span_scores), expected, strict=True
+        rank(order, image_token_scores, spectrum_token_scores), expected, strict=True
     ):
         np.testing.assert_array_equal(found, wanted, strict=True)
 
@@ -160,7 +160,7 @@ def test_ids_stay_contiguous_across_add_batches(
         assert (
             built.ntotal
             == galaxies * (N_IMAGE_TOKENS + N_LS_SCALARS)
-            + with_spectrum().sum() * N_SPANS
+            + with_spectrum().sum() * N_SPECTRUM_TOKENS
             + with_hsc().sum() * N_HSC_SCALARS
             + with_redshift().sum()
         )

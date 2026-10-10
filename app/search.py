@@ -15,7 +15,7 @@ from .config import (
     DIM,
     N_IMAGE_TOKENS,
     N_SCALARS,
-    N_SPANS,
+    N_SPECTRUM_TOKENS,
     REDSHIFT,
     REDSHIFT_SCALAR,
     SCALAR_SURVEYS,
@@ -44,9 +44,9 @@ class Query(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
         Field(alias="p", max_length=N_IMAGE_TOKENS),
     ] = ()
-    spans: Annotated[
-        tuple[Annotated[int, Field(ge=0, lt=N_SPANS)], ...],
-        Field(alias="s", max_length=N_SPANS),
+    spectrum_tokens: Annotated[
+        tuple[Annotated[int, Field(ge=0, lt=N_SPECTRUM_TOKENS)], ...],
+        Field(alias="s", max_length=N_SPECTRUM_TOKENS),
     ] = ()
     scalars: Annotated[
         tuple[Annotated[int, Field(ge=0, lt=N_SCALARS)], ...],
@@ -56,13 +56,15 @@ class Query(BaseModel):
 
     @model_validator(mode="after")
     def some_tokens(self) -> Self:
-        if not (self.image_tokens or self.spans or self.scalars):
-            raise ValueError("select at least one image token, span or scalar")
+        if not (self.image_tokens or self.spectrum_tokens or self.scalars):
+            raise ValueError(
+                "select at least one image token, spectrum token or scalar"
+            )
         return self
 
     @model_validator(mode="after")
-    def spans_need_a_spectrum(self) -> Self:
-        if self.spans and not with_spectrum()[self.galaxy]:
+    def spectrum_tokens_need_a_spectrum(self) -> Self:
+        if self.spectrum_tokens and not with_spectrum()[self.galaxy]:
             raise ValueError(f"galaxy {self.galaxy} has no spectrum")
         return self
 
@@ -115,7 +117,7 @@ def layout(
     sizes = (
         N_IMAGE_TOKENS
         + N_LS_SCALARS
-        + has_spectrum * N_SPANS
+        + has_spectrum * N_SPECTRUM_TOKENS
         + has_hsc * N_HSC_SCALARS
         + has_redshift
     )
@@ -123,7 +125,7 @@ def layout(
 
 
 def scalar_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
-    return first + N_IMAGE_TOKENS + has_spectrum * N_SPANS
+    return first + N_IMAGE_TOKENS + has_spectrum * N_SPECTRUM_TOKENS
 
 
 @cache
@@ -147,7 +149,7 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
     ids = np.concatenate(
         (
             start + np.asarray(query.image_tokens, dtype=np.int64),
-            start + N_IMAGE_TOKENS + np.asarray(query.spans, dtype=np.int64),
+            start + N_IMAGE_TOKENS + np.asarray(query.spectrum_tokens, dtype=np.int64),
             np.where(
                 scalars == REDSHIFT_SCALAR,
                 bounds()[query.galaxy + 1] - 1,
@@ -217,14 +219,14 @@ def optional_maps(
     return maps
 
 
-def span_maps(
+def spectrum_token_maps(
     order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
     return optional_maps(
         starts()[order] + N_IMAGE_TOKENS,
         with_spectrum()[order],
         direction,
-        width=N_SPANS,
+        width=N_SPECTRUM_TOKENS,
         index=index,
     )
 
@@ -270,7 +272,7 @@ def search(
     return rank(
         order,
         score_maps(vectors(order, index=index), direction, width=N_IMAGE_TOKENS),
-        span_maps(order, direction, index=index),
+        spectrum_token_maps(order, direction, index=index),
         scalar_maps(order, direction, index=index),
     )
 
@@ -307,8 +309,8 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
     built = np.empty((bounds[-1], DIM), dtype=np.float32)
     built[positions(first, N_IMAGE_TOKENS)] = image_tokens(batch.column(ANCHOR))
     if has_spectrum.any():
-        built[positions(first[has_spectrum] + N_IMAGE_TOKENS, N_SPANS)] = spectral(
-            spectra.drop_null()
+        built[positions(first[has_spectrum] + N_IMAGE_TOKENS, N_SPECTRUM_TOKENS)] = (
+            spectral(spectra.drop_null())
         )
     built[positions(scalar_first, N_LS_SCALARS)] = rows(
         batch.column(ANCHOR), N_IMAGE_TOKENS, None

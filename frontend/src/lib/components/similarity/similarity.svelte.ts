@@ -46,7 +46,7 @@ export class Similarity {
       app.search.request(
         galaxy,
         app.view.imageTokens.value,
-        app.view.spans.value,
+        app.view.spectrumTokens.value,
         app.view.scalars.value
       )
     )

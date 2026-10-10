@@ -25,7 +25,7 @@ from app.search import (
     scalar_maps,
     score_maps,
     search,
-    span_maps,
+    spectrum_token_maps,
     starts,
     tokens,
     vectors,
@@ -57,7 +57,7 @@ STAGES = [
     "candidates",
     "vectors",
     "score_maps",
-    "span_maps",
+    "spectrum_token_maps",
     "scalar_maps",
     "rank",
 ]
@@ -128,7 +128,7 @@ def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]
     marks.append(mark())
     scored = score_maps(rows, direction, width=N_IMAGE_TOKENS)
     marks.append(mark())
-    spectral_scores = span_maps(order, direction, index=built)
+    spectral_scores = spectrum_token_maps(order, direction, index=built)
     marks.append(mark())
     scalar_scores = scalar_maps(order, direction, index=built)
     marks.append(mark())

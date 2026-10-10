@@ -22,7 +22,7 @@ from .config import (
     GRID,
     N_IMAGE_TOKENS,
     N_SCALARS,
-    N_SPANS,
+    N_SPECTRUM_TOKENS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
@@ -371,7 +371,7 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": ARROW_STREAM}},
 )
 def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, values, spans, scalars = search(query, index=index())
+    galaxies, scores, values, spectrum_tokens, scalars = search(query, index=index())
 
     item = pa.field("item", pa.float32(), nullable=False)
     schema = pa.schema(
@@ -379,7 +379,7 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
             pa.field("galaxy", pa.int32(), nullable=False),
             pa.field("score", pa.float32(), nullable=False),
             pa.field("map", pa.list_(item, N_IMAGE_TOKENS), nullable=False),
-            pa.field("spectrum", pa.list_(item, N_SPANS)),
+            pa.field("spectrum", pa.list_(item, N_SPECTRUM_TOKENS)),
             pa.field("scalars", pa.list_(item, N_SCALARS), nullable=False),
         ]
     )
@@ -391,9 +391,9 @@ def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
                 pa.array(values.reshape(-1)), N_IMAGE_TOKENS
             ),
             pa.FixedSizeListArray.from_arrays(
-                pa.array(spans.reshape(-1)),
-                N_SPANS,
-                mask=pa.array(np.isnan(spans[:, 0])),
+                pa.array(spectrum_tokens.reshape(-1)),
+                N_SPECTRUM_TOKENS,
+                mask=pa.array(np.isnan(spectrum_tokens[:, 0])),
             ),
             pa.FixedSizeListArray.from_arrays(pa.array(scalars.reshape(-1)), N_SCALARS),
         ],
