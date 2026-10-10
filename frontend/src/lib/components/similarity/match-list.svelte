@@ -7,6 +7,9 @@
 </script>
 
 <span class="text-sm font-medium">Whole dataset</span>
+<p class="text-xs text-muted-foreground">
+  Matches are compared at the same place in the image and the same observed wavelength.
+</p>
 
 {#if similarity.error}
   <p role="alert" class="text-sm text-destructive">{similarity.error}</p>
