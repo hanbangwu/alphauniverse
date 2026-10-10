@@ -16,6 +16,8 @@ from .config import (
     N_PATCHES,
     N_SCALARS,
     N_SPANS,
+    REDSHIFT,
+    REDSHIFT_SCALAR,
     SCALAR_SURVEYS,
     SEED,
     SPECTRUM_SURVEYS,
@@ -30,6 +32,8 @@ PROBE = 2048
 TRAIN_GALAXIES = 2048
 N_LS_SCALARS = len(SCALAR_SURVEYS[ANCHOR])
 N_HSC_SCALARS = len(SCALAR_SURVEYS["hsc"])
+FIRST_LS_SCALAR = REDSHIFT_SCALAR + 1
+FIRST_HSC_SCALAR = FIRST_LS_SCALAR + N_LS_SCALARS
 
 
 class Query(BaseModel):
@@ -64,9 +68,15 @@ class Query(BaseModel):
 
     @model_validator(mode="after")
     def hsc_scalars_need_hsc(self) -> Self:
-        hsc = max(self.scalars, default=0) >= N_LS_SCALARS
+        hsc = any(scalar >= FIRST_HSC_SCALAR for scalar in self.scalars)
         if hsc and not with_hsc()[self.galaxy]:
             raise ValueError(f"galaxy {self.galaxy} has no HSC match")
+        return self
+
+    @model_validator(mode="after")
+    def redshift_needs_a_redshift(self) -> Self:
+        if REDSHIFT_SCALAR in self.scalars and not with_redshift()[self.galaxy]:
+            raise ValueError(f"galaxy {self.galaxy} has no usable redshift")
         return self
 
 
@@ -94,8 +104,21 @@ def with_spectrum() -> np.ndarray:
     return pc.is_valid(spectrum_cells(tokens())).to_numpy()
 
 
-def layout(has_spectrum: np.ndarray, has_hsc: np.ndarray) -> np.ndarray:
-    sizes = N_PATCHES + N_LS_SCALARS + has_spectrum * N_SPANS + has_hsc * N_HSC_SCALARS
+@cache
+def with_redshift() -> np.ndarray:
+    return pc.is_valid(tokens().column(REDSHIFT)).to_numpy()
+
+
+def layout(
+    has_spectrum: np.ndarray, has_hsc: np.ndarray, has_redshift: np.ndarray
+) -> np.ndarray:
+    sizes = (
+        N_PATCHES
+        + N_LS_SCALARS
+        + has_spectrum * N_SPANS
+        + has_hsc * N_HSC_SCALARS
+        + has_redshift
+    )
     return np.concatenate(([0], np.cumsum(sizes)))
 
 
@@ -104,8 +127,13 @@ def scalar_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
 
 
 @cache
+def bounds() -> np.ndarray:
+    return layout(with_spectrum(), with_hsc(), with_redshift())
+
+
+@cache
 def starts() -> np.ndarray:
-    return layout(with_spectrum(), with_hsc())[:-1]
+    return bounds()[:-1]
 
 
 def positions(first: np.ndarray, width: int) -> np.ndarray:
@@ -114,12 +142,17 @@ def positions(first: np.ndarray, width: int) -> np.ndarray:
 
 def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
     start = starts()[query.galaxy]
+    scalar_start = scalar_starts(start, with_spectrum()[query.galaxy])
+    scalars = np.asarray(query.scalars, dtype=np.int64)
     ids = np.concatenate(
         (
             start + np.asarray(query.patches, dtype=np.int64),
             start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
-            scalar_starts(start, with_spectrum()[query.galaxy])
-            + np.asarray(query.scalars, dtype=np.int64),
+            np.where(
+                scalars == REDSHIFT_SCALAR,
+                bounds()[query.galaxy + 1] - 1,
+                scalar_start + scalars - FIRST_LS_SCALAR,
+            ),
         )
     )
     direction = index.reconstruct_batch(ids).mean(axis=0, keepdims=True)
@@ -128,7 +161,7 @@ def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
 
 
 def scalar_tokens(galaxy: int) -> dict[str, int]:
-    return {
+    found = {
         column: int(token)
         for survey, columns in SCALAR_SURVEYS.items()
         if (cell := tokens().column(survey)[galaxy]).is_valid
@@ -136,6 +169,9 @@ def scalar_tokens(galaxy: int) -> dict[str, int]:
             columns, np.asarray(cell.values)[N_PATCHES:], strict=True
         )
     }
+    if (cell := tokens().column(REDSHIFT)[galaxy]).is_valid:
+        found[REDSHIFT] = int(cell.values[0].as_py())
+    return found
 
 
 def candidates(
@@ -196,14 +232,22 @@ def span_maps(
 def scalar_maps(
     order: np.ndarray, direction: np.ndarray, *, index: faiss.Index
 ) -> np.ndarray:
-    first = scalar_starts(starts()[order], with_spectrum()[order])
+    has_spectrum, has_hsc = with_spectrum()[order], with_hsc()[order]
+    first = scalar_starts(starts()[order], has_spectrum)
     rows = index.reconstruct_batch(positions(first, N_LS_SCALARS))
     return np.hstack(
         (
+            optional_maps(
+                bounds()[order + 1] - 1,
+                with_redshift()[order],
+                direction,
+                width=1,
+                index=index,
+            ),
             score_maps(rows, direction, width=N_LS_SCALARS),
             optional_maps(
                 first + N_LS_SCALARS,
-                with_hsc()[order],
+                has_hsc,
                 direction,
                 width=N_HSC_SCALARS,
                 index=index,
@@ -256,7 +300,8 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
     spectra = spectrum_cells(batch)
     has_spectrum = pc.is_valid(spectra).to_numpy(zero_copy_only=False)
     has_hsc = pc.is_valid(batch.column("hsc")).to_numpy(zero_copy_only=False)
-    bounds = layout(has_spectrum, has_hsc)
+    has_redshift = pc.is_valid(batch.column(REDSHIFT)).to_numpy(zero_copy_only=False)
+    bounds = layout(has_spectrum, has_hsc, has_redshift)
     first = bounds[:-1]
     scalar_first = scalar_starts(first, has_spectrum)
     built = np.empty((bounds[-1], DIM), dtype=np.float32)
@@ -272,6 +317,8 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
         built[positions(scalar_first[has_hsc] + N_LS_SCALARS, N_HSC_SCALARS)] = rows(
             batch.column("hsc"), N_PATCHES, None
         )
+    if has_redshift.any():
+        built[bounds[1:][has_redshift] - 1] = rows(batch.column(REDSHIFT), 0, None)
     return built
 
 
@@ -286,7 +333,7 @@ def index() -> faiss.Index:
 
 def generate_index() -> None:
     dataset = source("encoded")
-    columns = [ANCHOR, "hsc", *SPECTRUM_SURVEYS]
+    columns = [ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
     galaxies = dataset.count_rows()
     sample = np.random.default_rng(SEED).choice(
         galaxies, min(TRAIN_GALAXIES, galaxies), replace=False

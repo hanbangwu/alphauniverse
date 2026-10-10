@@ -19,7 +19,7 @@ from .config import (
     FLAG_SURVEYS,
     POINTS,
     SEED,
-    TOKEN_SURVEYS,
+    STORE_COLUMNS,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
@@ -183,7 +183,7 @@ def fit_parametric_umap(training: np.ndarray, validation: np.ndarray) -> Paramet
 
 
 def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    for survey in TOKEN_SURVEYS:
+    for survey in STORE_COLUMNS:
         for stored in source("encoded").to_batches(
             columns=["galaxy", survey], batch_size=CHUNK
         ):
@@ -200,7 +200,7 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
 
 
 def embedding_count() -> int:
-    table = source("encoded").to_table(columns=list(TOKEN_SURVEYS))
+    table = source("encoded").to_table(columns=list(STORE_COLUMNS))
     return sum(
         pc.sum(pc.list_value_length(column), min_count=0).as_py()
         for column in table.columns

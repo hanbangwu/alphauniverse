@@ -39,6 +39,7 @@ from aion.modalities import (
     Scalar,
     SDSSSpectrum,
     Spectrum,
+    Z,
 )
 from tqdm import tqdm
 
@@ -46,6 +47,8 @@ from .config import (
     ANCHOR,
     CROP_PIXELS,
     FLAG_SURVEYS,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
     SCALAR_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
@@ -53,7 +56,7 @@ from .config import (
     store_schema,
     store_writer,
 )
-from .dataset import dataset
+from .dataset import dataset, redshift
 
 BATCH = 128
 
@@ -189,6 +192,8 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
         groups["sdss"] = {
             SDSSSpectrum.token_key: spectrum(SDSSSpectrum, row[TOKEN_SURVEYS["sdss"]])
         }
+    if (survey := redshift(row)) is not None:
+        groups[REDSHIFT] = {Z.token_key: scalar(Z, row[REDSHIFT_COLUMNS[survey][0]])}
     return groups
 
 

@@ -11,6 +11,7 @@ from app.config import (
     DIM,
     N_PATCHES,
     N_SPANS,
+    REDSHIFT_SCALAR,
 )
 from app.search import (
     N_HSC_SCALARS,
@@ -26,6 +27,7 @@ from app.search import (
     source,
     starts,
     with_hsc,
+    with_redshift,
     with_spectrum,
 )
 from scripts.benchmarks.search_quality import exact_ranking
@@ -104,7 +106,9 @@ def test_a_search_that_finds_too_few_looks_further(
         {"galaxy": 4, "p": (64, 65), "matches": 2},
         {"galaxy": 9, "s": (40, 41), "matches": 2},
         {"galaxy": 6, "p": (3,), "s": (100,), "matches": 2},
-        {"galaxy": 0, "t": (1, 14), "matches": 2},
+        {"galaxy": 0, "t": (2, 15), "matches": 2},
+        {"galaxy": 6, "t": (REDSHIFT_SCALAR,), "matches": 2},
+        {"galaxy": 0, "p": (64,), "t": (15, REDSHIFT_SCALAR), "matches": 2},
     ],
 )
 def test_approximate_ranking_agrees_with_exact(
@@ -158,6 +162,7 @@ def test_ids_stay_contiguous_across_add_batches(
             == galaxies * (N_PATCHES + N_LS_SCALARS)
             + with_spectrum().sum() * N_SPANS
             + with_hsc().sum() * N_HSC_SCALARS
+            + with_redshift().sum()
         )
 
         stored = built.reconstruct_batch(starts() + 7)
@@ -182,11 +187,11 @@ def test_selected_scalars_join_the_direction(built: faiss.Index) -> None:
     )
     faiss.normalize_L2(expected)
 
-    direction = centroid(Query(galaxy=0, p=(3,), t=(1, 14)), index=built)
+    direction = centroid(Query(galaxy=0, p=(3,), t=(2, 15)), index=built)
 
     np.testing.assert_allclose(direction, expected, atol=SCORE_TOLERANCE)
     np.testing.assert_allclose(
-        scalar_maps(np.array([0]), direction, index=built)[0, [1, 14]],
+        scalar_maps(np.array([0]), direction, index=built)[0, [2, 15]],
         (scalars @ direction.T)[:, 0],
         atol=SCORE_TOLERANCE,
     )
