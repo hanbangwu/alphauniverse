@@ -191,10 +191,9 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
 
 
 @torch.inference_mode()
-def encode(
-    groups: dict[str, dict[str, torch.Tensor]],
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    tokens = {key: slot for group in groups.values() for key, slot in group.items()}
+def context(
+    tokens: dict[str, torch.Tensor],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     encoder_tokens, encoder_embeddings, encoder_mask, modality_mask = (
         model().embed_inputs(
             tokens,
@@ -202,10 +201,18 @@ def encode(
         )
     )
     with torch.autocast(device_type=device().type, dtype=torch.float16):
-        context = model()._encode(encoder_tokens, encoder_embeddings, encoder_mask)
+        encoded = model()._encode(encoder_tokens, encoder_embeddings, encoder_mask)
+    return encoded, encoder_tokens, encoder_mask, modality_mask
 
+
+def encode(
+    groups: dict[str, dict[str, torch.Tensor]],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    encoded, encoder_tokens, _, modality_mask = context(
+        {key: slot for group in groups.values() for key, slot in group.items()}
+    )
     return (
-        context[0].cpu().numpy(),
+        encoded[0].cpu().numpy(),
         encoder_tokens[0].cpu().numpy(),
         modality_mask[0].cpu().numpy(),
     )

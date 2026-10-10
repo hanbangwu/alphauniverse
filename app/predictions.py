@@ -1,21 +1,29 @@
 from collections.abc import Iterator
+from itertools import batched
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
 import torch
 from tqdm import tqdm
 
 from . import encode
-from .config import ANCHOR, DIM, N_PATCHES, N_SPANS, TOKEN_SURVEYS, artifact, device
+from .config import (
+    ANCHOR,
+    DIM,
+    N_PATCHES,
+    N_SPANS,
+    SEED,
+    TOKEN_SURVEYS,
+    artifact,
+    device,
+)
 from .search import source
 
 CHUNK = 128
-SEED = 0
 TOP_CODES = 64
 SPAN_RANK = 256
 VOCABULARY = 1024
-LEVELS = 255
+LEVELS = np.iinfo(np.uint8).max
 BATCH = 256
 
 IMAGES = {ANCHOR: encode.LegacySurveyImage.token_key, "hsc": encode.HSCImage.token_key}
@@ -71,26 +79,14 @@ def inputs(row: dict) -> dict[str, torch.Tensor]:
     for survey, image_key in IMAGES.items():
         if row[survey] is None:
             continue
-        ids = torch.as_tensor(np.asarray(row[survey], dtype=np.int64))[None]
+        ids = torch.as_tensor(row[survey], dtype=torch.int64)[None]
         tokens[image_key] = ids[:, :N_PATCHES]
         for offset, key in enumerate(SCALARS[survey]):
             tokens[key] = ids[:, N_PATCHES + offset : N_PATCHES + offset + 1]
     for survey, key in SPECTRA.items():
         if row[survey] is not None:
-            tokens[key] = torch.as_tensor(np.asarray(row[survey], dtype=np.int64))[None]
+            tokens[key] = torch.as_tensor(row[survey], dtype=torch.int64)[None]
     return tokens
-
-
-@torch.inference_mode()
-def context(tokens: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
-    encoder_tokens, encoder_embeddings, encoder_mask, _ = encode.model().embed_inputs(
-        tokens, num_encoder_tokens=sum(slot.shape[1] for slot in tokens.values())
-    )
-    with torch.autocast(device_type=device().type, dtype=torch.float16):
-        encoded = encode.model()._encode(
-            encoder_tokens, encoder_embeddings, encoder_mask
-        )
-    return encoded, encoder_mask
 
 
 @torch.inference_mode()
@@ -122,7 +118,7 @@ def predict(
 def predictions(
     tokens: dict[str, torch.Tensor], targets: dict[str, np.ndarray]
 ) -> dict[str, np.ndarray]:
-    encoded, encoder_mask = context(tokens)
+    encoded, _, encoder_mask, _ = encode.context(tokens)
     return {
         key: predict(encoded, encoder_mask, key, positions)
         for key, positions in targets.items()
@@ -132,8 +128,13 @@ def predictions(
 def cells(
     log_probabilities: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    codes = np.argsort(-log_probabilities, axis=1, kind="stable")[:, :TOP_CODES]
-    kept = np.take_along_axis(log_probabilities, codes, axis=1).astype(np.float64)
+    candidates = np.argpartition(-log_probabilities, TOP_CODES - 1, axis=1)[
+        :, :TOP_CODES
+    ]
+    kept = np.take_along_axis(log_probabilities, candidates, axis=1)
+    order = np.argsort(-kept, axis=1)
+    codes = np.take_along_axis(candidates, order, axis=1)
+    kept = np.take_along_axis(kept, order, axis=1).astype(np.float64)
     mass = np.minimum(np.exp(kept).sum(axis=1), np.nextafter(1.0, 0.0))
     return (
         codes.astype(np.uint16),
@@ -175,15 +176,17 @@ def coefficients(
     )
 
 
-def rows() -> Iterator[dict]:
-    for batch in source("tokens").to_batches(columns=["galaxy", *TOKEN_SURVEYS]):
-        yield from batch.to_pylist()
+def rows(description: str) -> Iterator[dict]:
+    dataset = source("tokens")
+    with tqdm(total=dataset.count_rows(), desc=description) as progress:
+        for batch in dataset.to_batches(columns=["galaxy", *TOKEN_SURVEYS]):
+            yield from batch.to_pylist()
+            progress.update(batch.num_rows)
 
 
 def bases() -> dict[str, tuple[np.ndarray, np.ndarray]]:
     moments = {survey: Moments() for survey in SPECTRA}
-    count = pq.read_metadata(artifact("tokens")).num_rows
-    for row in tqdm(rows(), total=count, desc="span moments"):
+    for row in rows("span moments"):
         predicted = predictions(inputs(row), SPAN_TARGETS)
         for survey, key in SPECTRA.items():
             moments[survey].add(np.exp(predicted[key]))
@@ -215,18 +218,15 @@ def record(
 
 
 def batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
-    return pa.record_batch(
-        [
-            pa.array(np.concatenate([values[field.name] for values in records]))
+    columns = []
+    for field in PREDICTIONS:
+        flat = np.concatenate([values[field.name] for values in records])
+        columns.append(
+            pa.array(flat)
             if field.name == "galaxy"
-            else pa.FixedSizeListArray.from_arrays(
-                pa.array(np.concatenate([values[field.name] for values in records])),
-                field.type.list_size,
-            )
-            for field in PREDICTIONS
-        ],
-        schema=PREDICTIONS,
-    )
+            else pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
+        )
+    return pa.record_batch(columns, schema=PREDICTIONS)
 
 
 def generate_predictions() -> None:
@@ -239,15 +239,13 @@ def generate_predictions() -> None:
             for name, value in zip(("mean", "directions"), pair, strict=True)
         },
     )
-    count = pq.read_metadata(artifact("tokens")).num_rows
     with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
-        records = []
-        for row in tqdm(rows(), total=count, desc="predict"):
-            records.append(
-                record(row["galaxy"], predictions(inputs(row), TARGETS), fitted)
+        for chunk in batched(rows("predict"), BATCH):
+            writer.write_batch(
+                batch(
+                    [
+                        record(row["galaxy"], predictions(inputs(row), TARGETS), fitted)
+                        for row in chunk
+                    ]
+                )
             )
-            if len(records) == BATCH:
-                writer.write_batch(batch(records))
-                records.clear()
-        if records:
-            writer.write_batch(batch(records))
