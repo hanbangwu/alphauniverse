@@ -22,7 +22,6 @@ uv run ruff format app scripts tests modal_app.py           # format
 uv run python -m scripts.fixture                            # build fixture tree
 uv run modal run -m scripts.benchmarks.search_performance   # time search() on Modal
 uv run modal run -m scripts.benchmarks.backend_performance  # time the HTTP endpoints on Modal
-uv run modal run -m scripts.benchmarks.search_quality       # measure recall on Modal
 uv run modal run -m scripts.benchmarks.projection_quality   # measure projection quality on Modal
 uv run modal run -m scripts.benchmarks.text_search_quality  # measure text search on Modal
 uv run python -m scripts.openapi                            # regenerate frontend/openapi.json
@@ -71,7 +70,7 @@ bun run lint                # prettier + eslint
 
 - Write the minimum code that is correct and clear.
 - Prefer removing to adding; deleting a concept is better than adding a flag.
-- Before writing code, check in order and stop at the first that serves: the change is not needed; the codebase already does it; the standard library does it; the platform does it (the browser, Svelte, FastAPI, pyarrow, faiss); an installed dependency does it. Only then write the minimum new code.
+- Before writing code, check in order and stop at the first that serves: the change is not needed; the codebase already does it; the standard library does it; the platform does it (the browser, Svelte, FastAPI, pyarrow); an installed dependency does it. Only then write the minimum new code.
 - Use library APIs the way their documentation intends, and read the docs when unsure.
 - Leanness never removes validation of request input, handling that prevents data loss, security checks or accessibility.
 - Report when an empirical test contradicts documentation; neither outranks the other.

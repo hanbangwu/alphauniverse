@@ -11,7 +11,6 @@ import pyarrow.compute as pc
 
 from app import pql
 from app.config import (
-    ANCHOR,
     DATASET_REVISION,
     DESI,
     REDSHIFT,
@@ -25,14 +24,7 @@ from app.search import (
     FIRST_LS_TABLE_VALUE,
     N_HSC_TABLE_VALUES,
     N_LS_TABLE_VALUES,
-    Query,
-    bounds,
-    centroid,
-    index,
-    search,
     source,
-    with_hsc,
-    with_spectrum,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import (
@@ -40,8 +32,9 @@ from scripts.benchmarks.common import (
     git,
     memory,
     observed_spectrum_tokens,
-    pql_query,
+    spectrum_query,
     wavelength,
+    with_spectrum,
 )
 
 app = modal.App("alphauniverse-pql-quality")
@@ -51,7 +44,6 @@ REPORT = Path("docs/benchmarks/pql_quality.json")
 WINDOW = 16
 TABLE_VALUES = 4
 TOP = 10
-CANDIDATES = 128
 POOL = 32
 FLIPS = 20
 NEAR = 0.01
@@ -67,15 +59,15 @@ def redshifts() -> np.ndarray:
     )
 
 
-def selections(galaxy: int, rng: np.random.Generator) -> dict[str, Query]:
+def selections(galaxy: int, rng: np.random.Generator) -> dict[str, pql.Query]:
     observed = observed_spectrum_tokens(wavelength(galaxy)).tolist()
     start = int(rng.integers(max(len(observed) - WINDOW, 0) + 1))
     kinds = {
-        "spectrum_tokens_16": Query(
-            galaxy=galaxy, spectrum_tokens=tuple(observed[start : start + WINDOW])
+        "spectrum_tokens_16": spectrum_query(
+            galaxy, tuple(observed[start : start + WINDOW])
         ),
-        "spectrum_tokens_all": Query(galaxy=galaxy, spectrum_tokens=tuple(observed)),
-        "ls_table": Query(
+        "spectrum_tokens_all": spectrum_query(galaxy, tuple(observed)),
+        "ls_table": pql.Query(
             galaxy=galaxy,
             table_values=tuple(
                 (
@@ -85,44 +77,28 @@ def selections(galaxy: int, rng: np.random.Generator) -> dict[str, Query]:
             ),
         ),
     }
-    if with_hsc()[galaxy]:
+    if pql.observed("hsc")[galaxy]:
         chosen = FIRST_HSC_TABLE_VALUE + rng.choice(
             N_HSC_TABLE_VALUES, TABLE_VALUES, replace=False
         )
-        kinds["hsc_table"] = Query(galaxy=galaxy, table_values=tuple(chosen.tolist()))
+        kinds["hsc_table"] = pql.Query(
+            galaxy=galaxy, table_values=tuple(chosen.tolist())
+        )
     return kinds
 
 
-def hidden(galaxies: np.ndarray) -> tuple[pa.RecordBatch, list[np.ndarray]]:
-    import torch
-
+def hidden(galaxies: np.ndarray) -> pa.RecordBatch:
     from app import encode, predictions
 
     fitted = {survey: pql.basis()[survey][:2] for survey in SPECTRUM_SURVEYS}
-    kept = torch.as_tensor(
-        [
-            encode.model().modality_info[key]["id"]
-            for key in (
-                predictions.IMAGES[ANCHOR],
-                *predictions.TABLE_VALUES[ANCHOR],
-                *predictions.TABLE_VALUES["hsc"],
-            )
-        ]
-    )
     table = source("tokens").to_table(columns=["galaxy", *TOKEN_SURVEYS])
-    records, rows = [], []
+    records = []
     for row in table.take(galaxies).to_pylist():
         row |= dict.fromkeys((*SPECTRUM_SURVEYS, REDSHIFT))
-        encoded, _, mask, modality = encode.context(predictions.inputs(row))
+        encoded, _, mask, _ = encode.context(predictions.inputs(row))
         predicted = predictions.decode(encoded, mask, predictions.TARGETS)
         records.append(predictions.record(row["galaxy"], predicted, fitted))
-        tokens = encoded[0][torch.isin(modality[0], kept.to(modality.device))]
-        rows.append(torch.nn.functional.normalize(tokens.float(), dim=-1).cpu().numpy())
-    return pql.prediction_batch(records), rows
-
-
-def best(rows: list[np.ndarray], direction: np.ndarray) -> np.ndarray:
-    return np.asarray([(galaxy @ direction).max() for galaxy in rows])
+    return pql.prediction_batch(records)
 
 
 def bias(
@@ -147,21 +123,18 @@ def offset(redshift: np.ndarray, chosen: np.ndarray, galaxy: int) -> float:
     )
 
 
-def interval(pql_values: list[float], cosine_values: list[float]) -> dict[str, Any]:
-    paired = np.asarray([pql_values, cosine_values], dtype=np.float64)
-    paired = paired[:, np.isfinite(paired).all(axis=0)]
-    differences = paired[0] - paired[1]
-    if not len(differences):
+def interval(values: list[float]) -> dict[str, Any]:
+    finite = np.asarray(values, dtype=np.float64)
+    finite = finite[np.isfinite(finite)]
+    if not len(finite):
         return {"queries": 0}
     draws = np.random.default_rng(0).integers(
-        len(differences), size=(RESAMPLES, len(differences))
+        len(finite), size=(RESAMPLES, len(finite))
     )
-    low, high = np.percentile(differences[draws].mean(axis=1), [2.5, 97.5])
+    low, high = np.percentile(finite[draws].mean(axis=1), [2.5, 97.5])
     return {
-        "queries": len(differences),
-        "pql": round(float(paired[0].mean()), 4),
-        "cosine": round(float(paired[1].mean()), 4),
-        "difference": round(float(differences.mean()), 4),
+        "queries": len(finite),
+        "mean": round(float(finite.mean()), 4),
         "low": round(float(low), 4),
         "high": round(float(high), 4),
     }
@@ -176,23 +149,16 @@ def interval(pql_values: list[float], cosine_values: list[float]) -> dict[str, A
     volumes={CACHE_PATH: cache_volume},
 )
 def benchmark_pql_quality(sample: int) -> dict[str, Any]:
-    built = index()
     redshift = redshifts()
     known = np.isfinite(redshift)
     rng = np.random.default_rng(0)
     galaxies = np.sort(
         rng.choice(np.flatnonzero(with_spectrum() & known), sample, replace=False)
     )
-    hidden_rows, hidden_tokens = hidden(galaxies)
-    observed_tokens = [
-        built.reconstruct_batch(np.arange(bounds()[galaxy], bounds()[galaxy + 1]))
-        for galaxy in galaxies
-    ]
+    hidden_rows = hidden(galaxies)
     flips = rng.random((FLIPS, sample)) < 0.5
 
-    measured: dict[str, dict[str, dict[str, list[float]]]] = defaultdict(
-        lambda: defaultdict(lambda: {"pql": [], "cosine": []})
-    )
+    measured: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for position, galaxy in enumerate(galaxies.tolist()):
         others = np.arange(sample) != position
         near = (
@@ -201,39 +167,26 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
         )
         for kind, query in selections(galaxy, rng).items():
             values = measured[kind]
-            likelihood_query = pql_query(query)
-            scores = pql.scores(likelihood_query)
+            scores = pql.scores(query)
             order = np.argsort(-scores, kind="stable")
             order = order[(order != galaxy) & known[order]]
-            found, cosine = search(
-                query.model_copy(update={"matches": CANDIDATES}), index=built
-            )[:2]
-            matches = found[1:][known[found[1:]]]
-            values["redshift"]["pql"].append(offset(redshift, order[:TOP], galaxy))
-            values["redshift"]["cosine"].append(offset(redshift, matches[:TOP], galaxy))
-            if not query.spectrum_tokens:
+            values["redshift"].append(offset(redshift, order[:TOP], galaxy))
+            if not (query.desi_spectrum or query.sdss_spectrum):
                 continue
 
-            selected = pql.selection(likelihood_query)
-            forms = pql.query_forms(pql.row(galaxy), selected)
+            selected, forms = pql.selected_forms(query)
             unseen = next(iter(pql.sums(hidden_rows, selected, forms).values()))
-            direction = centroid(query, index=built)[0]
-            unseen_cosine = best(hidden_tokens, direction)
-            values["identity"]["pql"].append(
+            values["identity"].append(
                 float((np.delete(scores, galaxy) > unseen[position]).sum() < TOP)
             )
-            values["identity"]["cosine"].append(
-                float(unseen_cosine[position] > cosine[TOP])
+            availability, evidence = bias(
+                scores[galaxies][others],
+                unseen[others],
+                near[others],
+                flips[:, others],
             )
-            for method, seen, missing in (
-                ("pql", scores[galaxies], unseen),
-                ("cosine", best(observed_tokens, direction), unseen_cosine),
-            ):
-                availability, evidence = bias(
-                    seen[others], missing[others], near[others], flips[:, others]
-                )
-                values["availability"][method].append(availability)
-                values["evidence"][method].append(evidence)
+            values["availability"].append(availability)
+            values["evidence"].append(evidence)
 
     return {
         "environment": environment(),
@@ -245,10 +198,7 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
         "flips": FLIPS,
         "near": NEAR,
         "results": {
-            kind: {
-                metric: interval(pair["pql"], pair["cosine"])
-                for metric, pair in metrics.items()
-            }
+            kind: {metric: interval(values) for metric, values in metrics.items()}
             for kind, metrics in measured.items()
         },
         "memory": memory(),

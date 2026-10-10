@@ -135,7 +135,6 @@ GEMMA_DIM = 768
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",
-    "search_index": "faiss",
     "codebook": "parquet",
     "tokens": "arrow",
     "mean_points": "parquet",

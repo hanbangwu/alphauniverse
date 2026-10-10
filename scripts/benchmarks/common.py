@@ -6,7 +6,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import faiss
 import numpy as np
 import pyarrow as pa
 from threadpoolctl import threadpool_info
@@ -21,7 +20,6 @@ from app.config import (
     galaxy_count,
 )
 from app.dataset import spectrum
-from app.search import Query
 from modal_app import (
     SERVING_CPU,
     SERVING_MAX_CONTAINERS,
@@ -50,12 +48,12 @@ def summary(samples: list[float]) -> dict[str, Any]:
     }
 
 
-def queries(count: int, image_token_count: int, matches: int) -> list[Query]:
+def queries(count: int, image_token_count: int, matches: int) -> list[pql.Query]:
     rng = np.random.default_rng(0)
     return [
-        Query(
+        pql.Query(
             galaxy=int(rng.integers(galaxy_count())),
-            p=tuple(
+            ls_image=tuple(
                 int(image_token)
                 for image_token in rng.choice(
                     N_IMAGE_TOKENS, image_token_count, replace=False
@@ -67,20 +65,13 @@ def queries(count: int, image_token_count: int, matches: int) -> list[Query]:
     ]
 
 
-def pql_query(query: Query) -> pql.Query:
-    spectrum = {}
-    if query.spectrum_tokens:
-        survey = next(
-            survey for survey in SPECTRUM_SURVEYS if pql.observed(survey)[query.galaxy]
-        )
-        spectrum[f"{survey}_spectrum"] = query.spectrum_tokens
-    return pql.Query(
-        galaxy=query.galaxy,
-        ls_image=query.image_tokens,
-        table_values=query.table_values,
-        matches=query.matches,
-        **spectrum,
-    )
+def with_spectrum() -> np.ndarray:
+    return np.logical_or.reduce([pql.observed(survey) for survey in SPECTRUM_SURVEYS])
+
+
+def spectrum_query(galaxy: int, slots: tuple[int, ...]) -> pql.Query:
+    survey = next(survey for survey in SPECTRUM_SURVEYS if pql.observed(survey)[galaxy])
+    return pql.Query(galaxy=galaxy, **{f"{survey}_spectrum": slots})
 
 
 def wavelength(galaxy: int) -> np.ndarray:
@@ -119,7 +110,6 @@ def environment() -> dict[str, Any]:
             for key in ("vendor_id", "cpu family", "model", "model name")
         },
         "cpu_count": os.cpu_count(),
-        "faiss_threads": faiss.omp_get_max_threads(),
         "omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
         "thread_pools": threadpool_info(),
     }

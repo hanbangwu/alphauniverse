@@ -2,7 +2,6 @@ import argparse
 import os
 from pathlib import Path
 
-import faiss
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -33,17 +32,7 @@ from app.config import (
     store_writer,
 )
 from app.pql import basis, prediction_batch, predictions, save_prediction_basis
-from app.search import (
-    bounds,
-    generate_index,
-    index,
-    source,
-    starts,
-    tokens,
-    with_hsc,
-    with_redshift,
-    with_spectrum,
-)
+from app.search import source, tokens
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
@@ -165,9 +154,7 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
-    unit = rows.copy()
-    faiss.normalize_L2(unit)
-    return unit @ basis
+    return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
 
 def forget() -> None:
@@ -175,13 +162,7 @@ def forget() -> None:
         galaxy_count,
         labels,
         source,
-        index,
         tokens,
-        with_spectrum,
-        with_hsc,
-        with_redshift,
-        bounds,
-        starts,
         aion_gemma_space,
         predictions,
         basis,
@@ -195,7 +176,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
     rng = np.random.default_rng(seed)
     centres = rng.standard_normal((CLUSTERS, DIM)).astype(np.float32)
-    faiss.normalize_L2(centres)
+    centres /= np.linalg.norm(centres, axis=1, keepdims=True)
 
     embeddings, token_cells = _cells(rng, centres, galaxies)
 
@@ -234,8 +215,6 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
     _predictions(rng, galaxies)
 
-    forget()
-    generate_index()
     forget()
     return target
 

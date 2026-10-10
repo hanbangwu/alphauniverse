@@ -2,22 +2,20 @@
 
 Every benchmark runs on Modal and measures the production artifacts on the volume.
 
-The stored reports predate #215's rename and use the old names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps`, `paired_patches` and `similarity scalars matches=32`.
+The stored reports predate #215's rename and use the old names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps` and `similarity scalars matches=32`.
 
-| Script                | Measures                                     | Runs on                                   | Report                                     |
-| --------------------- | -------------------------------------------- | ----------------------------------------- | ------------------------------------------ |
-| `search_performance`  | loads and `search()` stages, across commits  | Modal, a container with the server's spec | `docs/benchmarks/search_performance.json`  |
-| `backend_performance` | HTTP latency, cold start and concurrency     | Modal, an ephemeral server and a client   | `docs/benchmarks/backend_performance.json` |
-| `search_quality`      | recall of `search()` against an exact search | Modal, a build-image container            | `docs/benchmarks/search_quality.json`      |
-| `projection_quality`  | how the projector keeps neighbours           | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
-| `text_search_quality` | text queries against catalogue cuts          | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
-| `pql_quality`         | PQL scoring against `search()`               | Modal, a build-image container with a GPU | `docs/benchmarks/pql_quality.json`         |
-| `compression_quality` | the prediction store's compression schemes   | Modal, a build-image container with a GPU | `docs/benchmarks/compression_quality.json` |
+| Script                | Measures                                        | Runs on                                   | Report                                     |
+| --------------------- | ----------------------------------------------- | ----------------------------------------- | ------------------------------------------ |
+| `search_performance`  | loads and `pql.search()` stages, across commits | Modal, a container with the server's spec | `docs/benchmarks/search_performance.json`  |
+| `backend_performance` | HTTP latency, cold start and concurrency        | Modal, an ephemeral server and a client   | `docs/benchmarks/backend_performance.json` |
+| `projection_quality`  | how the projector keeps neighbours              | Modal, a build-image container            | `docs/benchmarks/projection_quality.json`  |
+| `text_search_quality` | text queries against catalogue cuts             | Modal, a build-image container with a GPU | `docs/benchmarks/text_search_quality.json` |
+| `pql_quality`         | PQL's rankings on held-out galaxies             | Modal, a build-image container with a GPU | `docs/benchmarks/pql_quality.json`         |
+| `compression_quality` | the prediction store's compression schemes      | Modal, a build-image container with a GPU | `docs/benchmarks/compression_quality.json` |
 
 ```sh
 uv run modal run -m scripts.benchmarks.search_performance   # --runs, default 30
 uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
-uv run modal run -m scripts.benchmarks.search_quality       # --per-kind, default 100
 uv run modal run -m scripts.benchmarks.projection_quality
 uv run modal run -m scripts.benchmarks.text_search_quality
 uv run modal run -m scripts.benchmarks.pql_quality          # --sample, default 1000
@@ -28,7 +26,7 @@ uv run modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --f
 - A pull request posts its run's report on the pull request and commits none; after a round, a docs pull request reruns the scripts on `main` and commits their reports.
 - Figures compare only within one run: not across runs, machines or thread layouts.
 - **Unmeasured** marks a figure read off the code.
-- A report records `memory`, read after the measured work: the process's peak resident set (`peak_rss_mib`, from `getrusage`), which counts the pages of memory-mapped files it read, such as the index, and the most pyarrow's memory pool held at once (`arrow_peak_mib`). `resident_files_mib` and `resident_anonymous_mib` split the resident memory at the end of the run, from `/proc/self/smaps`, into pages of memory-mapped files and the rest. Under Modal's gVisor a mapped file that is touched stays resident almost whole (the 16.5 GiB index and 23 GiB of the Hugging Face dataset in Benchmark run 38022404256), so, in a process that did not inherit its parent's peak and dropped no file pages, `peak_rss_mib` minus `resident_files_mib` bounds the peak of the rest from below. Only anonymous memory counts against a Modal container's memory limit, so `resident_anonymous_mib`, not `peak_rss_mib`, is the figure to compare with it: in Benchmark run 38029573811, a container limited to 4 GiB read 40.36 GiB of mapped artifacts and finished with 22,133 MiB of their pages resident, and one allocating anonymous memory was killed at 3,677 MiB on all 8 attempts. None of these counts GPU memory. A figure covers everything the benchmark process held, including data the server never builds, such as `search_quality`'s exact reference or `index_split`'s separate copy of the index. In `search_performance` each round's subprocess records its own, if its version's code does, and so does the parent; Linux carries the parent's peak at that moment into a child at `exec`, so a round near the parent's figure may be reading the parent's. `backend_performance` records none, since its client cannot read the server's memory.
+- A report records `memory`, read after the measured work: the process's peak resident set (`peak_rss_mib`, from `getrusage`), which counts the pages of memory-mapped files it read, such as `predictions`, and the most pyarrow's memory pool held at once (`arrow_peak_mib`). `resident_files_mib` and `resident_anonymous_mib` split the resident memory at the end of the run, from `/proc/self/smaps`, into pages of memory-mapped files and the rest. Under Modal's gVisor a mapped file that is touched stays resident almost whole (23 GiB of the Hugging Face dataset in Benchmark run 38022404256), so, in a process that did not inherit its parent's peak and dropped no file pages, `peak_rss_mib` minus `resident_files_mib` bounds the peak of the rest from below. Only anonymous memory counts against a Modal container's memory limit, so `resident_anonymous_mib`, not `peak_rss_mib`, is the figure to compare with it: in Benchmark run 38029573811, a container limited to 4 GiB read 40.36 GiB of mapped artifacts and finished with 22,133 MiB of their pages resident, and one allocating anonymous memory was killed at 3,677 MiB on all 8 attempts. None of these counts GPU memory. A figure covers everything the benchmark process held, including data the server never builds. In `search_performance` each round's subprocess records its own, if its version's code does, and so does the parent; Linux carries the parent's peak at that moment into a child at `exec`, so a round near the parent's figure may be reading the parent's. `backend_performance` records none, since its client cannot read the server's memory.
 
 ## From GitHub Actions
 
@@ -52,70 +50,18 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
-2. `read_index` and `make_direct_map`, the two calls `index()` loads with, timed on a separate copy, so in the first round they take the index's cold reads;
-3. `lifespan`'s loads: `galaxy_count`, `labels`, `index`, `tokens` (which `starts` loads), `starts`. `index` finds the pages step 2 read, so its cold cost is step 2's;
-4. the stages of `search()`, first query and warm, at 4 image tokens and 32 matches;
-5. `search()` whole at 8, 32 and 128 matches.
-6. where the version has `app/pql.py`, its loads (`predictions`, `basis`) and, first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 4 image tokens, 16 contiguous spectrum tokens, all 272 spectrum tokens and 4 Legacy Survey table values. These are reported under `pql`, outside `total_p50_ms`.
+2. `lifespan`'s loads: `galaxy_count`, `labels`, `predictions`, `basis`, and `observed` for each observation column;
+3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches: `forms` (the query galaxy's forms), `scan` (every galaxy's mode sums), `combine`, `similarity`, `order`, `maps` and `predicted`;
+4. `pql.search()` whole at 8, 32 and 128 matches;
+5. under `kinds`, outside `total_p50_ms`: first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 16 contiguous spectrum tokens, all 272 spectrum tokens and 4 Legacy Survey table values; step 3 covers 4 image tokens.
 
-The split, the loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. Cold reads are charged to user time: in the last run's first round, `make_direct_map` took 8,465 ms of wall time and 8,310 ms of user CPU, none of system. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count. An OpenMP count is per calling thread: `faiss.omp_set_num_threads` changes only its caller, so a server's thread layout is set through the environment.
+The loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count.
 
 Versions are the checked-out commit (after), `origin/main` (before), and the stored report's best unless its code matches one of those. Each is a `git archive` of `app/`, `scripts/` and `modal_app.py`, run in a subprocess with after's locked dependencies, in mirrored order: after, before, best, then back. After's first round has the cold page cache. A failed round records its error.
 
 The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
 
-### Last run
-
-| Run              |                                                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------------------ |
-| Date             | 2026-10-04                                                                                                   |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                   |
-| Versions         | `6aa4197` as after and as before (`main`); the stored best, `ff2ee6a`, is not in the clone and was dropped   |
-| Container        | 8 CPU, 8 GiB requested, 32 GiB limit; 24 CPUs visible, faiss and OpenMP at 8 threads; AMD family 25, model 1 |
-| Rounds           | 4, two per version; 30 warm queries per figure after one discarded                                           |
-
-Figures are after's. Warm figures average its two rounds. After and before are the same commit, so later rounds range over all three.
-
-**Loads.** Later rounds read files already in the page cache:
-
-| Load              | First round | Later rounds  |
-| ----------------- | ----------- | ------------- |
-| `import app.main` | 5.19 s      | 2.38–3.58 s   |
-| `read_index`      | 0.106 s     | 0.016–0.018 s |
-| `make_direct_map` | 8.47 s      | 0.16–0.18 s   |
-| `galaxy_count`    | 9.0 ms      | 2.4–2.9 ms    |
-| `labels`          | 16.5 ms     | 5.7–6.6 ms    |
-| `index`           | 323 ms      | 175–192 ms    |
-| `tokens`          | 56.3 ms     | 38.2–60.2 ms  |
-| `starts`          | 4.6 ms      | 3.8–5.8 ms    |
-
-`read_index` and `make_direct_map` are step 2's split, which takes the cold reads; `index` then finds those pages. `faiss.read_index` memory-maps the index, so pages fault in as queries touch them; `make_direct_map()` reads every list's ids.
-
-**Stages**, 4 image tokens, 32 matches. The run predates `table_value_maps`, which the script now times:
-
-| Stage                 | First query | Warm p50    | Warm share |
-| --------------------- | ----------- | ----------- | ---------- |
-| `centroid`            | 0.72 ms     | 0.31 ms     | 0.4 %      |
-| `candidates`          | 21.8 ms     | 5.03 ms     | 5.8 %      |
-| **`vectors`**         | 88.0 ms     | **79.8 ms** | **91.5 %** |
-| `score_maps`          | 7.59 ms     | 1.51 ms     | 1.7 %      |
-| `spectrum_token_maps` | 12.5 ms     | 0.37 ms     | 0.4 %      |
-| `table_value_maps`    | unmeasured  | unmeasured  |            |
-| `rank`                | 0.35 ms     | 0.14 ms     | 0.2 %      |
-| Total                 | 131.0 ms    | 87.2 ms     |            |
-
-- **`vectors` dominates**: it reconstructs 33 × 576 = 19,008 image token vectors in 79.8 ms, 4.2 µs each. `reconstruct_batch` walks the IVF direct map one vector at a time, not a contiguous read.
-- `candidates` and `vectors` are faiss-parallel and `score_maps` contends with their threads, so stage figures compare only at the same thread configuration.
-
-**Whole `search()`**, 4 image tokens, warm p50:
-
-| Matches | p50      |
-| ------- | -------- |
-| 8       | 29.1 ms  |
-| 32      | 89.5 ms  |
-| 128     | 306.3 ms |
-
-**Rounds.** Warm totals are 92.288 and 82.014 ms (after) and 94.215 and 92.371 ms (before): one commit's rounds differ by up to 94.215 − 82.014 = 12.201 ms.
+The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does and as `main` does until this removal merges, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
 
 ## `backend_performance`
 
@@ -180,36 +126,6 @@ All but `/search/text` are within 140 − 126 = 14 ms at p50; `/search/text` add
 
 **Throughput reaches 15.63 requests/s with 32 clients**, the most clients timed, against 15.61 with 16; latency grows with the queue (32 / 15.63 = 2.05 s, against a p50 of 2.10 s). Whether the server or the 1-CPU client sets the ceiling is **unmeasured**.
 
-## `search_quality`
-
-A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and the volume, runs `--per-kind` queries of each kind at 32 matches:
-
-- `image_tokens`: 4 image tokens of a galaxy drawn from all galaxies.
-- `paired_image_tokens`, `spectrum_tokens`, `both`: one draw of galaxies with a DESI spectrum, each with 4 image tokens and 4 spectrum tokens inside its observed range, queried with the image tokens, the spectrum tokens, and both.
-- `table_values`: 4 Legacy Survey table values of a galaxy drawn from all galaxies.
-- `hsc_table_values`: 2 Legacy Survey and 2 HSC table values of a galaxy drawn from galaxies with an HSC match.
-
-A query's recall is the share of its exact 32 galaxies that `search()` returns at the served `PROBE` and `NPROBE`. `exact_rankings` sets each query's direction from its galaxy's rows, then brute-forces the float32 embeddings in one streamed pass over `encoded`, `BATCH` galaxies at a time, keeping each galaxy's best score per query. Each kind reports the mean, the minimum, the share that found all 32, the share that searched the index more than once, and the most searches one query took.
-
-### Last run
-
-| Run              |                                                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Date             | 2026-10-04                                                                                                       |
-| Commit           | `6aa4197`                                                                                                        |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                       |
-| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 1 |
-| Queries          | 100 per kind, `PROBE=2048`, `NPROBE=64`                                                                          |
-
-| Query                                | Drawn from | Mean  | Lowest | All 32 found | Searched again | Most searches |
-| ------------------------------------ | ---------- | ----- | ------ | ------------ | -------------- | ------------- |
-| 4 image tokens                       | all        | 98.0% | 65.6%  | 74%          | 0%             | 1             |
-| 4 image tokens                       | DESI       | 96.7% | 71.9%  | 63%          | 0%             | 1             |
-| 4 spectrum tokens                    | DESI       | 96.7% | 53.1%  | 70%          | 0%             | 1             |
-| 4 image tokens and 4 spectrum tokens | DESI       | 94.3% | 43.8%  | 47%          | 0%             | 1             |
-
-`table_values` and `hsc_table_values` are unmeasured: this run predates them.
-
 ## `projection_quality`
 
 A container on the build image, with 16 CPU, 16 GiB requested, a 64 GiB limit and no GPU, redraws the projector's sample and its validation split, reads `SIZE` (10,000) of the validation rows from `encoded`, and projects them with the stored `parametric_umap`. At 15 and 100 neighbours it reports:
@@ -268,7 +184,7 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 ## `pql_quality`
 
-A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, and encodes it so for cosine, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy and by `search()` at 128 matches, and reports, PQL against cosine with a 95% bootstrap interval over queries:
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy, and reports the mean with a 95% bootstrap interval over queries:
 
 - `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
 - `identity` (spectrum token queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.

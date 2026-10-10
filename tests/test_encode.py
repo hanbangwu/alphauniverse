@@ -2,12 +2,12 @@ import importlib
 from pathlib import Path
 
 import numpy as np
+import pyarrow.compute as pc
 import pytest
 
 from app.config import (
     ANCHOR,
     CROP_PIXELS,
-    DIM,
     FLAG_SURVEYS,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
@@ -19,7 +19,7 @@ from app.config import (
     build_dir,
     store_schema,
 )
-from app.search import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, blocks, source
+from app.search import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, source
 from scripts.fixture import TOKENS, forget
 
 torch = pytest.importorskip("torch")
@@ -119,7 +119,7 @@ def test_each_survey_lands_in_its_own_cell_images_first() -> None:
     )
 
 
-def test_generated_stores_have_their_schemas_and_the_index_layout(
+def test_generated_stores_have_their_schemas_and_a_vector_per_token(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = [
@@ -127,11 +127,6 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
         galaxy(1, hsc=False, desi=False, sdss=False),
         galaxy(2, hsc=False, desi=False, sdss=True),
     ]
-    spectra = sum(
-        any(row[TOKEN_SURVEYS[survey]] is not None for survey in SPECTRUM_SURVEYS)
-        for row in rows
-    )
-    hsc = sum(row[TOKEN_SURVEYS["hsc"]] is not None for row in rows)
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
     build_dir().mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
@@ -145,11 +140,25 @@ def test_generated_stores_have_their_schemas_and_the_index_layout(
         table = source("encoded").to_table(
             columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
         )
-        assert blocks(table).shape == (
-            len(rows) * (N_IMAGE_TOKENS + N_LS_TABLE_VALUES)
-            + spectra * (N_SPECTRUM_TOKENS + 1)
-            + hsc * N_HSC_TABLE_VALUES,
-            DIM,
-        )
+        vectors = {
+            column: pc.list_value_length(table.column(column)).to_pylist()
+            for column in table.column_names
+        }
+        assert vectors[ANCHOR] == [N_IMAGE_TOKENS + N_LS_TABLE_VALUES] * len(rows)
+        assert vectors["hsc"] == [
+            N_IMAGE_TOKENS + N_HSC_TABLE_VALUES if row[TOKEN_SURVEYS["hsc"]] else None
+            for row in rows
+        ]
+        for survey in SPECTRUM_SURVEYS:
+            assert vectors[survey] == [
+                N_SPECTRUM_TOKENS + 1 if row[TOKEN_SURVEYS[survey]] else None
+                for row in rows
+            ]
+        assert vectors[REDSHIFT] == [
+            1
+            if any(row[TOKEN_SURVEYS[survey]] for survey in SPECTRUM_SURVEYS)
+            else None
+            for row in rows
+        ]
     finally:
         forget()

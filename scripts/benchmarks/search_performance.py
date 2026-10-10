@@ -12,35 +12,17 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
-import faiss
 import numpy as np
 
 from app import pql
 from app.config import (
     DATASET_REVISION,
-    N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
-    artifact,
+    OBSERVATIONS,
     galaxy_count,
     labels,
 )
-from app.search import (
-    FIRST_LS_TABLE_VALUE,
-    N_LS_TABLE_VALUES,
-    Query,
-    candidates,
-    centroid,
-    index,
-    rank,
-    score_maps,
-    search,
-    spectrum_token_maps,
-    starts,
-    table_value_maps,
-    tokens,
-    vectors,
-    with_spectrum,
-)
+from app.search import FIRST_LS_TABLE_VALUE, N_LS_TABLE_VALUES
 from modal_app import (
     CACHE_PATH,
     SERVING_CPU,
@@ -57,22 +39,23 @@ from scripts.benchmarks.common import (
     environment,
     git,
     memory,
-    pql_query,
     queries,
     server,
+    spectrum_query,
     summary,
+    with_spectrum,
 )
 
 image = serving_image.add_local_python_source("modal_app")
 
 STAGES = [
-    "centroid",
-    "candidates",
-    "vectors",
-    "score_maps",
-    "spectrum_token_maps",
-    "table_value_maps",
-    "rank",
+    "forms",
+    "scan",
+    "combine",
+    "similarity",
+    "order",
+    "maps",
+    "predicted",
 ]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
@@ -114,70 +97,69 @@ def rounded(usage: dict[str, float]) -> dict[str, float]:
     return {kind: round(milliseconds, 3) for kind, milliseconds in usage.items()}
 
 
-def index_split() -> dict[str, dict[str, float]]:
-    marks = [mark()]
-    separate = faiss.read_index(str(artifact("search_index")), faiss.IO_FLAG_MMAP)
-    marks.append(mark())
-    separate.make_direct_map()
-    marks.append(mark())
-    return usages(["read_index", "make_direct_map"], marks)
-
-
 def load_times() -> dict[str, dict[str, float]]:
-    loads = (galaxy_count, labels, index, tokens, starts)
+    loads = {
+        "galaxy_count": galaxy_count,
+        "labels": labels,
+        "predictions": pql.predictions,
+        "basis": pql.basis,
+        **{
+            f"observed_{column}": partial(pql.observed, column)
+            for column in OBSERVATIONS
+        },
+    }
     marks = [mark()]
-    for load in loads:
+    for load in loads.values():
         load()
         marks.append(mark())
-    return usages([load.__name__ for load in loads], marks)
+    return usages(list(loads), marks)
 
 
-def stage_times(query: Query, built: faiss.Index) -> dict[str, dict[str, float]]:
+def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
     marks = [mark()]
-    direction = centroid(query, index=built)
+    selected, forms = pql.selected_forms(query)
     marks.append(mark())
-    order = candidates(query, direction, index=built)
+    totals = pql.scan(selected, forms)
     marks.append(mark())
-    rows = vectors(order, index=built)
+    scored = pql.combine(totals)
     marks.append(mark())
-    scored = score_maps(rows, direction, width=N_IMAGE_TOKENS)
+    pql.similarity(pql.fractions(forms, totals))
     marks.append(mark())
-    spectral_scores = spectrum_token_maps(order, direction, index=built)
+    order = np.argsort(-scored, kind="stable")
+    galaxies = np.concatenate(
+        ([query.galaxy], order[order != query.galaxy][: query.matches])
+    )
     marks.append(mark())
-    table_value_scores = table_value_maps(order, direction, index=built)
+    pql.maps(query, galaxies)
     marks.append(mark())
-    rank(order, scored, spectral_scores, table_value_scores)
+    pql.predicted(query, galaxies)
     marks.append(mark())
     return usages(STAGES, marks)
 
 
-def whole_searches(runs: int, matches: int, built: faiss.Index) -> dict[str, Any]:
+def whole_searches(runs: int, matches: int) -> dict[str, Any]:
     batch = queries(runs + 1, IMAGE_TOKENS, matches)
-    search(batch[0], index=built)
-    return summary(
-        [elapsed(partial(search, query, index=built)) for query in batch[1:]]
-    )
+    pql.search(batch[0])
+    return summary([elapsed(partial(pql.search, query)) for query in batch[1:]])
 
 
-def pql_queries(count: int) -> dict[str, list[Query]]:
+def kind_queries(count: int) -> dict[str, list[pql.Query]]:
     rng = np.random.default_rng(4)
     holders = rng.choice(np.flatnonzero(with_spectrum()), count)
     first = rng.integers(N_SPECTRUM_TOKENS - SPECTRUM_TOKEN_WINDOW + 1, size=count)
     return {
-        "image_tokens": queries(count, IMAGE_TOKENS, MATCHES[1]),
         "spectrum_tokens_16": [
-            Query(
-                galaxy=int(galaxy),
-                spectrum_tokens=tuple(range(start, start + SPECTRUM_TOKEN_WINDOW)),
+            spectrum_query(
+                int(galaxy), tuple(range(start, start + SPECTRUM_TOKEN_WINDOW))
             )
             for galaxy, start in zip(holders, first, strict=True)
         ],
         "spectrum_tokens_all": [
-            Query(galaxy=int(galaxy), spectrum_tokens=tuple(range(N_SPECTRUM_TOKENS)))
+            spectrum_query(int(galaxy), tuple(range(N_SPECTRUM_TOKENS)))
             for galaxy in holders
         ],
         "table_values": [
-            Query(
+            pql.Query(
                 galaxy=int(rng.integers(galaxy_count())),
                 table_values=tuple(
                     (
@@ -191,16 +173,11 @@ def pql_queries(count: int) -> dict[str, list[Query]]:
     }
 
 
-def pql_times(runs: int, matches: int) -> dict[str, Any]:
-    loads = (pql.predictions, pql.basis)
-    marks = [mark()]
-    for load in loads:
-        load()
-        marks.append(mark())
+def kind_times(runs: int, matches: int) -> dict[str, Any]:
     timed = {}
-    for kind, batch in pql_queries(runs + 1).items():
+    for kind, batch in kind_queries(runs + 1).items():
         samples = []
-        for query in map(pql_query, batch):
+        for query in batch:
             start = time.perf_counter()
             order = np.argsort(-pql.scores(query), kind="stable")[: matches + 1]
             scanned = time.perf_counter()
@@ -216,27 +193,19 @@ def pql_times(runs: int, matches: int) -> dict[str, Any]:
             "scan": summary([scan for scan, _ in samples[1:]]),
             "maps": summary([maps for _, maps in samples[1:]]),
         }
-    return {
-        "load_ms": {
-            name: round(usage["wall"], 3)
-            for name, usage in usages([load.__name__ for load in loads], marks).items()
-        },
-        "queries": timed,
-    }
+    return timed
 
 
 @app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
-    split = index_split()
     loads = load_times()
-    built = index()
 
     batch = queries(runs + 1, IMAGE_TOKENS, matches)
-    cold = stage_times(batch[0], built)
+    cold = stage_times(batch[0])
     samples: dict[str, list[dict[str, float]]] = {name: [] for name in STAGES}
 
     for query in batch[1:]:
-        for name, usage in stage_times(query, built).items():
+        for name, usage in stage_times(query).items():
             samples[name].append(usage)
 
     medians = {
@@ -264,11 +233,10 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
             for name, median in medians.items()
         },
         "searches": {
-            f"matches={asked}": whole_searches(runs, asked, built) for asked in MATCHES
+            f"matches={asked}": whole_searches(runs, asked) for asked in MATCHES
         },
-        "pql": pql_times(runs, matches),
+        "kinds": kind_times(runs, matches),
         "usage_ms": {
-            "index_split": {name: rounded(usage) for name, usage in split.items()},
             "loads": {name: rounded(usage) for name, usage in loads.items()},
             "stages": {name: rounded(mean) for name, mean in means.items()},
         },
