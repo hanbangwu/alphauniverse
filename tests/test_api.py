@@ -14,7 +14,10 @@ from app.config import (
     FLAG_SURVEYS,
     N_MORPHOLOGIES,
     N_PATCHES,
+    REDSHIFT,
+    REDSHIFT_SCALAR,
     SCALAR_SURVEYS,
+    SDSS,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
@@ -167,16 +170,16 @@ def test_every_galaxy_has_scalar_scores_where_it_has_scalars(
     table = _similarity(client, galaxy=1, p=[100], matches=5)
     galaxies = table.column("galaxy").to_numpy()
     scores = np.asarray(table.column("scalars").to_pylist())
-    with_hsc = pq.read_table(artifact("encoded"), columns=["hsc"]).column("hsc")
+    stored = pq.read_table(artifact("encoded"), columns=["hsc", REDSHIFT])
+    with_hsc = stored.column("hsc").is_valid().to_numpy()[galaxies]
+    with_redshift = stored.column(REDSHIFT).is_valid().to_numpy()[galaxies]
+    hsc = scores[:, 12:REDSHIFT_SCALAR]
 
     assert np.isfinite(scores[:, :12]).all()
+    np.testing.assert_array_equal(np.isfinite(hsc).all(axis=1), with_hsc)
+    np.testing.assert_array_equal(np.isnan(hsc).all(axis=1), ~with_hsc)
     np.testing.assert_array_equal(
-        np.isfinite(scores[:, 12:]).all(axis=1),
-        with_hsc.is_valid().to_numpy()[galaxies],
-    )
-    np.testing.assert_array_equal(
-        np.isnan(scores[:, 12:]).all(axis=1),
-        ~with_hsc.is_valid().to_numpy()[galaxies],
+        np.isfinite(scores[:, REDSHIFT_SCALAR]), with_redshift
     )
 
 
@@ -190,17 +193,39 @@ def test_hsc_scalars_of_a_galaxy_without_hsc_are_rejected(
     assert "galaxy 1 has no HSC match" in error["msg"]
 
 
+def test_the_redshift_needs_a_usable_redshift_and_not_an_hsc_match(
+    client: TestClient,
+) -> None:
+    accepted = client.get("/search", params={"galaxy": 3, "t": [REDSHIFT_SCALAR]})
+    rejected = client.get("/search", params={"galaxy": 1, "t": [REDSHIFT_SCALAR]})
+
+    assert accepted.status_code == 200
+    assert rejected.status_code == 422
+    [error] = rejected.json()["detail"]
+    assert "galaxy 1 has no usable redshift" in error["msg"]
+
+
 def test_table_rows_name_their_catalogue_and_scalar(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    rows = Dataset.from_dict({SCALAR_SURVEYS["hsc"][0]: [1.5], f"Z{DESI}": [0.25]})
+    rows = Dataset.from_dict(
+        {
+            SCALAR_SURVEYS["hsc"][0]: [1.5],
+            f"Z{DESI}": [0.25],
+            f"ZWARN{DESI}": [False],
+            f"Z{SDSS}": [0.26],
+            f"ZWARNING{SDSS}": [False],
+        }
+    )
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
     table_columns.cache_clear()
 
     response = client.get("/galaxy/0/table")
     table_columns.cache_clear()
 
-    hsc = pq.read_table(artifact("tokens"), columns=["hsc"]).column("hsc")[0]
+    stored = pq.read_table(artifact("tokens"), columns=["hsc", REDSHIFT])
+    hsc, redshift = (stored.column(name)[0] for name in ("hsc", REDSHIFT))
+    plain = {"scalar": None, "token": None, "excluded": None}
     assert response.status_code == 200
     assert response.json() == [
         {
@@ -209,14 +234,26 @@ def test_table_rows_name_their_catalogue_and_scalar(
             "value": 1.5,
             "scalar": 12,
             "token": hsc.values[N_PATCHES].as_py(),
+            "excluded": None,
         },
         {
             "catalogue": "desi",
             "column": "Z",
             "value": 0.25,
-            "scalar": None,
-            "token": None,
+            "scalar": REDSHIFT_SCALAR,
+            "token": redshift.values[0].as_py(),
+            "excluded": None,
         },
+        {"catalogue": "desi", "column": "ZWARN", "value": False, **plain},
+        {
+            "catalogue": "sdss",
+            "column": "Z",
+            "value": 0.26,
+            "scalar": REDSHIFT_SCALAR,
+            "token": None,
+            "excluded": "AION takes one redshift: DESI's",
+        },
+        {"catalogue": "sdss", "column": "ZWARNING", "value": False, **plain},
     ]
 
 

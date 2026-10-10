@@ -23,6 +23,10 @@ from .config import (
     N_PATCHES,
     N_SCALARS,
     N_SPANS,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    REDSHIFT_RANGE,
+    REDSHIFT_SCALAR,
     SCALAR_COLUMNS,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
@@ -33,11 +37,12 @@ from .config import (
     Download,
     GalaxyIndex,
     Projection,
+    SpectrumSurvey,
     artifact,
     galaxy_count,
     labels,
 )
-from .dataset import catalogue, image, spectrum, table
+from .dataset import catalogue, image, redshift, spectrum, table, usable
 from .search import Query as SearchQuery
 from .search import (
     index,
@@ -79,6 +84,7 @@ class TableRow(BaseModel):
     value: float | int | bool | None
     scalar: int | None
     token: int | None
+    excluded: str | None
 
 
 class TextMatches(BaseModel):
@@ -230,21 +236,45 @@ def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
     )
 
 
+def excluded(values: dict, survey: SpectrumSurvey, chosen: str | None) -> str | None:
+    value, warning = (values[column] for column in REDSHIFT_COLUMNS[survey])
+    if value is None or survey == chosen:
+        return None
+    if warning:
+        return f"flagged by {survey.upper()}"
+    if not usable(value, warning):
+        return f"outside AION's redshift range, {REDSHIFT_RANGE[0]:g} to {REDSHIFT_RANGE[1]:g}"
+    return f"AION takes one redshift: {chosen.upper()}'s"
+
+
 @app.get(
     "/galaxy/{galaxy}/table",
 )
 def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     token_ids = scalar_tokens(galaxy)
-    return [
-        TableRow(
-            catalogue=catalogue(column),
-            column=column.partition("-")[0],
-            value=value,
-            scalar=SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None,
-            token=token_ids.get(column),
+    values = table(galaxy)
+    chosen = (redshift(values) or (None,))[0]
+    redshifts = {value: survey for survey, (value, _) in REDSHIFT_COLUMNS.items()}
+    rows = []
+    for column, value in values.items():
+        survey = redshifts.get(column)
+        if survey is not None:
+            scalar = REDSHIFT_SCALAR
+            token = token_ids.get(REDSHIFT) if survey == chosen else None
+        else:
+            scalar = SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None
+            token = token_ids.get(column)
+        rows.append(
+            TableRow(
+                catalogue=catalogue(column),
+                column=column.partition("-")[0],
+                value=value,
+                scalar=scalar,
+                token=token,
+                excluded=None if survey is None else excluded(values, survey, chosen),
+            )
         )
-        for column, value in table(galaxy).items()
-    ]
+    return rows
 
 
 @app.get(
