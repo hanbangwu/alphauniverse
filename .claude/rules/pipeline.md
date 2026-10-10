@@ -15,3 +15,4 @@ paths:
 
 - A pull request that changes what a `generate_*` job writes names the jobs that must be rerun, in order, before the change can deploy.
 - A change to an artifact's schema updates its schema in `docs/pipeline.md` and `scripts/fixture.py` together.
+- Code that reads an artifact larger than one batch reads it in batches into preallocated arrays, and never holds a second copy of it.
