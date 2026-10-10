@@ -93,7 +93,7 @@ def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     assert client.get("/downloads/codebook").status_code == 404
 
 
-def test_image_tokens_are_that_galaxys_stored_image_tokens(
+def test_image_tokens_are_that_galaxys_stored_image_token_ids(
     client: TestClient, galaxies: int
 ) -> None:
     galaxy = galaxies - 1

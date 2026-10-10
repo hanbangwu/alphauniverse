@@ -94,7 +94,7 @@ SvelteKit, Svelte 5 runes, one page in three resizable panes.
 │   │   └── GalaxyTooltip     hovered or selected galaxy: image, id, morphology
 │   └── TextSearch        Text Search: text box, ranked galaxies
 └── RightPanel       selected galaxy: image or spectrum, morphology, crossmatches
-    └── ImageTokenSimilarity   dialog: query image tokens, spectrum tokens and table values, match count, Search, ranked matches
+    └── SimilarityDialog   dialog: query image tokens, spectrum tokens and table values, match count, Search, ranked matches
 ```
 
 App-wide state is plain classes under `src/lib/state/`, held in a `runed` context and reached through the getters in `app.svelte.ts`. The similarity dialog keeps its own state, including the last search submitted, beside its components in `similarity.svelte.ts`.

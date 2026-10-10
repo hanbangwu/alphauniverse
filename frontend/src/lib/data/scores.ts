@@ -18,6 +18,6 @@ export function mask(values: ArrayLike<number>, threshold: number, invert: boole
   return out
 }
 
-export function row(values: Float32Array, index: number, imageTokens: number): Float32Array {
-  return values.subarray(index * imageTokens, (index + 1) * imageTokens)
+export function row(values: Float32Array, index: number, width: number): Float32Array {
+  return values.subarray(index * width, (index + 1) * width)
 }
