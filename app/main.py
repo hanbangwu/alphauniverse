@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from contextlib import asynccontextmanager
 from io import BytesIO
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
@@ -25,7 +25,7 @@ from .config import (
     N_SPANS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
-    REDSHIFT_RANGE,
+    REDSHIFT_LIMIT,
     REDSHIFT_SCALAR,
     SCALAR_COLUMNS,
     SPECTRUM_ORIGIN,
@@ -79,7 +79,7 @@ class Galaxy(BaseModel):
 
 
 class TableRow(BaseModel):
-    catalogue: Catalogue
+    section: Catalogue | Literal["redshift"]
     column: str
     value: float | int | bool | None
     scalar: int | None
@@ -236,26 +236,46 @@ def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
     )
 
 
-REDSHIFT_SURVEYS = {value: survey for survey, (value, _) in REDSHIFT_COLUMNS.items()}
-
-
 def excluded(values: dict, survey: SpectrumSurvey, chosen: str | None) -> str | None:
-    value, warning = (values[column] for column in REDSHIFT_COLUMNS[survey])
+    value, _, warning = (values[column] for column in REDSHIFT_COLUMNS[survey])
     if value is None or survey == chosen:
         return None
     if warning:
         return f"flagged by {survey.upper()}"
-    if not REDSHIFT_RANGE[0] <= value <= REDSHIFT_RANGE[1]:
-        return f"outside AION's redshift range, {REDSHIFT_RANGE[0]:g} to {REDSHIFT_RANGE[1]:g}"
+    if not value <= REDSHIFT_LIMIT:
+        return f"above AION's redshift limit, {REDSHIFT_LIMIT:g}"
     return f"AION takes one redshift: {chosen.upper()}'s"
 
 
-def encoded(
-    column: str, survey: SpectrumSurvey | None, chosen: str | None
-) -> int | None:
-    if survey is not None:
-        return REDSHIFT_SCALAR if survey == chosen else None
-    return SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None
+def redshift_row(
+    column: str,
+    survey: SpectrumSurvey,
+    values: dict,
+    chosen: str | None,
+    token: int | None,
+) -> TableRow:
+    first = column == REDSHIFT_COLUMNS[survey][0]
+    selectable = first and survey == chosen
+    return TableRow(
+        section=REDSHIFT,
+        column=f"{survey.upper()} {column.partition('-')[0]}",
+        value=values[column],
+        scalar=REDSHIFT_SCALAR if selectable else None,
+        token=token if selectable else None,
+        excluded=excluded(values, survey, chosen) if first else None,
+    )
+
+
+def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRow:
+    scalar = SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None
+    return TableRow(
+        section=catalogue(column),
+        column=column.partition("-")[0],
+        value=value,
+        scalar=scalar,
+        token=None if scalar is None else token_ids.get(column),
+        excluded=None,
+    )
 
 
 @app.get(
@@ -265,23 +285,20 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     token_ids = scalar_tokens(galaxy)
     values = table(galaxy)
     chosen = redshift(values)
-    rows = []
-    for column, value in values.items():
-        survey = REDSHIFT_SURVEYS.get(column)
-        scalar = encoded(column, survey, chosen)
-        rows.append(
-            TableRow(
-                catalogue=catalogue(column),
-                column=column.partition("-")[0],
-                value=value,
-                scalar=scalar,
-                token=None
-                if scalar is None
-                else token_ids.get(column if survey is None else REDSHIFT),
-                excluded=None if survey is None else excluded(values, survey, chosen),
-            )
-        )
-    return rows
+    shown = [
+        (column, survey)
+        for survey, columns in REDSHIFT_COLUMNS.items()
+        for column in columns
+    ]
+    redshifts = {column for column, _ in shown}
+    return [
+        redshift_row(column, survey, values, chosen, token_ids.get(REDSHIFT))
+        for column, survey in shown
+    ] + [
+        catalogue_row(column, value, token_ids)
+        for column, value in values.items()
+        if column not in redshifts
+    ]
 
 
 @app.get(

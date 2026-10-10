@@ -60,10 +60,10 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
     present = {"desi": desi, "sdss": sdss}
     redshifts = {
         column: value if present[survey] else None
-        for (survey, (redshift, warning)), measured in zip(
+        for (survey, (redshift, error, warning)), measured in zip(
             REDSHIFT_COLUMNS.items(), (0.5, 0.3), strict=True
         )
-        for column, value in ((redshift, measured), (warning, False))
+        for column, value in ((redshift, measured), (error, 1e-4), (warning, False))
     }
     return {
         **redshifts,

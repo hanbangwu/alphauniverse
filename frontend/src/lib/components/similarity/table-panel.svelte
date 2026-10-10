@@ -4,7 +4,7 @@
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
   import { tableQuery } from '$lib/data/queries'
-  import { SURVEYS } from '$lib/labels'
+  import { SECTIONS } from '$lib/labels'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -19,7 +19,7 @@
   const similarity = getSimilarity()
   const table = createQuery(() => tableQuery(galaxy))
 
-  const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.catalogue)])
+  const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.section)])
   const palette = $derived(
     tokenColors((table.data ?? []).flatMap((row) => (row.token === null ? [] : [row.token])))
   )
@@ -68,10 +68,10 @@
           </Table.Row>
         </Table.Header>
         <Table.Body>
-          {#each groups as [catalogue, rows] (catalogue)}
+          {#each groups as [section, rows] (section)}
             <Table.Row class="hover:bg-transparent">
               <Table.Cell colspan={3} class="px-0 pt-3 pb-1 text-muted-foreground uppercase">
-                {SURVEYS[catalogue].label}
+                {SECTIONS[section].label}
               </Table.Cell>
             </Table.Row>
             {#each rows as row (row.column)}

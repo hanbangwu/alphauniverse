@@ -205,15 +205,17 @@ def test_the_redshift_needs_a_usable_redshift_and_not_an_hsc_match(
     assert "galaxy 1 has no usable redshift" in error["msg"]
 
 
-def test_table_rows_name_their_catalogue_and_scalar(
+def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_scalar(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = Dataset.from_dict(
         {
             SCALAR_SURVEYS["hsc"][0]: [1.5],
             f"Z{DESI}": [0.25],
+            f"ZERR{DESI}": [1e-4],
             f"ZWARN{DESI}": [False],
             f"Z{SDSS}": [0.26],
+            f"Z_ERR{SDSS}": [2e-4],
             f"ZWARNING{SDSS}": [False],
         }
     )
@@ -229,31 +231,33 @@ def test_table_rows_name_their_catalogue_and_scalar(
     assert response.status_code == 200
     assert response.json() == [
         {
-            "catalogue": "hsc",
+            "section": REDSHIFT,
+            "column": "DESI Z",
+            "value": 0.25,
+            "scalar": REDSHIFT_SCALAR,
+            "token": redshift.values[0].as_py(),
+            "excluded": None,
+        },
+        {"section": REDSHIFT, "column": "DESI ZERR", "value": 1e-4, **plain},
+        {"section": REDSHIFT, "column": "DESI ZWARN", "value": False, **plain},
+        {
+            "section": REDSHIFT,
+            "column": "SDSS Z",
+            "value": 0.26,
+            "scalar": None,
+            "token": None,
+            "excluded": "AION takes one redshift: DESI's",
+        },
+        {"section": REDSHIFT, "column": "SDSS Z_ERR", "value": 2e-4, **plain},
+        {"section": REDSHIFT, "column": "SDSS ZWARNING", "value": False, **plain},
+        {
+            "section": "hsc",
             "column": "a_g",
             "value": 1.5,
             "scalar": 12,
             "token": hsc.values[N_PATCHES].as_py(),
             "excluded": None,
         },
-        {
-            "catalogue": "desi",
-            "column": "Z",
-            "value": 0.25,
-            "scalar": REDSHIFT_SCALAR,
-            "token": redshift.values[0].as_py(),
-            "excluded": None,
-        },
-        {"catalogue": "desi", "column": "ZWARN", "value": False, **plain},
-        {
-            "catalogue": "sdss",
-            "column": "Z",
-            "value": 0.26,
-            "scalar": None,
-            "token": None,
-            "excluded": "AION takes one redshift: DESI's",
-        },
-        {"catalogue": "sdss", "column": "ZWARNING", "value": False, **plain},
     ]
 
 

@@ -13,7 +13,7 @@ from .config import (
     DATASET_NAME,
     DATASET_REVISION,
     REDSHIFT_COLUMNS,
-    REDSHIFT_RANGE,
+    REDSHIFT_LIMIT,
     RGB_COLUMN,
     SPECTRUM_SURVEYS,
     Catalogue,
@@ -85,18 +85,14 @@ def table(galaxy: int) -> dict[str, float | int | bool | None]:
 
 
 def usable(redshift: float | None, warning: bool | None) -> bool:
-    return (
-        redshift is not None
-        and not warning
-        and REDSHIFT_RANGE[0] <= redshift <= REDSHIFT_RANGE[1]
-    )
+    return redshift is not None and not warning and redshift <= REDSHIFT_LIMIT
 
 
 def redshift(row: dict) -> SpectrumSurvey | None:
     return next(
         (
             survey
-            for survey, (value, warning) in REDSHIFT_COLUMNS.items()
+            for survey, (value, _, warning) in REDSHIFT_COLUMNS.items()
             if usable(row[value], row[warning])
         ),
         None,

@@ -19,7 +19,7 @@ The serving app reads images and spectra from the dataset itself, from the copy 
 
 ## `generate_embeddings`
 
-For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id. A spectrum's padding samples (wavelength at or below zero) are dropped before tokenising, as the serving app drops them. AION's one redshift token (`tok_z`) takes the DESI `Z` if it is usable, else the SDSS `Z`: usable means finite, unflagged (`ZWARN`, `ZWARNING`) and within the trained codec's range, 0 to 6 (`REDSHIFT_RANGE`).
+For each galaxy: tokenise every modality it has, run all its tokens through the AION encoder in one pass, then split the output back apart by modality id. A spectrum's padding samples (wavelength at or below zero) are dropped before tokenising, as the serving app drops them. AION's one redshift token (`tok_z`) takes the DESI `Z` if it is usable, else the SDSS `Z`: usable means present, not NaN, unflagged (`ZWARN`, `ZWARNING`) and at most the trained codec's upper limit, 6 (`REDSHIFT_LIMIT`). The codec clamps a negative redshift to its first bin.
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 

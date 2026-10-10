@@ -125,7 +125,8 @@ def test_table_keeps_numeric_catalogue_columns(
         ((0.5, False), (0.51, False), "desi"),
         ((0.5, True), (0.51, False), "sdss"),
         ((6.5, False), (0.51, False), "sdss"),
-        ((-0.001, False), (None, None), None),
+        ((float("nan"), False), (0.51, False), "sdss"),
+        ((-0.001, False), (None, None), "desi"),
         ((1.5, False), (None, None), "desi"),
         ((None, None), (0.51, True), None),
     ],
@@ -137,8 +138,10 @@ def test_aion_gets_the_first_usable_redshift_desi_before_sdss(
 ) -> None:
     row = {
         column: value
-        for columns, values in zip(REDSHIFT_COLUMNS.values(), (desi, sdss), strict=True)
-        for column, value in zip(columns, values, strict=True)
+        for (value_column, _, warning_column), (measured, flagged) in zip(
+            REDSHIFT_COLUMNS.values(), (desi, sdss), strict=True
+        )
+        for column, value in ((value_column, measured), (warning_column, flagged))
     }
 
     assert redshift(row) == expected

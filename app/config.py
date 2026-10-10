@@ -111,10 +111,10 @@ SCALAR_COLUMNS = tuple(
 REDSHIFT = "redshift"
 REDSHIFT_SCALAR = len(SCALAR_COLUMNS)
 N_SCALARS = REDSHIFT_SCALAR + 1
-REDSHIFT_RANGE = (0.0, 6.0)
-REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str]] = {
-    "desi": (f"Z{DESI}", f"ZWARN{DESI}"),
-    "sdss": (f"Z{SDSS}", f"ZWARNING{SDSS}"),
+REDSHIFT_LIMIT = 6.0
+REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
+    "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),
+    "sdss": (f"Z{SDSS}", f"Z_ERR{SDSS}", f"ZWARNING{SDSS}"),
 }
 STORE_COLUMNS = (*TOKEN_SURVEYS, REDSHIFT)
 

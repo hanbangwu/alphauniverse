@@ -617,17 +617,25 @@
       },
       "TableRow": {
         "properties": {
-          "catalogue": {
-            "type": "string",
-            "enum": [
-              "ls",
-              "hsc",
-              "desi",
-              "sdss",
-              "gz10",
-              "provabgs"
+          "section": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ls",
+                  "hsc",
+                  "desi",
+                  "sdss",
+                  "gz10",
+                  "provabgs"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "redshift"
+              }
             ],
-            "title": "Catalogue"
+            "title": "Section"
           },
           "column": {
             "type": "string",
@@ -686,7 +694,7 @@
         },
         "type": "object",
         "required": [
-          "catalogue",
+          "section",
           "column",
           "value",
           "scalar",
