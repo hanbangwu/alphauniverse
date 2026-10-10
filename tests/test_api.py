@@ -2,7 +2,7 @@ import io
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
+import pyarrow.compute as pc
 import pytest
 from datasets import Dataset
 from fastapi.testclient import TestClient
@@ -91,7 +91,7 @@ def test_image_tokens_are_that_galaxys_stored_patch_tokens(
     client: TestClient, galaxies: int
 ) -> None:
     galaxy = galaxies - 1
-    cell = pq.read_table(artifact("tokens"), columns=[ANCHOR]).column(ANCHOR)[galaxy]
+    cell = source("tokens").to_table(columns=[ANCHOR]).column(ANCHOR)[galaxy]
 
     response = client.get(f"/galaxy/{galaxy}/image/tokens")
 
@@ -102,7 +102,7 @@ def test_image_tokens_are_that_galaxys_stored_patch_tokens(
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
-    stored = pq.read_table(artifact("tokens"), filters=[("galaxy", "==", galaxy)])
+    stored = source("tokens").to_table(filter=pc.field("galaxy") == galaxy)
     rows = client.get(f"/galaxy/{galaxy}").json()
 
     assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
@@ -111,14 +111,14 @@ def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
 
 
 def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:
-    tokens = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    tokens = source("tokens").to_table(columns=["desi"]).column("desi")
     untokenised = tokens.is_valid().to_pylist().index(False)
 
     assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
 
 
 def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    column = pq.read_table(artifact("tokens"), columns=["desi"]).column("desi")
+    column = source("tokens").to_table(columns=["desi"]).column("desi")
     galaxy = column.is_valid().to_pylist().index(True)
     cell = column[galaxy]
 
@@ -201,7 +201,7 @@ def test_table_rows_name_their_catalogue_and_scalar(
     response = client.get("/galaxy/0/table")
     table_columns.cache_clear()
 
-    hsc = pq.read_table(artifact("tokens"), columns=["hsc"]).column("hsc")[0]
+    hsc = source("tokens").to_table(columns=["hsc"]).column("hsc")[0]
     assert response.status_code == 200
     assert response.json() == [
         {

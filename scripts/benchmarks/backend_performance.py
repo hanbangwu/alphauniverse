@@ -1,4 +1,3 @@
-import io
 import json
 import time
 from collections.abc import Callable
@@ -14,7 +13,6 @@ import httpx
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pyarrow.parquet as pq
 
 from app.config import DATASET_REVISION, N_PATCHES
 from app.main import SPECTRUM_SURVEY
@@ -125,10 +123,9 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 "requests_per_s": round(len(samples) / seconds, 2)
             }
 
-        cells = pq.read_table(
-            io.BytesIO(session.get("/downloads/tokens").raise_for_status().content),
-            columns=[SPECTRUM_SURVEY],
-        )
+        cells = pa.ipc.open_file(
+            session.get("/downloads/tokens").raise_for_status().content
+        ).read_all()
         holders = np.flatnonzero(pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy())
 
         def spectrum(route: str) -> None:

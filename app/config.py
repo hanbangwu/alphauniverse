@@ -129,7 +129,7 @@ ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",
     "search_index": "faiss",
     "codebook": "parquet",
-    "tokens": "parquet",
+    "tokens": "arrow",
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
