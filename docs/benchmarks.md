@@ -112,8 +112,8 @@ Figures are after's. Warm figures average its two rounds. After and before are t
 
 `modal run` starts an ephemeral `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A 1-CPU client in a separate container times, in order:
 
-1. one cold `/meta` and one cold `/search`;
-2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, and `/search` with 4 patches at 8, 32 and 128 matches;
+1. one cold `/meta`, one cold `/search`, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
+2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey scalars at 32 matches, and `/search` with 4 patches at 8, 32 and 128 matches;
 3. warm: both spectrum routes, and `/search` at 32 matches with 4 spans, alone and with 4 patches, on galaxies with a DESI spectrum and spans inside its observed range;
 4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 patches at 32 matches.
 
@@ -132,30 +132,33 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 **`/search`**, warm, 32 matches unless stated:
 
-| Query                  | p50    | p95    |
-| ---------------------- | ------ | ------ |
-| 4 patches, 8 matches   | 215 ms | 232 ms |
-| 4 patches              | 276 ms | 294 ms |
-| 4 patches, 128 matches | 501 ms | 556 ms |
-| 4 spans                | 299 ms | 320 ms |
-| 4 patches and 4 spans  | 286 ms | 307 ms |
+| Query                   | p50            | p95            |
+| ----------------------- | -------------- | -------------- |
+| 4 patches, 8 matches    | 215 ms         | 232 ms         |
+| 4 patches               | 276 ms         | 294 ms         |
+| 4 patches, 128 matches  | 501 ms         | 556 ms         |
+| 4 spans                 | 299 ms         | 320 ms         |
+| 4 patches and 4 spans   | 286 ms         | 307 ms         |
+| 4 Legacy Survey scalars | **unmeasured** | **unmeasured** |
 
 `matches` sets the cost: in that run each match was rescored from 576 reconstructed vectors, before scalars joined the index. Over the 179 ms `/meta` floor, 32 matches add 276 − 179 = 97 ms at p50, and 128 add 501 − 179 = 322 ms.
 
 **Other endpoints**, warm:
 
-| Endpoint                      | p50    | p95    |
-| ----------------------------- | ------ | ------ |
-| `/meta`                       | 179 ms | 184 ms |
-| `/galaxy/{g}/image`           | 190 ms | 214 ms |
-| `/galaxy/{g}/image/tokens`    | 178 ms | 183 ms |
-| `/galaxy/{g}`                 | 179 ms | 186 ms |
-| `/galaxy/{g}/spectrum`        | 185 ms | 205 ms |
-| `/galaxy/{g}/spectrum/tokens` | 177 ms | 207 ms |
+| Endpoint                      | p50            | p95            |
+| ----------------------------- | -------------- | -------------- |
+| `/meta`                       | 179 ms         | 184 ms         |
+| `/galaxy/{g}/image`           | 190 ms         | 214 ms         |
+| `/galaxy/{g}/image/tokens`    | 178 ms         | 183 ms         |
+| `/galaxy/{g}`                 | 179 ms         | 186 ms         |
+| `/galaxy/{g}/spectrum`        | 185 ms         | 205 ms         |
+| `/galaxy/{g}/spectrum/tokens` | 177 ms         | 207 ms         |
+| `/galaxy/{g}/table`           | **unmeasured** | **unmeasured** |
+| `/search/text`                | **unmeasured** | **unmeasured** |
 
-All six are within 190 − 177 = 13 ms at p50. What the floor is made of is **unmeasured**.
+The six measured are within 190 − 177 = 13 ms at p50. What the floor is made of is **unmeasured**.
 
-**Cold start.** A request to a fresh container took **17.6 s**. How the 17.6 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 17.6 s; `max_containers=1` leaves no second container to answer.
+**Cold start.** A request to a fresh container took **17.6 s**. How the 17.6 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 17.6 s; `max_containers=1` leaves no second container to answer. The first `/search/text` after the cold `/search` is **unmeasured**.
 
 **Concurrency:**
 
