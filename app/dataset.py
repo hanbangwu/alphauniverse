@@ -92,10 +92,10 @@ def usable(redshift: float | None, warning: bool | None) -> bool:
     )
 
 
-def redshift(row: dict) -> tuple[SpectrumSurvey, float] | None:
+def redshift(row: dict) -> SpectrumSurvey | None:
     return next(
         (
-            (survey, row[value])
+            survey
             for survey, (value, warning) in REDSHIFT_COLUMNS.items()
             if usable(row[value], row[warning])
         ),

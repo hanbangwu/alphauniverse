@@ -122,18 +122,18 @@ def test_table_keeps_numeric_catalogue_columns(
 @pytest.mark.parametrize(
     ("desi", "sdss", "expected"),
     [
-        ((0.5, False), (0.51, False), ("desi", 0.5)),
-        ((0.5, True), (0.51, False), ("sdss", 0.51)),
-        ((6.5, False), (0.51, False), ("sdss", 0.51)),
+        ((0.5, False), (0.51, False), "desi"),
+        ((0.5, True), (0.51, False), "sdss"),
+        ((6.5, False), (0.51, False), "sdss"),
         ((-0.001, False), (None, None), None),
-        ((1.5, False), (None, None), ("desi", 1.5)),
+        ((1.5, False), (None, None), "desi"),
         ((None, None), (0.51, True), None),
     ],
 )
 def test_aion_gets_the_first_usable_redshift_desi_before_sdss(
     desi: tuple[float | None, bool | None],
     sdss: tuple[float | None, bool | None],
-    expected: tuple[str, float] | None,
+    expected: str | None,
 ) -> None:
     row = {
         column: value

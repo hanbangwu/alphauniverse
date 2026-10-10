@@ -78,11 +78,11 @@
               <Table.Row
                 class={[
                   'transition-none last:border-0',
-                  row.scalar !== null && row.token === null && 'cursor-not-allowed',
+                  ((row.scalar !== null && row.token === null) || row.excluded !== null) &&
+                    'cursor-not-allowed',
                   row.excluded !== null && 'text-muted-foreground italic'
                 ]}
                 style={fill(row)}
-                title={row.excluded ?? undefined}
               >
                 <Table.Cell class="px-0 py-1.5">
                   {#if row.scalar !== null}
@@ -95,9 +95,21 @@
                       onchange={() => ontoggle(scalar)}
                       aria-label={`Query ${row.column}`}
                     />
+                  {:else if row.excluded !== null}
+                    <input
+                      type="checkbox"
+                      class="disabled:cursor-not-allowed"
+                      disabled
+                      aria-label={`Query ${row.column}: ${row.excluded}`}
+                    />
                   {/if}
                 </Table.Cell>
-                <Table.Cell class="px-0 py-1.5 font-mono">{row.column}</Table.Cell>
+                <Table.Cell class="px-0 py-1.5 font-mono">
+                  {row.column}
+                  {#if row.excluded !== null}
+                    <span class="block font-sans text-[10px]">{row.excluded}</span>
+                  {/if}
+                </Table.Cell>
                 <Table.Cell class="px-0 py-1.5 text-right font-mono tabular-nums">
                   {format(row.value)}
                 </Table.Cell>

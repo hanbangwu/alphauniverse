@@ -57,15 +57,13 @@ def spectrum(rng: np.random.Generator, samples: int, padding: int) -> dict:
 def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
     rng = np.random.default_rng(seed)
     scalars = encode_module.LS_SCALARS + encode_module.HSC_SCALARS
+    present = {"desi": desi, "sdss": sdss}
     redshifts = {
-        column: value
-        for (survey, (redshift, warning)), value in zip(
+        column: value if present[survey] else None
+        for (survey, (redshift, warning)), measured in zip(
             REDSHIFT_COLUMNS.items(), (0.5, 0.3), strict=True
         )
-        for column, value in (
-            (redshift, value if {"desi": desi, "sdss": sdss}[survey] else None),
-            (warning, False if {"desi": desi, "sdss": sdss}[survey] else None),
-        )
+        for column, value in ((redshift, measured), (warning, False))
     }
     return {
         **redshifts,

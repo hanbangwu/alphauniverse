@@ -196,7 +196,7 @@ def test_hsc_scalars_of_a_galaxy_without_hsc_are_rejected(
 def test_the_redshift_needs_a_usable_redshift_and_not_an_hsc_match(
     client: TestClient,
 ) -> None:
-    accepted = client.get("/search", params={"galaxy": 3, "t": [REDSHIFT_SCALAR]})
+    accepted = client.get("/search", params={"galaxy": 6, "t": [REDSHIFT_SCALAR]})
     rejected = client.get("/search", params={"galaxy": 1, "t": [REDSHIFT_SCALAR]})
 
     assert accepted.status_code == 200
@@ -249,7 +249,7 @@ def test_table_rows_name_their_catalogue_and_scalar(
             "catalogue": "sdss",
             "column": "Z",
             "value": 0.26,
-            "scalar": REDSHIFT_SCALAR,
+            "scalar": None,
             "token": None,
             "excluded": "AION takes one redshift: DESI's",
         },

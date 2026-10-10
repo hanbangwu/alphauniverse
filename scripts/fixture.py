@@ -14,6 +14,7 @@ from app.config import (
     N_MORPHOLOGIES,
     N_PATCHES,
     REDSHIFT,
+    STORE_COLUMNS,
     artifact,
     build_dir,
     galaxy_count,
@@ -22,6 +23,7 @@ from app.config import (
     store_schema,
 )
 from app.search import (
+    bounds,
     generate_index,
     index,
     source,
@@ -41,7 +43,7 @@ TOKENS: dict[str, int] = {
     REDSHIFT: 1,
 }
 
-STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4, REDSHIFT: 3}
+STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4, REDSHIFT: 6}
 
 CLUSTERS = 64
 NOISE = 0.05
@@ -85,7 +87,7 @@ def _store(
                     survey: [
                         None if cell is None else list(cell) for cell in cells[survey]
                     ]
-                    for survey in TOKENS
+                    for survey in STORE_COLUMNS
                 },
                 **flags,
             },
@@ -112,6 +114,7 @@ def forget() -> None:
         with_spectrum,
         with_hsc,
         with_redshift,
+        bounds,
         starts,
         aion_gemma_space,
     ):

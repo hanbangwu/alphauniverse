@@ -49,6 +49,7 @@ from .config import (
     CROP_PIXELS,
     FLAG_SURVEYS,
     REDSHIFT,
+    REDSHIFT_COLUMNS,
     SCALAR_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
@@ -190,8 +191,8 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
         groups["sdss"] = {
             SDSSSpectrum.token_key: spectrum(SDSSSpectrum, row[TOKEN_SURVEYS["sdss"]])
         }
-    if (chosen := redshift(row)) is not None:
-        groups[REDSHIFT] = {Z.token_key: scalar(Z, chosen[1])}
+    if (survey := redshift(row)) is not None:
+        groups[REDSHIFT] = {Z.token_key: scalar(Z, row[REDSHIFT_COLUMNS[survey][0]])}
     return groups
 
 

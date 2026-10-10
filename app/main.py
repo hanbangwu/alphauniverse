@@ -42,7 +42,7 @@ from .config import (
     galaxy_count,
     labels,
 )
-from .dataset import catalogue, image, redshift, spectrum, table, usable
+from .dataset import catalogue, image, redshift, spectrum, table
 from .search import Query as SearchQuery
 from .search import (
     index,
@@ -236,15 +236,26 @@ def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
     )
 
 
+REDSHIFT_SURVEYS = {value: survey for survey, (value, _) in REDSHIFT_COLUMNS.items()}
+
+
 def excluded(values: dict, survey: SpectrumSurvey, chosen: str | None) -> str | None:
     value, warning = (values[column] for column in REDSHIFT_COLUMNS[survey])
     if value is None or survey == chosen:
         return None
     if warning:
         return f"flagged by {survey.upper()}"
-    if not usable(value, warning):
+    if not REDSHIFT_RANGE[0] <= value <= REDSHIFT_RANGE[1]:
         return f"outside AION's redshift range, {REDSHIFT_RANGE[0]:g} to {REDSHIFT_RANGE[1]:g}"
     return f"AION takes one redshift: {chosen.upper()}'s"
+
+
+def encoded(
+    column: str, survey: SpectrumSurvey | None, chosen: str | None
+) -> int | None:
+    if survey is not None:
+        return REDSHIFT_SCALAR if survey == chosen else None
+    return SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None
 
 
 @app.get(
@@ -253,24 +264,20 @@ def excluded(values: dict, survey: SpectrumSurvey, chosen: str | None) -> str | 
 def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     token_ids = scalar_tokens(galaxy)
     values = table(galaxy)
-    chosen = (redshift(values) or (None,))[0]
-    redshifts = {value: survey for survey, (value, _) in REDSHIFT_COLUMNS.items()}
+    chosen = redshift(values)
     rows = []
     for column, value in values.items():
-        survey = redshifts.get(column)
-        if survey is not None:
-            scalar = REDSHIFT_SCALAR
-            token = token_ids.get(REDSHIFT) if survey == chosen else None
-        else:
-            scalar = SCALAR_COLUMNS.index(column) if column in SCALAR_COLUMNS else None
-            token = token_ids.get(column)
+        survey = REDSHIFT_SURVEYS.get(column)
+        scalar = encoded(column, survey, chosen)
         rows.append(
             TableRow(
                 catalogue=catalogue(column),
                 column=column.partition("-")[0],
                 value=value,
                 scalar=scalar,
-                token=token,
+                token=None
+                if scalar is None
+                else token_ids.get(column if survey is None else REDSHIFT),
                 excluded=None if survey is None else excluded(values, survey, chosen),
             )
         )

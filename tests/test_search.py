@@ -107,7 +107,7 @@ def test_a_search_that_finds_too_few_looks_further(
         {"galaxy": 9, "s": (40, 41), "matches": 2},
         {"galaxy": 6, "p": (3,), "s": (100,), "matches": 2},
         {"galaxy": 0, "t": (1, 14), "matches": 2},
-        {"galaxy": 3, "t": (REDSHIFT_SCALAR,), "matches": 2},
+        {"galaxy": 6, "t": (REDSHIFT_SCALAR,), "matches": 2},
         {"galaxy": 0, "p": (64,), "t": (14, REDSHIFT_SCALAR), "matches": 2},
     ],
 )

@@ -118,15 +118,14 @@ def scalar_starts(first: np.ndarray, has_spectrum: np.ndarray) -> np.ndarray:
     return first + N_PATCHES + has_spectrum * N_SPANS
 
 
-def redshift_starts(
-    first: np.ndarray, has_spectrum: np.ndarray, has_hsc: np.ndarray
-) -> np.ndarray:
-    return scalar_starts(first, has_spectrum) + N_LS_SCALARS + has_hsc * N_HSC_SCALARS
+@cache
+def bounds() -> np.ndarray:
+    return layout(with_spectrum(), with_hsc(), with_redshift())
 
 
 @cache
 def starts() -> np.ndarray:
-    return layout(with_spectrum(), with_hsc(), with_redshift())[:-1]
+    return bounds()[:-1]
 
 
 def positions(first: np.ndarray, width: int) -> np.ndarray:
@@ -135,16 +134,16 @@ def positions(first: np.ndarray, width: int) -> np.ndarray:
 
 def centroid(query: Query, *, index: faiss.Index) -> np.ndarray:
     start = starts()[query.galaxy]
-    has_spectrum = with_spectrum()[query.galaxy]
+    scalar_start = scalar_starts(start, with_spectrum()[query.galaxy])
     scalars = np.asarray(query.scalars, dtype=np.int64)
     ids = np.concatenate(
         (
             start + np.asarray(query.patches, dtype=np.int64),
             start + N_PATCHES + np.asarray(query.spans, dtype=np.int64),
-            scalar_starts(start, has_spectrum) + scalars[scalars < REDSHIFT_SCALAR],
-            np.repeat(
-                redshift_starts(start, has_spectrum, with_hsc()[query.galaxy]),
-                np.count_nonzero(scalars == REDSHIFT_SCALAR),
+            np.where(
+                scalars == REDSHIFT_SCALAR,
+                bounds()[query.galaxy + 1] - 1,
+                scalar_start + scalars,
             ),
         )
     )
@@ -239,7 +238,7 @@ def scalar_maps(
                 index=index,
             ),
             optional_maps(
-                redshift_starts(starts()[order], has_spectrum, has_hsc),
+                bounds()[order + 1] - 1,
                 with_redshift()[order],
                 direction,
                 width=1,
@@ -311,9 +310,7 @@ def blocks(batch: pa.RecordBatch | pa.Table) -> np.ndarray:
             batch.column("hsc"), N_PATCHES, None
         )
     if has_redshift.any():
-        built[redshift_starts(first, has_spectrum, has_hsc)[has_redshift]] = rows(
-            batch.column(REDSHIFT), 0, None
-        )
+        built[bounds[1:][has_redshift] - 1] = rows(batch.column(REDSHIFT), 0, None)
     return built
 
 
