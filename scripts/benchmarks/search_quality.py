@@ -41,6 +41,7 @@ from scripts.benchmarks.common import (
     SPANS,
     environment,
     git,
+    memory,
     observed_spans,
     queries,
 )
@@ -266,6 +267,7 @@ def benchmark_search_quality(per_kind: int) -> dict[str, Any]:
         "nprobe": NPROBE,
         "matches": MATCHES,
         "recall": measured,
+        "memory": memory(),
     }
 
 
