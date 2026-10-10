@@ -3,9 +3,7 @@ import { Field } from './field.svelte'
 
 export const DECIMALS = 3
 
-export class MaskState {
-  readonly on = new Field(false)
-  readonly invert = new Field(false)
+export class Threshold {
   readonly override = new Field<number | null>(null)
 
   at([low, high]: Extent): number {
@@ -16,4 +14,11 @@ export class MaskState {
   get pinned(): boolean {
     return this.override.value !== null
   }
+}
+
+export class MaskState {
+  readonly on = new Field(false)
+  readonly invert = new Field(false)
+  readonly query = new Threshold()
+  readonly matches = new Threshold()
 }
