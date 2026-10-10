@@ -18,10 +18,11 @@ from app import pql
 from app.config import (
     DATASET_REVISION,
     N_SPECTRUM_TOKENS,
+    OBSERVATIONS,
     galaxy_count,
     labels,
 )
-from app.search import FIRST_LS_TABLE_VALUE, N_LS_TABLE_VALUES, tokens
+from app.search import FIRST_LS_TABLE_VALUE, N_LS_TABLE_VALUES
 from modal_app import (
     CACHE_PATH,
     SERVING_CPU,
@@ -97,12 +98,21 @@ def rounded(usage: dict[str, float]) -> dict[str, float]:
 
 
 def load_times() -> dict[str, dict[str, float]]:
-    loads = (galaxy_count, labels, tokens, pql.predictions, pql.basis)
+    loads = {
+        "galaxy_count": galaxy_count,
+        "labels": labels,
+        "predictions": pql.predictions,
+        "basis": pql.basis,
+        **{
+            f"observed_{column}": partial(pql.observed, column)
+            for column in OBSERVATIONS
+        },
+    }
     marks = [mark()]
-    for load in loads:
+    for load in loads.values():
         load()
         marks.append(mark())
-    return usages([load.__name__ for load in loads], marks)
+    return usages(list(loads), marks)
 
 
 def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
@@ -138,7 +148,6 @@ def kind_queries(count: int) -> dict[str, list[pql.Query]]:
     holders = rng.choice(np.flatnonzero(with_spectrum()), count)
     first = rng.integers(N_SPECTRUM_TOKENS - SPECTRUM_TOKEN_WINDOW + 1, size=count)
     return {
-        "image_tokens": queries(count, IMAGE_TOKENS, MATCHES[1]),
         "spectrum_tokens_16": [
             spectrum_query(
                 int(galaxy), tuple(range(start, start + SPECTRUM_TOKEN_WINDOW))

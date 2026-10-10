@@ -2,7 +2,7 @@
 
 Every benchmark runs on Modal and measures the production artifacts on the volume.
 
-The stored reports predate #215's rename and use the old names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps`, `paired_patches` and `similarity scalars matches=32`.
+The stored reports predate #215's rename and use the old names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps` and `similarity scalars matches=32`.
 
 | Script                | Measures                                        | Runs on                                   | Report                                     |
 | --------------------- | ----------------------------------------------- | ----------------------------------------- | ------------------------------------------ |
@@ -50,10 +50,10 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
-2. `lifespan`'s search loads: `galaxy_count`, `labels`, `tokens`, `predictions`, `basis`;
+2. `lifespan`'s loads: `galaxy_count`, `labels`, `predictions`, `basis`, and `observed` for each observation column;
 3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches: `forms` (the query galaxy's forms), `scan` (every galaxy's mode sums), `combine`, `similarity`, `order`, `maps` and `predicted`;
 4. `pql.search()` whole at 8, 32 and 128 matches;
-5. under `kinds`, outside `total_p50_ms`: first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 4 image tokens, 16 contiguous spectrum tokens, all 272 spectrum tokens and 4 Legacy Survey table values.
+5. under `kinds`, outside `total_p50_ms`: first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 16 contiguous spectrum tokens, all 272 spectrum tokens and 4 Legacy Survey table values; step 3 covers 4 image tokens.
 
 The loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count.
 
@@ -61,7 +61,7 @@ Versions are the checked-out commit (after), `origin/main` (before), and the sto
 
 The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
 
-The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. Its best version imports faiss, which the locked dependencies no longer hold, so its rounds fail until a run stores a new best. The PQL search is unmeasured.
+The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does and as `main` does until this removal merges, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
 
 ## `backend_performance`
 
