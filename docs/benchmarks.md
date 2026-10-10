@@ -2,6 +2,8 @@
 
 Every benchmark runs on Modal and measures the production artifacts on the volume.
 
+The stored reports predate #215's rename and use the old names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps`, `paired_patches` and `similarity scalars matches=32`.
+
 | Script                | Measures                                     | Runs on                                   | Report                                     |
 | --------------------- | -------------------------------------------- | ----------------------------------------- | ------------------------------------------ |
 | `search_performance`  | loads and `search()` stages, across commits  | Modal, a container with the server's spec | `docs/benchmarks/search_performance.json`  |
