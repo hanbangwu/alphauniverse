@@ -23,7 +23,7 @@ For each galaxy: tokenise every modality it has, run all its tokens through the 
 
 The model and every codec load from the latest commit of `polymathic-ai/aion-base`, so a push to that repository changes the next build.
 
-Galaxies are encoded one at a time and written in batches of 1024 rows.
+Galaxies are encoded one at a time and written in row groups of `ROW_GROUP` (128) galaxies, so a reader decodes at most 128 galaxies' cells at once. In `encoded` and `codebook` the vector columns use Parquet's byte-stream-split encoding without a dictionary; `tokens` keeps pyarrow's default dictionary encoding.
 
 Three stores are written, with the same columns:
 

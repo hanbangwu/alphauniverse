@@ -56,6 +56,8 @@ from .config import (
 )
 from .dataset import dataset
 
+ROW_GROUP = 128
+
 LS_SCALARS = tuple(
     zip(
         (
@@ -228,11 +230,27 @@ def by_survey(
     }
 
 
+def vector_encoding(schema: pa.Schema) -> dict[str, object]:
+    return {
+        "use_dictionary": False,
+        "use_byte_stream_split": [
+            f"{field.name}.list.element.list.element"
+            for field in schema
+            if pa.types.is_list(field.type)
+        ],
+    }
+
+
 def generate_embeddings() -> None:
     data = dataset()
     schemas = {role: store_schema(role) for role in STORES}
     writers = {
-        role: pq.ParquetWriter(artifact(role), schemas[role], compression="zstd")
+        role: pq.ParquetWriter(
+            artifact(role),
+            schemas[role],
+            compression="zstd",
+            **({} if role == "tokens" else vector_encoding(schemas[role])),
+        )
         for role in STORES
     }
     rows: dict[str, list[dict]] = {role: [] for role in STORES}
@@ -263,7 +281,7 @@ def generate_embeddings() -> None:
         }
         for role in STORES:
             rows[role].append({"galaxy": galaxy, **cells[role], **flags})
-            if len(rows[role]) == 1024:
+            if len(rows[role]) == ROW_GROUP:
                 writers[role].write_table(
                     pa.Table.from_pylist(rows[role], schema=schemas[role])
                 )
