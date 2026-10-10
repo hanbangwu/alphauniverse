@@ -215,28 +215,30 @@ def embedding_count() -> int:
     )
 
 
-def scan(count: int) -> tuple[np.ndarray, np.ndarray]:
+def sample() -> np.ndarray:
     population = embedding_count()
-    chosen = np.sort(
+    return np.sort(
         np.random.default_rng(SEED).choice(
             population, min(SAMPLE, population), replace=False
         )
     )
 
+
+def scan(count: int, chosen: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    order = np.argsort(chosen)
+    ascending = chosen[order]
     sums = np.zeros((count, DIM), dtype=np.float64)
     held = np.zeros(count, dtype=np.int64)
-    taken: list[np.ndarray] = []
+    taken = np.empty((len(chosen), DIM), dtype=np.float32)
     seen = 0
     for galaxies, offsets, values in tqdm(_stream(), desc="scan"):
         sums[galaxies] += np.add.reduceat(values, offsets[:-1])
         held[galaxies] += np.diff(offsets)
-        window = chosen[
-            np.searchsorted(chosen, seen) : np.searchsorted(chosen, seen + len(values))
-        ]
-        taken.append(values[window - seen])
+        first, last = np.searchsorted(ascending, (seen, seen + len(values)))
+        taken[order[first:last]] = values[ascending[first:last] - seen]
         seen += len(values)
 
-    return (sums / held[:, None]).astype(dtype=np.float32), np.concatenate(taken)
+    return (sums / held[:, None]).astype(dtype=np.float32), taken
 
 
 def generate_projections() -> None:
@@ -246,8 +248,9 @@ def generate_projections() -> None:
     count = len(category)
     galaxy = np.arange(count, dtype=np.int32)
 
-    mean, sampled = scan(count)
-    model = fit_parametric_umap(*split(sampled))
+    training, validation = split(sample())
+    mean, sampled = scan(count, np.concatenate((training, validation)))
+    model = fit_parametric_umap(sampled[: len(training)], sampled[len(training) :])
     del sampled
 
     pq.write_table(

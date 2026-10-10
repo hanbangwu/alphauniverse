@@ -49,11 +49,13 @@ def benchmark_projection_quality() -> dict[str, Any]:
     from sklearn.manifold import trustworthiness
 
     from app.config import artifact, device, galaxy_count
-    from app.parametric_umap import ParametricUMAP, scan, split
+    from app.parametric_umap import ParametricUMAP, sample, scan, split
 
-    _, sampled = scan(galaxy_count())
-    _, validation = split(sampled)
-    embedded = np.random.default_rng(SEED).choice(validation, SIZE, replace=False)
+    _, validation = split(sample())
+    _, embedded = scan(
+        galaxy_count(),
+        np.random.default_rng(SEED).choice(validation, SIZE, replace=False),
+    )
 
     saved = torch.load(artifact("parametric_umap"), map_location=device())
     model = ParametricUMAP(saved["dim"]).to(device())
