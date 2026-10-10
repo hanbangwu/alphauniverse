@@ -8,7 +8,6 @@ import modal
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pyarrow.dataset as ds
 
 from app.config import (
     ANCHOR,
@@ -59,11 +58,6 @@ image = build_image.add_local_python_source("modal_app")
 MATCHES = Query.model_fields["matches"].default
 REPORT = Path("docs/benchmarks/search_quality.json")
 COLUMNS = [ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
-SCAN = {
-    "batch_size": BATCH,
-    "batch_readahead": 1,
-    "fragment_scan_options": ds.ParquetFragmentScanOptions(pre_buffer=False),
-}
 
 
 class Corpus(NamedTuple):
@@ -163,7 +157,7 @@ def best(
 
 def galaxy_cells(galaxies: np.ndarray) -> pa.Table:
     return source("encoded").to_table(
-        columns=COLUMNS, filter=pc.field("galaxy").isin(galaxies), **SCAN
+        columns=COLUMNS, filter=pc.field("galaxy").isin(galaxies)
     )
 
 
@@ -179,7 +173,7 @@ def exact_rankings(batch: list[Query]) -> list[np.ndarray]:
     del taken
     scores = np.empty((len(batch), source("encoded").count_rows()), dtype=np.float32)
     start = 0
-    for cells in source("encoded").to_batches(columns=COLUMNS, **SCAN):
+    for cells in source("encoded").to_batches(columns=COLUMNS, batch_size=BATCH):
         scores[:, start : start + cells.num_rows] = best(
             *exact_maps(directions, corpus(cells))
         ).T

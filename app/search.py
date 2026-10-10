@@ -6,10 +6,12 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
+from pyarrow.fs import LocalFileSystem
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import (
     ANCHOR,
+    ARTIFACTS,
     DIM,
     N_PATCHES,
     N_SCALARS,
@@ -80,7 +82,11 @@ class Query(BaseModel):
 
 @cache
 def source(role: str) -> ds.Dataset:
-    return ds.dataset(artifact(role), format="parquet")
+    return ds.dataset(
+        artifact(role),
+        format=ARTIFACTS[role],
+        filesystem=LocalFileSystem(use_mmap=True),
+    )
 
 
 @cache
@@ -340,9 +346,7 @@ def generate_index() -> None:
     built.train(training)
     del training
 
-    for batch in dataset.to_batches(
-        columns=columns, batch_size=BATCH, batch_readahead=1
-    ):
+    for batch in dataset.to_batches(columns=columns, batch_size=BATCH):
         built.add(blocks(batch))
 
     faiss.write_index(built, str(artifact("search_index")))

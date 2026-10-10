@@ -3,7 +3,7 @@ from typing import NamedTuple
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.dataset as ds
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
@@ -184,12 +184,10 @@ def fit_parametric_umap(training: np.ndarray, validation: np.ndarray) -> Paramet
 
 def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     for survey in STORE_COLUMNS:
-        scanner = source("encoded").scanner(
-            columns=["galaxy", survey],
-            batch_size=CHUNK,
-            filter=ds.field(survey).is_valid(),
-        )
-        for batch in scanner.to_batches():
+        for stored in source("encoded").to_batches(
+            columns=["galaxy", survey], batch_size=CHUNK
+        ):
+            batch = stored.filter(stored.column(survey).is_valid())
             cells = batch.column(survey)
             offsets = np.asarray(cells.offsets, dtype=np.intp)
             yield (
@@ -202,16 +200,10 @@ def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
 
 
 def embedding_count() -> int:
-    metadata = pq.read_metadata(artifact("encoded"))
-    columns = (
-        metadata.row_group(group).column(leaf)
-        for group in range(metadata.num_row_groups)
-        for leaf in range(metadata.num_columns)
-        if "." in metadata.schema.column(leaf).path
-    )
-    return (
-        sum(column.num_values - column.statistics.null_count for column in columns)
-        // DIM
+    table = source("encoded").to_table(columns=list(STORE_COLUMNS))
+    return sum(
+        pc.sum(pc.list_value_length(column), min_count=0).as_py()
+        for column in table.columns
     )
 
 

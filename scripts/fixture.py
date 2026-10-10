@@ -21,6 +21,7 @@ from app.config import (
     labels,
     points,
     store_schema,
+    store_writer,
 )
 from app.search import (
     bounds,
@@ -79,23 +80,23 @@ def _store(
     galaxies: int,
     flags: dict[str, np.ndarray],
 ) -> None:
-    pq.write_table(
-        pa.table(
-            {
-                "galaxy": np.arange(galaxies),
-                **{
-                    survey: [
-                        None if cell is None else list(cell) for cell in cells[survey]
-                    ]
-                    for survey in STORE_COLUMNS
+    with store_writer(role) as writer:
+        writer.write_table(
+            pa.table(
+                {
+                    "galaxy": np.arange(galaxies),
+                    **{
+                        survey: [
+                            None if cell is None else list(cell)
+                            for cell in cells[survey]
+                        ]
+                        for survey in STORE_COLUMNS
+                    },
+                    **flags,
                 },
-                **flags,
-            },
-            schema=store_schema(role),
-        ),
-        artifact(role),
-        compression="zstd",
-    )
+                schema=store_schema(role),
+            )
+        )
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
