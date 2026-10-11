@@ -133,9 +133,7 @@ class Results(NamedTuple):
 
 
 class Agreements(NamedTuple):
-    galaxy: int
     values: np.ndarray
-    peaks: np.ndarray
     spread: np.ndarray
     totals: np.ndarray
 
@@ -490,11 +488,7 @@ def built(galaxy: int) -> Agreements:
         block = values[start : start + BATCH].astype(np.float64) - means
         squares += (block[others[start : start + BATCH]] ** 2).sum(axis=0)
     return Agreements(
-        galaxy,
-        values,
-        slot_peaks(forms),
-        np.sqrt(squares / others.sum()),
-        values.sum(axis=1, dtype=np.float64),
+        values, np.sqrt(squares / others.sum()), values.sum(axis=1, dtype=np.float64)
     )
 
 
