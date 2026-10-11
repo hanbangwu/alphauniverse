@@ -63,12 +63,13 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def get(path: str, **params: Any) -> None:
             session.get(path, params=params).raise_for_status()
 
+        def image_tokens(count: int) -> list[int]:
+            return rng.choice(N_IMAGE_TOKENS, count, replace=False).tolist()
+
         def parameters(galaxy: int, matches: int) -> dict[str, Any]:
             return {
                 "galaxy": galaxy,
-                "ls_image": rng.choice(
-                    N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False
-                ).tolist(),
+                "ls_image": image_tokens(IMAGE_TOKENS),
                 "matches": matches,
             }
 
@@ -110,6 +111,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "tokens": lambda: get(f"/galaxy/{galaxy()}/image/tokens"),
             "coverage": lambda: get(f"/galaxy/{galaxy()}"),
             "table": lambda: get(f"/galaxy/{int(added.integers(galaxies))}/table"),
+            "cosines": lambda: get(f"/galaxy/{galaxy()}/cosines/ls_image"),
             "text search": lambda: get("/search/text", text=next(texts)),
             "similarity table values matches=32": lambda: get(
                 "/search",
@@ -118,6 +120,9 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                     FIRST_LS_TABLE_VALUE
                     + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist(),
+            ),
+            "saliency": lambda: get(
+                "/saliency", galaxy=next(imaged), ls_image=image_tokens(IMAGE_TOKENS)
             ),
         } | {
             f"similarity matches={matches}": (
@@ -158,9 +163,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             )
             return {
                 "galaxy": galaxy,
-                "ls_image": rng.choice(
-                    N_IMAGE_TOKENS, image_token_count, replace=False
-                ).tolist(),
+                "ls_image": image_tokens(image_token_count),
                 f"{SPECTRUM_SURVEY}_spectrum": rng.choice(
                     spectrum_tokens, SPECTRUM_TOKENS, replace=False
                 ).tolist(),
