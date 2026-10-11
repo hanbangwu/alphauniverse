@@ -72,7 +72,7 @@ Run a benchmark
    uv run modal run -m scripts.benchmarks.projection_quality
    uv run modal run -m scripts.benchmarks.text_search_quality
    uv run modal run -m scripts.benchmarks.pql_quality                        # --sample, default 1000
-   uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200
+   uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200, --modes every mode
 
 Each writes its report to ``docs/benchmarks/<script>.json``. The performance scripts refuse to run with uncommitted changes.
 

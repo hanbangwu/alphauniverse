@@ -37,6 +37,7 @@ VALUES = (
     Precision("q4_log", 4, "log", "slot"),
     Precision("q4_probability", 4, "probability", "slot"),
 )
+PROBABILITY = Precision("fp32_probability", 32, "probability", "none")
 COEFFICIENTS = (
     *FLOATS,
     Precision("q8_slot", 8, "coefficient", "slot"),
@@ -44,7 +45,12 @@ COEFFICIENTS = (
     Precision("q4_slot", 4, "coefficient", "slot"),
     Precision("q4_component", 4, "coefficient", "component"),
 )
-DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
+DTYPES = {
+    "fp32": torch.float32,
+    "fp16": torch.float16,
+    "bf16": torch.bfloat16,
+    "fp32_probability": torch.float32,
+}
 
 
 def kind(mode: Mode) -> str:
@@ -386,6 +392,7 @@ def schemes(mode: Mode, basis: Basis) -> list:
     return [
         Current(mode, basis),
         *(Dense(precision) for precision in VALUES),
+        Dense(PROBABILITY),
         *(
             TopK(k, rest, precision, vocabulary)
             for k in KS

@@ -130,6 +130,32 @@ def test_dense_log_overlaps_match_float64_where_float32_probabilities_underflow(
     assert overlaps.floored == 0
 
 
+def test_fp32_probability_overlaps_below_float32_range_are_floored_and_counted() -> (
+    None
+):
+    quality = importlib.import_module("scripts.benchmarks.compression_quality")
+    mode = Mode("ls_table", ("key",), np.arange(SLOTS), 300, "ls")
+    gallery = np.full((4, SLOTS, mode.vocabulary), -120.0, dtype=np.float32)
+    gallery[np.arange(4), :, np.arange(4)] = 0
+    queries = np.asarray([0, 2])
+
+    overlaps = quality.log_overlaps(
+        compression.Dense(compression.PROBABILITY),
+        mode,
+        gallery,
+        queries,
+        gallery[queries],
+        torch.device("cpu"),
+    )
+
+    expected = np.full(
+        (SLOTS, len(queries), len(gallery)), np.log(np.finfo(np.float32).tiny)
+    )
+    expected[:, np.arange(len(queries)), queries] = 0
+    np.testing.assert_allclose(overlaps.found["both"].numpy(), expected, rtol=1e-6)
+    assert overlaps.floored == 3 / 4
+
+
 def test_a_scheme_unrankable_at_one_size_is_not_chosen_over_a_rankable_one() -> None:
     quality = importlib.import_module("scripts.benchmarks.compression_quality")
     rankable = {
