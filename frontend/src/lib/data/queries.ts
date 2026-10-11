@@ -178,6 +178,7 @@ export function similarityQuery(request: SimilarityQuery | null) {
             const { data } = await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
             return {
+              request,
               galaxies: table.getChild('galaxy')!.toArray(),
               similarities: table.getChild('similarity')!.toArray(),
               imageMaps: maps(table, 'ls_image'),

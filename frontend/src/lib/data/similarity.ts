@@ -7,6 +7,7 @@ export type SaliencyQuery = GetSaliencyData['query']
 export type Extent = readonly [number, number]
 
 export interface SimilarityResult {
+  request: SimilarityQuery
   galaxies: Int32Array
   similarities: Float32Array
   imageMaps: Float32Array

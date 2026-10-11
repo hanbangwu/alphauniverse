@@ -143,15 +143,17 @@ export class Similarity {
   }
 
   anywhere(mode: 'ls_image' | 'desi_spectrum'): boolean {
-    return this.#submitted?.anywhere?.includes(mode) ?? false
+    return this.#result.data?.request.anywhere?.includes(mode) ?? false
   }
 
   imageOutlinesAt(index: number): number[] {
-    return this.#result.data?.imagePositions[index] ?? this.#submitted?.ls_image ?? []
+    const data = this.#result.data
+    return data?.imagePositions[index] ?? data?.request.ls_image ?? []
   }
 
   spectrumOutlinesAt(index: number): number[] {
-    return this.#result.data?.spectrumPositions[index] ?? this.#submitted?.desi_spectrum ?? []
+    const data = this.#result.data
+    return data?.spectrumPositions[index] ?? data?.request.desi_spectrum ?? []
   }
 
   get stale(): boolean {

@@ -92,7 +92,9 @@ class Selection(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_TABLE_VALUES)], ...],
         Field(max_length=N_TABLE_VALUES),
     ] = ()
-    anywhere: tuple[Anywhere, ...] = ()
+    anywhere: Annotated[
+        tuple[Anywhere, ...], Field(max_length=len(IMAGE_MODES) + len(SPECTRUM_MODES))
+    ] = ()
 
     @model_validator(mode="after")
     def selects_observed_slots(self) -> Self:
@@ -322,6 +324,8 @@ def cross_overlaps(
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
+    mean_square = np.float32(mean_square)
+    projected_mean = projected_mean.astype(np.float32)
     quantised = array(
         rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
     ).astype(np.float32)
@@ -329,8 +333,8 @@ def cross_overlaps(
     steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)
     block = max(1, BLOCK_BYTES // (4 * offsets.size))
     for start in range(0, len(form), block):
-        part = form[start : start + block]
-        weights = (projected_mean + part).astype(np.float32)
+        part = form[start : start + block].astype(np.float32)
+        weights = projected_mean + part
         overlaps = (
             mean_square
             + part @ projected_mean
@@ -357,8 +361,10 @@ def basket_maps(
     selected: dict[str, np.ndarray],
     peaks: dict[str, np.ndarray],
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
-    rows = gathered(galaxies)
     shown, positions = {}, {}
+    if not selected:
+        return shown, positions
+    rows = gathered(galaxies)
     for mode, form in query_forms(row(galaxy), selected).items():
         scale = np.exp(-peaks[mode])
         shown[mode] = np.zeros((len(galaxies), WIDTHS[mode]), np.float32)
@@ -373,15 +379,21 @@ def basket_maps(
 
 
 def basket_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    forms = query_forms(row(galaxy), selected)
-    totals = {mode: np.empty(predictions().num_rows) for mode in selected}
-    start = 0
-    for rows in predictions().to_batches():
-        stop = start + rows.num_rows
-        for mode, form in forms.items():
-            totals[mode][start:stop] = best_log_overlaps(rows, mode, form).sum(axis=1)
-        start = stop
-    return totals
+    return {
+        mode: basket_sum(galaxy, mode, tuple(slots.tolist()))
+        for mode, slots in selected.items()
+    }
+
+
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+    form = query_forms(row(galaxy), {mode: np.asarray(slots)})[mode]
+    return np.concatenate(
+        [
+            best_log_overlaps(rows, mode, form).sum(axis=1)
+            for rows in predictions().to_batches()
+        ]
+    )
 
 
 def distributions(mode: str, form: np.ndarray) -> np.ndarray:
