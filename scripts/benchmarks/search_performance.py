@@ -123,7 +123,7 @@ def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
     forms = pql.galaxy_forms(query.galaxy)
     peaks = pql.slot_peaks(forms)
     marks.append(mark())
-    totals = pql.column_sums(selected, pql.query_forms(pql.row(query.galaxy), selected))
+    totals = pql.mode_totals(query.galaxy, selected, {})
     marks.append(mark())
     scored = pql.combine(totals)
     marks.append(mark())
@@ -134,7 +134,7 @@ def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
     marks.append(mark())
-    pql.maps(forms, peaks, galaxies)
+    pql.maps(forms, peaks, pql.gathered(galaxies))
     marks.append(mark())
     pql.predicted(selected, galaxies)
     marks.append(mark())
@@ -211,9 +211,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
 
     batch = queries(runs + 1, IMAGE_TOKENS, matches)
     cold = stage_times(batch[0])
-    samples: dict[str, list[dict[str, float]]] = {
-        name: [] for name in [*STAGES, *CLICK]
-    }
+    samples: dict[str, list[dict[str, float]]] = {name: [] for name in cold}
 
     for query in batch[1:]:
         for name, usage in stage_times(query).items():

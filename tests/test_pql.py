@@ -91,7 +91,7 @@ def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.n
 
 
 def mode_sums(query: pql.Query) -> dict[str, np.ndarray]:
-    return pql.column_sums(*pql.selected_forms(query))
+    return pql.column_sums(query.galaxy, pql.selection(query))
 
 
 def similarity(query: pql.Query) -> np.ndarray:
@@ -136,7 +136,7 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     shown = table.take(galaxies)
 
     forms = pql.galaxy_forms(GALAXY)
-    aligned = pql.maps(forms, pql.slot_peaks(forms), galaxies)
+    aligned = pql.maps(forms, pql.slot_peaks(forms), pql.gathered(galaxies))
 
     expected = {
         mode: slot_similarities(
