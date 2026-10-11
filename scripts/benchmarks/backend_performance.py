@@ -1,11 +1,11 @@
 import json
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from functools import partial
-from itertools import cycle, islice
+from itertools import cycle, islice, repeat
 from pathlib import Path
 from typing import Any
 
@@ -47,9 +47,11 @@ def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
     return summary([elapsed(call) for _ in range(runs)])
 
 
-def timed_requests(session: httpx.Client, batch: list[dict[str, Any]]) -> list[float]:
+def timed_requests(
+    session: httpx.Client, path: str, batch: list[dict[str, Any]]
+) -> list[float]:
     def ask(params: dict[str, Any]) -> None:
-        session.get("/search", params=params).raise_for_status()
+        session.get(path, params=params).raise_for_status()
 
     return [elapsed(partial(ask, params)) for params in batch]
 
@@ -66,12 +68,11 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def image_tokens(count: int) -> list[int]:
             return rng.choice(N_IMAGE_TOKENS, count, replace=False).tolist()
 
+        def selection(galaxy: int) -> dict[str, Any]:
+            return {"galaxy": galaxy, "ls_image": image_tokens(IMAGE_TOKENS)}
+
         def parameters(galaxy: int, matches: int) -> dict[str, Any]:
-            return {
-                "galaxy": galaxy,
-                "ls_image": image_tokens(IMAGE_TOKENS),
-                "matches": matches,
-            }
+            return selection(galaxy) | {"matches": matches}
 
         def similarity(galaxy: int, matches: int) -> None:
             get("/search", **parameters(galaxy, matches))
@@ -96,8 +97,8 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 (chosen for chosen in unused if has_spectrum[chosen]), CACHED_PER_KIND
             )
         )
-        for chosen in random_galaxies + spectrum_galaxies:
-            similarity(chosen, 32)
+        for chosen in random_galaxies:
+            get("/saliency", **selection(chosen))
         random_rotation = cycle(random_galaxies)
         spectrum_rotation = cycle(spectrum_galaxies)
         texts = cycle(TEXTS)
@@ -119,11 +120,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                     + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist(),
             ),
-            "saliency": lambda: get(
-                "/saliency",
-                galaxy=next(random_rotation),
-                ls_image=image_tokens(IMAGE_TOKENS),
-            ),
+            "saliency": lambda: get("/saliency", **selection(next(random_rotation))),
         } | {
             f"similarity matches={matches}": (
                 lambda matches=matches: similarity(next(random_rotation), matches)
@@ -133,11 +130,14 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         warm = {label: time_it(runs, call) for label, call in calls.items()}
 
         def concurrent(
-            clients: int, count: int, timed_galaxies: Iterator[int]
+            clients: int,
+            count: int,
+            path: str,
+            timed_parameters: Callable[[], dict[str, Any]],
         ) -> dict[str, Any]:
             batches = [
                 [parameters(next(random_rotation), 32)]
-                + [parameters(next(timed_galaxies), 32) for _ in range(count)]
+                + [timed_parameters() for _ in range(count)]
                 for _ in range(clients)
             ]
             with ExitStack() as stack, ThreadPoolExecutor(clients) as pool:
@@ -146,11 +146,21 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                     for _ in batches
                 ]
                 list(
-                    pool.map(timed_requests, sessions, [batch[:1] for batch in batches])
+                    pool.map(
+                        timed_requests,
+                        sessions,
+                        repeat("/search"),
+                        [batch[:1] for batch in batches],
+                    )
                 )
                 begin = time.perf_counter()
                 timed = list(
-                    pool.map(timed_requests, sessions, [batch[1:] for batch in batches])
+                    pool.map(
+                        timed_requests,
+                        sessions,
+                        repeat(path),
+                        [batch[1:] for batch in batches],
+                    )
                 )
                 seconds = time.perf_counter() - begin
             samples = [sample for client_samples in timed for sample in client_samples]
@@ -197,16 +207,20 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         }
         warm |= {label: time_it(runs, call) for label, call in spectral_calls.items()}
         concurrency = {
-            f"clients={clients}": concurrent(clients, runs, random_rotation)
+            f"clients={clients}": concurrent(
+                clients, runs, "/search", lambda: parameters(next(random_rotation), 32)
+            )
             for clients in CLIENTS
         } | {
             f"new galaxies clients={NEW_GALAXY_CLIENTS}": concurrent(
-                NEW_GALAXY_CLIENTS, 1, unused
+                NEW_GALAXY_CLIENTS, 1, "/saliency", lambda: selection(next(unused))
             )
         }
         new_galaxy = summary(
             timed_requests(
-                session, [parameters(chosen, 32) for chosen in islice(unused, runs)]
+                session,
+                "/search",
+                [parameters(chosen, 32) for chosen in islice(unused, runs)],
             )
         )
         return {
