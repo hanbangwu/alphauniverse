@@ -400,7 +400,9 @@ def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Arr
     description="For the query galaxy, at every slot of every mode, the partial "
     "correlation over every other galaxy between its score on the selection and its "
     "agreement with the query galaxy at that slot, controlling for its mean agreement "
-    "outside the selection. One row, one list column per map.",
+    "outside the selection. A mode named in anywhere takes, at each slot, the best "
+    "agreement at any slot of that mode, over the top 256 matches and 256 random "
+    "other galaxies. One row, one list column per map.",
 )
 def get_saliency(query: Annotated[pql.Selection, Query()]) -> Response:
     fields, columns = map_arrays(pql.by_mode(pql.saliency(query)[None]))
@@ -442,6 +444,15 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
             pa.nulls(count, pa.float32())
             if shares is None
             else pa.array(shares, pa.float32())
+        )
+    places = pa.list_(pa.field("item", pa.int32(), nullable=False))
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
+        fields.append(pa.field(f"{mode}_positions", places))
+        positions = results.positions.get(mode)
+        columns.append(
+            pa.nulls(count, places)
+            if positions is None
+            else pa.array(positions.tolist(), places)
         )
     for column in OBSERVATIONS:
         fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))

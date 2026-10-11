@@ -421,7 +421,7 @@
     "/saliency": {
       "get": {
         "summary": "Get Saliency",
-        "description": "For the query galaxy, at every slot of every mode, the partial correlation over every other galaxy between its score on the selection and its agreement with the query galaxy at that slot, controlling for its mean agreement outside the selection. One row, one list column per map.",
+        "description": "For the query galaxy, at every slot of every mode, the partial correlation over every other galaxy between its score on the selection and its agreement with the query galaxy at that slot, controlling for its mean agreement outside the selection. A mode named in anywhere takes, at each slot, the best agreement at any slot of that mode, over the top 256 matches and 256 random other galaxies. One row, one list column per map.",
         "operationId": "get_saliency",
         "parameters": [
           {
@@ -512,6 +512,25 @@
               "maxItems": 26,
               "default": [],
               "title": "Table Values"
+            }
+          },
+          {
+            "name": "anywhere",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum"
+                ],
+                "type": "string"
+              },
+              "default": [],
+              "title": "Anywhere"
             }
           }
         ],
@@ -633,6 +652,25 @@
               "maxItems": 26,
               "default": [],
               "title": "Table Values"
+            }
+          },
+          {
+            "name": "anywhere",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum"
+                ],
+                "type": "string"
+              },
+              "default": [],
+              "title": "Anywhere"
             }
           },
           {
