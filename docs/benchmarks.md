@@ -119,21 +119,21 @@ The rows are held out only if `parametric_umap` was trained with the validation 
 
 ### Last run
 
-| Run              |                                                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Date             | 2026-10-05                                                                                                                |
-| Commit           | `3005bac-dirty`: uncommitted changes on top of `3005bac`                                                                  |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                                |
-| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit, no GPU; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 17 |
-| Projector        | trained with `SAMPLE=5000000`, `EPOCHS=20`, `VALIDATION=0.3`                                                              |
-| Rows             | 10,000 validation rows                                                                                                    |
+| Run              | Benchmark run 38145004513                                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-11                                                                                                                 |
+| Commit           | `f44aac0`                                                                                                                  |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                                 |
+| Machine          | 16 CPU, 16 GiB requested, 64 GiB limit, no GPU; 32 CPUs visible, OpenMP and OpenBLAS at 16 threads; AMD family 25, model 1 |
+| Projector        | trained in #230's rebuild with `SAMPLE=5000000`, `EPOCHS=20`, `VALIDATION=0.3`                                             |
+| Rows             | 10,000 validation rows                                                                                                     |
 
 | Neighbours | Preservation | Trustworthiness |
 | ---------- | ------------ | --------------- |
-| 15         | 0.3064       | 0.8926          |
-| 100        | 0.3336       | 0.8173          |
+| 15         | 0.3020       | 0.8943          |
+| 100        | 0.3357       | 0.8260          |
 
-At 15 neighbours, 0.3064 × 15 = 4.6 of a row's 15 nearest neighbours in 768-d are among its 15 nearest in 2-d. Random 2-d positions would keep 15 / 9,999 = 0.0015 of them, and score a trustworthiness near 0.5.
+At 15 neighbours, 0.3020 × 15 = 4.5 of a row's 15 nearest neighbours in 768-d are among its 15 nearest in 2-d. Random 2-d positions would keep 15 / 9,999 = 0.0015 of them, and score a trustworthiness near 0.5.
 
 ## `text_search_quality`
 
@@ -143,24 +143,24 @@ The dataset holds 7 galaxies with a GZ10 label, too few to score morphology quer
 
 ### Last run
 
-| Run              |                                                                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Date             | 2026-10-07                                                                                                               |
-| Commit           | `16730a0-dirty`: uncommitted changes on top of `16730a0`                                                                 |
-| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                               |
-| Machine          | 16 CPU, 32 GiB requested, 128 GiB limit, one L4; 32 CPUs visible, faiss and OpenMP at 16 threads; AMD family 25, model 1 |
-| Galaxies         | 5,211 held out by `generate_alignment`                                                                                   |
+| Run              | Benchmark run 38145006479                                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-11                                                                                                                   |
+| Commit           | `f44aac0`                                                                                                                    |
+| Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                                                   |
+| Machine          | 16 CPU, 16 GiB requested, 64 GiB limit, one L4; 32 CPUs visible, OpenMP and OpenBLAS at 16 threads; Intel family 6, model 85 |
+| Galaxies         | 5,211 held out by `generate_alignment` in #230's rebuild                                                                     |
 
 Average precision, raw:
 
 | Query                                                   | Base rate | EmbeddingGemma | Linear | MLP    |
 | ------------------------------------------------------- | --------- | -------------- | ------ | ------ |
-| A massive galaxy, stellar mass above 10^11 solar masses | 0.3604    | 0.5654         | 0.5902 | 0.5929 |
-| A low-mass dwarf galaxy                                 | 0.0558    | 0.0413         | 0.0437 | 0.0468 |
-| A star-forming galaxy                                   | 0.1066    | 0.0933         | 0.1020 | 0.0973 |
-| A quiescent galaxy with no ongoing star formation       | 0.3236    | 0.3028         | 0.2668 | 0.2525 |
-| A distant galaxy at redshift above 0.5                  | 0.0178    | 0.0153         | 0.0140 | 0.0152 |
-| A nearby galaxy at redshift below 0.1                   | 0.0876    | 0.1096         | 0.1088 | 0.1283 |
+| A massive galaxy, stellar mass above 10^11 solar masses | 0.3604    | 0.5654         | 0.5856 | 0.5999 |
+| A low-mass dwarf galaxy                                 | 0.0558    | 0.0413         | 0.0447 | 0.0481 |
+| A star-forming galaxy                                   | 0.1066    | 0.0933         | 0.1036 | 0.0979 |
+| A quiescent galaxy with no ongoing star formation       | 0.3236    | 0.3028         | 0.2620 | 0.2463 |
+| A distant galaxy at redshift above 0.5                  | 0.0178    | 0.0153         | 0.0170 | 0.0161 |
+| A nearby galaxy at redshift below 0.1                   | 0.0876    | 0.1096         | 0.1068 | 0.1340 |
 
 Raw, only the stellar-mass query beats its base rate by more than 0.05 in any space. Centred figures and precision at 10 and 100 are in `docs/benchmarks/text_search_quality.json`.
 
