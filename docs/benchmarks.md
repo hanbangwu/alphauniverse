@@ -51,7 +51,7 @@ A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
 2. `lifespan`'s loads: `galaxy_count`, `labels`, `predictions`, `basis`, and `observed` for each observation column;
-3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches, each query with an empty agreement cache: `selection` (the selected slots by mode), `agreements` (building its agreement matrix), `sums` (the selected columns' sums), `combine`, `similarity`, `order`, `maps` and `predicted`, then `saliency` (one click under Population, from the built matrix). A click on a galaxy whose matrix is cached costs every stage but `agreements`;
+3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches: `selection` (the selected slots by mode), `forms` (the query galaxy's distribution at every slot, and its peaks), `sums` (the selected slots' log overlaps over every galaxy, summed), `combine`, `similarity`, `order`, `maps` (every slot's log overlap over the returned galaxies) and `predicted`; then, outside `total_p50_ms`, in `click_p50_ms`, one click under Population on the same galaxy with an empty agreement cache: `agreements` (building its agreement matrix) and `saliency`. A click on a galaxy whose matrix is cached costs only `saliency`;
 4. `pql.search()` whole at 8, 32 and 128 matches, each query on a random galaxy.
 5. under `anywhere`, outside `total_p50_ms`: first query and warm, `pql.search()` and then one `pql.saliency()` click, with the agreement matrix already built; the click reuses the search's position-independent sums; for 4 Legacy Survey image tokens and for 16 contiguous spectrum tokens, each position-independent.
 
@@ -59,7 +59,7 @@ The loads and the warm stages also record wall, user and system milliseconds (`u
 
 Versions are the checked-out commit (after), `origin/main` (before), and the stored report's best unless its code matches one of those. Each is a `git archive` of `app/`, `scripts/` and `modal_app.py`, run in a subprocess with after's locked dependencies, in mirrored order: after, before, best, then back. After's first round has the cold page cache. A failed round records its error.
 
-The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
+The best version has the lowest `total_p50_ms` (sum of warm search stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
 
 The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
 
@@ -169,7 +169,7 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 ## `pql_quality`
 
-A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query ranks every galaxy by `pql.scores`, from the query galaxy's agreement matrix; the hidden copy is scored by its own log overlaps with the query. It reports the mean with a 95% bootstrap interval over queries:
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query ranks every galaxy by `pql.scores`; the hidden copy is scored by its own log overlaps with the query. It reports the mean with a 95% bootstrap interval over queries:
 
 - `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
 - `identity` (spectrum token queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.
