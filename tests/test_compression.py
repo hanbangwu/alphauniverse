@@ -50,6 +50,7 @@ def test_lossless_schemes_decode_the_distribution() -> None:
     gallery = log_probabilities(vocabulary, 3, 4)
     lossless = [
         compression.Dense(compression.FLOATS[0]),
+        compression.Dense(compression.PROBABILITY),
         compression.TopK(vocabulary, "spread", compression.FLOATS[0], vocabulary),
         compression.Projection(vocabulary, compression.FLOATS[0], basis),
     ]
