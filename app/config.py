@@ -143,8 +143,8 @@ ARTIFACTS: dict[str, str] = {
     "pairs": "parquet",
     "alignment": "pt",
     "aion_gemma_space": "npy",
-    "predictions": "arrow",
-    "prediction_basis": "npz",
+    "probabilities": "arrow",
+    "probability_basis": "npz",
 }
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
@@ -203,7 +203,7 @@ OBSERVATIONS = {
 PREDICTIONS = pa.schema(
     [
         pa.field("galaxy", pa.int32()),
-        pa.field(REDSHIFT, pa.list_(pa.float16(), REDSHIFT_VOCABULARY)),
+        pa.field(REDSHIFT, pa.list_(pa.float32(), REDSHIFT_VOCABULARY)),
     ]
     + [
         field
@@ -213,13 +213,14 @@ PREDICTIONS = pa.schema(
                 f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * TOP_CODES)
             ),
             pa.field(
-                f"{survey}_log_probabilities",
+                f"{survey}_probabilities",
                 pa.list_(pa.float16(), N_IMAGE_TOKENS * TOP_CODES),
             ),
+            pa.field(f"{survey}_rest", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
             pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
             pa.field(
                 f"{survey}_table_values",
-                pa.list_(pa.float16(), len(columns) * VOCABULARY),
+                pa.list_(pa.float32(), len(columns) * VOCABULARY),
             ),
         )
     ]

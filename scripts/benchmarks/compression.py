@@ -312,7 +312,7 @@ class Current:
         self.vocabulary = mode.vocabulary
         self.kind = kind(mode)
         self.basis = basis
-        self.dense = Dense(FLOATS[1])
+        self.dense = Dense(PROBABILITY)
         self.name = "current"
 
     def encode(self, log_probabilities: torch.Tensor) -> Stored:
@@ -323,7 +323,7 @@ class Current:
         flat = flat.float().cpu().numpy()
         if self.kind == "image":
             parts = image_token_codes(flat)
-            names = ("codes", "kept", "tails")
+            names = ("codes", "probabilities", "rest", "tails")
         else:
             parts = coefficients(
                 np.exp(flat),
@@ -341,11 +341,10 @@ class Current:
     def image(
         self, stored: Stored, kept: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        probabilities = stored["kept"].float().exp()
-        rest = stored["tails"].exp() + probabilities[..., kept:].sum(dim=-1)
+        rest = stored["rest"] if kept == pql.KEPT else stored["tails"].exp()
         return (
             stored["codes"][..., :kept].long(),
-            probabilities[..., :kept],
+            stored["probabilities"][..., :kept].float(),
             rest / (self.vocabulary - kept),
         )
 
@@ -377,9 +376,9 @@ class Current:
                 self.projected(stored) * (query @ directions.T)
             ).sum(dim=-1)
         overlaps = pql.table_value_overlaps(
-            load(stored).cpu().numpy(), query.log().cpu().numpy()
+            load(stored).cpu().numpy(), query.cpu().numpy()
         )
-        return torch.from_numpy(overlaps).exp().to(query.device)
+        return torch.from_numpy(overlaps).to(query.device)
 
     def bits(self, stored: Stored) -> int:
         return 8 * sum(

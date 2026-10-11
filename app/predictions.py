@@ -24,7 +24,7 @@ from .config import (
     artifact,
     device,
 )
-from .pql import prediction_batch, save_prediction_basis
+from .pql import KEPT, prediction_batch, save_prediction_basis
 from .search import source
 
 CHUNK = 128
@@ -148,18 +148,21 @@ def predictions(
 
 def image_token_codes(
     log_probabilities: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     candidates = np.argpartition(-log_probabilities, TOP_CODES - 1, axis=1)[
         :, :TOP_CODES
     ]
     kept = np.take_along_axis(log_probabilities, candidates, axis=1)
     order = np.argsort(-kept, axis=1)
     codes = np.take_along_axis(candidates, order, axis=1)
-    kept = np.take_along_axis(kept, order, axis=1).astype(np.float64)
-    mass = np.minimum(np.exp(kept).sum(axis=1), np.nextafter(1.0, 0.0))
+    probabilities = np.exp(np.take_along_axis(kept, order, axis=1).astype(np.float64))
+    mass = np.minimum(probabilities.sum(axis=1), np.nextafter(1.0, 0.0))
+    rest = np.exp(log_probabilities)
+    np.put_along_axis(rest, codes[:, :KEPT], 0, axis=1)
     return (
         codes.astype(np.uint16),
-        kept.astype(np.float16),
+        probabilities.astype(np.float16),
+        rest.sum(axis=1, dtype=np.float64).astype(np.float32),
         np.log1p(-mass).astype(np.float32),
     )
 
@@ -221,16 +224,17 @@ def record(
 ) -> dict[str, np.ndarray]:
     values: dict[str, np.ndarray] = {
         "galaxy": np.asarray([galaxy], dtype=np.int32),
-        REDSHIFT: predicted[REDSHIFT_KEY][0].astype(np.float16),
+        REDSHIFT: np.exp(predicted[REDSHIFT_KEY][0]),
     }
     for survey, image_key in IMAGES.items():
-        codes, kept, tails = image_token_codes(predicted[image_key])
+        codes, probabilities, rest, tails = image_token_codes(predicted[image_key])
         values[f"{survey}_codes"] = codes.reshape(-1)
-        values[f"{survey}_log_probabilities"] = kept.reshape(-1)
+        values[f"{survey}_probabilities"] = probabilities.reshape(-1)
+        values[f"{survey}_rest"] = rest
         values[f"{survey}_tails"] = tails
-        values[f"{survey}_table_values"] = np.concatenate(
-            [predicted[key][0] for key in TABLE_VALUES[survey]]
-        ).astype(np.float16)
+        values[f"{survey}_table_values"] = np.exp(
+            np.concatenate([predicted[key][0] for key in TABLE_VALUES[survey]])
+        )
     for survey, key in SPECTRA.items():
         quantised, offsets, steps = coefficients(
             np.exp(predicted[key]), *fitted[survey]
@@ -244,7 +248,7 @@ def record(
 def generate_predictions() -> None:
     fitted = bases()
     save_prediction_basis(fitted)
-    with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
+    with pa.ipc.new_file(artifact("probabilities"), PREDICTIONS) as writer:
         for chunk in batched(rows("predict"), BATCH):
             writer.write_batch(
                 prediction_batch(

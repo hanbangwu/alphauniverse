@@ -48,12 +48,12 @@ def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
 
 def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
     codes = column(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES).astype(np.int64)
-    probabilities = np.exp(
-        column(rows, f"{survey}_log_probabilities", N_IMAGE_TOKENS, TOP_CODES)
+    probabilities = column(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, TOP_CODES)
+    rest = (
+        column(rows, f"{survey}_rest", N_IMAGE_TOKENS)
+        if kept == pql.KEPT
+        else np.exp(column(rows, f"{survey}_tails", N_IMAGE_TOKENS))
     )
-    rest = np.exp(column(rows, f"{survey}_tails", N_IMAGE_TOKENS)) + probabilities[
-        ..., kept:
-    ].sum(axis=-1)
     dense = np.repeat(
         (rest / (IMAGE_VOCABULARY - kept))[..., None], IMAGE_VOCABULARY, axis=-1
     )
@@ -76,7 +76,7 @@ def dense(rows: pa.Table, mode: str, kept: int) -> np.ndarray:
     if kind == "spectrum":
         return dense_spectrum_tokens(rows, survey)
     name, count, vocabulary = TABLE_MODES[mode]
-    return np.exp(column(rows, name, count, vocabulary))
+    return column(rows, name, count, vocabulary)
 
 
 def log_overlaps(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.ndarray:
@@ -159,13 +159,16 @@ def test_a_search_reads_what_the_agreement_matrix_holds(query: pql.Query) -> Non
 
     found = pql.agreements(GALAXY).values[results.galaxies]
     for mode, slots in pql.selection(query).items():
-        np.testing.assert_array_equal(
+        np.testing.assert_allclose(
             results.sums[mode],
             found[:, pql.OFFSETS[mode] + slots].sum(axis=1, dtype=np.float64),
+            rtol=1e-5 if mode in TABLE_MODES else 0,
         )
     peaks = pql.slot_peaks(pql.galaxy_forms(GALAXY))
     for mode, values in pql.by_mode(np.exp(found - peaks)).items():
-        np.testing.assert_array_equal(results.maps[mode], values)
+        np.testing.assert_allclose(
+            results.maps[mode], values, rtol=1e-5 if mode == "table_values" else 0
+        )
 
 
 def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
@@ -389,18 +392,16 @@ def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
     np.testing.assert_allclose(pql.scores(query), expected)
 
 
-def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow() -> (
-    None
-):
-    query = np.full((1, VOCABULARY), -120.0, dtype=np.float32)
-    gallery = np.full((3, 1, VOCABULARY), -120.0, dtype=np.float32)
-    query[0, 0] = 0
-    gallery[:, 0, 1] = 0
+def test_table_value_overlaps_below_float32_range_are_floored() -> None:
+    query = np.zeros((1, VOCABULARY), dtype=np.float32)
+    gallery = np.zeros((2, 1, VOCABULARY), dtype=np.float32)
+    query[0, 0] = 1
+    gallery[0, 0, 1] = 1
+    gallery[1, 0, 0] = 1
 
     found = pql.table_value_overlaps(gallery, query)
 
-    expected = np.log(np.exp(gallery.astype(np.float64) + query).sum(axis=-1))
-    np.testing.assert_allclose(found, expected, rtol=1e-6)
+    np.testing.assert_array_equal(found, [[pql.TABLE_VALUE_FLOOR], [1]])
 
 
 def test_a_repeated_slot_counts_once(tree: Path) -> None:

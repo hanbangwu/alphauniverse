@@ -145,10 +145,8 @@ def chunks(
 def logarithmic(scheme: Any, mode: Mode) -> bool:
     if kind(mode) in ("image", "spectrum"):
         return False
-    return (
-        scheme is None
-        or isinstance(scheme, compression.Current)
-        or (isinstance(scheme, compression.Dense) and scheme.precision.domain == "log")
+    return scheme is None or (
+        isinstance(scheme, compression.Dense) and scheme.precision.domain == "log"
     )
 
 

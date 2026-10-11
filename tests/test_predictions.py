@@ -19,6 +19,7 @@ from app.config import (
     artifact,
     build_dir,
 )
+from app.pql import KEPT
 
 pytest.importorskip("torch")
 predictions_module = importlib.import_module("app.predictions")
@@ -38,8 +39,10 @@ def store(
         build_dir().mkdir(parents=True)
         shutil.copy(tokens, artifact("tokens"))
         predictions_module.generate_predictions()
-        table = pa.ipc.open_file(pa.memory_map(str(artifact("predictions")))).read_all()
-        with np.load(artifact("prediction_basis")) as basis:
+        table = pa.ipc.open_file(
+            pa.memory_map(str(artifact("probabilities")))
+        ).read_all()
+        with np.load(artifact("probability_basis")) as basis:
             return table, dict(basis)
 
 
@@ -55,20 +58,18 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 
     assert table.schema.equals(PREDICTIONS)
     assert table["galaxy"].to_pylist() == list(range(galaxies))
-    redshift = np.exp(column(table, REDSHIFT).astype(np.float64))
+    redshift = column(table, REDSHIFT).astype(np.float64)
     np.testing.assert_allclose(redshift.reshape(galaxies, -1).sum(-1), 1, atol=0.02)
     for survey, keys in predictions_module.TABLE_VALUES.items():
-        kept = np.exp(column(table, f"{survey}_log_probabilities").astype(np.float64))
+        kept = column(table, f"{survey}_probabilities").astype(np.float64)
+        kept = kept.reshape(galaxies, N_IMAGE_TOKENS, -1)
+        rest = column(table, f"{survey}_rest").reshape(galaxies, N_IMAGE_TOKENS)
         tails = np.exp(column(table, f"{survey}_tails").astype(np.float64))
-        table_values = np.exp(
-            column(table, f"{survey}_table_values").astype(np.float64)
-        )
+        table_values = column(table, f"{survey}_table_values").astype(np.float64)
         np.testing.assert_allclose(
-            kept.reshape(galaxies, N_IMAGE_TOKENS, -1).sum(-1)
-            + tails.reshape(galaxies, N_IMAGE_TOKENS),
-            1,
-            atol=0.02,
+            kept.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS), 1, atol=0.02
         )
+        np.testing.assert_allclose(kept[..., :KEPT].sum(-1) + rest, 1, atol=0.02)
         np.testing.assert_allclose(
             table_values.reshape(galaxies, len(keys), -1).sum(-1), 1, atol=0.02
         )
@@ -92,7 +93,7 @@ def test_kept_image_token_codes_are_the_most_probable_in_descending_order() -> N
         np.random.default_rng(1).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
     )
 
-    codes, _, _ = predictions_module.image_token_codes(log_probabilities)
+    codes = predictions_module.image_token_codes(log_probabilities)[0]
 
     assert np.array_equal(codes, np.argsort(-log_probabilities, axis=1)[:, :TOP_CODES])
 
