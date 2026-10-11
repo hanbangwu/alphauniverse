@@ -529,6 +529,7 @@
                 ],
                 "type": "string"
               },
+              "maxItems": 4,
               "default": [],
               "title": "Anywhere"
             }
@@ -669,6 +670,7 @@
                 ],
                 "type": "string"
               },
+              "maxItems": 4,
               "default": [],
               "title": "Anywhere"
             }
