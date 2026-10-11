@@ -161,18 +161,21 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def spectrum(route: str) -> None:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
-        def spectrum_token_query(image_token_count: int) -> dict[str, Any]:
-            galaxy = next(spectrum_rotation)
-            response = session.get(f"/galaxy/{galaxy}/spectrum")
+        spectrum_tokens = {}
+        for chosen in spectrum_galaxies:
+            response = session.get(f"/galaxy/{chosen}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
-            spectrum_tokens = observed_spectrum_tokens(
+            spectrum_tokens[chosen] = observed_spectrum_tokens(
                 table.column("wavelength").to_numpy()
             )
+
+        def spectrum_token_query(image_token_count: int) -> dict[str, Any]:
+            galaxy = next(spectrum_rotation)
             return {
                 "galaxy": galaxy,
                 "ls_image": image_tokens(image_token_count),
                 f"{SPECTRUM_SURVEY}_spectrum": rng.choice(
-                    spectrum_tokens, SPECTRUM_TOKENS, replace=False
+                    spectrum_tokens[galaxy], SPECTRUM_TOKENS, replace=False
                 ).tolist(),
                 "matches": 32,
             }
