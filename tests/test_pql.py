@@ -172,7 +172,10 @@ def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
     selected = {"ls_image": (0, 17, 300), "desi_spectrum": (40, 41, 42)}
     query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
 
-    sums = pql.mode_totals(pql.agreements(GALAXY), pql.selection(query), query.anywhere)
+    chosen = pql.selection(query)
+    sums = pql.mode_totals(
+        pql.agreements(GALAXY), chosen, pql.positional_slots(chosen, query.anywhere)
+    )
 
     for mode, slots in selected.items():
         np.testing.assert_allclose(

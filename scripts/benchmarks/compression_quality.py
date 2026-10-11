@@ -480,7 +480,7 @@ def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
                 for size, mask in masks.items()
             },
         }
-        if crossed:
+        if window is not None:
             entries[scheme.name]["sizes"]["16 anywhere"] = {
                 side: summary(
                     crossed[side],

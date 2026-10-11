@@ -3,7 +3,7 @@ from collections.abc import Callable, Hashable, Iterator
 from functools import cache, partial
 from itertools import accumulate
 from threading import Lock
-from typing import Annotated, NamedTuple, Self
+from typing import Annotated, NamedTuple, Self, get_args
 
 import numpy as np
 import pyarrow as pa
@@ -96,7 +96,7 @@ class Selection(BaseModel):
         Field(max_length=N_TABLE_VALUES),
     ] = ()
     anywhere: Annotated[
-        tuple[TokenMode, ...], Field(max_length=len(IMAGE_MODES) + len(SPECTRUM_MODES))
+        tuple[TokenMode, ...], Field(max_length=len(get_args(TokenMode)))
     ] = ()
 
     @model_validator(mode="after")
@@ -517,16 +517,30 @@ def selected_peaks(
 
 
 def mode_totals(
-    found: Agreements, selected: dict[str, np.ndarray], anywhere: tuple[str, ...]
+    found: Agreements,
+    selected: dict[str, np.ndarray],
+    positional: dict[str, np.ndarray],
 ) -> dict[str, np.ndarray]:
-    aligned = {mode: slots for mode, slots in selected.items() if mode not in anywhere}
-    positional = {mode: selected[mode] for mode in anywhere}
+    aligned = {
+        mode: slots for mode, slots in selected.items() if mode not in positional
+    }
     return column_sums(found, aligned) | basket_sums(found.galaxy, positional)
 
 
+def positional_slots(
+    selected: dict[str, np.ndarray], anywhere: tuple[str, ...]
+) -> dict[str, np.ndarray]:
+    return {mode: selected[mode] for mode in anywhere}
+
+
 def scores(query: Selection) -> np.ndarray:
+    selected = selection(query)
     return combine(
-        mode_totals(agreements(query.galaxy), selection(query), query.anywhere)
+        mode_totals(
+            agreements(query.galaxy),
+            selected,
+            positional_slots(selected, query.anywhere),
+        )
     )
 
 
@@ -640,15 +654,15 @@ def predicted(selected: dict[str, np.ndarray], galaxies: np.ndarray) -> list[lis
 
 def search(query: Query) -> Results:
     selected = selection(query)
+    positional = positional_slots(selected, query.anywhere)
     found = agreements(query.galaxy)
-    totals = mode_totals(found, selected, query.anywhere)
+    totals = mode_totals(found, selected, positional)
     scored = combine(totals)
     shares = fractions(selected_peaks(found, selected), totals)
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
-    positional = {mode: selected[mode] for mode in query.anywhere}
     shown, positions = basket_maps(
         query.galaxy, galaxies, positional, selected_peaks(found, positional)
     )
