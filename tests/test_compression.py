@@ -117,7 +117,7 @@ def test_dense_log_overlaps_match_float64_where_float32_probabilities_underflow(
     gallery[np.arange(4), :, np.arange(4)] = 0
     queries = np.asarray([0, 2])
 
-    found, pairs, _, floored = quality.log_overlaps(
+    found, pairs, _, _, _, floored = quality.log_overlaps(
         None, mode, gallery, queries, gallery[queries], torch.device("cpu")
     )
 

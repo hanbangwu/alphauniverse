@@ -1,5 +1,6 @@
 import argparse
 import os
+from itertools import batched
 from pathlib import Path
 
 import numpy as np
@@ -55,6 +56,8 @@ STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4, REDSHIFT: 6
 
 CLUSTERS = 64
 NOISE = 0.05
+
+PREDICTION_BATCH = 5
 
 
 def covered(survey: str, galaxy: int) -> bool:
@@ -158,7 +161,8 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
             values[f"{survey}_steps"] = steps
         records.append(values)
     with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
-        writer.write_batch(prediction_batch(records))
+        for chunk in batched(records, PREDICTION_BATCH):
+            writer.write_batch(prediction_batch(list(chunk)))
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
