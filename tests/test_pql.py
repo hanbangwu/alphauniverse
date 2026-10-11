@@ -154,6 +154,31 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     )
 
 
+def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
+    table: pa.Table,
+) -> None:
+    own = table.slice(GALAXY, 1)
+    selected = {"ls_image": (0, 17, 300), "desi_spectrum": (40, 41, 42)}
+    query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
+
+    sums = pql.mode_totals(query, pql.agreements(GALAXY))
+
+    for mode, slots in selected.items():
+        gallery = dense(table, mode, pql.KEPT)
+        overlaps = gallery @ dense(own, mode, TOP_CODES)[0, list(slots)].T
+        if mode in SPECTRUM_MODES:
+            overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
+        expected = np.log(overlaps).max(axis=1).sum(axis=1)
+        np.testing.assert_allclose(sums[mode], expected, rtol=1e-4, err_msg=mode)
+
+
+def test_a_position_independent_mode_without_a_selection_is_rejected(
+    tree: Path,
+) -> None:
+    with pytest.raises(ValidationError):
+        pql.Query(galaxy=GALAXY, ls_image=(0,), anywhere=("desi_spectrum",))
+
+
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
     table: pa.Table,
 ) -> None:

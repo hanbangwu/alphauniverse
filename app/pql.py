@@ -1,7 +1,8 @@
+from collections.abc import Iterator
 from functools import cache, lru_cache
 from itertools import accumulate
 from threading import Lock
-from typing import Annotated, NamedTuple, Self
+from typing import Annotated, Literal, NamedTuple, Self
 
 import numpy as np
 import pyarrow as pa
@@ -58,6 +59,7 @@ OFFSETS = {
 WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
+BLOCK_BYTES = 64 * 2**20
 BUILDING = Lock()
 
 ImageTokens = Annotated[
@@ -68,6 +70,7 @@ SpectrumTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_SPECTRUM_TOKENS)], ...],
     Field(max_length=N_SPECTRUM_TOKENS),
 ]
+Anywhere = Literal[(*IMAGE_MODES, *SPECTRUM_MODES)]
 
 
 @cache
@@ -87,6 +90,7 @@ class Selection(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_TABLE_VALUES)], ...],
         Field(max_length=N_TABLE_VALUES),
     ] = ()
+    anywhere: tuple[Anywhere, ...] = ()
 
     @model_validator(mode="after")
     def selects_observed_slots(self) -> Self:
@@ -94,6 +98,10 @@ class Selection(BaseModel):
         if not selected:
             raise ValueError(
                 "select at least one image token, spectrum token or table value"
+            )
+        if missing := set(self.anywhere) - selected.keys():
+            raise ValueError(
+                f"no selection in position-independent {', '.join(sorted(missing))}"
             )
         for mode in selected.keys() & OBSERVED_IN.keys():
             column = OBSERVED_IN[mode]
@@ -290,6 +298,57 @@ def log_overlaps(
     return table_value_overlaps(table_value_log_probabilities(rows, mode, slots), form)
 
 
+def cross_log_overlaps(
+    rows: pa.RecordBatch, mode: str, form: np.ndarray
+) -> Iterator[tuple[int, np.ndarray]]:
+    if mode in IMAGE_MODES:
+        codes, probabilities, spread = top_image_tokens(
+            rows, IMAGE_MODES[mode], slice(None), KEPT
+        )
+        codes = codes.astype(np.intp)
+        size = codes.size
+    else:
+        survey = SPECTRUM_MODES[mode]
+        _, _, mean_square, projected_mean = basis()[survey]
+        quantised = array(
+            rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
+        )
+        offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)
+        steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)
+        size = quantised.size
+    block = max(1, BLOCK_BYTES // (4 * size))
+    for start in range(0, len(form), block):
+        part = form[start : start + block]
+        if mode in IMAGE_MODES:
+            at_codes = part[:, codes]
+            overlaps = (probabilities * at_codes).sum(axis=-1) + spread * (
+                part.sum(axis=-1)[:, None, None] - at_codes.sum(axis=-1)
+            )
+        else:
+            weights = projected_mean + part
+            overlaps = np.maximum(
+                mean_square
+                + (part @ projected_mean)[:, None, None]
+                + offsets * weights.sum(axis=-1)[:, None, None]
+                + steps * np.einsum("gcr,br->bgc", quantised, weights),
+                SPECTRUM_TOKEN_FLOOR,
+            )
+        yield start, np.log(overlaps)
+
+
+def basket_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    forms = query_forms(row(galaxy), selected)
+    totals = {mode: np.zeros(predictions().num_rows) for mode in selected}
+    start = 0
+    for rows in predictions().to_batches():
+        stop = start + rows.num_rows
+        for mode, form in forms.items():
+            for _, overlaps in cross_log_overlaps(rows, mode, form):
+                totals[mode][start:stop] += overlaps.max(axis=-1).sum(axis=0)
+        start = stop
+    return totals
+
+
 def distributions(mode: str, form: np.ndarray) -> np.ndarray:
     if mode in SPECTRUM_MODES:
         mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
@@ -392,8 +451,18 @@ def selected_peaks(
     }
 
 
+def mode_totals(query: Selection, found: Agreements) -> dict[str, np.ndarray]:
+    selected = selection(query)
+    aligned = {
+        mode: slots for mode, slots in selected.items() if mode not in query.anywhere
+    }
+    return column_sums(found, aligned) | basket_sums(
+        query.galaxy, {mode: selected[mode] for mode in query.anywhere}
+    )
+
+
 def scores(query: Query) -> np.ndarray:
-    return combine(column_sums(agreements(query.galaxy), selection(query)))
+    return combine(mode_totals(query, agreements(query.galaxy)))
 
 
 def columns(selected: dict[str, np.ndarray]) -> np.ndarray:
@@ -468,7 +537,7 @@ def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
 def search(query: Query) -> Results:
     selected = selection(query)
     found = agreements(query.galaxy)
-    totals = column_sums(found, selected)
+    totals = mode_totals(query, found)
     scored = combine(totals)
     shares = fractions(selected_peaks(found, selected), totals)
     order = np.argsort(-scored, kind="stable")
