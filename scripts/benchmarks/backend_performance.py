@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from functools import partial
-from itertools import cycle
+from itertools import cycle, islice
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,7 @@ import pyarrow.compute as pc
 
 from app.config import DATASET_REVISION, N_IMAGE_TOKENS
 from app.main import SPECTRUM_SURVEY
+from app.pql import AGREEMENT_GALAXIES
 from app.search import FIRST_LS_TABLE_VALUE, N_LS_TABLE_VALUES
 from modal_app import SERVING_MAX_INPUTS, app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
@@ -35,6 +36,7 @@ from scripts.benchmarks.text_search_quality import CUTS
 image = serving_image.add_local_python_source("modal_app")
 
 CLIENTS = (1, 4, SERVING_MAX_INPUTS, 2 * SERVING_MAX_INPUTS)
+CACHED_PER_KIND = AGREEMENT_GALAXIES // 2
 REPORT = Path("docs/benchmarks/backend_performance.json")
 TEXTS = tuple(text for text, _ in CUTS)
 
@@ -60,26 +62,44 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def get(path: str, **params: Any) -> None:
             session.get(path, params=params).raise_for_status()
 
-        def parameters(matches: int) -> dict[str, Any]:
+        def parameters(galaxy: int, matches: int) -> dict[str, Any]:
             return {
-                "galaxy": galaxy(),
+                "galaxy": galaxy,
                 "ls_image": rng.choice(
                     N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False
                 ).tolist(),
                 "matches": matches,
             }
 
-        def similarity(matches: int) -> None:
-            get("/search", **parameters(matches))
-
         cold_meta = round(elapsed(lambda: get("/meta")), 3)
         galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
+        unused = iter(rng.permutation(galaxies).tolist())
 
         def galaxy() -> int:
             return int(rng.integers(galaxies))
 
-        cold_similarity = round(elapsed(lambda: similarity(32)), 3)
+        cold_similarity = round(
+            elapsed(lambda: get("/search", **parameters(next(unused), 32))), 3
+        )
         cold_text_search = round(elapsed(lambda: get("/search/text", text=TEXTS[0])), 3)
+        cells = pa.ipc.open_file(
+            session.get("/downloads/tokens").raise_for_status().content
+        ).read_all()
+        has_spectrum = pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy()
+        holders = np.flatnonzero(has_spectrum)
+        image_galaxies = list(islice(unused, CACHED_PER_KIND))
+        spectrum_galaxies = list(
+            islice(
+                (chosen for chosen in unused if has_spectrum[chosen]), CACHED_PER_KIND
+            )
+        )
+        for chosen in image_galaxies + spectrum_galaxies:
+            get("/search", **parameters(chosen, 32))
+        imaged, spectral = cycle(image_galaxies), cycle(spectrum_galaxies)
+
+        def similarity(matches: int) -> None:
+            get("/search", **parameters(next(imaged), matches))
+
         texts = cycle(TEXTS)
         added = np.random.default_rng(1)
 
@@ -92,7 +112,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "text search": lambda: get("/search/text", text=next(texts)),
             "similarity table values matches=32": lambda: get(
                 "/search",
-                galaxy=int(added.integers(galaxies)),
+                galaxy=next(imaged),
                 table_values=(
                     FIRST_LS_TABLE_VALUE
                     + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
@@ -108,7 +128,8 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
 
         def concurrent(clients: int) -> dict[str, Any]:
             batches = [
-                [parameters(32) for _ in range(runs + 1)] for _ in range(clients)
+                [parameters(next(imaged), 32) for _ in range(runs + 1)]
+                for _ in range(clients)
             ]
             with ExitStack() as stack, ThreadPoolExecutor(clients) as pool:
                 sessions = [
@@ -128,16 +149,11 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 "requests_per_s": round(len(samples) / seconds, 2)
             }
 
-        cells = pa.ipc.open_file(
-            session.get("/downloads/tokens").raise_for_status().content
-        ).read_all()
-        holders = np.flatnonzero(pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy())
-
         def spectrum(route: str) -> None:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
         def spectrum_token_query(image_token_count: int) -> dict[str, Any]:
-            galaxy = int(rng.choice(holders))
+            galaxy = next(spectral)
             response = session.get(f"/galaxy/{galaxy}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
             spectrum_tokens = observed_spectrum_tokens(
