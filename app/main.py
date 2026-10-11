@@ -445,14 +445,19 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
             if shares is None
             else pa.array(shares, pa.float32())
         )
-    places = pa.list_(pa.field("item", pa.int32(), nullable=False))
     for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
-        fields.append(pa.field(f"{mode}_positions", places))
         positions = results.positions.get(mode)
+        places = pa.list_(
+            pa.field("item", pa.int32(), nullable=False),
+            -1 if positions is None else positions.shape[1],
+        )
+        fields.append(pa.field(f"{mode}_positions", places))
         columns.append(
             pa.nulls(count, places)
             if positions is None
-            else pa.array(positions.tolist(), places)
+            else pa.FixedSizeListArray.from_arrays(
+                pa.array(positions.reshape(-1)), positions.shape[1]
+            )
         )
     for column in OBSERVATIONS:
         fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))
