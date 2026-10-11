@@ -60,7 +60,7 @@ Versions are the checked-out commit (after), `origin/main` (before), and the sto
 
 The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
 
-The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does and as `main` does until this removal merges, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
+The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
 
 ## `backend_performance`
 
