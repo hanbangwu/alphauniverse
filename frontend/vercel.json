@@ -1,5 +1,4 @@
 {
-  "installCommand": "pip3 install uv && bun install",
   "buildCommand": "uv run --directory ../docs --group docs sphinx-build -b html . ../frontend/static/docs && bun run build",
   "redirects": [{ "source": "/docs", "destination": "/docs/", "permanent": true }]
 }
