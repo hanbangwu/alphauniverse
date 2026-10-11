@@ -136,7 +136,7 @@ def generate_aion_gemma_space() -> None:
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")
-    .env(environment | {"HF_HUB_OFFLINE": "1"})
+    .env(environment | {"HF_HUB_OFFLINE": "1", "OPENBLAS_NUM_THREADS": "1"})
     .add_local_python_source("app")
 )
 

@@ -1,5 +1,7 @@
+import math
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from functools import cache, partial
 from itertools import accumulate
 from threading import Lock
@@ -67,6 +69,8 @@ SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
 MATRICES = OrderedDict()
 SUMS = OrderedDict()
+THREADS = pa.cpu_count()
+POOL = ThreadPoolExecutor(THREADS)
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -352,6 +356,12 @@ def cross_overlaps(
         yield start, np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR, out=overlaps)
 
 
+def threaded(
+    compute: Callable[[pa.RecordBatch], np.ndarray], batches: list[pa.RecordBatch]
+) -> np.ndarray:
+    return np.concatenate(list(POOL.map(compute, batches)))
+
+
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
     rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
     return pa.concat_tables(rows).combine_chunks().to_batches()[0]
@@ -406,12 +416,9 @@ def cached[T](store: OrderedDict, key: Hashable, compute: Callable[[], T]) -> T:
 
 def basket_sum(galaxy: int, mode: str, slots: np.ndarray) -> np.ndarray:
     form = query_forms(row(galaxy), {mode: slots})[mode]
-    return np.concatenate(
-        [
-            best_log_overlaps(rows, mode, form).sum(axis=1)
-            for rows in predictions().to_batches()
-        ]
-    )
+    return threaded(
+        partial(best_log_overlaps, mode=mode, form=form), predictions().to_batches()
+    ).sum(axis=1)
 
 
 def distributions(mode: str, form: np.ndarray) -> np.ndarray:
@@ -477,13 +484,9 @@ def agreement_rows(rows: pa.RecordBatch, forms: dict[str, np.ndarray]) -> np.nda
 
 
 def built(galaxy: int) -> Agreements:
-    forms = galaxy_forms(galaxy)
-    values = np.empty((predictions().num_rows, WIDTH), np.float32)
-    start = 0
-    for rows in predictions().to_batches():
-        stop = start + rows.num_rows
-        values[start:stop] = agreement_rows(rows, forms)
-        start = stop
+    values = threaded(
+        partial(agreement_rows, forms=galaxy_forms(galaxy)), predictions().to_batches()
+    )
     others = np.arange(len(values)) != galaxy
     means = (values.sum(axis=0, dtype=np.float64) - values[galaxy]) / others.sum()
     squares = np.zeros(WIDTH)
@@ -591,10 +594,12 @@ def sampled_values(query: Selection, found: Agreements) -> np.ndarray:
     sample = saliency_sample(query)
     values = found.values[sample].astype(np.float64)
     rows = gathered(sample)
+    size = math.ceil(rows.num_rows / THREADS)
+    parts = [rows.slice(start, size) for start in range(0, rows.num_rows, size)]
     forms = query_forms(row(query.galaxy), dict.fromkeys(query.anywhere, slice(None)))
     for mode, form in forms.items():
-        values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = best_log_overlaps(
-            rows, mode, form
+        values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = threaded(
+            partial(best_log_overlaps, mode=mode, form=form), parts
         )
     return values
 
