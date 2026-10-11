@@ -10,6 +10,7 @@ from typing import Annotated, NamedTuple, Self, get_args
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+import torch
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import (
@@ -317,8 +318,6 @@ def cross_overlaps(
     rows: pa.RecordBatch, mode: str, form: np.ndarray
 ) -> Iterator[tuple[int, np.ndarray]]:
     if mode in IMAGE_MODES:
-        import torch
-
         codes, probabilities, spread = top_image_tokens(
             rows, IMAGE_MODES[mode], slice(None), KEPT
         )
