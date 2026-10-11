@@ -36,14 +36,14 @@ Start the Benchmark workflow by hand from the Actions tab. Pick a branch that co
 
 What a first visitor to an idle site waits for, from the last `backend_performance` run:
 
-| Step                             | Cost                        |
-| -------------------------------- | --------------------------- |
-| Container start + loads, `/meta` | **18.1 s**                  |
-| First `/search` after that       | 0.52 s                      |
-| First `/search/text` after that  | 35.5 s                      |
-| Everything warm after that       | 0.13–0.43 s p50 per request |
+| Step                             | Cost                                          |
+| -------------------------------- | --------------------------------------------- |
+| Container start + loads, `/meta` | 18.1 s with the cosine search's loads         |
+| First `/search` after that       | unmeasured since #225                         |
+| First `/search/text` after that  | 35.5 s                                        |
+| Everything warm after that       | 0.13–0.28 s p50, every endpoint but `/search` |
 
-**A cold visit shows a spinner until `/meta` returns**, 18.1 s after the browser sends it. Cold start dominates, then the first text search.
+The run predates #225, which replaced the cosine search and its loads with PQL, so every `/search` figure and the cold start under PQL are **unmeasured**.
 
 ## `search_performance`
 
@@ -53,7 +53,7 @@ A container with the server's spec runs, per version:
 2. `lifespan`'s loads: `galaxy_count`, `labels`, `predictions`, `basis`, and `observed` for each observation column;
 3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches, each query with an empty agreement cache: `selection` (the selected slots by mode), `agreements` (building its agreement matrix), `sums` (the selected columns' sums), `combine`, `similarity`, `order`, `maps` and `predicted`, then `saliency` (one click under Population, from the built matrix). A click on a galaxy whose matrix is cached costs every stage but `agreements`;
 4. `pql.search()` whole at 8, 32 and 128 matches, each query on a random galaxy.
-5. under `anywhere`, outside `total_p50_ms`: first query and warm, `pql.search()` and one `pql.saliency()` click with the agreement matrix already built, for 4 Legacy Survey image tokens and for 16 contiguous spectrum tokens, each position-independent.
+5. under `anywhere`, outside `total_p50_ms`: first query and warm, `pql.search()` and then one `pql.saliency()` click, with the agreement matrix already built; the click reuses the search's position-independent sums; for 4 Legacy Survey image tokens and for 16 contiguous spectrum tokens, each position-independent.
 
 The loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count.
 
@@ -70,7 +70,8 @@ The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone
 1. one cold `/meta`, one cold `/search`, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
 2. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `/search/text` cycling through `text_search_quality`'s six queries, `/search` with 4 Legacy Survey table values at 32 matches, and `/search` with 4 image tokens at 8, 32 and 128 matches;
 3. warm: both spectrum routes, and `/search` at 32 matches with 4 spectrum tokens, alone and with 4 image tokens, on galaxies with a DESI spectrum and spectrum tokens inside its observed range;
-4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 image tokens at 32 matches.
+
+Each `/search` goes to a random galaxy, so under PQL most of the warm `/search` requests build that galaxy's agreement matrix; "warm" means a warm container, not a cached matrix. 4. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 image tokens at 32 matches.
 
 Latency includes Modal's ingress, not the starter's network. Only the checked-out commit is timed.
 
@@ -85,18 +86,7 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 | Client           | 1 CPU; 17 CPUs visible, faiss at 1 thread; AMD family 25, model 1                                 |
 | Runs             | 30 warm per figure after one discarded; one cold                                                  |
 
-**`/search`**, warm, 32 matches unless stated:
-
-| Query                                | p50    | p95    |
-| ------------------------------------ | ------ | ------ |
-| 4 image tokens, 8 matches            | 164 ms | 174 ms |
-| 4 image tokens                       | 225 ms | 255 ms |
-| 4 image tokens, 128 matches          | 429 ms | 503 ms |
-| 4 spectrum tokens                    | 253 ms | 276 ms |
-| 4 image tokens and 4 spectrum tokens | 237 ms | 258 ms |
-| 4 Legacy Survey table values         | 231 ms | 264 ms |
-
-`matches` sets the cost. Over the 128 ms `/meta` floor, 32 matches add 225 − 128 = 97 ms at p50, and 128 add 429 − 128 = 301 ms.
+**`/search`**: the run timed the cosine search, which #225 removed; under PQL it is **unmeasured**.
 
 **Other endpoints**, warm:
 
@@ -113,18 +103,9 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 
 All but `/search/text` are within 140 − 126 = 14 ms at p50; `/search/text` adds 284 − 128 = 156 ms over the floor. What the floor is made of is **unmeasured**.
 
-**Cold start.** A request to a fresh container took **18.1 s**. How the 18.1 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 18.1 s; `max_containers=1` leaves no second container to answer. The first `/search/text` after the cold `/search` took **35.5 s**: it loads EmbeddingGemma and `aion_gemma_space` and imports sentence-transformers.
+**Cold start.** A request to a fresh container took **18.1 s**, with the cosine search's loads; under PQL it is **unmeasured**. How the 18.1 s splits between container start and loads is **unmeasured** in this run; `search_performance` times the loads in its own run. With `scaledown_window=300`, a visitor more than five minutes after the last waits the full 18.1 s; `max_containers=1` leaves no second container to answer. The first `/search/text` after the cold `/search` took **35.5 s**: it loads EmbeddingGemma and `aion_gemma_space` and imports sentence-transformers.
 
-**Concurrency:**
-
-| Clients | p50    | p95    | Requests/s |
-| ------- | ------ | ------ | ---------- |
-| 1       | 232 ms | 262 ms | 4.26       |
-| 4       | 289 ms | 345 ms | 13.42      |
-| 16      | 1.05 s | 1.39 s | 15.61      |
-| 32      | 2.10 s | 2.64 s | 15.63      |
-
-**Throughput reaches 15.63 requests/s with 32 clients**, the most clients timed, against 15.61 with 16; latency grows with the queue (32 / 15.63 = 2.05 s, against a p50 of 2.10 s). Whether the server or the 1-CPU client sets the ceiling is **unmeasured**.
+**Concurrency** was timed with `/search` on the cosine search; under PQL it is **unmeasured**.
 
 ## `projection_quality`
 
@@ -207,7 +188,7 @@ The report is too large for the workflow's step summary; it is in the run's arti
 
 ## Scaling ceilings
 
-| Ceiling          | Now           | Breaks at                                                                                             |
-| ---------------- | ------------- | ----------------------------------------------------------------------------------------------------- |
-| Cold start       | 18.1 s        | a proxy or browser timeout; which one, and at what length, is unmeasured                              |
-| Serving capacity | one container | 15.63 requests/s `/search` throughput at 32 clients, the most timed; `max_containers=1` is a hard cap |
+| Ceiling          | Now                   | Breaks at                                                                      |
+| ---------------- | --------------------- | ------------------------------------------------------------------------------ |
+| Cold start       | unmeasured since #225 | a proxy or browser timeout; which one, and at what length, is unmeasured       |
+| Serving capacity | one container         | `/search` throughput under PQL is unmeasured; `max_containers=1` is a hard cap |

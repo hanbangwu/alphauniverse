@@ -28,25 +28,25 @@ hanbangwu/alphauniverse-cosmos (Hugging Face)
 
 ## The artifacts
 
-| Role               | Shape                                                | Who reads it                                                             |
-| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| `encoded`          | one row per galaxy, embeddings per survey            | projections, `/downloads/{role}`                                         |
-| `codebook`         | same, the encoder's input embeddings                 | `/downloads/{role}`                                                      |
-| `tokens`           | same, token ids                                      | startup, `/search`, token and galaxy endpoints, downloads, predictions   |
-| `mean_points`      | one 2-d point per galaxy                             | `/meta`, `/projections/mean`                                             |
-| `full_points`      | one 2-d point per embedding                          | `/projections/full`                                                      |
-| `parametric_umap`  | the trained projector's weights                      | nothing at serve time                                                    |
-| `pairs`            | AION and EmbeddingGemma embeddings per galaxy        | `generate_alignment`, `generate_aion_gemma_space`, `text_search_quality` |
-| `alignment`        | the AION to EmbeddingGemma maps' weights             | `generate_aion_gemma_space`, `text_search_quality`                       |
-| `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space         | `/search/text`                                                           |
-| `predictions`      | AION's predicted codes at every slot                 | startup, `/search`, `pql_quality`                                        |
-| `prediction_basis` | the spectrum token predictions' PCA basis per survey | startup, `/search`, `pql_quality`                                        |
+| Role               | Shape                                                | Who reads it                                                                                       |
+| ------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `encoded`          | one row per galaxy, embeddings per survey            | projections, `/downloads/{role}`                                                                   |
+| `codebook`         | same, the encoder's input embeddings                 | `/downloads/{role}`                                                                                |
+| `tokens`           | same, token ids                                      | startup, `/search`, token and galaxy endpoints, downloads, predictions                             |
+| `mean_points`      | one 2-d point per galaxy                             | `/meta`, `/projections/mean`                                                                       |
+| `full_points`      | one 2-d point per embedding                          | `/projections/full`                                                                                |
+| `parametric_umap`  | the trained projector's weights                      | nothing at serve time                                                                              |
+| `pairs`            | AION and EmbeddingGemma embeddings per galaxy        | `generate_alignment`, `generate_aion_gemma_space`, `text_search_quality`                           |
+| `alignment`        | the AION to EmbeddingGemma maps' weights             | `generate_aion_gemma_space`, `text_search_quality`                                                 |
+| `aion_gemma_space` | each galaxy's vector in EmbeddingGemma space         | `/search/text`                                                                                     |
+| `predictions`      | AION's predicted codes at every slot                 | startup, `/search`, `/saliency`, `/galaxy/{g}/cosines/{mode}`, `search_performance`, `pql_quality` |
+| `prediction_basis` | the spectrum token predictions' PCA basis per survey | startup, `/search`, `/saliency`, `/galaxy/{g}/cosines/{mode}`, `search_performance`, `pql_quality` |
 
 `docs/pipeline.md` has the schemas. `/meta` counts `mean_points.category`: one count per GZ10 class, unlabelled galaxies last. `/galaxy/{g}/image`, `/galaxy/{g}/spectrum` and `/galaxy/{g}/table` read the cached dataset instead; `/galaxy/{g}/spectrum` smooths the flux with astropy for display only (Gaussian, `SPECTRUM_SMOOTHING_SIGMA` pixels, masked pixels stay NaN), and search reads the unsmoothed flux. `/galaxy/{g}/table` returns every numeric and boolean column whose name ends in one of the six catalogue suffixes, null where that catalogue has no match; the `Z` row AION was given carries index 0, the redshift, and each of the 25 table values AION encodes carries its index: 1 to 12 Legacy Survey, then 13 to 25 HSC (`TABLE_VALUE_SURVEYS` in `app/config.py`). The DESI and SDSS redshift rows (`Z`, its error, its flag) come first, in the `redshift` section and named with their survey; every other row's section is its catalogue. Any other measured `Z` row has `excluded`, the reason: flagged by its survey, above AION's limit of 6, or not the one AION takes.
 
 ## The serving app
 
-Eleven endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded` and `tokens`, as Arrow IPC files, and `codebook`, as Parquet.
+Thirteen endpoints, all `GET`; `/projections/{projection}` and `/downloads/{role}` also answer `HEAD`, for range-request clients and size checks. `/downloads/{role}` serves only `encoded` and `tokens`, as Arrow IPC files, and `codebook`, as Parquet.
 
 A request whose `If-None-Match` matches the ETag gets `304 Not Modified` with no body. An artifact's ETag is Starlette's, from the file's size and modification time, compared before the file is read. Every other successful response's ETag is an MD5 of its body, added by the route class every endpoint uses: the server still builds the response and saves only the transfer. Successful responses and 304s carry `Cache-Control: no-cache`, so a browser revalidates before each reuse.
 
@@ -76,14 +76,12 @@ A query is one galaxy and a selection from it: image tokens of its Legacy Survey
 
 1. The selection splits into modes: each image survey, each spectrum survey, each catalogue's table values and the redshift.
 2. At each selected slot, a galaxy's overlap with the query is Σ_t p_q(t) p_g(t) over their predicted distributions. Image tokens use the query's 64 stored codes and the galaxy's top `KEPT` (16), each with the rest of its mass spread evenly; spectrum tokens use the PCA coefficients, floored at 0.1/1,024; table values and the redshift take a log-sum-exp of the stored log-probabilities.
-3. A mode's sum is the sum of its slots' log overlaps, in nats. A mode named in `anywhere` is position-independent: each selected slot takes its best log overlap over every slot of the galaxy's same mode, computed in blocks of at most 64 MB rather than from the matrix; the server keeps the 8 most recent such sums, so `/saliency` reuses a search's. One mode ranks by its sum; several rank by the mean of each mode's sum standardised over every galaxy.
+3. A mode's sum is the sum of its slots' log overlaps, in nats. A mode named in `anywhere` is position-independent: each selected slot takes its best log overlap over every slot of the galaxy's same mode, computed in blocks whose output is at most 64 MB, rather than from the matrix; the server keeps the 8 most recent such sums, so `/saliency` reuses a search's. One mode ranks by its sum; several rank by the mean of each mode's sum standardised over every galaxy.
 4. The answer is the query galaxy's row, then the `matches` best other galaxies, or every other galaxy if the dataset holds fewer.
 
 Each row carries its `score`, its `similarity`, `{mode}_sum` and `{mode}_similarity` for each selected mode (null otherwise), `has_hsc`, `has_desi`, `has_sdss` and `has_redshift`, `predicted` (the observations its selected modes need that it lacks, each once: `hsc`, `desi`, `sdss`, `redshift`), `{mode}_positions` for each position-independent mode (null otherwise), and the maps.
 
 A mode's similarity is exp ℓ_m, where ℓ_m is the mean over its selected slots of the log overlap minus the log of the query's largest probability at that slot. An overlap is at most that largest probability, so the similarity is in (0, 1]: the geometric mean fraction of the best overlap any galaxy could reach. The row's `similarity` is exp Σ_m w_m ℓ_m, with w_m proportional to 1/std(ℓ_m) over every galaxy and summing to 1; it orders galaxies as `score` does. A PCA spectrum overlap can exceed the query's largest probability slightly, and with it a spectrum similarity exceeds 1; the dialog shows at most 1.
-
-The maps:
 
 The maps (`ls_image`, `hsc_image`, `desi_spectrum`, `sdss_spectrum`, `table_values`) are the galaxy's row of the agreement matrix: at each slot, the overlap of the galaxy's and the query galaxy's predictions at that slot, divided by the query's largest probability there. A mode's similarity is the geometric mean of its map over the selected slots. A position-independent mode's map instead shows, at each slot, the best similarity of any selected slot there, and `{mode}_positions` lists each selected slot's best slot in the galaxy, in the order of the sorted selection; both are computed for the returned rows only.
 
