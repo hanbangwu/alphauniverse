@@ -1,4 +1,5 @@
 import json
+import math
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -528,10 +529,8 @@ def meets(entry: dict[str, Any]) -> bool:
 
 
 def worst(entry: dict[str, Any]) -> float:
-    return min(
-        np.nan_to_num(result["both"]["spearman_median"], nan=-np.inf)
-        for result in entry["sizes"].values()
-    )
+    medians = [result["both"]["spearman_median"] for result in entry["sizes"].values()]
+    return -math.inf if any(map(math.isnan, medians)) else min(medians)
 
 
 def choices(results: dict[str, dict[str, Any]], total: int) -> dict[str, Any]:
