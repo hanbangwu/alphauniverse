@@ -1,4 +1,4 @@
-import type { SimilarityQuery } from '$lib/data/similarity'
+import type { SaliencyQuery, SimilarityQuery } from '$lib/data/similarity'
 import { Field } from './field.svelte'
 import { rangeOf } from './schema'
 
@@ -12,16 +12,15 @@ export class SearchState {
     return Number.isInteger(value) && value >= minimum && value <= maximum ? value : null
   }
 
-  request(
+  selection(
     galaxy: number | null,
     imageTokens: number[],
     spectrumTokens: number[],
     tableValues: number[],
     imageAnywhere: boolean,
     spectrumAnywhere: boolean
-  ): SimilarityQuery | null {
-    const matches = this.count
-    if (galaxy === null || matches === null) return null
+  ): SaliencyQuery | null {
+    if (galaxy === null) return null
     if (imageTokens.length + spectrumTokens.length + tableValues.length === 0) return null
     return {
       galaxy,
@@ -31,8 +30,12 @@ export class SearchState {
       anywhere: [
         ...(imageAnywhere && imageTokens.length ? (['ls_image'] as const) : []),
         ...(spectrumAnywhere && spectrumTokens.length ? (['desi_spectrum'] as const) : [])
-      ],
-      matches
+      ]
     }
+  }
+
+  request(selection: SaliencyQuery | null): SimilarityQuery | null {
+    const matches = this.count
+    return selection && matches !== null ? { ...selection, matches } : null
   }
 }

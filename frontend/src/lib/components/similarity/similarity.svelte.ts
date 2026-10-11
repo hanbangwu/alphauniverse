@@ -54,8 +54,8 @@ export class Similarity {
     this.galaxy = galaxy
     this.grid = app.meta.grid
 
-    this.draft = $derived(
-      app.search.request(
+    const selection = $derived(
+      app.search.selection(
         galaxy,
         app.view.imageTokens.value,
         app.view.spectrumTokens.value,
@@ -64,6 +64,7 @@ export class Similarity {
         app.view.spectrumAnywhere.value
       )
     )
+    this.draft = $derived(app.search.request(selection))
     this.#result = createQuery(() => similarityQuery(this.#submitted))
     const own = $derived(this.layer === 'galaxy')
     this.#imageCosines = createQuery(() =>
@@ -72,20 +73,8 @@ export class Similarity {
     this.#spectrumCosines = createQuery(() =>
       cosinesQuery(own && app.view.spectrumTokens.value.length ? galaxy : null, 'desi_spectrum')
     )
-    this.#saliency = createQuery(() =>
-      saliencyQuery(
-        !own && this.draft
-          ? {
-              galaxy,
-              ls_image: this.draft.ls_image,
-              desi_spectrum: this.draft.desi_spectrum,
-              table_values: this.draft.table_values,
-              anywhere: this.draft.anywhere
-            }
-          : null
-      )
-    )
-    const saliency = $derived(own || !this.draft ? null : (this.#saliency.data ?? null))
+    this.#saliency = createQuery(() => saliencyQuery(own ? null : selection))
+    const saliency = $derived(own || !selection ? null : (this.#saliency.data ?? null))
 
     this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
@@ -103,11 +92,11 @@ export class Similarity {
     this.imageLayerDomain = $derived(this.imageLayer ? extent(this.imageLayer) : null)
     this.imageLayerHeat = $derived(this.imageLayerDomain ? continuous(this.imageLayerDomain) : null)
     this.spectrumMaps = $derived(this.#result.data?.spectrumMaps ?? null)
-    this.spectrumHeat = $derived.by(() => {
-      if (!this.spectrumMaps) return null
-      const [low, high] = extent(this.spectrumMaps.subarray(this.spectrumMapAt(0).length))
-      return low <= high ? continuous([low, high]) : null
-    })
+    this.spectrumHeat = $derived(
+      this.spectrumMaps
+        ? continuous(extent(this.spectrumMaps.subarray(this.spectrumMapAt(0).length)))
+        : null
+    )
     this.spectrumLayer = $derived(
       saliency
         ? saliency.spectrum
@@ -121,11 +110,9 @@ export class Similarity {
     this.tableValueMap = $derived(
       saliency ? saliency.tableValues : (this.#result.data?.tableValueMap ?? null)
     )
-    this.tableValueHeat = $derived.by(() => {
-      if (!this.tableValueMap) return null
-      const [low, high] = extent(this.tableValueMap)
-      return low <= high ? continuous([low, high]) : null
-    })
+    this.tableValueHeat = $derived(
+      this.tableValueMap ? continuous(extent(this.tableValueMap)) : null
+    )
   }
 
   get error(): string | null {
@@ -154,6 +141,10 @@ export class Similarity {
   spectrumOutlinesAt(index: number): number[] {
     const data = this.#result.data
     return data?.spectrumPositions[index] ?? data?.request.desi_spectrum ?? []
+  }
+
+  get layerStale(): boolean {
+    return this.layer !== 'galaxy' && this.#saliency.isPlaceholderData
   }
 
   get stale(): boolean {

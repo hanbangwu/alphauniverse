@@ -30,85 +30,86 @@
       <Tabs.Trigger value="population">Population</Tabs.Trigger>
     </Tabs.List>
   </Tabs.Root>
+  <div class={['flex flex-col gap-5 transition-opacity', similarity.layerStale && 'opacity-50']}>
+    <div class="flex flex-col gap-5 md:flex-row md:justify-center md:*:max-w-xs">
+      <GalaxyTile galaxy={similarity.galaxy} />
 
-  <div class="flex flex-col gap-5 md:flex-row md:justify-center md:*:max-w-xs">
-    <GalaxyTile galaxy={similarity.galaxy} />
-
-    <ImageTokenPanel
-      label="Image Tokens"
-      describe="Click an image token to query it"
-      values={similarity.imageLayer ?? tokens.data ?? null}
-      grid={similarity.grid}
-      color={similarity.imageLayer ? similarity.imageLayerHeat : palette}
-      opacity={similarity.imageLayer ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
-      galaxy={similarity.galaxy}
-      title={similarity.imageLayer ? similarity.layerCaption : similarity.caption}
-      selected={view.imageTokens.value}
-      ontoggle={(index) => view.imageTokens.toggle(index)}
-      busy={!tokens.data && !tokens.isError}
-      onhover={(value) => (hovered = value)}
-      imageOpacity={similarity.imageLayer || hovered ? undefined : tokenAlpha(false)}
-    >
-      {#snippet action()}
-        <div class="flex items-center gap-4">
-          <label class="flex items-center gap-2 text-sm font-medium">
-            <Switch
-              checked={display.on.value}
-              disabled={!display.on.value && !similarity.imageLayer && !similarity.searched}
-              onCheckedChange={(checked) => (display.on.value = checked)}
-            />
-            Mask
-          </label>
-          <label class="flex items-center gap-2 text-sm font-medium">
-            <Switch
-              checked={display.invert.value}
-              disabled={!display.on.value}
-              onCheckedChange={(checked) => (display.invert.value = checked)}
-            />
-            Invert
-          </label>
-        </div>
-      {/snippet}
-      {#if tokens.isError}
-        <p role="alert" class="text-xs leading-relaxed text-destructive">
-          {errorMessage(tokens.error)}
-        </p>
-      {/if}
-      {#if similarity.imageLayerError}
-        <p role="alert" class="text-xs leading-relaxed text-destructive">
-          {similarity.imageLayerError}
-        </p>
-      {/if}
-    </ImageTokenPanel>
-
-    {#if similarity.imageLayer && similarity.imageLayerDomain}
-      <ImageTokenMask
-        values={similarity.imageLayer}
-        domain={similarity.imageLayerDomain}
-        control={display.query}
+      <ImageTokenPanel
+        label="Image Tokens"
+        describe="Click an image token to query it"
+        values={similarity.imageLayer ?? tokens.data ?? null}
+        grid={similarity.grid}
+        color={similarity.imageLayer ? similarity.imageLayerHeat : palette}
+        opacity={similarity.imageLayer ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
+        galaxy={similarity.galaxy}
+        title={similarity.imageLayer ? similarity.layerCaption : similarity.caption}
+        selected={view.imageTokens.value}
+        ontoggle={(index) => view.imageTokens.toggle(index)}
+        busy={!tokens.data && !tokens.isError}
+        onhover={(value) => (hovered = value)}
+        imageOpacity={similarity.imageLayer || hovered ? undefined : tokenAlpha(false)}
       >
-        <MaskControls domain={similarity.imageLayerDomain} control={display.query} />
-      </ImageTokenMask>
-    {/if}
+        {#snippet action()}
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 text-sm font-medium">
+              <Switch
+                checked={display.on.value}
+                disabled={!display.on.value && !similarity.imageLayer && !similarity.searched}
+                onCheckedChange={(checked) => (display.on.value = checked)}
+              />
+              Mask
+            </label>
+            <label class="flex items-center gap-2 text-sm font-medium">
+              <Switch
+                checked={display.invert.value}
+                disabled={!display.on.value}
+                onCheckedChange={(checked) => (display.invert.value = checked)}
+              />
+              Invert
+            </label>
+          </div>
+        {/snippet}
+        {#if tokens.isError}
+          <p role="alert" class="text-xs leading-relaxed text-destructive">
+            {errorMessage(tokens.error)}
+          </p>
+        {/if}
+        {#if similarity.imageLayerError}
+          <p role="alert" class="text-xs leading-relaxed text-destructive">
+            {similarity.imageLayerError}
+          </p>
+        {/if}
+      </ImageTokenPanel>
 
-    <TablePanel
+      {#if similarity.imageLayer && similarity.imageLayerDomain}
+        <ImageTokenMask
+          values={similarity.imageLayer}
+          domain={similarity.imageLayerDomain}
+          control={display.query}
+        >
+          <MaskControls domain={similarity.imageLayerDomain} control={display.query} />
+        </ImageTokenMask>
+      {/if}
+
+      <TablePanel
+        galaxy={similarity.galaxy}
+        selected={view.tableValues.value}
+        ontoggle={(index) => view.tableValues.toggle(index)}
+      />
+    </div>
+
+    <SpectrumPanel
       galaxy={similarity.galaxy}
-      selected={view.tableValues.value}
-      ontoggle={(index) => view.tableValues.toggle(index)}
+      map={similarity.spectrumLayer}
+      heat={similarity.spectrumLayerHeat}
+      caption={similarity.layerCaption}
+      selected={view.spectrumTokens.value}
+      ontoggle={(index) => view.spectrumTokens.toggle(index)}
     />
+    {#if similarity.spectrumLayerError}
+      <p role="alert" class="text-xs leading-relaxed text-destructive">
+        {similarity.spectrumLayerError}
+      </p>
+    {/if}
   </div>
-
-  <SpectrumPanel
-    galaxy={similarity.galaxy}
-    map={similarity.spectrumLayer}
-    heat={similarity.spectrumLayerHeat}
-    caption={similarity.layerCaption}
-    selected={view.spectrumTokens.value}
-    ontoggle={(index) => view.spectrumTokens.toggle(index)}
-  />
-  {#if similarity.spectrumLayerError}
-    <p role="alert" class="text-xs leading-relaxed text-destructive">
-      {similarity.spectrumLayerError}
-    </p>
-  {/if}
 </div>
