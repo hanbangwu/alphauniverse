@@ -13,6 +13,7 @@ SERVING_MEMORY = (8 * 1024, 32 * 1024)
 SERVING_MAX_INPUTS = 16
 SERVING_MAX_CONTAINERS = 1
 SERVING_SCALEDOWN_WINDOW = 5 * 60
+SERVING_ENVIRONMENT = {"OPENBLAS_NUM_THREADS": "1"}
 
 app = modal.App("alphauniverse")
 
@@ -136,13 +137,14 @@ def generate_aion_gemma_space() -> None:
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")
-    .env(environment | {"HF_HUB_OFFLINE": "1", "OPENBLAS_NUM_THREADS": "1"})
+    .env(environment | {"HF_HUB_OFFLINE": "1"})
     .add_local_python_source("app")
 )
 
 
 @app.function(
     image=serving_image,
+    env=SERVING_ENVIRONMENT,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
     timeout=10 * 60,
