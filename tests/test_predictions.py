@@ -9,7 +9,6 @@ import pytest
 from app.config import (
     ANCHOR,
     IMAGE_VOCABULARY,
-    KEPT,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
@@ -64,15 +63,18 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
         kept = column(table, f"{survey}_probabilities").reshape(
             galaxies, N_IMAGE_TOKENS, -1
         )
+        query = column(table, f"{survey}_query_probabilities").reshape(
+            galaxies, N_IMAGE_TOKENS, -1
+        )
         rest = column(table, f"{survey}_rest").reshape(galaxies, N_IMAGE_TOKENS)
         tails = np.exp(column(table, f"{survey}_tails").astype(np.float64))
         table_values = column(table, f"{survey}_table_values")
         np.testing.assert_allclose(
-            kept.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS), 1, atol=0.02
+            kept.sum(-1) + query.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS),
+            1,
+            atol=0.02,
         )
-        np.testing.assert_allclose(
-            kept[..., :KEPT].sum(-1) + rest, 1, atol=np.finfo(np.float16).eps
-        )
+        np.testing.assert_allclose(kept.sum(-1) + rest, 1, atol=1e-5)
         np.testing.assert_allclose(
             table_values.reshape(galaxies, len(keys), -1).sum(-1), 1, atol=0.02
         )

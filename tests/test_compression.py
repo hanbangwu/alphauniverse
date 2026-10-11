@@ -72,7 +72,8 @@ def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
     }
     widths = {
         "ls_image": columns["ls_codes"] * 2
-        + columns["ls_probabilities"] * 2
+        + columns["ls_probabilities"] * 4
+        + columns["ls_query_probabilities"] * 2
         + columns["ls_rest"] * 4
         + columns["ls_tails"] * 4,
         "ls_table": columns["ls_table_values"] * 4,

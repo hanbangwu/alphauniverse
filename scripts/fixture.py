@@ -143,9 +143,12 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
                 .reshape(-1)
             )
             probabilities = -np.sort(-mass[:, :TOP_CODES], axis=1)
-            values[f"{survey}_probabilities"] = probabilities.astype(
-                np.float16
-            ).reshape(-1)
+            values[f"{survey}_probabilities"] = (
+                probabilities[:, :KEPT].astype(np.float32).reshape(-1)
+            )
+            values[f"{survey}_query_probabilities"] = (
+                probabilities[:, KEPT:].astype(np.float16).reshape(-1)
+            )
             values[f"{survey}_rest"] = (
                 probabilities[:, KEPT:].sum(axis=1) + mass[:, -1]
             ).astype(np.float32)

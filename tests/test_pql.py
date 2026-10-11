@@ -48,7 +48,18 @@ def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
 
 def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
     codes = column(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES).astype(np.int64)
-    probabilities = column(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, TOP_CODES)
+    probabilities = np.concatenate(
+        [
+            column(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, pql.KEPT),
+            column(
+                rows,
+                f"{survey}_query_probabilities",
+                N_IMAGE_TOKENS,
+                TOP_CODES - pql.KEPT,
+            ),
+        ],
+        axis=-1,
+    )
     rest = (
         column(rows, f"{survey}_rest", N_IMAGE_TOKENS)
         if kept == pql.KEPT

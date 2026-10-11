@@ -149,7 +149,7 @@ def predictions(
 
 def image_token_codes(
     log_probabilities: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     candidates = np.argpartition(-log_probabilities, TOP_CODES - 1, axis=1)[
         :, :TOP_CODES
     ]
@@ -162,7 +162,8 @@ def image_token_codes(
     tails = beyond.sum(axis=1)
     return (
         codes.astype(np.uint16),
-        probabilities.astype(np.float16),
+        probabilities[:, :KEPT],
+        probabilities[:, KEPT:].astype(np.float16),
         tails + probabilities[:, KEPT:].sum(axis=1),
         np.log(np.maximum(tails, PROBABILITY_FLOOR)),
     )
@@ -228,9 +229,12 @@ def record(
         REDSHIFT: np.exp(predicted[REDSHIFT_KEY][0]),
     }
     for survey, image_key in IMAGES.items():
-        codes, probabilities, rest, tails = image_token_codes(predicted[image_key])
+        codes, probabilities, query_probabilities, rest, tails = image_token_codes(
+            predicted[image_key]
+        )
         values[f"{survey}_codes"] = codes.reshape(-1)
         values[f"{survey}_probabilities"] = probabilities.reshape(-1)
+        values[f"{survey}_query_probabilities"] = query_probabilities.reshape(-1)
         values[f"{survey}_rest"] = rest
         values[f"{survey}_tails"] = tails
         values[f"{survey}_table_values"] = np.exp(

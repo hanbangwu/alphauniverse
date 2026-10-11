@@ -323,7 +323,7 @@ class Current:
         flat = flat.float().cpu().numpy()
         if self.kind == "image":
             parts = image_token_codes(flat)
-            names = ("codes", "probabilities", "rest", "tails")
+            names = ("codes", "probabilities", "query_probabilities", "rest", "tails")
         else:
             parts = coefficients(
                 np.exp(flat),
@@ -341,15 +341,18 @@ class Current:
     def image(
         self, stored: Stored, side: str = "gallery"
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        kept, rest = (
-            (KEPT, stored["rest"])
-            if side == "gallery"
-            else (TOP_CODES, stored["tails"].exp())
-        )
+        if side == "gallery":
+            return (
+                stored["codes"][..., :KEPT].long(),
+                stored["probabilities"],
+                stored["rest"] / (self.vocabulary - KEPT),
+            )
         return (
-            stored["codes"][..., :kept].long(),
-            stored["probabilities"][..., :kept].float(),
-            rest / (self.vocabulary - kept),
+            stored["codes"].long(),
+            torch.cat(
+                [stored["probabilities"], stored["query_probabilities"].float()], dim=-1
+            ),
+            stored["tails"].exp() / (self.vocabulary - TOP_CODES),
         )
 
     def projected(self, stored: Stored) -> torch.Tensor:

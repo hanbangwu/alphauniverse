@@ -203,8 +203,8 @@ def top_image_tokens(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     codes = array(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES)[:, slots, :KEPT]
-    probabilities = array(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, TOP_CODES)[
-        :, slots, :KEPT
+    probabilities = array(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, KEPT)[
+        :, slots
     ]
     rest = array(rows, f"{survey}_rest", N_IMAGE_TOKENS)[:, slots]
     return codes, probabilities, rest / (IMAGE_VOCABULARY - KEPT)
@@ -214,9 +214,15 @@ def dense_image_tokens(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
     codes = array(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES)[:, slots]
-    probabilities = array(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, TOP_CODES)[
-        :, slots
-    ]
+    probabilities = np.concatenate(
+        [
+            array(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, KEPT),
+            array(
+                rows, f"{survey}_query_probabilities", N_IMAGE_TOKENS, TOP_CODES - KEPT
+            ),
+        ],
+        axis=-1,
+    )[:, slots]
     rest = np.exp(array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots])
     dense = np.repeat(
         (rest / (IMAGE_VOCABULARY - TOP_CODES))[..., None], IMAGE_VOCABULARY, axis=-1

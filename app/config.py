@@ -214,8 +214,11 @@ PREDICTIONS = pa.schema(
                 f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * TOP_CODES)
             ),
             pa.field(
-                f"{survey}_probabilities",
-                pa.list_(pa.float16(), N_IMAGE_TOKENS * TOP_CODES),
+                f"{survey}_probabilities", pa.list_(pa.float32(), N_IMAGE_TOKENS * KEPT)
+            ),
+            pa.field(
+                f"{survey}_query_probabilities",
+                pa.list_(pa.float16(), N_IMAGE_TOKENS * (TOP_CODES - KEPT)),
             ),
             pa.field(f"{survey}_rest", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
             pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
