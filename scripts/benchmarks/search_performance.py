@@ -8,7 +8,7 @@ import tempfile
 import time
 from datetime import UTC, datetime
 from functools import partial
-from itertools import pairwise
+from itertools import cycle, pairwise
 from pathlib import Path
 from typing import Any
 
@@ -143,9 +143,22 @@ def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
 
 
 def whole_searches(runs: int, matches: int) -> dict[str, Any]:
-    batch = queries(runs + 1, IMAGE_TOKENS, matches)
-    pql.search(batch[0])
-    return summary([elapsed(partial(pql.search, query)) for query in batch[1:]])
+    galaxies = (
+        np.random.default_rng(1)
+        .choice(galaxy_count(), pql.AGREEMENT_GALAXIES, replace=False)
+        .tolist()
+    )
+    batch = [
+        query.model_copy(update={"galaxy": galaxy})
+        for query, galaxy in zip(
+            queries(runs + len(galaxies), IMAGE_TOKENS, matches), cycle(galaxies)
+        )
+    ]
+    for query in batch[: len(galaxies)]:
+        pql.search(query)
+    return summary(
+        [elapsed(partial(pql.search, query)) for query in batch[len(galaxies) :]]
+    )
 
 
 def anywhere_queries(count: int, matches: int) -> dict[str, list[pql.Query]]:
