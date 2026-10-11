@@ -593,7 +593,7 @@ def main(
     sample: int = 1024, fit: int = 512, queries: int = 200, modes: str = ""
 ) -> None:
     every = [mode.name for mode in predictions.MODES]
-    names = modes.split(",") if modes else every
+    names = list(dict.fromkeys(modes.split(","))) if modes else every
     if unknown := sorted(set(names) - set(every)):
         raise SystemExit(f"Unknown modes {unknown}; choose from {every}.")
     measured = measure.map(

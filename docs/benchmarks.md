@@ -188,7 +188,7 @@ Measures how each way of storing a predicted distribution changes PQL's scores a
 - **Choices**: per mode, the smallest scheme whose both-sides figures meet `TARGETS` at every size (identity may not drop by more than its target); and for corpus totals of 1, 2, 4 and 8 GB, the schemes that maximise the lowest median Spearman over modes and sizes. A NaN Spearman, as when a query's compressed scores are all equal, fails the targets and counts as −∞.
 - **Check**: for the image modes, the log overlaps of 64 galaxies with fp16 and fp32 references.
 
-The report is too large for the workflow's step summary; it is in the run's artifact. Unmeasured.
+A full run's report is over the workflow's step summary limit; it is in the run's artifact. Unmeasured.
 
 ## Scaling ceilings
 

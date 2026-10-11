@@ -148,6 +148,11 @@ def test_fp32_probability_overlaps_below_float32_range_are_floored_and_counted()
         torch.device("cpu"),
     )
 
+    expected = np.full(
+        (SLOTS, len(queries), len(gallery)), np.log(np.finfo(np.float32).tiny)
+    )
+    expected[:, np.arange(len(queries)), queries] = 0
+    np.testing.assert_allclose(overlaps.found["both"].numpy(), expected, rtol=1e-6)
     assert overlaps.floored == 3 / 4
 
 
