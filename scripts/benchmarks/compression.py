@@ -391,7 +391,8 @@ def schemes(mode: Mode, basis: Basis) -> list:
     vocabulary = mode.vocabulary
     return [
         Current(mode, basis),
-        *(Dense(precision) for precision in (*VALUES, PROBABILITY)),
+        *(Dense(precision) for precision in VALUES),
+        Dense(PROBABILITY),
         *(
             TopK(k, rest, precision, vocabulary)
             for k in KS
