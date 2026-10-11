@@ -224,6 +224,11 @@ def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
     best = others[np.argsort(-expected[others], kind="stable")][:matches]
     assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
     np.testing.assert_array_equal(results.scores, expected[results.galaxies])
+    for mode, values in mode_sums(ranked).items():
+        np.testing.assert_array_equal(results.sums[mode], values[results.galaxies])
+    np.testing.assert_array_equal(
+        results.similarity, similarity(ranked)[results.galaxies]
+    )
 
 
 @pytest.mark.parametrize(

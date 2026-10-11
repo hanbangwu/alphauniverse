@@ -183,7 +183,7 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 ## `pql_quality`
 
-A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy, and reports the mean with a 95% bootstrap interval over queries:
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query ranks every galaxy by `pql.scores`, from the query galaxy's agreement matrix; the hidden copy is scored by its own log overlaps with the query. It reports the mean with a 95% bootstrap interval over queries:
 
 - `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
 - `identity` (spectrum token queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.
