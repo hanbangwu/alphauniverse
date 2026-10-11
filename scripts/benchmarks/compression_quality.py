@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import modal
 import numpy as np
@@ -189,6 +189,15 @@ def products(
     )
 
 
+class Overlaps(NamedTuple):
+    found: dict[str, torch.Tensor]
+    pairs: dict[str, torch.Tensor]
+    crossed: dict[str, torch.Tensor]
+    crossed_pairs: dict[str, torch.Tensor]
+    bits: int
+    floored: float
+
+
 def log_overlaps(
     scheme: Any,
     mode: Mode,
@@ -197,14 +206,7 @@ def log_overlaps(
     hidden: np.ndarray,
     device: torch.device,
     window: torch.Tensor | None = None,
-) -> tuple[
-    dict[str, torch.Tensor],
-    dict[str, torch.Tensor],
-    dict[str, torch.Tensor],
-    dict[str, torch.Tensor],
-    int,
-    float,
-]:
+) -> Overlaps:
     sides = ("exact",) if scheme is None else ("gallery", "both")
     shape = (gallery.shape[1], len(queries))
     found = {side: torch.empty(*shape, len(gallery), device=device) for side in sides}
@@ -266,7 +268,7 @@ def log_overlaps(
                     own.clamp_min(minimum).log().amax(dim=-1),
                 )
     total = sum(values.numel() for values in found.values())
-    return found, pairs, crossed, crossed_pairs, bits, floored / total
+    return Overlaps(found, pairs, crossed, crossed_pairs, bits, floored / total)
 
 
 def anywhere_forms(
@@ -449,9 +451,7 @@ def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
         for scheme in compression.schemes(mode, basis.to(torch.device("cpu")))
     }
     window = masks["16"] if kind(mode) in ("image", "spectrum") else None
-    reference, reference_pairs, anywhere, anywhere_pairs, _, _ = log_overlaps(
-        None, mode, gallery, picked, unseen, device, window
-    )
+    reference = log_overlaps(None, mode, gallery, picked, unseen, device, window)
     entries = {}
     for scheme in compression.schemes(mode, basis):
         found, pairs, crossed, crossed_pairs, bits, floored = log_overlaps(
@@ -462,15 +462,16 @@ def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
             "scan_ms": scan_ms(timed[scheme.name], gallery, gallery[picked[0]]),
             "floored": floored,
             "slot_error": {
-                side: slot_errors(found[side], reference["exact"]) for side in found
+                side: slot_errors(found[side], reference.found["exact"])
+                for side in found
             },
             "sizes": {
                 size: {
                     side: summary(
                         found[side],
                         pairs[side],
-                        reference["exact"],
-                        reference_pairs["exact"],
+                        reference.found["exact"],
+                        reference.pairs["exact"],
                         mask,
                         positions,
                         redshift,
@@ -485,8 +486,8 @@ def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
                 side: summary(
                     crossed[side],
                     crossed_pairs[side],
-                    anywhere["exact"],
-                    anywhere_pairs["exact"],
+                    reference.crossed["exact"],
+                    reference.crossed_pairs["exact"],
                     window,
                     positions,
                     redshift,

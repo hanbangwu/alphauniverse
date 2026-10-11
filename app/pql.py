@@ -169,7 +169,7 @@ def predictions() -> pa.Table:
 
 
 @cache
-def basis() -> dict[str, tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
+def basis() -> dict[str, tuple[np.ndarray, np.ndarray, np.float32, np.ndarray]]:
     with np.load(artifact("prediction_basis")) as stored:
         fitted = {}
         for survey in SPECTRUM_SURVEYS:
@@ -392,11 +392,8 @@ def basket_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.nd
 
 
 def cached[T](store: OrderedDict, key: Hashable, compute: Callable[[], T]) -> T:
-    try:
-        store.move_to_end(key)
-        return store[key]
-    except KeyError:
-        pass
+    if (found := store.get(key)) is not None:
+        return found
     with BUILDING:
         if key not in store:
             store[key] = compute()

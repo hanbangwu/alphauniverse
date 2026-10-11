@@ -117,14 +117,14 @@ def test_dense_log_overlaps_match_float64_where_float32_probabilities_underflow(
     gallery[np.arange(4), :, np.arange(4)] = 0
     queries = np.asarray([0, 2])
 
-    found, pairs, _, _, _, floored = quality.log_overlaps(
+    overlaps = quality.log_overlaps(
         None, mode, gallery, queries, gallery[queries], torch.device("cpu")
     )
 
     probabilities = np.exp(gallery.astype(np.float64))
     exact = np.log((probabilities[queries, None] * probabilities[None]).sum(axis=-1))
     np.testing.assert_allclose(
-        found["exact"].numpy(), exact.transpose(2, 0, 1), rtol=1e-6
+        overlaps.found["exact"].numpy(), exact.transpose(2, 0, 1), rtol=1e-6
     )
-    np.testing.assert_allclose(pairs["exact"].numpy(), 0, atol=1e-6)
-    assert floored == 0
+    np.testing.assert_allclose(overlaps.pairs["exact"].numpy(), 0, atol=1e-6)
+    assert overlaps.floored == 0

@@ -30,6 +30,7 @@ export class Similarity {
   readonly #spectrumCosines: CreateQueryResult<Float32Array>
   readonly #saliency: CreateQueryResult<SaliencyResult>
   #submitted: SimilarityQuery | null = $state(null)
+  readonly #selected: boolean
 
   layer: Layer = $state('galaxy')
 
@@ -64,6 +65,7 @@ export class Similarity {
         app.view.spectrumAnywhere.value
       )
     )
+    this.#selected = $derived(selection !== null)
     this.draft = $derived(app.search.request(selection))
     this.#result = createQuery(() => similarityQuery(this.#submitted))
     const own = $derived(this.layer === 'galaxy')
@@ -144,7 +146,7 @@ export class Similarity {
   }
 
   get layerStale(): boolean {
-    return this.layer !== 'galaxy' && this.#saliency.isPlaceholderData
+    return this.layer !== 'galaxy' && this.#selected && this.#saliency.isPlaceholderData
   }
 
   get stale(): boolean {

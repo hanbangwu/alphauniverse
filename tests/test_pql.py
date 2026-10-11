@@ -237,8 +237,7 @@ def test_a_cached_matrix_is_served_while_another_galaxy_builds(tree: Path) -> No
         worker = Thread(target=lambda: served.append(pql.agreements(GALAXY)))
         worker.start()
         worker.join(timeout=10)
-
-    assert served
+        assert served
 
 
 def test_the_saliency_sample_is_the_best_matches_and_other_galaxies(
