@@ -48,15 +48,15 @@ image = serving_image.add_local_python_source("modal_app")
 
 STAGES = [
     "selection",
-    "agreements",
+    "forms",
     "sums",
     "combine",
     "similarity",
     "order",
     "maps",
     "predicted",
-    "saliency",
 ]
+CLICK = ["agreements", "saliency"]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 WINDOW = 16
@@ -120,26 +120,29 @@ def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
     marks = [mark()]
     selected = pql.selection(query)
     marks.append(mark())
-    found = pql.agreements(query.galaxy)
+    forms = pql.galaxy_forms(query.galaxy)
+    peaks = pql.slot_peaks(forms)
     marks.append(mark())
-    totals = pql.column_sums(found, selected)
+    totals = pql.column_sums(selected, pql.query_forms(pql.row(query.galaxy), selected))
     marks.append(mark())
     scored = pql.combine(totals)
     marks.append(mark())
-    pql.similarity(pql.fractions(pql.selected_peaks(found, selected), totals))
+    pql.similarity(pql.fractions(pql.selected_peaks(peaks, selected), totals))
     marks.append(mark())
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
     marks.append(mark())
-    pql.maps(found, galaxies)
+    pql.maps(forms, peaks, galaxies)
     marks.append(mark())
     pql.predicted(selected, galaxies)
     marks.append(mark())
+    pql.agreements(query.galaxy)
+    marks.append(mark())
     pql.saliency(query)
     marks.append(mark())
-    return usages(STAGES, marks)
+    return usages([*STAGES, *CLICK], marks)
 
 
 def whole_searches(runs: int, matches: int) -> dict[str, Any]:
@@ -195,7 +198,9 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
 
     batch = queries(runs + 1, IMAGE_TOKENS, matches)
     cold = stage_times(batch[0])
-    samples: dict[str, list[dict[str, float]]] = {name: [] for name in STAGES}
+    samples: dict[str, list[dict[str, float]]] = {
+        name: [] for name in [*STAGES, *CLICK]
+    }
 
     for query in batch[1:]:
         for name, usage in stage_times(query).items():
@@ -211,7 +216,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
         }
         for name, values in samples.items()
     }
-    total = sum(medians.values())
+    total = sum(medians[name] for name in STAGES)
     return {
         "environment": environment(),
         "load_ms": {name: round(usage["wall"], 3) for name, usage in loads.items()},
@@ -222,9 +227,13 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
         },
         "total_p50_ms": round(total, 3),
         "stages": {
-            name: {"p50_ms": round(median, 3), "share": round(median / total, 4)}
-            for name, median in medians.items()
+            name: {
+                "p50_ms": round(medians[name], 3),
+                "share": round(medians[name] / total, 4),
+            }
+            for name in STAGES
         },
+        "click_p50_ms": {name: round(medians[name], 3) for name in CLICK},
         "searches": {
             f"matches={asked}": whole_searches(runs, asked) for asked in MATCHES
         },

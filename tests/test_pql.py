@@ -91,16 +91,13 @@ def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.n
 
 
 def mode_sums(query: pql.Query) -> dict[str, np.ndarray]:
-    return pql.column_sums(pql.agreements(query.galaxy), pql.selection(query))
+    return pql.column_sums(*pql.selected_forms(query))
 
 
 def similarity(query: pql.Query) -> np.ndarray:
-    found = pql.agreements(query.galaxy)
-    selected = pql.selection(query)
+    peaks = pql.slot_peaks(pql.galaxy_forms(query.galaxy))
     return pql.similarity(
-        pql.fractions(
-            pql.selected_peaks(found, selected), pql.column_sums(found, selected)
-        )
+        pql.fractions(pql.selected_peaks(peaks, pql.selection(query)), mode_sums(query))
     )
 
 
@@ -138,7 +135,8 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     own = table.slice(GALAXY, 1)
     shown = table.take(galaxies)
 
-    aligned = pql.maps(pql.agreements(GALAXY), galaxies)
+    forms = pql.galaxy_forms(GALAXY)
+    aligned = pql.maps(forms, pql.slot_peaks(forms), galaxies)
 
     expected = {
         mode: slot_similarities(
@@ -154,6 +152,20 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
         np.hstack([expected[mode] for mode in TABLE_MODES]),
         rtol=1e-4,
     )
+
+
+def test_a_search_reads_what_the_agreement_matrix_holds(query: pql.Query) -> None:
+    results = pql.search(query.model_copy(update={"matches": 11}))
+
+    found = pql.agreements(GALAXY).values[results.galaxies]
+    for mode, slots in pql.selection(query).items():
+        np.testing.assert_array_equal(
+            results.sums[mode],
+            found[:, pql.OFFSETS[mode] + slots].sum(axis=1, dtype=np.float64),
+        )
+    peaks = pql.slot_peaks(pql.galaxy_forms(GALAXY))
+    for mode, values in pql.by_mode(np.exp(found - peaks)).items():
+        np.testing.assert_array_equal(results.maps[mode], values)
 
 
 def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
@@ -173,9 +185,7 @@ def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
     query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
 
     chosen = pql.selection(query)
-    sums = pql.mode_totals(
-        pql.agreements(GALAXY), chosen, pql.positional_slots(chosen, query.anywhere)
-    )
+    sums = pql.mode_totals(GALAXY, chosen, pql.positional_slots(chosen, query.anywhere))
 
     for mode, slots in selected.items():
         np.testing.assert_allclose(
