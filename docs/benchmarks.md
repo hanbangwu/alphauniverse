@@ -19,7 +19,7 @@ uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
 uv run modal run -m scripts.benchmarks.projection_quality
 uv run modal run -m scripts.benchmarks.text_search_quality
 uv run modal run -m scripts.benchmarks.pql_quality          # --sample, default 1000
-uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200
+uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200, --modes every mode
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -179,7 +179,7 @@ It needs `predictions` and `prediction_basis` from `generate_predictions`. Unmea
 
 ## `compression_quality`
 
-Measures how each way of storing a predicted distribution changes PQL's scores and rankings, for every mode in `app.predictions.MODES`. Unlike the other benchmarks it predicts its own galaxies, densely, from `tokens`; it also reads `mean_points` for the galaxy count and the dataset for spectra's wavelengths and redshifts. Each mode runs in its own container, as `pql_quality`'s, with a 24-hour timeout, and the local entrypoint combines them.
+Measures how each way of storing a predicted distribution changes PQL's scores and rankings, for every mode in `app.predictions.MODES`. Unlike the other benchmarks it predicts its own galaxies, densely, from `tokens`; it also reads `mean_points` for the galaxy count and the dataset for spectra's wavelengths and redshifts. Each mode runs in its own container, as `pql_quality`'s, with a 24-hour timeout, and the local entrypoint combines them. `--modes`, comma-separated, limits a run to those modes; its budgets then total only them.
 
 - **Galaxies** (`SEED`): `--sample` scored galaxies, up to half of them drawn from galaxies with SDSS, then from galaxies with HSC or DESI up to half the sample, the rest from all galaxies; and `--fit` other galaxies whose predictions fit the mode's PCA basis, so every scored galaxy is out of sample. Image modes are held in fp16, the rest in fp32.
 - **Schemes** (`scripts/benchmarks/compression.py`, 219 per mode): the store's current scheme, with the fit galaxies' basis for spectra; dense, also as fp32 probabilities; the top k codes; the fewest codes holding mass p; and PCA coefficients. Top-k and top-p either spread the rest of the mass evenly or drop it, and every scheme is stored at fp32, fp16, bf16, 8 bits or 4 bits. The levels are listed in #214.

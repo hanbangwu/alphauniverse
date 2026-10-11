@@ -589,8 +589,13 @@ def report(measured: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 
 @app.local_entrypoint()
-def main(sample: int = 1024, fit: int = 512, queries: int = 200) -> None:
-    names = [mode.name for mode in predictions.MODES]
+def main(
+    sample: int = 1024, fit: int = 512, queries: int = 200, modes: str = ""
+) -> None:
+    every = [mode.name for mode in predictions.MODES]
+    names = modes.split(",") if modes else every
+    if unknown := sorted(set(names) - set(every)):
+        raise SystemExit(f"Unknown modes {unknown}; choose from {every}.")
     measured = measure.map(
         names, kwargs={"sample": sample, "fit": fit, "queries": queries}
     )
