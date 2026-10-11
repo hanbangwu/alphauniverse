@@ -219,8 +219,8 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         new_galaxy = summary(
             timed_requests(
                 session,
-                "/search",
-                [parameters(chosen, 32) for chosen in islice(unused, runs)],
+                "/saliency",
+                [selection(chosen) for chosen in islice(unused, runs)],
             )
         )
         return {
