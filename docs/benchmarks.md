@@ -51,15 +51,15 @@ A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
 2. `lifespan`'s loads: `galaxy_count`, `labels`, `predictions`, `basis`, and `observed` for each observation column;
-3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches, each query with an empty agreement cache: `selection` (the selected slots by mode), `agreements` (building its agreement matrix), `sums` (the selected columns' sums), `combine`, `similarity`, `order`, `maps` and `predicted`, then `saliency` (one click under Population, from the built matrix). A click on a galaxy whose matrix is cached costs every stage but `agreements`;
-4. `pql.search()` whole at 8, 32 and 128 matches on `pql.AGREEMENT_GALAXIES` random galaxies: at each level, one untimed search per galaxy caches its agreement matrix, then the timed searches take the galaxies in turn, each with its own 4 image tokens; the three levels time the same galaxies and tokens.
+3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches: `selection` (the selected slots by mode), `forms` (the query galaxy's distribution at every slot, and its peaks), `sums` (the selected slots' log overlaps over every galaxy, summed), `combine`, `similarity`, `order`, `maps` (every slot's log overlap over the returned galaxies) and `predicted`; then, outside `total_p50_ms`, in `click_p50_ms`, one click under Population on the same galaxy with an empty agreement cache: `agreements` (building its agreement matrix) and `saliency`;
+4. `pql.search()` whole at 8, 32 and 128 matches on `pql.AGREEMENT_GALAXIES` random galaxies: at each level, one untimed search per galaxy, then the timed searches take the galaxies in turn, each with its own 4 image tokens; the three levels time the same galaxies and tokens.
 5. under `anywhere`, outside `total_p50_ms`: first query and warm, `pql.search()` and then one `pql.saliency()` click, with the agreement matrix already built; the click reuses the search's position-independent sums; for 4 Legacy Survey image tokens and for 16 contiguous spectrum tokens, each position-independent.
 
 The loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count.
 
 Versions are the checked-out commit (after), `origin/main` (before), and the stored report's best unless its code matches one of those. Each is a `git archive` of `app/`, `scripts/` and `modal_app.py`, run in a subprocess with after's locked dependencies, in mirrored order: after, before, best, then back. After's first round has the cold page cache. A failed round records its error.
 
-The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
+The best version has the lowest `total_p50_ms` (sum of warm search stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
 
 The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
 
@@ -68,12 +68,12 @@ The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone
 `modal run` starts an ephemeral `fastapi_app` from the checked-out source, with its image, CPU, memory and concurrency. A 1-CPU client in a separate container times, in order:
 
 1. one cold `/meta`, one cold `/search` with 4 image tokens at 32 matches, then one `/search/text`, the first to load EmbeddingGemma and `aion_gemma_space`;
-2. untimed, one `/search` on each galaxy of the cached set, which builds its agreement matrix: 4 galaxies and 4 with a DESI spectrum, `pql.AGREEMENT_GALAXIES` in all, so none is evicted while the set is in use;
+2. untimed, one `/saliency` with 4 image tokens on each of the set's first 4 galaxies, which builds its agreement matrix; the set is 4 random galaxies, then 4 with a DESI spectrum;
 3. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `ls_image` cosines, `/search/text` cycling through `text_search_quality`'s six queries, then, on the set's first 4 galaxies in turn, `/search` with 4 Legacy Survey table values at 32 matches, `/saliency` with 4 image tokens, and `/search` with 4 image tokens at 8, 32 and 128 matches;
 4. warm: both spectrum routes on random galaxies with a DESI spectrum, and `/search` at 32 matches with 4 spectrum tokens inside the galaxy's observed range, alone and with 4 image tokens, on the set's 4 galaxies with a DESI spectrum in turn;
 5. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending one untimed and then `runs` timed `/search` with 4 image tokens at 32 matches on the set's first 4 galaxies;
-6. 4 such clients, each sending one untimed `/search` on the set, then, all at once, one on a new galaxy; matrices build one at a time under `pql.BUILDING`, so the new galaxies queue;
-7. `runs` `/search` requests with 4 image tokens at 32 matches, each on a new galaxy.
+6. 4 such clients, each sending one untimed `/search` on the set, then, all at once, one `/saliency` on a new galaxy; matrices build one at a time under `pql.BUILDING`, so the new galaxies queue;
+7. `runs` `/saliency` requests with 4 image tokens, each on a new galaxy.
 
 A new galaxy is one no earlier `/search` or `/saliency` named, so its request builds its matrix. Every timed `/search` and `/saliency` draws random tokens or table values.
 
@@ -169,7 +169,7 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 ## `pql_quality`
 
-A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query ranks every galaxy by `pql.scores`, from the query galaxy's agreement matrix; the hidden copy is scored by its own log overlaps with the query. It reports the mean with a 95% bootstrap interval over queries:
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query ranks every galaxy by `pql.scores`; the hidden copy is scored by its own log overlaps with the query. It reports the mean with a 95% bootstrap interval over queries:
 
 - `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
 - `identity` (spectrum token queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.
