@@ -179,6 +179,27 @@ def test_a_position_independent_mode_without_a_selection_is_rejected(
         pql.Query(galaxy=GALAXY, ls_image=(0,), anywhere=("desi_spectrum",))
 
 
+def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
+    table: pa.Table,
+) -> None:
+    own = table.slice(GALAXY, 1)
+    slots = [0, 17, 300]
+    query = pql.Query(galaxy=GALAXY, ls_image=tuple(slots), anywhere=("ls_image",))
+
+    results = pql.search(query)
+
+    shown = dense(table.take(results.galaxies), "ls_image", pql.KEPT)
+    selected = dense(own, "ls_image", TOP_CODES)[0, slots]
+    overlaps = np.log(shown @ selected.T)
+    peaks = np.log(selected.max(axis=-1))
+    np.testing.assert_allclose(
+        results.maps["ls_image"], np.exp((overlaps - peaks).max(axis=-1)), rtol=1e-4
+    )
+    np.testing.assert_array_equal(
+        results.positions["ls_image"], overlaps.argmax(axis=1)
+    )
+
+
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
     table: pa.Table,
 ) -> None:

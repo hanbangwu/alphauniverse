@@ -121,7 +121,8 @@ class Results(NamedTuple):
     sums: dict[str, np.ndarray]
     similarities: dict[str, np.ndarray]
     predicted: list[list[str]]
-    aligned: dict[str, np.ndarray]
+    maps: dict[str, np.ndarray]
+    positions: dict[str, np.ndarray]
 
 
 class Agreements(NamedTuple):
@@ -336,6 +337,25 @@ def cross_log_overlaps(
         yield start, np.log(overlaps)
 
 
+def basket_maps(
+    galaxy: int, galaxies: np.ndarray, selected: dict[str, np.ndarray]
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    rows = predictions().take(galaxies).combine_chunks().to_batches()[0]
+    shown, positions = {}, {}
+    for mode, form in query_forms(row(galaxy), selected).items():
+        peaks = log_peaks(mode, form)
+        best = np.full((len(galaxies), WIDTHS[mode]), -np.inf)
+        positions[mode] = np.empty((len(galaxies), len(form)), np.int32)
+        for start, overlaps in cross_log_overlaps(rows, mode, form):
+            stop = start + len(overlaps)
+            best = np.maximum(
+                best, (overlaps - peaks[start:stop, None, None]).max(axis=0)
+            )
+            positions[mode][:, start:stop] = overlaps.argmax(axis=-1).T
+        shown[mode] = np.exp(best).astype(np.float32)
+    return shown, positions
+
+
 def basket_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     forms = query_forms(row(galaxy), selected)
     totals = {mode: np.zeros(predictions().num_rows) for mode in selected}
@@ -544,6 +564,9 @@ def search(query: Query) -> Results:
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
+    shown, positions = basket_maps(
+        query.galaxy, galaxies, {mode: selected[mode] for mode in query.anywhere}
+    )
     return Results(
         galaxies,
         scored[galaxies],
@@ -551,5 +574,6 @@ def search(query: Query) -> Results:
         {mode: values[galaxies] for mode, values in totals.items()},
         {mode: np.exp(values[galaxies]) for mode, values in shares.items()},
         predicted(query, galaxies),
-        maps(found, galaxies),
+        maps(found, galaxies) | shown,
+        positions,
     )

@@ -425,7 +425,7 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
         pa.array(results.scores),
         pa.array(results.similarity, pa.float32()),
     ]
-    map_fields, map_columns = map_arrays(results.aligned)
+    map_fields, map_columns = map_arrays(results.maps)
     fields += map_fields
     columns += map_columns
     for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES):
