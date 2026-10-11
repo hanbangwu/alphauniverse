@@ -344,7 +344,7 @@ def agreements(galaxy: int) -> Agreements:
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
 def built(galaxy: int) -> Agreements:
     forms = query_forms(row(galaxy), dict.fromkeys(MODES, slice(None)))
-    values = np.empty((predictions().num_rows, WIDTH), np.float16)
+    values = np.empty((predictions().num_rows, WIDTH), np.float32)
     start = 0
     for rows in predictions().to_batches():
         stop = start + rows.num_rows
