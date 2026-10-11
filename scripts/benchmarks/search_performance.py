@@ -116,7 +116,7 @@ def load_times() -> dict[str, dict[str, float]]:
 
 
 def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
-    pql.built.cache_clear()
+    pql.MATRICES.clear()
     marks = [mark()]
     selected = pql.selection(query)
     marks.append(mark())

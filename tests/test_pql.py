@@ -1,4 +1,5 @@
 from pathlib import Path
+from threading import Thread
 
 import numpy as np
 import pyarrow as pa
@@ -200,6 +201,18 @@ def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
     np.testing.assert_array_equal(
         results.positions["ls_image"], overlaps.argmax(axis=1)
     )
+
+
+def test_a_cached_matrix_is_served_while_another_galaxy_builds(tree: Path) -> None:
+    pql.agreements(GALAXY)
+    served = []
+
+    with pql.BUILDING:
+        worker = Thread(target=lambda: served.append(pql.agreements(GALAXY)))
+        worker.start()
+        worker.join(timeout=10)
+
+    assert served
 
 
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(

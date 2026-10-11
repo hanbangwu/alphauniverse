@@ -1,5 +1,6 @@
-from collections.abc import Iterator
-from functools import cache, lru_cache
+from collections import OrderedDict
+from collections.abc import Callable, Hashable, Iterator
+from functools import cache, partial
 from itertools import accumulate
 from threading import Lock
 from typing import Annotated, Literal, NamedTuple, Self
@@ -63,6 +64,8 @@ BLOCK_BYTES = 64 * 2**20
 SALIENCY_MATCHES = 256
 SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
+MATRICES = OrderedDict()
+SUMS = OrderedDict()
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -345,7 +348,8 @@ def cross_overlaps(
 
 
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
-    return predictions().take(galaxies).combine_chunks().to_batches()[0]
+    rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
+    return pa.concat_tables(rows).combine_chunks().to_batches()[0]
 
 
 def best_log_overlaps(rows: pa.RecordBatch, mode: str, form: np.ndarray) -> np.ndarray:
@@ -380,14 +384,31 @@ def basket_maps(
 
 def basket_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {
-        mode: basket_sum(galaxy, mode, tuple(slots.tolist()))
+        mode: cached(
+            SUMS,
+            (galaxy, mode, *slots.tolist()),
+            partial(basket_sum, galaxy, mode, slots),
+        )
         for mode, slots in selected.items()
     }
 
 
-@lru_cache(maxsize=AGREEMENT_GALAXIES)
-def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
-    form = query_forms(row(galaxy), {mode: np.asarray(slots)})[mode]
+def cached[T](store: OrderedDict, key: Hashable, compute: Callable[[], T]) -> T:
+    try:
+        store.move_to_end(key)
+        return store[key]
+    except KeyError:
+        pass
+    with BUILDING:
+        if key not in store:
+            store[key] = compute()
+            if len(store) > AGREEMENT_GALAXIES:
+                store.popitem(last=False)
+        return store[key]
+
+
+def basket_sum(galaxy: int, mode: str, slots: np.ndarray) -> np.ndarray:
+    form = query_forms(row(galaxy), {mode: slots})[mode]
     return np.concatenate(
         [
             best_log_overlaps(rows, mode, form).sum(axis=1)
@@ -443,11 +464,9 @@ def cosines(galaxy: int, mode: str) -> np.ndarray:
 
 
 def agreements(galaxy: int) -> Agreements:
-    with BUILDING:
-        return built(galaxy)
+    return cached(MATRICES, galaxy, partial(built, galaxy))
 
 
-@lru_cache(maxsize=AGREEMENT_GALAXIES)
 def built(galaxy: int) -> Agreements:
     forms = query_forms(row(galaxy), dict.fromkeys(MODES, slice(None)))
     values = np.empty((predictions().num_rows, WIDTH), np.float32)
