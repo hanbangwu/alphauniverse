@@ -36,6 +36,7 @@ from scripts.benchmarks.text_search_quality import CUTS
 image = serving_image.add_local_python_source("modal_app")
 
 CLIENTS = (1, 4, SERVING_MAX_INPUTS, 2 * SERVING_MAX_INPUTS)
+NEW_GALAXY_CLIENTS = 4
 CACHED_PER_KIND = AGREEMENT_GALAXIES // 2
 REPORT = Path("docs/benchmarks/backend_performance.json")
 TEXTS = tuple(text for text, _ in CUTS)
@@ -126,12 +127,8 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         }
         warm = {label: time_it(runs, call) for label, call in calls.items()}
 
-        def concurrent(clients: int) -> dict[str, Any]:
-            batches = [
-                [parameters(next(imaged), 32) for _ in range(runs + 1)]
-                for _ in range(clients)
-            ]
-            with ExitStack() as stack, ThreadPoolExecutor(clients) as pool:
+        def concurrent(batches: list[list[dict[str, Any]]]) -> dict[str, Any]:
+            with ExitStack() as stack, ThreadPoolExecutor(len(batches)) as pool:
                 sessions = [
                     stack.enter_context(httpx.Client(base_url=url, timeout=None))
                     for _ in batches
@@ -186,7 +183,22 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             ),
         }
         warm |= {label: time_it(runs, call) for label, call in spectral_calls.items()}
-        concurrency = {f"clients={clients}": concurrent(clients) for clients in CLIENTS}
+        concurrency = {
+            f"clients={clients}": concurrent(
+                [
+                    [parameters(next(imaged), 32) for _ in range(runs + 1)]
+                    for _ in range(clients)
+                ]
+            )
+            for clients in CLIENTS
+        } | {
+            f"new galaxies clients={NEW_GALAXY_CLIENTS}": concurrent(
+                [
+                    [parameters(next(imaged), 32), parameters(next(unused), 32)]
+                    for _ in range(NEW_GALAXY_CLIENTS)
+                ]
+            )
+        }
         new_galaxy = summary(
             [
                 elapsed(partial(get, "/search", **parameters(chosen, 32)))
