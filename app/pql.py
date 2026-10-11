@@ -66,6 +66,7 @@ WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
 CHUNK = 16
+SLOT_BLOCK = 32
 SALIENCY_MATCHES = 256
 SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
@@ -204,7 +205,7 @@ def top_image_tokens(
     codes = array(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES)[:, slots, :KEPT]
     probabilities = array(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, TOP_CODES)[
         :, slots, :KEPT
-    ].astype(np.float32)
+    ]
     rest = array(rows, f"{survey}_rest", N_IMAGE_TOKENS)[:, slots]
     return codes, probabilities, rest / (IMAGE_VOCABULARY - KEPT)
 
@@ -230,14 +231,17 @@ def image_token_overlaps(
     probabilities: np.ndarray,
     spread: np.ndarray,
 ) -> np.ndarray:
-    at_codes = np.take_along_axis(
-        np.broadcast_to(query, (*codes.shape[:-1], query.shape[-1])),
-        codes.astype(np.intp),
-        axis=-1,
-    )
-    return (probabilities * at_codes).sum(axis=-1) + spread * (
-        query.sum(axis=-1) - at_codes.sum(axis=-1)
-    )
+    flat = query.ravel()
+    offsets = np.arange(len(query))[:, None] * query.shape[-1]
+    totals = query.sum(axis=-1)
+    overlaps = np.empty(codes.shape[:-1], np.float32)
+    for start in range(0, len(query), SLOT_BLOCK):
+        block = slice(start, start + SLOT_BLOCK)
+        at_codes = flat[codes[:, block] + offsets[block]]
+        overlaps[:, block] = np.einsum(
+            "gsk,gsk->gs", probabilities[:, block].astype(np.float32), at_codes
+        ) + spread[:, block] * (totals[block] - at_codes.sum(axis=-1))
+    return overlaps
 
 
 def spectrum_token_coefficients(
