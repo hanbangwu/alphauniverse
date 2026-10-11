@@ -61,7 +61,7 @@ OFFSETS = {
 WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
-BLOCK_BYTES = 64 * 2**20
+CHUNK = 16
 SALIENCY_MATCHES = 256
 SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
@@ -313,38 +313,43 @@ def cross_overlaps(
     rows: pa.RecordBatch, mode: str, form: np.ndarray
 ) -> Iterator[tuple[int, np.ndarray]]:
     if mode in IMAGE_MODES:
+        import torch
+
         codes, probabilities, spread = top_image_tokens(
             rows, IMAGE_MODES[mode], slice(None), KEPT
         )
-        codes = codes.astype(np.intp)
-        folded = probabilities - spread[..., None]
-        block = max(1, BLOCK_BYTES // (4 * codes.size))
-        for start in range(0, len(form), block):
-            part = form[start : start + block]
-            yield (
-                start,
-                np.einsum("gck,bgck->bgc", folded, part[:, codes])
-                + spread * part.sum(axis=-1)[:, None, None],
-            )
+        indices = torch.from_numpy(codes.astype(np.int64))
+        weights = torch.from_numpy(probabilities - spread[..., None])
+        spread = torch.from_numpy(spread)
+        table = torch.from_numpy(np.ascontiguousarray(form.T))
+        totals = torch.from_numpy(form.sum(axis=-1))
+        for start in range(0, rows.num_rows, CHUNK):
+            stop = start + CHUNK
+            overlaps = torch.nn.functional.embedding_bag(
+                indices[start:stop].flatten(0, 1),
+                table,
+                per_sample_weights=weights[start:stop].flatten(0, 1),
+                mode="sum",
+            ).view(-1, N_IMAGE_TOKENS, len(form))
+            yield start, overlaps.addcmul_(spread[start:stop, :, None], totals).numpy()
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
     quantised = array(
         rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
-    ).astype(np.float32)
-    offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)
-    steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)
-    block = max(1, BLOCK_BYTES // (4 * offsets.size))
-    for start in range(0, len(form), block):
-        part = form[start : start + block].astype(np.float32)
-        weights = projected_mean + part
-        overlaps = (
-            mean_square
-            + part @ projected_mean
-            + offsets[..., None] * weights.sum(axis=-1)
-            + steps[..., None] * (quantised @ weights.T)
-        )
-        yield start, np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR).transpose(2, 0, 1)
+    )
+    offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[..., None]
+    steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[..., None]
+    weights = projected_mean + form
+    base = mean_square + np.einsum("br,r->b", form, projected_mean)
+    totals = weights.sum(axis=-1)
+    for start in range(0, rows.num_rows, CHUNK):
+        stop = start + CHUNK
+        overlaps = quantised[start:stop].astype(np.float32) @ weights.T
+        overlaps *= steps[start:stop]
+        overlaps += offsets[start:stop] * totals
+        overlaps += base
+        yield start, np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR, out=overlaps)
 
 
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
@@ -355,7 +360,7 @@ def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
 def best_log_overlaps(rows: pa.RecordBatch, mode: str, form: np.ndarray) -> np.ndarray:
     best = np.empty((rows.num_rows, len(form)))
     for start, overlaps in cross_overlaps(rows, mode, form):
-        best[:, start : start + len(overlaps)] = overlaps.max(axis=-1).T
+        best[start : start + len(overlaps)] = overlaps.max(axis=1)
     return np.log(best)
 
 
@@ -368,14 +373,12 @@ def basket_maps(
     shown, positions = {}, {}
     for mode, form in query_forms(row(galaxy), selected).items():
         scale = np.exp(-peaks[mode])
-        shown[mode] = np.zeros((rows.num_rows, WIDTHS[mode]), np.float32)
+        shown[mode] = np.empty((rows.num_rows, WIDTHS[mode]), np.float32)
         positions[mode] = np.empty((rows.num_rows, len(form)), np.int32)
         for start, overlaps in cross_overlaps(rows, mode, form):
             stop = start + len(overlaps)
-            shown[mode] = np.maximum(
-                shown[mode], (overlaps * scale[start:stop, None, None]).max(axis=0)
-            )
-            positions[mode][:, start:stop] = overlaps.argmax(axis=-1).T
+            shown[mode][start:stop] = (overlaps * scale).max(axis=-1)
+            positions[mode][start:stop] = overlaps.argmax(axis=1)
     return shown, positions
 
 
