@@ -514,8 +514,8 @@ def meets(entry: dict[str, Any]) -> bool:
     for result in entry["sizes"].values():
         both = result["both"]
         if (
-            both["spearman_median"] < TARGETS["spearman_median"]
-            or both["spearman_p5"] < TARGETS["spearman_p5"]
+            not (both["spearman_median"] >= TARGETS["spearman_median"])
+            or not (both["spearman_p5"] >= TARGETS["spearman_p5"])
             or both["top10_median"] < TARGETS["top10_median"]
             or both["identity_exact"] - both["identity"] > TARGETS["identity"]
         ):
@@ -528,7 +528,10 @@ def meets(entry: dict[str, Any]) -> bool:
 
 
 def worst(entry: dict[str, Any]) -> float:
-    return min(result["both"]["spearman_median"] for result in entry["sizes"].values())
+    return min(
+        np.nan_to_num(result["both"]["spearman_median"], nan=-np.inf)
+        for result in entry["sizes"].values()
+    )
 
 
 def choices(results: dict[str, dict[str, Any]], total: int) -> dict[str, Any]:

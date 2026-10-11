@@ -128,3 +128,34 @@ def test_dense_log_overlaps_match_float64_where_float32_probabilities_underflow(
     )
     np.testing.assert_allclose(overlaps.pairs["exact"].numpy(), 0, atol=1e-6)
     assert overlaps.floored == 0
+
+
+def test_a_scheme_unrankable_at_any_size_is_not_chosen_over_a_rankable_one() -> None:
+    quality = importlib.import_module("scripts.benchmarks.compression_quality")
+    rankable = {
+        "spearman_median": 1.0,
+        "spearman_p5": 1.0,
+        "top10_median": 1.0,
+        "identity": 0.0,
+        "identity_exact": 0.0,
+        "relevance": None,
+        "relevance_exact": None,
+    }
+    unrankable = rankable | {"spearman_median": np.nan, "spearman_p5": np.nan}
+    schemes = {
+        "constant": {
+            "bytes_per_galaxy": 1,
+            "sizes": {"one": {"both": rankable}, "all": {"both": unrankable}},
+        },
+        "exact": {
+            "bytes_per_galaxy": 2,
+            "sizes": {"one": {"both": rankable}, "all": {"both": rankable}},
+        },
+    }
+
+    chosen = quality.choices({"ls_image": schemes}, 1)
+
+    assert chosen["accuracy"] == {"ls_image": "exact"}
+    assert {budget["schemes"]["ls_image"] for budget in chosen["budgets"].values()} == {
+        "exact"
+    }
