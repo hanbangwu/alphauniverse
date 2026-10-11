@@ -39,7 +39,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Run on Modal
-        run: uv run --python 3.12 modal run -m "scripts.benchmarks.$SCRIPT" $ARGS
+        run: uv run --python 3.12 --group build modal run -m "scripts.benchmarks.$SCRIPT" $ARGS
 
       - name: Report
         run: |
