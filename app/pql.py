@@ -361,6 +361,11 @@ def threaded(
     return np.concatenate(list(POOL.map(compute, batches)))
 
 
+def slices(rows: pa.RecordBatch) -> list[pa.RecordBatch]:
+    size = math.ceil(rows.num_rows / THREADS)
+    return [rows.slice(start, size) for start in range(0, rows.num_rows, size)]
+
+
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
     rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
     return pa.concat_tables(rows).combine_chunks().to_batches()[0]
@@ -507,7 +512,11 @@ def products(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
 
 def column_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     forms = query_forms(row(galaxy), selected)
-    batches = [sums(rows, selected, forms) for rows in predictions().to_batches()]
+    batches = list(
+        POOL.map(
+            partial(sums, selected=selected, forms=forms), predictions().to_batches()
+        )
+    )
     return {
         mode: np.concatenate([batch[mode] for batch in batches]) for mode in selected
     }
@@ -558,7 +567,9 @@ def by_mode(values: np.ndarray) -> dict[str, np.ndarray]:
 def maps(
     forms: dict[str, np.ndarray], peaks: np.ndarray, rows: pa.RecordBatch
 ) -> dict[str, np.ndarray]:
-    return by_mode(np.exp(agreement_rows(rows, forms) - peaks))
+    return by_mode(
+        np.exp(threaded(partial(agreement_rows, forms=forms), slices(rows)) - peaks)
+    )
 
 
 def saliency(query: Selection) -> np.ndarray:
@@ -592,9 +603,7 @@ def saliency_sample(query: Selection) -> np.ndarray:
 def sampled_values(query: Selection, found: Agreements) -> np.ndarray:
     sample = saliency_sample(query)
     values = found.values[sample].astype(np.float64)
-    rows = gathered(sample)
-    size = math.ceil(rows.num_rows / THREADS)
-    parts = [rows.slice(start, size) for start in range(0, rows.num_rows, size)]
+    parts = slices(gathered(sample))
     forms = query_forms(row(query.galaxy), dict.fromkeys(query.anywhere, slice(None)))
     for mode, form in forms.items():
         values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = threaded(
