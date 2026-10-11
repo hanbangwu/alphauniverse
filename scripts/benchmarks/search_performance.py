@@ -44,7 +44,7 @@ from scripts.benchmarks.common import (
 image = serving_image.add_local_python_source("modal_app")
 
 STAGES = [
-    "forms",
+    "selection",
     "agreements",
     "sums",
     "combine",
@@ -112,9 +112,9 @@ def load_times() -> dict[str, dict[str, float]]:
 
 
 def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
-    pql.agreements.cache_clear()
+    pql.built.cache_clear()
     marks = [mark()]
-    selected, forms = pql.selected_forms(query)
+    selected = pql.selection(query)
     marks.append(mark())
     found = pql.agreements(query.galaxy)
     marks.append(mark())
@@ -122,7 +122,7 @@ def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
     marks.append(mark())
     scored = pql.combine(totals)
     marks.append(mark())
-    pql.similarity(pql.fractions(forms, totals))
+    pql.similarity(pql.fractions(pql.selected_peaks(found, selected), totals))
     marks.append(mark())
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(

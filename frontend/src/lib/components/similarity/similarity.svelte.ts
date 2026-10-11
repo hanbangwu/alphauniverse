@@ -82,7 +82,7 @@ export class Similarity {
           : null
       )
     )
-    const saliency = $derived(own ? null : (this.#saliency.data ?? null))
+    const saliency = $derived(own || !this.draft ? null : (this.#saliency.data ?? null))
 
     this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
     this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
@@ -135,8 +135,8 @@ export class Similarity {
   }
 
   get spectrumLayerError(): string | null {
-    const failed = this.layer === 'galaxy' ? this.#spectrumCosines : this.#saliency
-    return failed.isError ? errorMessage(failed.error) : null
+    if (this.layer !== 'galaxy') return null
+    return this.#spectrumCosines.isError ? errorMessage(this.#spectrumCosines.error) : null
   }
 
   get submittedImageTokens(): number[] {

@@ -1,5 +1,6 @@
 from functools import cache, lru_cache
 from itertools import accumulate
+from threading import Lock
 from typing import Annotated, NamedTuple, Self
 
 import numpy as np
@@ -50,10 +51,14 @@ WIDTHS = (
     | {mode: count for mode, (_, count, _) in TABLE_MODES.items()}
 )
 MODES = tuple(WIDTHS)
-OFFSETS = dict(zip(MODES, accumulate(WIDTHS.values(), initial=0), strict=False))
+OFFSETS = {
+    mode: end - WIDTHS[mode]
+    for mode, end in zip(MODES, accumulate(WIDTHS.values()), strict=True)
+}
 WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
+BUILDING = Lock()
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -352,8 +357,13 @@ def cosines(galaxy: int, mode: str) -> np.ndarray:
     return (unit @ unit.T).astype(np.float32, copy=False)
 
 
-@lru_cache(maxsize=AGREEMENT_GALAXIES)
 def agreements(galaxy: int) -> Agreements:
+    with BUILDING:
+        return built(galaxy)
+
+
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def built(galaxy: int) -> Agreements:
     forms = query_forms(row(galaxy), dict.fromkeys(MODES, slice(None)))
     values = np.empty((predictions().num_rows, WIDTH), np.float32)
     start = 0
@@ -395,6 +405,14 @@ def column_sums(
     }
 
 
+def selected_peaks(
+    found: Agreements, selected: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
+    return {
+        mode: found.peaks[OFFSETS[mode] + slots] for mode, slots in selected.items()
+    }
+
+
 def columns(selected: dict[str, np.ndarray]) -> np.ndarray:
     return np.concatenate([OFFSETS[mode] + slots for mode, slots in selected.items()])
 
@@ -417,27 +435,27 @@ def saliency(query: Selection) -> np.ndarray:
     others = np.arange(len(found.values)) != query.galaxy
     count = others.sum()
     score = found.values[:, chosen].sum(axis=1, dtype=np.float64)
-    control = (found.totals - score) / (WIDTH - len(chosen))
-    targets = np.c_[score, control]
-    targets = np.where(others[:, None], targets - targets[others].mean(axis=0), 0)
-    spreads = np.sqrt((targets**2).sum(axis=0) / count)
-    covariances = products(found.values, targets).T
     with np.errstate(divide="ignore", invalid="ignore"):
+        control = (found.totals - score) / (WIDTH - len(chosen))
+        targets = np.c_[score, control]
+        targets = np.where(others[:, None], targets - targets[others].mean(axis=0), 0)
+        spreads = np.sqrt((targets**2).sum(axis=0) / count)
+        covariances = products(found.values, targets).T
         with_score, with_control = covariances / (
             count * found.spread * spreads[:, None]
         )
         between = targets[:, 0] @ targets[:, 1] / (count * spreads.prod())
-        return (
-            (with_score - with_control * between)
-            / np.sqrt((1 - with_control**2) * (1 - between**2))
-        ).astype(np.float32)
+        partial = (with_score - with_control * between) / np.sqrt(
+            (1 - with_control**2) * (1 - between**2)
+        )
+    return np.clip(np.nan_to_num(partial, nan=0), -1, 1).astype(np.float32)
 
 
 def fractions(
-    forms: dict[str, np.ndarray], totals: dict[str, np.ndarray]
+    peaks: dict[str, np.ndarray], totals: dict[str, np.ndarray]
 ) -> dict[str, np.ndarray]:
     return {
-        mode: (values - log_peaks(mode, forms[mode]).sum()) / len(forms[mode])
+        mode: (values - peaks[mode].sum()) / len(peaks[mode])
         for mode, values in totals.items()
     }
 
@@ -465,11 +483,11 @@ def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
 
 
 def search(query: Query) -> Results:
-    selected, forms = selected_forms(query)
+    selected = selection(query)
     found = agreements(query.galaxy)
     totals = column_sums(found, selected)
     scored = combine(totals)
-    shares = fractions(forms, totals)
+    shares = fractions(selected_peaks(found, selected), totals)
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])

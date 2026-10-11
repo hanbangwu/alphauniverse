@@ -90,7 +90,8 @@ def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.n
 
 def similarity(query: pql.Query) -> np.ndarray:
     _, forms = pql.selected_forms(query)
-    return pql.similarity(pql.fractions(forms, pql.parts(query)))
+    peaks = {mode: pql.log_peaks(mode, form) for mode, form in forms.items()}
+    return pql.similarity(pql.fractions(peaks, pql.parts(query)))
 
 
 @pytest.fixture(scope="module")
@@ -177,6 +178,29 @@ def test_saliency_is_the_partial_correlation_over_the_other_galaxies(
     ]
 
     np.testing.assert_allclose(pql.saliency(query), expected, atol=1e-4)
+
+
+def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
+    tree: Path,
+) -> None:
+    galaxy = int(
+        np.flatnonzero(np.logical_and.reduce([pql.observed(c) for c in OBSERVATIONS]))[
+            0
+        ]
+    )
+    everything = pql.Selection(
+        galaxy=galaxy,
+        ls_image=tuple(range(N_IMAGE_TOKENS)),
+        hsc_image=tuple(range(N_IMAGE_TOKENS)),
+        desi_spectrum=tuple(range(N_SPECTRUM_TOKENS)),
+        sdss_spectrum=tuple(range(N_SPECTRUM_TOKENS)),
+        table_values=tuple(range(len(pql.TABLE_SLOTS))),
+    )
+
+    found = pql.saliency(everything)
+
+    assert np.isfinite(found).all()
+    assert (np.abs(found) <= 1).all()
 
 
 def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
