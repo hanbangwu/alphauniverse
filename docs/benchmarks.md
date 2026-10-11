@@ -53,6 +53,7 @@ A container with the server's spec runs, per version:
 2. `lifespan`'s loads: `galaxy_count`, `labels`, `predictions`, `basis`, and `observed` for each observation column;
 3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches, each query with an empty agreement cache: `selection` (the selected slots by mode), `agreements` (building its agreement matrix), `sums` (the selected columns' sums), `combine`, `similarity`, `order`, `maps` and `predicted`, then `saliency` (one click under Population, from the built matrix). A click on a galaxy whose matrix is cached costs every stage but `agreements`;
 4. `pql.search()` whole at 8, 32 and 128 matches, each query on a random galaxy.
+5. under `anywhere`, outside `total_p50_ms`: first query and warm, `pql.search()` and one `pql.saliency()` click with the agreement matrix already built, for 4 Legacy Survey image tokens and for 16 contiguous spectrum tokens, each position-independent.
 
 The loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count.
 
