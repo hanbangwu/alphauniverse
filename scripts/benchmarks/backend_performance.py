@@ -185,16 +185,22 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 IMAGE_TOKENS
             ),
         }
+        warm |= {label: time_it(runs, call) for label, call in spectral_calls.items()}
+        concurrency = {f"clients={clients}": concurrent(clients) for clients in CLIENTS}
+        new_galaxy = summary(
+            [
+                elapsed(partial(get, "/search", **parameters(chosen, 32)))
+                for chosen in islice(unused, runs)
+            ]
+        )
         return {
             "environment": environment(),
             "cold_meta_ms": cold_meta,
             "cold_similarity_ms": cold_similarity,
             "cold_text_search_ms": cold_text_search,
-            "warm": warm
-            | {label: time_it(runs, call) for label, call in spectral_calls.items()},
-            "concurrency": {
-                f"clients={clients}": concurrent(clients) for clients in CLIENTS
-            },
+            "warm": warm,
+            "concurrency": concurrency,
+            "new_galaxy": new_galaxy,
         }
 
 
