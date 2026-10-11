@@ -9,7 +9,7 @@
 | `scripts/`     | Dataset build, OpenAPI export, test fixtures, benchmarks |
 | `tests/`       | pytest suite                                             |
 | `frontend/`    | Svelte app                                               |
-| `docs/`        | Architecture, pipeline, benchmark, and testing notes     |
+| `docs/`        | Sphinx documentation and the benchmark reports           |
 
 ## Commands
 
@@ -24,7 +24,15 @@ uv run modal run -m scripts.benchmarks.search_performance   # time search() on M
 uv run modal run -m scripts.benchmarks.backend_performance  # time the HTTP endpoints on Modal
 uv run modal run -m scripts.benchmarks.projection_quality   # measure projection quality on Modal
 uv run modal run -m scripts.benchmarks.text_search_quality  # measure text search on Modal
+uv run modal run -m scripts.benchmarks.pql_quality          # measure similarity search on Modal
+uv run --group build modal run -m scripts.benchmarks.compression_quality  # measure prediction storage on Modal
 uv run python -m scripts.openapi                            # regenerate frontend/openapi.json
+```
+
+### Docs
+
+```sh
+uv run --group docs make -C docs html  # build the Sphinx site into docs/_build/html
 ```
 
 ### Frontend

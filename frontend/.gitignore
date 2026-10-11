@@ -24,3 +24,6 @@ vite.config.ts.timestamp-*
 
 # OpenAPI
 src/lib/api
+
+# Sphinx
+/static/docs
