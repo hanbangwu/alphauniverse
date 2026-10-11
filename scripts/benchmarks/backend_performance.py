@@ -1,6 +1,6 @@
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from datetime import UTC, datetime
@@ -73,6 +73,9 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 "matches": matches,
             }
 
+        def similarity(galaxy: int, matches: int) -> None:
+            get("/search", **parameters(galaxy, matches))
+
         cold_meta = round(elapsed(lambda: get("/meta")), 3)
         galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
         unused = iter(rng.permutation(galaxies).tolist())
@@ -80,28 +83,23 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def galaxy() -> int:
             return int(rng.integers(galaxies))
 
-        cold_similarity = round(
-            elapsed(lambda: get("/search", **parameters(next(unused), 32))), 3
-        )
+        cold_similarity = round(elapsed(lambda: similarity(next(unused), 32)), 3)
         cold_text_search = round(elapsed(lambda: get("/search/text", text=TEXTS[0])), 3)
         cells = pa.ipc.open_file(
             session.get("/downloads/tokens").raise_for_status().content
         ).read_all()
         has_spectrum = pc.is_valid(cells.column(SPECTRUM_SURVEY)).to_numpy()
         holders = np.flatnonzero(has_spectrum)
-        image_galaxies = list(islice(unused, CACHED_PER_KIND))
+        random_galaxies = list(islice(unused, CACHED_PER_KIND))
         spectrum_galaxies = list(
             islice(
                 (chosen for chosen in unused if has_spectrum[chosen]), CACHED_PER_KIND
             )
         )
-        for chosen in image_galaxies + spectrum_galaxies:
-            get("/search", **parameters(chosen, 32))
-        imaged, spectral = cycle(image_galaxies), cycle(spectrum_galaxies)
-
-        def similarity(matches: int) -> None:
-            get("/search", **parameters(next(imaged), matches))
-
+        for chosen in random_galaxies + spectrum_galaxies:
+            similarity(chosen, 32)
+        random_rotation = cycle(random_galaxies)
+        spectrum_rotation = cycle(spectrum_galaxies)
         texts = cycle(TEXTS)
         added = np.random.default_rng(1)
 
@@ -115,25 +113,34 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             "text search": lambda: get("/search/text", text=next(texts)),
             "similarity table values matches=32": lambda: get(
                 "/search",
-                galaxy=next(imaged),
+                galaxy=next(random_rotation),
                 table_values=(
                     FIRST_LS_TABLE_VALUE
                     + added.choice(N_LS_TABLE_VALUES, TABLE_VALUES, replace=False)
                 ).tolist(),
             ),
             "saliency": lambda: get(
-                "/saliency", galaxy=next(imaged), ls_image=image_tokens(IMAGE_TOKENS)
+                "/saliency",
+                galaxy=next(random_rotation),
+                ls_image=image_tokens(IMAGE_TOKENS),
             ),
         } | {
             f"similarity matches={matches}": (
-                lambda matches=matches: similarity(matches)
+                lambda matches=matches: similarity(next(random_rotation), matches)
             )
             for matches in MATCHES
         }
         warm = {label: time_it(runs, call) for label, call in calls.items()}
 
-        def concurrent(batches: list[list[dict[str, Any]]]) -> dict[str, Any]:
-            with ExitStack() as stack, ThreadPoolExecutor(len(batches)) as pool:
+        def concurrent(
+            clients: int, count: int, timed_galaxies: Iterator[int]
+        ) -> dict[str, Any]:
+            batches = [
+                [parameters(next(random_rotation), 32)]
+                + [parameters(next(timed_galaxies), 32) for _ in range(count)]
+                for _ in range(clients)
+            ]
+            with ExitStack() as stack, ThreadPoolExecutor(clients) as pool:
                 sessions = [
                     stack.enter_context(httpx.Client(base_url=url, timeout=None))
                     for _ in batches
@@ -155,7 +162,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             get(f"/galaxy/{rng.choice(holders)}/spectrum{route}")
 
         def spectrum_token_query(image_token_count: int) -> dict[str, Any]:
-            galaxy = next(spectral)
+            galaxy = next(spectrum_rotation)
             response = session.get(f"/galaxy/{galaxy}/spectrum")
             table = pa.ipc.open_stream(response.raise_for_status().content).read_all()
             spectrum_tokens = observed_spectrum_tokens(
@@ -187,26 +194,17 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         }
         warm |= {label: time_it(runs, call) for label, call in spectral_calls.items()}
         concurrency = {
-            f"clients={clients}": concurrent(
-                [
-                    [parameters(next(imaged), 32) for _ in range(runs + 1)]
-                    for _ in range(clients)
-                ]
-            )
+            f"clients={clients}": concurrent(clients, runs, random_rotation)
             for clients in CLIENTS
         } | {
             f"new galaxies clients={NEW_GALAXY_CLIENTS}": concurrent(
-                [
-                    [parameters(next(imaged), 32), parameters(next(unused), 32)]
-                    for _ in range(NEW_GALAXY_CLIENTS)
-                ]
+                NEW_GALAXY_CLIENTS, 1, unused
             )
         }
         new_galaxy = summary(
-            [
-                elapsed(partial(get, "/search", **parameters(chosen, 32)))
-                for chosen in islice(unused, runs)
-            ]
+            timed_requests(
+                session, [parameters(chosen, 32) for chosen in islice(unused, runs)]
+            )
         )
         return {
             "environment": environment(),

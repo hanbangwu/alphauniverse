@@ -72,10 +72,10 @@ The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone
 3. warm, `runs` times each after one warm-up: `/meta`, image, image tokens, galaxy, table, `ls_image` cosines, `/search/text` cycling through `text_search_quality`'s six queries, then, on the set's first 4 galaxies in turn, `/search` with 4 Legacy Survey table values at 32 matches, `/saliency` with 4 image tokens, and `/search` with 4 image tokens at 8, 32 and 128 matches;
 4. warm: both spectrum routes on random galaxies with a DESI spectrum, and `/search` at 32 matches with 4 spectrum tokens inside the galaxy's observed range, alone and with 4 image tokens, on the set's 4 galaxies with a DESI spectrum in turn;
 5. 1, 4, `max_inputs` and 2 × `max_inputs` concurrent clients, each a thread with its own connection, sending `/search` with 4 image tokens at 32 matches on the set's first 4 galaxies;
-6. 4 clients, each a thread with its own connection, each sending one `/search` with 4 image tokens at 32 matches on the set and then, all at once, one on a new galaxy; `pql.BUILDING` builds one matrix at a time, so the new galaxies queue;
+6. 4 such clients, each sending one untimed `/search` on the set, then, all at once, one on a new galaxy; matrices build one at a time under `pql.BUILDING`, so the new galaxies queue;
 7. `runs` `/search` requests with 4 image tokens at 32 matches, each on a new galaxy.
 
-A new galaxy, like the cold `/search`'s, is one no earlier `/search` or `/saliency` named, so its request builds its matrix. Every timed `/search` and `/saliency` draws new tokens or table values. Every galaxy has a Legacy Survey image and table values.
+A new galaxy is one no earlier `/search` or `/saliency` named, so its request builds its matrix. Every timed `/search` and `/saliency` draws random tokens or table values.
 
 Latency includes Modal's ingress, not the starter's network. Only the checked-out commit is timed.
 
