@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
+    KEPT,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     N_TABLE_VALUES,
@@ -35,7 +36,6 @@ from .config import (
 )
 from .search import tokens
 
-KEPT = 16
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
 TABLE_VALUE_FLOOR = np.finfo(np.float32).tiny
 OBSERVED_IN = {
@@ -66,7 +66,7 @@ WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
 CHUNK = 16
-SLOT_BLOCK = 32
+BLOCK = 8192
 SALIENCY_MATCHES = 256
 SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
@@ -216,7 +216,7 @@ def dense_image_tokens(
     codes = array(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES)[:, slots]
     probabilities = array(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, TOP_CODES)[
         :, slots
-    ].astype(np.float32)
+    ]
     rest = np.exp(array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots])
     dense = np.repeat(
         (rest / (IMAGE_VOCABULARY - TOP_CODES))[..., None], IMAGE_VOCABULARY, axis=-1
@@ -235,12 +235,15 @@ def image_token_overlaps(
     offsets = np.arange(len(query))[:, None] * query.shape[-1]
     totals = query.sum(axis=-1)
     overlaps = np.empty(codes.shape[:-1], np.float32)
-    for start in range(0, len(query), SLOT_BLOCK):
-        block = slice(start, start + SLOT_BLOCK)
-        at_codes = flat[codes[:, block] + offsets[block]]
-        overlaps[:, block] = np.einsum(
-            "gsk,gsk->gs", probabilities[:, block].astype(np.float32), at_codes
-        ) + spread[:, block] * (totals[block] - at_codes.sum(axis=-1))
+    step = max(1, BLOCK // len(codes))
+    for start in range(0, len(query), step):
+        block = slice(start, start + step)
+        weights = probabilities[:, block] - spread[:, block, None]
+        at_codes = np.take(flat, codes[:, block] + offsets[block])
+        overlaps[:, block] = (
+            np.einsum("gsk,gsk->gs", weights, at_codes)
+            + spread[:, block] * totals[block]
+        )
     return overlaps
 
 
@@ -274,17 +277,17 @@ def spectrum_token_overlaps(
     return np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR)
 
 
-def table_value_probabilities(
-    rows: pa.RecordBatch, mode: str, slots: slice | np.ndarray
-) -> np.ndarray:
+def table_value_probabilities(rows: pa.RecordBatch, mode: str) -> np.ndarray:
     column, count, vocabulary = TABLE_MODES[mode]
-    return array(rows, column, count, vocabulary)[:, slots]
+    return array(rows, column, count, vocabulary)
 
 
-def table_value_overlaps(gallery: np.ndarray, query: np.ndarray) -> np.ndarray:
-    overlaps = np.empty(gallery.shape[:-1], np.float32)
-    for slot, distribution in enumerate(query):
-        overlaps[:, slot] = gallery[:, slot] @ distribution
+def table_value_overlaps(
+    gallery: np.ndarray, slots: slice | np.ndarray, query: np.ndarray
+) -> np.ndarray:
+    overlaps = np.empty((len(gallery), len(query)), np.float32)
+    for index, slot in enumerate(np.arange(gallery.shape[1])[slots]):
+        overlaps[:, index] = gallery[:, slot] @ query[index]
     return np.maximum(overlaps, TABLE_VALUE_FLOOR)
 
 
@@ -300,7 +303,7 @@ def query_forms(
                 0
             ]
         else:
-            forms[mode] = table_value_probabilities(own, mode, slots)[0]
+            forms[mode] = table_value_probabilities(own, mode)[0, slots]
     return forms
 
 
@@ -312,16 +315,16 @@ def log_overlaps(
     rows: pa.RecordBatch, mode: str, slots: np.ndarray | slice, form: np.ndarray
 ) -> np.ndarray:
     if mode in IMAGE_MODES:
-        return np.log(
-            image_token_overlaps(
-                form, *top_image_tokens(rows, IMAGE_MODES[mode], slots)
-            )
+        overlaps = image_token_overlaps(
+            form, *top_image_tokens(rows, IMAGE_MODES[mode], slots)
         )
-    if mode in SPECTRUM_MODES:
-        return np.log(spectrum_token_overlaps(rows, SPECTRUM_MODES[mode], slots, form))
-    return np.log(
-        table_value_overlaps(table_value_probabilities(rows, mode, slots), form)
-    )
+    elif mode in SPECTRUM_MODES:
+        overlaps = spectrum_token_overlaps(rows, SPECTRUM_MODES[mode], slots, form)
+    else:
+        overlaps = table_value_overlaps(
+            table_value_probabilities(rows, mode), slots, form
+        )
+    return np.log(overlaps)
 
 
 def cross_overlaps(
@@ -443,12 +446,10 @@ def distributions(mode: str, form: np.ndarray) -> np.ndarray:
     return form
 
 
-def log_peaks(mode: str, form: np.ndarray) -> np.ndarray:
-    return np.log(distributions(mode, form).max(axis=-1))
-
-
 def slot_peaks(forms: dict[str, np.ndarray]) -> np.ndarray:
-    return np.concatenate([log_peaks(mode, forms[mode]) for mode in MODES])
+    return np.concatenate(
+        [np.log(distributions(mode, forms[mode]).max(axis=-1)) for mode in MODES]
+    )
 
 
 def sums(

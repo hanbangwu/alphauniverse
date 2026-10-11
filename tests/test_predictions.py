@@ -9,6 +9,7 @@ import pytest
 from app.config import (
     ANCHOR,
     IMAGE_VOCABULARY,
+    KEPT,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
@@ -19,7 +20,6 @@ from app.config import (
     artifact,
     build_dir,
 )
-from app.pql import KEPT
 
 pytest.importorskip("torch")
 predictions_module = importlib.import_module("app.predictions")
@@ -58,14 +58,15 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 
     assert table.schema.equals(PREDICTIONS)
     assert table["galaxy"].to_pylist() == list(range(galaxies))
-    redshift = column(table, REDSHIFT).astype(np.float64)
+    redshift = column(table, REDSHIFT)
     np.testing.assert_allclose(redshift.reshape(galaxies, -1).sum(-1), 1, atol=0.02)
     for survey, keys in predictions_module.TABLE_VALUES.items():
-        kept = column(table, f"{survey}_probabilities").astype(np.float64)
-        kept = kept.reshape(galaxies, N_IMAGE_TOKENS, -1)
+        kept = column(table, f"{survey}_probabilities").reshape(
+            galaxies, N_IMAGE_TOKENS, -1
+        )
         rest = column(table, f"{survey}_rest").reshape(galaxies, N_IMAGE_TOKENS)
         tails = np.exp(column(table, f"{survey}_tails").astype(np.float64))
-        table_values = column(table, f"{survey}_table_values").astype(np.float64)
+        table_values = column(table, f"{survey}_table_values")
         np.testing.assert_allclose(
             kept.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS), 1, atol=0.02
         )

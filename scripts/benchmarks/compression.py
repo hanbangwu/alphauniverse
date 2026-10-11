@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from app import pql
-from app.config import SPECTRUM_TOKEN_RANK, TOP_CODES, VOCABULARY
+from app.config import KEPT, SPECTRUM_TOKEN_RANK, TOP_CODES, VOCABULARY
 from app.predictions import Mode, coefficients, image_token_codes
 
 KS = (1, 2, 4, 8, 16, 32, 64, 128, 256)
@@ -339,9 +339,13 @@ class Current:
         }
 
     def image(
-        self, stored: Stored, kept: int
+        self, stored: Stored, side: str = "gallery"
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        rest = stored["rest"] if kept == pql.KEPT else stored["tails"].exp()
+        kept, rest = (
+            (KEPT, stored["rest"])
+            if side == "gallery"
+            else (TOP_CODES, stored["tails"].exp())
+        )
         return (
             stored["codes"][..., :kept].long(),
             stored["probabilities"][..., :kept].float(),
@@ -356,8 +360,7 @@ class Current:
 
     def decode(self, stored: Stored, side: str = "gallery") -> torch.Tensor:
         if self.kind == "image":
-            kept = pql.KEPT if side == "gallery" else TOP_CODES
-            codes, probabilities, spread = self.image(stored, kept)
+            codes, probabilities, spread = self.image(stored, side)
             dense = spread[..., None].expand(*spread.shape, self.vocabulary).clone()
             return dense.scatter_(-1, codes, probabilities)
         if self.kind == "spectrum":
@@ -367,7 +370,7 @@ class Current:
 
     def overlap(self, stored: Stored, query: torch.Tensor) -> torch.Tensor:
         if self.kind == "image":
-            parts = [part.cpu().numpy() for part in self.image(stored, pql.KEPT)]
+            parts = [part.cpu().numpy() for part in self.image(stored)]
             overlaps = pql.image_token_overlaps(query.cpu().numpy(), *parts)
             return torch.from_numpy(overlaps).to(query.device)
         if self.kind == "spectrum":
@@ -376,7 +379,7 @@ class Current:
                 self.projected(stored) * (query @ directions.T)
             ).sum(dim=-1)
         overlaps = pql.table_value_overlaps(
-            load(stored).cpu().numpy(), query.cpu().numpy()
+            load(stored).cpu().numpy(), slice(None), query.cpu().numpy()
         )
         return torch.from_numpy(overlaps).to(query.device)
 

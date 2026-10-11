@@ -12,6 +12,7 @@ from app.config import (
     DIM,
     GEMMA_DIM,
     IMAGE_VOCABULARY,
+    KEPT,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
@@ -33,7 +34,6 @@ from app.config import (
     store_writer,
 )
 from app.pql import (
-    KEPT,
     MATRICES,
     SUMS,
     basis,
@@ -111,8 +111,8 @@ def _store(
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
-    shifted = np.exp(logits - logits.max(axis=-1, keepdims=True))
-    return shifted / shifted.sum(axis=-1, keepdims=True)
+    exponentials = np.exp(logits - logits.max(axis=-1, keepdims=True))
+    return exponentials / exponentials.sum(axis=-1, keepdims=True)
 
 
 def _predictions(rng: np.random.Generator, galaxies: int) -> None:

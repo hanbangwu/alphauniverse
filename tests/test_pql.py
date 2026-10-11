@@ -399,7 +399,7 @@ def test_table_value_overlaps_below_float32_range_are_floored() -> None:
     gallery[0, 0, 1] = 1
     gallery[1, 0, 0] = 1
 
-    found = pql.table_value_overlaps(gallery, query)
+    found = pql.table_value_overlaps(gallery, slice(None), query)
 
     np.testing.assert_array_equal(found, [[pql.TABLE_VALUE_FLOOR], [1]])
 

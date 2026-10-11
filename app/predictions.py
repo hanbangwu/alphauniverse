@@ -11,6 +11,7 @@ from . import encode
 from .config import (
     ANCHOR,
     IMAGE_VOCABULARY,
+    KEPT,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
@@ -24,7 +25,7 @@ from .config import (
     artifact,
     device,
 )
-from .pql import KEPT, prediction_batch, save_prediction_basis
+from .pql import prediction_batch, save_prediction_basis
 from .search import source
 
 CHUNK = 128
@@ -162,7 +163,7 @@ def image_token_codes(
     return (
         codes.astype(np.uint16),
         probabilities.astype(np.float16),
-        rest.sum(axis=1, dtype=np.float64).astype(np.float32),
+        rest.sum(axis=1),
         np.log1p(-mass).astype(np.float32),
     )
 
