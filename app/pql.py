@@ -512,13 +512,7 @@ def products(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
 
 def column_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     forms = query_forms(row(galaxy), selected)
-    with ThreadPoolExecutor(THREADS) as pool:
-        batches = list(
-            pool.map(
-                partial(sums, selected=selected, forms=forms),
-                predictions().to_batches(),
-            )
-        )
+    batches = [sums(rows, selected, forms) for rows in predictions().to_batches()]
     return {
         mode: np.concatenate([batch[mode] for batch in batches]) for mode in selected
     }
