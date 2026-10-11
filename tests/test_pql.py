@@ -129,8 +129,9 @@ def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
 
 
 def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
-    table: pa.Table, query: pql.Query
+    table: pa.Table, query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(pql, "BLOCK", 200)
     galaxies = np.asarray([3, 0])
     own = table.slice(GALAXY, 1)
     shown = table.take(galaxies)
@@ -401,7 +402,22 @@ def test_table_value_overlaps_below_float32_range_are_floored() -> None:
 
     found = pql.table_value_overlaps(gallery, slice(None), query)
 
-    np.testing.assert_array_equal(found, [[pql.TABLE_VALUE_FLOOR], [1]])
+    np.testing.assert_array_equal(found, [[pql.PROBABILITY_FLOOR], [1]])
+
+
+def test_image_token_overlaps_below_float32_range_are_floored() -> None:
+    query = np.zeros((1, IMAGE_VOCABULARY), dtype=np.float32)
+    query[0, 0] = 1
+    codes = np.stack([np.arange(1, pql.KEPT + 1), np.arange(pql.KEPT)])[:, None]
+    probabilities = np.zeros((2, 1, pql.KEPT), dtype=np.float16)
+    probabilities[0] = 1 / pql.KEPT
+    probabilities[1, 0, 0] = 1
+
+    found = pql.image_token_overlaps(
+        query, codes, probabilities, np.zeros((2, 1), dtype=np.float32)
+    )
+
+    np.testing.assert_array_equal(found, [[pql.PROBABILITY_FLOOR], [1]])
 
 
 def test_a_repeated_slot_counts_once(tree: Path) -> None:

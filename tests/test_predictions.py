@@ -70,7 +70,9 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
         np.testing.assert_allclose(
             kept.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS), 1, atol=0.02
         )
-        np.testing.assert_allclose(kept[..., :KEPT].sum(-1) + rest, 1, atol=0.02)
+        np.testing.assert_allclose(
+            kept[..., :KEPT].sum(-1) + rest, 1, atol=np.finfo(np.float16).eps
+        )
         np.testing.assert_allclose(
             table_values.reshape(galaxies, len(keys), -1).sum(-1), 1, atol=0.02
         )

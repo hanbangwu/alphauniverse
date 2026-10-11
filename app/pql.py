@@ -37,7 +37,7 @@ from .config import (
 from .search import tokens
 
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
-TABLE_VALUE_FLOOR = np.finfo(np.float32).tiny
+PROBABILITY_FLOOR = np.finfo(np.float32).tiny
 OBSERVED_IN = {
     mode: survey
     for mode, survey in (
@@ -244,7 +244,7 @@ def image_token_overlaps(
             np.einsum("gsk,gsk->gs", weights, at_codes)
             + spread[:, block] * totals[block]
         )
-    return overlaps
+    return np.maximum(overlaps, PROBABILITY_FLOOR, out=overlaps)
 
 
 def spectrum_token_coefficients(
@@ -288,7 +288,7 @@ def table_value_overlaps(
     overlaps = np.empty((len(gallery), len(query)), np.float32)
     for index, slot in enumerate(np.arange(gallery.shape[1])[slots]):
         overlaps[:, index] = gallery[:, slot] @ query[index]
-    return np.maximum(overlaps, TABLE_VALUE_FLOOR)
+    return np.maximum(overlaps, PROBABILITY_FLOOR)
 
 
 def query_forms(
@@ -347,7 +347,8 @@ def cross_overlaps(
                 per_sample_weights=weights[chunk].flatten(0, 1),
                 mode="sum",
             ).view(-1, N_IMAGE_TOKENS, len(form))
-            yield chunk, overlaps.addcmul_(spread[chunk, :, None], totals).numpy()
+            overlaps.addcmul_(spread[chunk, :, None], totals)
+            yield chunk, overlaps.clamp_(min=PROBABILITY_FLOOR).numpy()
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
