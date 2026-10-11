@@ -2,7 +2,7 @@
 
 Six Modal jobs; the README has the commands. Embeddings come first, then the projections, which read `encoded`, and `generate_predictions`, which reads `tokens`. `generate_pairs` reads the dataset and `encoded`, `generate_alignment` reads `pairs`, and `generate_aion_gemma_space` reads `pairs` and `alignment`. All jobs share a volume mounted at `/cache`, and `ALPHAUNIVERSE_CACHE` points the app at it. Artifacts go under `$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/`, so changing `DATASET_REVISION` switches trees rather than overwriting one.
 
-Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
+Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Each job commits the volume before it returns, since the commit Modal makes when the container exits must finish within 30 seconds. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
 Every job runs on the build image, which adds the `build` dependency group (AION, scikit-learn, torchvision, umap-learn, wandb). The serving image installs only the main dependencies, which include torch and sentence-transformers for text search.
 
