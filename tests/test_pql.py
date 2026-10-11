@@ -213,25 +213,47 @@ def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
         np.testing.assert_allclose(found, unit @ unit.T, atol=1e-5, err_msg=mode)
 
 
+def partial_correlations(values: np.ndarray, chosen: np.ndarray) -> list[float]:
+    score = values[:, chosen].sum(axis=1)
+    control = (values.sum(axis=1) - score) / (pql.WIDTH - len(chosen))
+    design = np.c_[np.ones(len(values)), control]
+
+    def residual(target: np.ndarray) -> np.ndarray:
+        return target - design @ np.linalg.lstsq(design, target, rcond=None)[0]
+
+    return [
+        np.corrcoef(residual(score), residual(values[:, column]))[0, 1]
+        for column in range(pql.WIDTH)
+    ]
+
+
 def test_saliency_is_the_partial_correlation_over_the_other_galaxies(
     query: pql.Query,
 ) -> None:
     values = pql.agreements(GALAXY).values.astype(np.float64)
     others = np.delete(values, GALAXY, axis=0)
-    chosen = pql.columns(pql.selection(query))
-    score = others[:, chosen].sum(axis=1)
-    control = (others.sum(axis=1) - score) / (pql.WIDTH - len(chosen))
-    design = np.c_[np.ones(len(others)), control]
 
-    def residual(target: np.ndarray) -> np.ndarray:
-        return target - design @ np.linalg.lstsq(design, target, rcond=None)[0]
-
-    expected = [
-        np.corrcoef(residual(score), residual(others[:, column]))[0, 1]
-        for column in range(pql.WIDTH)
-    ]
+    expected = partial_correlations(others, pql.columns(pql.selection(query)))
 
     np.testing.assert_allclose(pql.saliency(query), expected, atol=1e-4)
+
+
+def test_position_independent_saliency_uses_each_slot_s_best_overlap(
+    table: pa.Table, query: pql.Query
+) -> None:
+    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+    values = pql.agreements(GALAXY).values.astype(np.float64)
+    others = np.delete(np.arange(len(values)), GALAXY)
+    gallery = dense(table.take(others), "ls_image", pql.KEPT)
+    own = dense(table.slice(GALAXY, 1), "ls_image", TOP_CODES)[0]
+    best = np.log(gallery @ own.T).max(axis=1)
+    start = pql.OFFSETS["ls_image"]
+    values = values[others]
+    values[:, start : start + N_IMAGE_TOKENS] = best
+
+    expected = partial_correlations(values, pql.columns(pql.selection(anywhere)))
+
+    np.testing.assert_allclose(pql.saliency(anywhere), expected, atol=1e-4)
 
 
 def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(

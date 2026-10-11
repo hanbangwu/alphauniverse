@@ -60,6 +60,8 @@ WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
 BLOCK_BYTES = 64 * 2**20
+SALIENCY_MATCHES = 256
+SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
 
 ImageTokens = Annotated[
@@ -504,18 +506,62 @@ def maps(found: Agreements, galaxies: np.ndarray) -> dict[str, np.ndarray]:
 def saliency(query: Selection) -> np.ndarray:
     found = agreements(query.galaxy)
     chosen = columns(selection(query))
-    others = np.arange(len(found.values)) != query.galaxy
+    if not query.anywhere:
+        others = np.arange(len(found.values)) != query.galaxy
+        return partial_correlations(
+            found.values, found.spread, found.totals, chosen, others
+        )
+    values = sampled_values(query, found)
+    return partial_correlations(
+        values,
+        values.std(axis=0),
+        values.sum(axis=1),
+        chosen,
+        np.ones(len(values), bool),
+    )
+
+
+def saliency_sample(query: Selection) -> np.ndarray:
+    order = np.argsort(-scores(query), kind="stable")
+    order = order[order != query.galaxy]
+    rest = order[SALIENCY_MATCHES:]
+    background = np.random.default_rng(query.galaxy).choice(
+        rest, min(SALIENCY_BACKGROUND, len(rest)), replace=False
+    )
+    return np.sort(np.concatenate([order[:SALIENCY_MATCHES], background]))
+
+
+def sampled_values(query: Selection, found: Agreements) -> np.ndarray:
+    sample = saliency_sample(query)
+    values = found.values[sample].astype(np.float64)
+    rows = predictions().take(sample).combine_chunks().to_batches()[0]
+    forms = query_forms(row(query.galaxy), dict.fromkeys(query.anywhere, slice(None)))
+    for mode, form in forms.items():
+        values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = np.concatenate(
+            [
+                overlaps.max(axis=-1)
+                for _, overlaps in cross_log_overlaps(rows, mode, form)
+            ]
+        ).T
+    return values
+
+
+def partial_correlations(
+    values: np.ndarray,
+    spread: np.ndarray,
+    totals: np.ndarray,
+    chosen: np.ndarray,
+    others: np.ndarray,
+) -> np.ndarray:
     count = others.sum()
-    score = found.values[:, chosen].sum(axis=1, dtype=np.float64)
+    score = values[:, chosen].sum(axis=1, dtype=np.float64)
     with np.errstate(divide="ignore", invalid="ignore"):
-        control = (found.totals - score) / (WIDTH - len(chosen))
+        control = (totals - score) / (WIDTH - len(chosen))
         targets = np.c_[score, control]
         targets = np.where(others[:, None], targets - targets[others].mean(axis=0), 0)
         spreads = np.sqrt((targets**2).sum(axis=0) / count)
-        covariances = products(found.values, targets).T
-        with_score, with_control = covariances / (
-            count * found.spread * spreads[:, None]
-        )
+        covariances = products(values, targets).T
+        with_score, with_control = covariances / (count * spread * spreads[:, None])
         between = targets[:, 0] @ targets[:, 1] / (count * spreads.prod())
         partial = (with_score - with_control * between) / np.sqrt(
             (1 - with_control**2) * (1 - between**2)
