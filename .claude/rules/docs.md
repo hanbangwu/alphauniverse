@@ -8,11 +8,14 @@ paths:
 
 # Docs
 
-- Docs are for someone new, concise, and state only what the code does now.
+- `docs/` is a Sphinx project in reStructuredText. Its reader is an astronomer who knows little about AI: say what they see and what AION does, with math in place of prose where it is shorter; keep implementation detail to the reference.
+- Docs are concise and state only what the code does now.
 - Each fact has one home: before adding to a doc, re-read it and cut what the addition duplicates. The homes are:
-  - `README.md`: what the platform does, the dataset, and how to run it.
-  - `docs/architecture.md`: how the pieces connect, the artifact roles and the endpoints.
-  - `docs/pipeline.md`: the build jobs and the artifact schemas.
-  - `docs/benchmarks.md`: the benchmarks, how to run them, measured figures and scaling ceilings.
-  - `docs/testing.md`: the test and CI commands.
+  - `README.md`: a brief showcase of the features, how to start the site locally, and a link to the docs.
+  - `docs/index.rst`: what alphaUniverse is and the dataset.
+  - `docs/explanation.rst`: how each feature works.
+  - `docs/benchmarks.rst`: what each benchmark measures, with its figures drawn from its report.
+  - `docs/how-to.rst`: the commands.
+  - `docs/reference.rst`: the pipeline, the artifacts, the HTTP API, the tests and CI, and the Python modules.
+- Facts the code holds (schemas, routes, signatures) are rendered from it by Sphinx, not restated.
 - A rule goes in the narrowest place it applies: a path-scoped file in `.claude/rules/` when it concerns certain files, `CLAUDE.md` only when it applies to the whole repository.
