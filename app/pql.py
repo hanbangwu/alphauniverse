@@ -253,7 +253,7 @@ def spectrum_token_overlaps(
     )[:, slots]
     overlaps = (
         mean_square
-        + query @ projected_mean
+        + np.einsum("...r,r->...", query, projected_mean)
         + array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[:, slots]
         * weights.sum(axis=-1)
         + array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[:, slots]
