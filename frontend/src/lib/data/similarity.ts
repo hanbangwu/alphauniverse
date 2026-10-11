@@ -11,6 +11,8 @@ export interface SimilarityResult {
   similarities: Float32Array
   imageMaps: Float32Array
   spectrumMaps: Float32Array
+  imagePositions: (number[] | null)[]
+  spectrumPositions: (number[] | null)[]
   tableValueMap: Float32Array
   predicted: string[][]
 }

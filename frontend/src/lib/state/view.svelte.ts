@@ -9,6 +9,8 @@ export class ViewState {
   readonly imageTokens = new IndexListField()
   readonly spectrumTokens = new IndexListField()
   readonly tableValues = new IndexListField()
+  readonly imageAnywhere = new Field(false)
+  readonly spectrumAnywhere = new Field(false)
   readonly explorer = new Field(false)
 
   constructor() {

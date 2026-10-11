@@ -16,7 +16,14 @@ import { matchMean } from './scores'
 import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
-import { type Float32, type Table, type Utf8, type Vector, tableFromIPC } from 'apache-arrow'
+import {
+  type Float32,
+  type Int32,
+  type Table,
+  type Utf8,
+  type Vector,
+  tableFromIPC
+} from 'apache-arrow'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
@@ -151,6 +158,12 @@ export function morphologyQuery(mosaic: MosaicState, table: string | null, galax
   })
 }
 
+function positions(table: Table, mode: string): (number[] | null)[] {
+  return Array.from(table.getChild(`${mode}_positions`)!, (row: Vector<Int32> | null) =>
+    row ? Array.from(row.toArray()) : null
+  )
+}
+
 function maps(table: Table, mode: string): Float32Array {
   return table.getChild(mode)!.getChildAt<Float32>(0)!.toArray()
 }
@@ -169,6 +182,8 @@ export function similarityQuery(request: SimilarityQuery | null) {
               similarities: table.getChild('similarity')!.toArray(),
               imageMaps: maps(table, 'ls_image'),
               spectrumMaps: maps(table, 'desi_spectrum'),
+              imagePositions: positions(table, 'ls_image'),
+              spectrumPositions: positions(table, 'desi_spectrum'),
               tableValueMap: matchMean(maps(table, 'table_values'), table.numRows),
               predicted: Array.from(
                 table.getChild('predicted')!,

@@ -43,7 +43,7 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <div class="flex items-center justify-between gap-2">
+  <div class="flex flex-wrap items-center justify-between gap-2">
     <span class="text-sm font-medium">{label}</span>
     {@render action?.()}
   </div>

@@ -50,8 +50,8 @@
       imageOpacity={similarity.imageLayer || hovered ? undefined : tokenAlpha(false)}
     >
       {#snippet action()}
-        <div class="flex items-center gap-4">
-          <label class="flex items-center gap-2 text-sm font-medium">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <label class="flex items-center gap-2 text-sm font-medium whitespace-nowrap">
             <Switch
               checked={display.on.value}
               disabled={!display.on.value && !similarity.imageLayer && !similarity.searched}
@@ -59,7 +59,14 @@
             />
             Mask
           </label>
-          <label class="flex items-center gap-2 text-sm font-medium">
+          <label class="flex items-center gap-2 text-sm font-medium whitespace-nowrap">
+            <Switch
+              checked={view.imageAnywhere.value}
+              onCheckedChange={(checked) => (view.imageAnywhere.value = checked)}
+            />
+            Any position
+          </label>
+          <label class="flex items-center gap-2 text-sm font-medium whitespace-nowrap">
             <Switch
               checked={display.invert.value}
               disabled={!display.on.value}
@@ -105,7 +112,17 @@
     caption={similarity.layerCaption}
     selected={view.spectrumTokens.value}
     ontoggle={(index) => view.spectrumTokens.toggle(index)}
-  />
+  >
+    {#snippet action()}
+      <label class="flex items-center gap-2 text-sm font-medium whitespace-nowrap">
+        <Switch
+          checked={view.spectrumAnywhere.value}
+          onCheckedChange={(checked) => (view.spectrumAnywhere.value = checked)}
+        />
+        Any position
+      </label>
+    {/snippet}
+  </SpectrumPanel>
   {#if similarity.spectrumLayerError}
     <p role="alert" class="text-xs leading-relaxed text-destructive">
       {similarity.spectrumLayerError}

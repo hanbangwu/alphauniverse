@@ -7,6 +7,7 @@
   import { errorMessage } from '$lib/errors'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
+  import type { Snippet } from 'svelte'
 
   interface Props {
     galaxy: number
@@ -16,9 +17,19 @@
     absent?: string
     heat: ((value: number) => RGB) | null
     caption: (value: number, index: number) => string
+    action?: Snippet
   }
 
-  let { galaxy, map, selected, ontoggle, absent = 'No spectrum', heat, caption }: Props = $props()
+  let {
+    galaxy,
+    map,
+    selected,
+    ontoggle,
+    absent = 'No spectrum',
+    heat,
+    caption,
+    action
+  }: Props = $props()
 
   const similarity = getSimilarity()
 
@@ -32,7 +43,10 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <span class="text-sm font-medium">Spectrum Tokens</span>
+  <div class="flex items-center justify-between gap-2">
+    <span class="text-sm font-medium">Spectrum Tokens</span>
+    {@render action?.()}
+  </div>
 
   <PanelFrame
     busy={coverage.isPending || spectrum.isFetching || tokens.isFetching}
