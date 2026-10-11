@@ -88,10 +88,22 @@ def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.n
     return np.exp(log_overlaps(mode, gallery, query) - np.log(query.max(axis=-1)))
 
 
+def mode_sums(query: pql.Query) -> dict[str, np.ndarray]:
+    return pql.column_sums(pql.agreements(query.galaxy), pql.selection(query))
+
+
+def scores(query: pql.Query) -> np.ndarray:
+    return pql.combine(mode_sums(query))
+
+
 def similarity(query: pql.Query) -> np.ndarray:
-    _, forms = pql.selected_forms(query)
-    peaks = {mode: pql.log_peaks(mode, form) for mode, form in forms.items()}
-    return pql.similarity(pql.fractions(peaks, pql.parts(query)))
+    found = pql.agreements(query.galaxy)
+    selected = pql.selection(query)
+    return pql.similarity(
+        pql.fractions(
+            pql.selected_peaks(found, selected), pql.column_sums(found, selected)
+        )
+    )
 
 
 @pytest.fixture(scope="module")
@@ -109,7 +121,7 @@ def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
 ) -> None:
     own = table.slice(GALAXY, 1)
 
-    sums = pql.parts(query)
+    sums = mode_sums(query)
 
     assert sums.keys() == SELECTED_SLOTS.keys()
     for mode, slots in SELECTED_SLOTS.items():
@@ -211,18 +223,11 @@ def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
 
     results = pql.search(ranked)
 
-    scores = pql.scores(ranked)
-    others = np.delete(np.arange(len(scores)), GALAXY)
-    best = others[np.argsort(-scores[others], kind="stable")][:matches]
+    expected = scores(ranked)
+    others = np.delete(np.arange(len(expected)), GALAXY)
+    best = others[np.argsort(-expected[others], kind="stable")][:matches]
     assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
-    np.testing.assert_allclose(results.scores, scores[results.galaxies], atol=1e-4)
-    for mode, values in pql.parts(ranked).items():
-        np.testing.assert_allclose(
-            results.sums[mode], values[results.galaxies], rtol=1e-5
-        )
-    np.testing.assert_allclose(
-        results.similarity, similarity(ranked)[results.galaxies], rtol=1e-5
-    )
+    np.testing.assert_array_equal(results.scores, expected[results.galaxies])
 
 
 @pytest.mark.parametrize(
@@ -239,13 +244,13 @@ def test_a_selection_on_a_mode_the_query_galaxy_lacks_is_rejected(
 def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
     query: pql.Query,
 ) -> None:
-    sums = pql.parts(query)
+    sums = mode_sums(query)
 
     expected = np.mean(
         [(values - values.mean()) / values.std() for values in sums.values()],
         axis=0,
     )
-    np.testing.assert_allclose(pql.scores(query), expected)
+    np.testing.assert_allclose(scores(query), expected)
 
 
 def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow() -> (
@@ -263,10 +268,10 @@ def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow(
 
 
 def test_a_repeated_slot_counts_once(tree: Path) -> None:
-    repeated = pql.parts(
+    repeated = mode_sums(
         pql.Query(galaxy=GALAXY, ls_image=(7, 7, 9), table_values=(2, 2))
     )
-    once = pql.parts(pql.Query(galaxy=GALAXY, ls_image=(7, 9), table_values=(2,)))
+    once = mode_sums(pql.Query(galaxy=GALAXY, ls_image=(7, 9), table_values=(2,)))
 
     for mode, values in once.items():
         np.testing.assert_array_equal(repeated[mode], values)
@@ -277,7 +282,7 @@ def test_similarity_ranks_galaxies_as_the_score_does(query: pql.Query) -> None:
 
     np.testing.assert_array_equal(
         np.argsort(-similarities, kind="stable"),
-        np.argsort(-pql.scores(query), kind="stable"),
+        np.argsort(-scores(query), kind="stable"),
     )
 
 

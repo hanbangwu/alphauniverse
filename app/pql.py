@@ -321,23 +321,6 @@ def selected_forms(
     return selected, query_forms(row(query.galaxy), selected)
 
 
-def parts(query: Query) -> dict[str, np.ndarray]:
-    return scan(*selected_forms(query))
-
-
-def scan(
-    selected: dict[str, np.ndarray], forms: dict[str, np.ndarray]
-) -> dict[str, np.ndarray]:
-    totals = {mode: np.empty(predictions().num_rows) for mode in selected}
-    start = 0
-    for rows in predictions().to_batches():
-        stop = start + rows.num_rows
-        for mode, values in sums(rows, selected, forms).items():
-            totals[mode][start:stop] = values
-        start = stop
-    return totals
-
-
 def combine(sums: dict[str, np.ndarray]) -> np.ndarray:
     if len(sums) == 1:
         return next(iter(sums.values()))
@@ -345,10 +328,6 @@ def combine(sums: dict[str, np.ndarray]) -> np.ndarray:
         [(values - values.mean()) / values.std() for values in sums.values()],
         axis=0,
     )
-
-
-def scores(query: Query) -> np.ndarray:
-    return combine(parts(query))
 
 
 def cosines(galaxy: int, mode: str) -> np.ndarray:
