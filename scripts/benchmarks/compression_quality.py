@@ -240,6 +240,75 @@ def log_overlaps(
     return found, pairs, bits, floored / total
 
 
+def anywhere_overlaps(
+    scheme: Any,
+    mode: Mode,
+    gallery: np.ndarray,
+    queries: np.ndarray,
+    hidden: np.ndarray,
+    mask: torch.Tensor,
+    device: torch.device,
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    sides = ("exact",) if scheme is None else ("gallery", "both")
+    minimum = compression.floor(scheme, mode.vocabulary)
+    selected = [row.nonzero()[:, 0] for row in mask]
+    forms: dict[str, list[list[torch.Tensor]]] = {
+        side: [[] for _ in queries] for side in sides
+    }
+    for part, rows, _ in chunks(gallery, hidden, device):
+        for position, slots in enumerate(selected):
+            local = slots[(slots >= part.start) & (slots < part.stop)] - part.start
+            own = rows[queries[position]][None, local]
+            if scheme is None:
+                forms["exact"][position].append(exponentiated(own)[0])
+            else:
+                forms["gallery"][position].append(exponentiated(own)[0])
+                stored = scheme.encode(own)
+                forms["both"][position].append(scheme.decode(stored, side="query")[0])
+    stacked = {
+        side: [torch.cat(parts) for parts in per_query]
+        for side, per_query in forms.items()
+    }
+    best = {
+        side: [
+            torch.full((len(slots), len(gallery)), -torch.inf, device=device)
+            for slots in selected
+        ]
+        for side in sides
+    }
+    best_own = {
+        side: [
+            torch.full((len(slots),), -torch.inf, device=device) for slots in selected
+        ]
+        for side in sides
+    }
+    for _, rows, unseen in chunks(gallery, hidden, device):
+        if scheme is None:
+            decoded, decoded_unseen = exponentiated(rows), exponentiated(unseen)
+        else:
+            decoded = scheme.decode(scheme.encode(rows))
+            decoded_unseen = scheme.decode(scheme.encode(unseen))
+        for side in sides:
+            for position, form in enumerate(stacked[side]):
+                overlaps = torch.einsum("kv,gcv->kgc", form, decoded)
+                best[side][position] = torch.maximum(
+                    best[side][position],
+                    overlaps.clamp_min(minimum).log().amax(dim=-1),
+                )
+                own = torch.einsum("kv,cv->kc", form, decoded_unseen[position])
+                best_own[side][position] = torch.maximum(
+                    best_own[side][position], own.clamp_min(minimum).log().amax(dim=-1)
+                )
+    shape = (gallery.shape[1], len(queries))
+    found = {side: torch.zeros(*shape, len(gallery), device=device) for side in sides}
+    pairs = {side: torch.zeros(*shape, device=device) for side in sides}
+    for side in sides:
+        for position, slots in enumerate(selected):
+            found[side][slots, position] = best[side][position]
+            pairs[side][slots, position] = best_own[side][position]
+    return found, pairs
+
+
 def ranks(scores: torch.Tensor) -> torch.Tensor:
     ordered = scores.sort(dim=-1).values.contiguous()
     values = scores.contiguous()
@@ -402,6 +471,11 @@ def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
     reference, reference_pairs, _, _ = log_overlaps(
         None, mode, gallery, picked, unseen, device
     )
+    anywhere = kind(mode) in ("image", "spectrum")
+    if anywhere:
+        reference_anywhere, reference_anywhere_pairs = anywhere_overlaps(
+            None, mode, gallery, picked, unseen, masks["16"], device
+        )
     entries = {}
     for scheme in compression.schemes(mode, basis):
         found, pairs, bits, floored = log_overlaps(
@@ -430,6 +504,22 @@ def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
                 for size, mask in masks.items()
             },
         }
+        if anywhere:
+            crossed, crossed_pairs = anywhere_overlaps(
+                scheme, mode, gallery, picked, unseen, masks["16"], device
+            )
+            entries[scheme.name]["sizes"]["16 anywhere"] = {
+                side: summary(
+                    crossed[side],
+                    crossed_pairs[side],
+                    reference_anywhere["exact"],
+                    reference_anywhere_pairs["exact"],
+                    masks["16"],
+                    positions,
+                    redshift,
+                )
+                for side in crossed
+            }
     return {
         "galaxies": galaxy_count(),
         "sample": len(galaxies),
