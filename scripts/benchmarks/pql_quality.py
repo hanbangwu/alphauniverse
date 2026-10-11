@@ -167,9 +167,7 @@ def benchmark_pql_quality(sample: int) -> dict[str, Any]:
         )
         for kind, query in selections(galaxy, rng).items():
             values = measured[kind]
-            scores = pql.combine(
-                pql.column_sums(pql.agreements(galaxy), pql.selection(query))
-            )
+            scores = pql.scores(query)
             order = np.argsort(-scores, kind="stable")
             order = order[(order != galaxy) & known[order]]
             values["redshift"].append(offset(redshift, order[:TOP], galaxy))

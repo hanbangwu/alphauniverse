@@ -321,11 +321,11 @@ def selected_forms(
     return selected, query_forms(row(query.galaxy), selected)
 
 
-def combine(sums: dict[str, np.ndarray]) -> np.ndarray:
-    if len(sums) == 1:
-        return next(iter(sums.values()))
+def combine(totals: dict[str, np.ndarray]) -> np.ndarray:
+    if len(totals) == 1:
+        return next(iter(totals.values()))
     return np.mean(
-        [(values - values.mean()) / values.std() for values in sums.values()],
+        [(values - values.mean()) / values.std() for values in totals.values()],
         axis=0,
     )
 
@@ -354,7 +354,7 @@ def built(galaxy: int) -> Agreements:
             )
         start = stop
     others = np.arange(len(values)) != galaxy
-    means = products(values, others.astype(np.float64)[:, None])[:, 0] / others.sum()
+    means = (values.sum(axis=0, dtype=np.float64) - values[galaxy]) / others.sum()
     squares = np.zeros(WIDTH)
     for start in range(0, len(values), BATCH):
         block = values[start : start + BATCH].astype(np.float64) - means
@@ -390,6 +390,10 @@ def selected_peaks(
     return {
         mode: found.peaks[OFFSETS[mode] + slots] for mode, slots in selected.items()
     }
+
+
+def scores(query: Query) -> np.ndarray:
+    return combine(column_sums(agreements(query.galaxy), selection(query)))
 
 
 def columns(selected: dict[str, np.ndarray]) -> np.ndarray:
@@ -439,11 +443,11 @@ def fractions(
     }
 
 
-def similarity(fractions: dict[str, np.ndarray]) -> np.ndarray:
-    if len(fractions) == 1:
-        return np.exp(next(iter(fractions.values())))
-    weights = {mode: 1 / values.std() for mode, values in fractions.items()}
-    weighted = sum(weights[mode] * values for mode, values in fractions.items())
+def similarity(shares: dict[str, np.ndarray]) -> np.ndarray:
+    if len(shares) == 1:
+        return np.exp(next(iter(shares.values())))
+    weights = {mode: 1 / values.std() for mode, values in shares.items()}
+    weighted = sum(weights[mode] * values for mode, values in shares.items())
     return np.exp(weighted / sum(weights.values()))
 
 

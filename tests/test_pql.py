@@ -92,10 +92,6 @@ def mode_sums(query: pql.Query) -> dict[str, np.ndarray]:
     return pql.column_sums(pql.agreements(query.galaxy), pql.selection(query))
 
 
-def scores(query: pql.Query) -> np.ndarray:
-    return pql.combine(mode_sums(query))
-
-
 def similarity(query: pql.Query) -> np.ndarray:
     found = pql.agreements(query.galaxy)
     selected = pql.selection(query)
@@ -223,7 +219,7 @@ def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
 
     results = pql.search(ranked)
 
-    expected = scores(ranked)
+    expected = pql.scores(ranked)
     others = np.delete(np.arange(len(expected)), GALAXY)
     best = others[np.argsort(-expected[others], kind="stable")][:matches]
     assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
@@ -250,7 +246,7 @@ def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
         [(values - values.mean()) / values.std() for values in sums.values()],
         axis=0,
     )
-    np.testing.assert_allclose(scores(query), expected)
+    np.testing.assert_allclose(pql.scores(query), expected)
 
 
 def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow() -> (
@@ -282,7 +278,7 @@ def test_similarity_ranks_galaxies_as_the_score_does(query: pql.Query) -> None:
 
     np.testing.assert_array_equal(
         np.argsort(-similarities, kind="stable"),
-        np.argsort(-scores(query), kind="stable"),
+        np.argsort(-pql.scores(query), kind="stable"),
     )
 
 
