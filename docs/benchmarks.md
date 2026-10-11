@@ -2,7 +2,7 @@
 
 Every benchmark runs on Modal and measures the production artifacts on the volume.
 
-The stored reports predate #215's rename and use the old names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps` and `similarity scalars matches=32`.
+The stored reports use older names for image tokens (`patches`), spectrum tokens (`spans`) and table values (`scalars`), as in `span_maps` and `similarity scalars matches=32`.
 
 | Script                | Measures                                        | Runs on                                   | Report                                     |
 | --------------------- | ----------------------------------------------- | ----------------------------------------- | ------------------------------------------ |
@@ -39,11 +39,11 @@ What a first visitor to an idle site waits for, from the last `backend_performan
 | Step                             | Cost                                          |
 | -------------------------------- | --------------------------------------------- |
 | Container start + loads, `/meta` | 18.1 s with the cosine search's loads         |
-| First `/search` after that       | unmeasured since #225                         |
+| First `/search` after that       | unmeasured                                    |
 | First `/search/text` after that  | 35.5 s                                        |
 | Everything warm after that       | 0.13–0.28 s p50, every endpoint but `/search` |
 
-The run predates #225, which replaced the cosine search and its loads with PQL, so every `/search` figure and the cold start under PQL are **unmeasured**.
+The run timed the cosine search and its loads, not PQL's, so every `/search` figure and the cold start under PQL are **unmeasured**.
 
 ## `search_performance`
 
@@ -84,13 +84,13 @@ Latency includes Modal's ingress, not the starter's network. Only the checked-ou
 | Run              |                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
 | Date             | 2026-10-10                                                                                        |
-| Commit           | `853bac8`, #190 and #191 on `37bff8a`                                                             |
+| Commit           | `853bac8`                                                                                         |
 | Dataset revision | `e250e43c35e63523ee3940c9543302c29ca56437`                                                        |
 | Server           | 8 CPU, 8 GiB requested, 32 GiB limit; `max_inputs=16`, `max_containers=1`, `scaledown_window=300` |
 | Client           | 1 CPU; 17 CPUs visible, faiss at 1 thread; AMD family 25, model 1                                 |
 | Runs             | 30 warm per figure after one discarded; one cold                                                  |
 
-**`/search`**: the run timed the cosine search, which #225 removed; under PQL it is **unmeasured**.
+**`/search`**: the run timed the cosine search; under PQL it is **unmeasured**.
 
 **Other endpoints**, warm:
 
@@ -194,5 +194,5 @@ The report is too large for the workflow's step summary; it is in the run's arti
 
 | Ceiling          | Now                   | Breaks at                                                                      |
 | ---------------- | --------------------- | ------------------------------------------------------------------------------ |
-| Cold start       | unmeasured since #225 | a proxy or browser timeout; which one, and at what length, is unmeasured       |
+| Cold start       | unmeasured            | a proxy or browser timeout; which one, and at what length, is unmeasured       |
 | Serving capacity | one container         | `/search` throughput under PQL is unmeasured; `max_containers=1` is a hard cap |
