@@ -1,5 +1,5 @@
 from functools import cache, lru_cache
-from threading import Lock
+from itertools import accumulate
 from typing import Annotated, NamedTuple, Self
 
 import numpy as np
@@ -44,17 +44,16 @@ TABLE_SLOTS = [
     (mode, slot) for mode, (_, count, _) in TABLE_MODES.items() for slot in range(count)
 ]
 
-MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
 WIDTHS = (
     dict.fromkeys(IMAGE_MODES, N_IMAGE_TOKENS)
     | dict.fromkeys(SPECTRUM_MODES, N_SPECTRUM_TOKENS)
     | {mode: count for mode, (_, count, _) in TABLE_MODES.items()}
 )
-OFFSETS = dict(zip(MODES, np.cumsum([0, *WIDTHS.values()]).tolist(), strict=False))
+MODES = tuple(WIDTHS)
+OFFSETS = dict(zip(MODES, accumulate(WIDTHS.values(), initial=0), strict=False))
 WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
-BUILDING = Lock()
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -71,7 +70,7 @@ def observed(column: str) -> np.ndarray:
     return pc.is_valid(tokens().column(column)).to_numpy()
 
 
-class Query(BaseModel):
+class Selection(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     galaxy: GalaxyIndex
@@ -83,7 +82,6 @@ class Query(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_TABLE_VALUES)], ...],
         Field(max_length=N_TABLE_VALUES),
     ] = ()
-    matches: Annotated[int, Field(ge=1, le=128)] = 32
 
     @model_validator(mode="after")
     def selects_observed_slots(self) -> Self:
@@ -99,6 +97,10 @@ class Query(BaseModel):
         return self
 
 
+class Query(Selection):
+    matches: Annotated[int, Field(ge=1, le=128)] = 32
+
+
 class Results(NamedTuple):
     galaxies: np.ndarray
     scores: np.ndarray
@@ -112,7 +114,6 @@ class Results(NamedTuple):
 class Agreements(NamedTuple):
     values: np.ndarray
     peaks: np.ndarray
-    means: np.ndarray
     spread: np.ndarray
     totals: np.ndarray
 
@@ -160,16 +161,11 @@ def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:
     return rows.column(name).flatten().to_numpy().reshape(rows.num_rows, *shape)
 
 
-def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
-    rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
-    return pa.concat_tables(rows).combine_chunks().to_batches()[0]
-
-
 def row(galaxy: int) -> pa.RecordBatch:
     return predictions().slice(galaxy, 1).to_batches()[0]
 
 
-def selection(query: Query) -> dict[str, np.ndarray]:
+def selection(query: Selection) -> dict[str, np.ndarray]:
     selected = {mode: getattr(query, mode) for mode in (*IMAGE_MODES, *SPECTRUM_MODES)}
     for table_value in query.table_values:
         mode, slot = TABLE_SLOTS[table_value]
@@ -356,13 +352,8 @@ def cosines(galaxy: int, mode: str) -> np.ndarray:
     return (unit @ unit.T).astype(np.float32, copy=False)
 
 
-def agreements(galaxy: int) -> Agreements:
-    with BUILDING:
-        return built(galaxy)
-
-
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
-def built(galaxy: int) -> Agreements:
+def agreements(galaxy: int) -> Agreements:
     forms = query_forms(row(galaxy), dict.fromkeys(MODES, slice(None)))
     values = np.empty((predictions().num_rows, WIDTH), np.float32)
     start = 0
@@ -382,7 +373,6 @@ def built(galaxy: int) -> Agreements:
     return Agreements(
         values,
         np.concatenate([log_peaks(mode, forms[mode]) for mode in MODES]),
-        means,
         np.sqrt(squares / others.sum()),
         values.sum(axis=1, dtype=np.float64),
     )
@@ -421,28 +411,22 @@ def maps(found: Agreements, galaxies: np.ndarray) -> dict[str, np.ndarray]:
     return by_mode(np.exp(found.values[galaxies] - found.peaks))
 
 
-def saliency(query: Query) -> np.ndarray:
+def saliency(query: Selection) -> np.ndarray:
     found = agreements(query.galaxy)
     chosen = columns(selection(query))
     others = np.arange(len(found.values)) != query.galaxy
     count = others.sum()
     score = found.values[:, chosen].sum(axis=1, dtype=np.float64)
     control = (found.totals - score) / (WIDTH - len(chosen))
-
-    def centred(values: np.ndarray) -> np.ndarray:
-        return np.where(others, values - values[others].mean(), 0)
-
-    centred_score, centred_control = centred(score), centred(control)
-    spread_score = np.sqrt(centred_score @ centred_score / count)
-    spread_control = np.sqrt(centred_control @ centred_control / count)
-    covariances = products(found.values, np.c_[centred_score, centred_control]).T
+    targets = np.c_[score, control]
+    targets = np.where(others[:, None], targets - targets[others].mean(axis=0), 0)
+    spreads = np.sqrt((targets**2).sum(axis=0) / count)
+    covariances = products(found.values, targets).T
     with np.errstate(divide="ignore", invalid="ignore"):
         with_score, with_control = covariances / (
-            count * found.spread * [[spread_score], [spread_control]]
+            count * found.spread * spreads[:, None]
         )
-        between = (
-            centred_score @ centred_control / (count * spread_score * spread_control)
-        )
+        between = targets[:, 0] @ targets[:, 1] / (count * spreads.prod())
         return (
             (with_score - with_control * between)
             / np.sqrt((1 - with_control**2) * (1 - between**2))

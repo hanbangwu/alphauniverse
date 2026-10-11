@@ -57,7 +57,6 @@ STAGES = [
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
-SPECTRUM_TOKEN_WINDOW = 16
 ENTRY = (
     "import json, sys, time\n"
     "start = time.perf_counter()\n"
@@ -113,7 +112,7 @@ def load_times() -> dict[str, dict[str, float]]:
 
 
 def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
-    pql.built.cache_clear()
+    pql.agreements.cache_clear()
     marks = [mark()]
     selected, forms = pql.selected_forms(query)
     marks.append(mark())

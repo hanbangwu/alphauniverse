@@ -513,18 +513,6 @@
               "default": [],
               "title": "Table Values"
             }
-          },
-          {
-            "name": "matches",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 128,
-              "minimum": 1,
-              "default": 32,
-              "title": "Matches"
-            }
           }
         ],
         "responses": {
