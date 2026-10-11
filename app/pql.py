@@ -1,4 +1,6 @@
-from functools import cache
+from functools import cache, lru_cache
+from itertools import accumulate
+from threading import Lock
 from typing import Annotated, NamedTuple, Self
 
 import numpy as np
@@ -43,6 +45,21 @@ TABLE_SLOTS = [
     (mode, slot) for mode, (_, count, _) in TABLE_MODES.items() for slot in range(count)
 ]
 
+WIDTHS = (
+    dict.fromkeys(IMAGE_MODES, N_IMAGE_TOKENS)
+    | dict.fromkeys(SPECTRUM_MODES, N_SPECTRUM_TOKENS)
+    | {mode: count for mode, (_, count, _) in TABLE_MODES.items()}
+)
+MODES = tuple(WIDTHS)
+OFFSETS = {
+    mode: end - WIDTHS[mode]
+    for mode, end in zip(MODES, accumulate(WIDTHS.values()), strict=True)
+}
+WIDTH = sum(WIDTHS.values())
+AGREEMENT_GALAXIES = 8
+BATCH = 256
+BUILDING = Lock()
+
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
     Field(max_length=N_IMAGE_TOKENS),
@@ -58,7 +75,7 @@ def observed(column: str) -> np.ndarray:
     return pc.is_valid(tokens().column(column)).to_numpy()
 
 
-class Query(BaseModel):
+class Selection(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     galaxy: GalaxyIndex
@@ -70,7 +87,6 @@ class Query(BaseModel):
         tuple[Annotated[int, Field(ge=0, lt=N_TABLE_VALUES)], ...],
         Field(max_length=N_TABLE_VALUES),
     ] = ()
-    matches: Annotated[int, Field(ge=1, le=128)] = 32
 
     @model_validator(mode="after")
     def selects_observed_slots(self) -> Self:
@@ -86,6 +102,10 @@ class Query(BaseModel):
         return self
 
 
+class Query(Selection):
+    matches: Annotated[int, Field(ge=1, le=128)] = 32
+
+
 class Results(NamedTuple):
     galaxies: np.ndarray
     scores: np.ndarray
@@ -94,7 +114,13 @@ class Results(NamedTuple):
     similarities: dict[str, np.ndarray]
     predicted: list[list[str]]
     aligned: dict[str, np.ndarray]
-    selected: dict[str, np.ndarray]
+
+
+class Agreements(NamedTuple):
+    values: np.ndarray
+    peaks: np.ndarray
+    spread: np.ndarray
+    totals: np.ndarray
 
 
 def prediction_batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
@@ -140,16 +166,11 @@ def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:
     return rows.column(name).flatten().to_numpy().reshape(rows.num_rows, *shape)
 
 
-def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
-    rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
-    return pa.concat_tables(rows).combine_chunks().to_batches()[0]
-
-
 def row(galaxy: int) -> pa.RecordBatch:
     return predictions().slice(galaxy, 1).to_batches()[0]
 
 
-def selection(query: Query) -> dict[str, np.ndarray]:
+def selection(query: Selection) -> dict[str, np.ndarray]:
     selected = {mode: getattr(query, mode) for mode in (*IMAGE_MODES, *SPECTRUM_MODES)}
     for table_value in query.table_values:
         mode, slot = TABLE_SLOTS[table_value]
@@ -282,12 +303,6 @@ def log_peaks(mode: str, form: np.ndarray) -> np.ndarray:
     return np.log(distributions(mode, form).max(axis=-1))
 
 
-def slot_similarities(
-    rows: pa.RecordBatch, mode: str, slots: np.ndarray | slice, form: np.ndarray
-) -> np.ndarray:
-    return np.exp(log_overlaps(rows, mode, slots, form) - log_peaks(mode, form))
-
-
 def sums(
     rows: pa.RecordBatch,
     selected: dict[str, np.ndarray],
@@ -306,34 +321,13 @@ def selected_forms(
     return selected, query_forms(row(query.galaxy), selected)
 
 
-def parts(query: Query) -> dict[str, np.ndarray]:
-    return scan(*selected_forms(query))
-
-
-def scan(
-    selected: dict[str, np.ndarray], forms: dict[str, np.ndarray]
-) -> dict[str, np.ndarray]:
-    totals = {mode: np.empty(predictions().num_rows) for mode in selected}
-    start = 0
-    for rows in predictions().to_batches():
-        stop = start + rows.num_rows
-        for mode, values in sums(rows, selected, forms).items():
-            totals[mode][start:stop] = values
-        start = stop
-    return totals
-
-
-def combine(sums: dict[str, np.ndarray]) -> np.ndarray:
-    if len(sums) == 1:
-        return next(iter(sums.values()))
+def combine(totals: dict[str, np.ndarray]) -> np.ndarray:
+    if len(totals) == 1:
+        return next(iter(totals.values()))
     return np.mean(
-        [(values - values.mean()) / values.std() for values in sums.values()],
+        [(values - values.mean()) / values.std() for values in totals.values()],
         axis=0,
     )
-
-
-def scores(query: Query) -> np.ndarray:
-    return combine(parts(query))
 
 
 def cosines(galaxy: int, mode: str) -> np.ndarray:
@@ -342,43 +336,118 @@ def cosines(galaxy: int, mode: str) -> np.ndarray:
     return (unit @ unit.T).astype(np.float32, copy=False)
 
 
-def maps(
-    query: Query, galaxies: np.ndarray
-) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
-    own = row(query.galaxy)
-    rows = gathered(galaxies)
-    every = query_forms(
-        own, dict.fromkeys((*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES), slice(None))
+def agreements(galaxy: int) -> Agreements:
+    with BUILDING:
+        return built(galaxy)
+
+
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def built(galaxy: int) -> Agreements:
+    forms = query_forms(row(galaxy), dict.fromkeys(MODES, slice(None)))
+    values = np.empty((predictions().num_rows, WIDTH), np.float32)
+    start = 0
+    for rows in predictions().to_batches():
+        stop = start + rows.num_rows
+        for mode, form in forms.items():
+            values[start:stop, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = (
+                log_overlaps(rows, mode, slice(None), form)
+            )
+        start = stop
+    others = np.arange(len(values)) != galaxy
+    means = (values.sum(axis=0, dtype=np.float64) - values[galaxy]) / others.sum()
+    squares = np.zeros(WIDTH)
+    for start in range(0, len(values), BATCH):
+        block = values[start : start + BATCH].astype(np.float64) - means
+        squares += (block[others[start : start + BATCH]] ** 2).sum(axis=0)
+    return Agreements(
+        values,
+        np.concatenate([log_peaks(mode, forms[mode]) for mode in MODES]),
+        np.sqrt(squares / others.sum()),
+        values.sum(axis=1, dtype=np.float64),
     )
-    aligned = {
-        mode: slot_similarities(rows, mode, slice(None), form)
-        for mode, form in every.items()
+
+
+def products(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    total = np.zeros((values.shape[1], weights.shape[1]))
+    for start in range(0, len(values), BATCH):
+        stop = start + BATCH
+        total += values[start:stop].astype(np.float64).T @ weights[start:stop]
+    return total
+
+
+def column_sums(
+    found: Agreements, selected: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
+    return {
+        mode: found.values[:, OFFSETS[mode] + slots].sum(axis=1, dtype=np.float64)
+        for mode, slots in selected.items()
     }
-    aligned["table_values"] = np.hstack([aligned.pop(mode) for mode in TABLE_MODES])
-    selected = {
-        mode: slot_similarities(
-            rows, mode, slice(None), every[mode][slots].mean(axis=0)
+
+
+def selected_peaks(
+    found: Agreements, selected: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
+    return {
+        mode: found.peaks[OFFSETS[mode] + slots] for mode, slots in selected.items()
+    }
+
+
+def scores(query: Query) -> np.ndarray:
+    return combine(column_sums(agreements(query.galaxy), selection(query)))
+
+
+def columns(selected: dict[str, np.ndarray]) -> np.ndarray:
+    return np.concatenate([OFFSETS[mode] + slots for mode, slots in selected.items()])
+
+
+def by_mode(values: np.ndarray) -> dict[str, np.ndarray]:
+    table = OFFSETS[next(iter(TABLE_MODES))]
+    return {
+        mode: values[..., OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]]
+        for mode in (*IMAGE_MODES, *SPECTRUM_MODES)
+    } | {"table_values": values[..., table:]}
+
+
+def maps(found: Agreements, galaxies: np.ndarray) -> dict[str, np.ndarray]:
+    return by_mode(np.exp(found.values[galaxies] - found.peaks))
+
+
+def saliency(query: Selection) -> np.ndarray:
+    found = agreements(query.galaxy)
+    chosen = columns(selection(query))
+    others = np.arange(len(found.values)) != query.galaxy
+    count = others.sum()
+    score = found.values[:, chosen].sum(axis=1, dtype=np.float64)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        control = (found.totals - score) / (WIDTH - len(chosen))
+        targets = np.c_[score, control]
+        targets = np.where(others[:, None], targets - targets[others].mean(axis=0), 0)
+        spreads = np.sqrt((targets**2).sum(axis=0) / count)
+        covariances = products(found.values, targets).T
+        with_score, with_control = covariances / (
+            count * found.spread * spreads[:, None]
         )
-        for mode, slots in selection(query).items()
-        if mode not in TABLE_MODES
-    }
-    return aligned, selected
+        between = targets[:, 0] @ targets[:, 1] / (count * spreads.prod())
+        partial = (with_score - with_control * between) / np.sqrt(
+            (1 - with_control**2) * (1 - between**2)
+        )
+    return np.clip(np.nan_to_num(partial, nan=0), -1, 1).astype(np.float32)
 
 
 def fractions(
-    forms: dict[str, np.ndarray], totals: dict[str, np.ndarray]
+    peaks: dict[str, np.ndarray], totals: dict[str, np.ndarray]
 ) -> dict[str, np.ndarray]:
     return {
-        mode: (values - log_peaks(mode, forms[mode]).sum()) / len(forms[mode])
+        mode: (values - peaks[mode].sum()) / len(peaks[mode])
         for mode, values in totals.items()
     }
 
 
-def similarity(fractions: dict[str, np.ndarray]) -> np.ndarray:
-    if len(fractions) == 1:
-        return np.exp(next(iter(fractions.values())))
-    weights = {mode: 1 / values.std() for mode, values in fractions.items()}
-    weighted = sum(weights[mode] * values for mode, values in fractions.items())
+def similarity(shares: dict[str, np.ndarray]) -> np.ndarray:
+    if len(shares) == 1:
+        return np.exp(next(iter(shares.values())))
+    weights = {mode: 1 / values.std() for mode, values in shares.items()}
+    weighted = sum(weights[mode] * values for mode, values in shares.items())
     return np.exp(weighted / sum(weights.values()))
 
 
@@ -397,10 +466,11 @@ def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
 
 
 def search(query: Query) -> Results:
-    selected, forms = selected_forms(query)
-    totals = scan(selected, forms)
+    selected = selection(query)
+    found = agreements(query.galaxy)
+    totals = column_sums(found, selected)
     scored = combine(totals)
-    shares = fractions(forms, totals)
+    shares = fractions(selected_peaks(found, selected), totals)
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
@@ -412,5 +482,5 @@ def search(query: Query) -> Results:
         {mode: values[galaxies] for mode, values in totals.items()},
         {mode: np.exp(values[galaxies]) for mode, values in shares.items()},
         predicted(query, galaxies),
-        *maps(query, galaxies),
+        maps(found, galaxies),
     )

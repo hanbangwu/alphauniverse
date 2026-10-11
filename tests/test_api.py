@@ -172,28 +172,15 @@ def test_search_returns_one_arrow_batch_with_every_mode(client: TestClient) -> N
         assert np.isfinite(np.asarray(table.column(name).to_pylist())).all()
 
 
-def test_only_selected_modes_have_a_selection_map_and_a_sum(
-    client: TestClient,
-) -> None:
+def test_only_selected_modes_have_a_sum(client: TestClient) -> None:
     table = _similarity(
         client, galaxy=0, sdss_spectrum=[10, 11], table_values=[1], matches=5
     )
 
-    selections = {
-        name: table.column(name).is_valid().to_numpy().all()
-        for name in table.column_names
-        if name.endswith("_selection")
-    }
     sums = {
         name: table.column(name).is_valid().to_numpy().all()
         for name in table.column_names
         if name.endswith("_sum")
-    }
-    assert selections == {
-        "ls_image_selection": False,
-        "hsc_image_selection": False,
-        "desi_spectrum_selection": False,
-        "sdss_spectrum_selection": True,
     }
     assert {name for name, valid in sums.items() if valid} == {
         "sdss_spectrum_sum",
@@ -206,6 +193,22 @@ def test_only_selected_modes_have_a_selection_map_and_a_sum(
     }
     assert similar == {"sdss_spectrum_similarity", "ls_table_similarity"}
     assert table.column("similarity").null_count == 0
+
+
+def test_saliency_returns_one_row_with_every_map(client: TestClient) -> None:
+    response = client.get("/saliency", params={"galaxy": 2, "ls_image": [100, 101]})
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == ARROW
+    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
+    assert table.num_rows == 1
+    assert {name: len(table.column(name)[0]) for name in table.column_names} == {
+        "ls_image": N_IMAGE_TOKENS,
+        "hsc_image": N_IMAGE_TOKENS,
+        "desi_spectrum": N_SPECTRUM_TOKENS,
+        "sdss_spectrum": N_SPECTRUM_TOKENS,
+        "table_values": N_TABLE_VALUES,
+    }
 
 
 def test_has_flags_say_which_galaxies_observed_each_mode(client: TestClient) -> None:

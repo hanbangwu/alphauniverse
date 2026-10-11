@@ -88,9 +88,18 @@ def slot_similarities(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.n
     return np.exp(log_overlaps(mode, gallery, query) - np.log(query.max(axis=-1)))
 
 
+def mode_sums(query: pql.Query) -> dict[str, np.ndarray]:
+    return pql.column_sums(pql.agreements(query.galaxy), pql.selection(query))
+
+
 def similarity(query: pql.Query) -> np.ndarray:
-    _, forms = pql.selected_forms(query)
-    return pql.similarity(pql.fractions(forms, pql.parts(query)))
+    found = pql.agreements(query.galaxy)
+    selected = pql.selection(query)
+    return pql.similarity(
+        pql.fractions(
+            pql.selected_peaks(found, selected), pql.column_sums(found, selected)
+        )
+    )
 
 
 @pytest.fixture(scope="module")
@@ -108,7 +117,7 @@ def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
 ) -> None:
     own = table.slice(GALAXY, 1)
 
-    sums = pql.parts(query)
+    sums = mode_sums(query)
 
     assert sums.keys() == SELECTED_SLOTS.keys()
     for mode, slots in SELECTED_SLOTS.items():
@@ -127,7 +136,7 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     own = table.slice(GALAXY, 1)
     shown = table.take(galaxies)
 
-    aligned, _ = pql.maps(query, galaxies)
+    aligned = pql.maps(pql.agreements(GALAXY), galaxies)
 
     expected = {
         mode: slot_similarities(
@@ -145,26 +154,6 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     )
 
 
-def test_selection_maps_compare_every_slot_with_the_mean_of_the_selected_slots(
-    table: pa.Table, query: pql.Query
-) -> None:
-    galaxies = np.asarray([3, 0])
-    own = table.slice(GALAXY, 1)
-    shown = table.take(galaxies)
-
-    _, selected = pql.maps(query, galaxies)
-
-    assert selected.keys() == {*IMAGE_MODES, *SPECTRUM_MODES}
-    for mode in selected:
-        mean = dense(own, mode, TOP_CODES)[0, SELECTED_SLOTS[mode]].mean(axis=0)
-        np.testing.assert_allclose(
-            selected[mode],
-            slot_similarities(mode, dense(shown, mode, pql.KEPT), mean),
-            rtol=1e-4,
-            err_msg=mode,
-        )
-
-
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
     table: pa.Table,
 ) -> None:
@@ -178,15 +167,48 @@ def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
         np.testing.assert_allclose(found, unit @ unit.T, atol=1e-5, err_msg=mode)
 
 
-def test_unselected_image_and_spectrum_modes_have_no_selection_map(
+def test_saliency_is_the_partial_correlation_over_the_other_galaxies(
+    query: pql.Query,
+) -> None:
+    values = pql.agreements(GALAXY).values.astype(np.float64)
+    others = np.delete(values, GALAXY, axis=0)
+    chosen = pql.columns(pql.selection(query))
+    score = others[:, chosen].sum(axis=1)
+    control = (others.sum(axis=1) - score) / (pql.WIDTH - len(chosen))
+    design = np.c_[np.ones(len(others)), control]
+
+    def residual(target: np.ndarray) -> np.ndarray:
+        return target - design @ np.linalg.lstsq(design, target, rcond=None)[0]
+
+    expected = [
+        np.corrcoef(residual(score), residual(others[:, column]))[0, 1]
+        for column in range(pql.WIDTH)
+    ]
+
+    np.testing.assert_allclose(pql.saliency(query), expected, atol=1e-4)
+
+
+def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
     tree: Path,
 ) -> None:
-    aligned, selected = pql.maps(
-        pql.Query(galaxy=GALAXY, table_values=(1,)), np.asarray([3])
+    galaxy = int(
+        np.flatnonzero(np.logical_and.reduce([pql.observed(c) for c in OBSERVATIONS]))[
+            0
+        ]
+    )
+    everything = pql.Selection(
+        galaxy=galaxy,
+        ls_image=tuple(range(N_IMAGE_TOKENS)),
+        hsc_image=tuple(range(N_IMAGE_TOKENS)),
+        desi_spectrum=tuple(range(N_SPECTRUM_TOKENS)),
+        sdss_spectrum=tuple(range(N_SPECTRUM_TOKENS)),
+        table_values=tuple(range(len(pql.TABLE_SLOTS))),
     )
 
-    assert selected == {}
-    assert all(np.isfinite(values).all() for values in aligned.values())
+    found = pql.saliency(everything)
+
+    assert np.isfinite(found).all()
+    assert (np.abs(found) <= 1).all()
 
 
 def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
@@ -197,15 +219,15 @@ def test_results_open_with_the_query_galaxy_then_the_best_other_galaxies(
 
     results = pql.search(ranked)
 
-    scores = pql.scores(ranked)
-    others = np.delete(np.arange(len(scores)), GALAXY)
-    best = others[np.argsort(-scores[others], kind="stable")][:matches]
+    expected = pql.scores(ranked)
+    others = np.delete(np.arange(len(expected)), GALAXY)
+    best = others[np.argsort(-expected[others], kind="stable")][:matches]
     assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
-    np.testing.assert_allclose(results.scores, scores[results.galaxies])
-    for mode, values in pql.parts(ranked).items():
-        np.testing.assert_allclose(results.sums[mode], values[results.galaxies])
-    np.testing.assert_allclose(
-        results.similarity, similarity(ranked)[results.galaxies], rtol=1e-6
+    np.testing.assert_array_equal(results.scores, expected[results.galaxies])
+    for mode, values in mode_sums(ranked).items():
+        np.testing.assert_array_equal(results.sums[mode], values[results.galaxies])
+    np.testing.assert_array_equal(
+        results.similarity, similarity(ranked)[results.galaxies]
     )
 
 
@@ -223,7 +245,7 @@ def test_a_selection_on_a_mode_the_query_galaxy_lacks_is_rejected(
 def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
     query: pql.Query,
 ) -> None:
-    sums = pql.parts(query)
+    sums = mode_sums(query)
 
     expected = np.mean(
         [(values - values.mean()) / values.std() for values in sums.values()],
@@ -247,10 +269,10 @@ def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow(
 
 
 def test_a_repeated_slot_counts_once(tree: Path) -> None:
-    repeated = pql.parts(
+    repeated = mode_sums(
         pql.Query(galaxy=GALAXY, ls_image=(7, 7, 9), table_values=(2, 2))
     )
-    once = pql.parts(pql.Query(galaxy=GALAXY, ls_image=(7, 9), table_values=(2,)))
+    once = mode_sums(pql.Query(galaxy=GALAXY, ls_image=(7, 9), table_values=(2,)))
 
     for mode, values in once.items():
         np.testing.assert_array_equal(repeated[mode], values)

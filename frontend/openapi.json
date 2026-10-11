@@ -418,6 +418,128 @@
         }
       }
     },
+    "/saliency": {
+      "get": {
+        "summary": "Get Saliency",
+        "description": "For the query galaxy, at every slot of every mode, the partial correlation over every other galaxy between its score on the selection and its agreement with the query galaxy at that slot, controlling for its mean agreement outside the selection. One row, one list column per map.",
+        "operationId": "get_saliency",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "ls_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Ls Image"
+            }
+          },
+          {
+            "name": "hsc_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Hsc Image"
+            }
+          },
+          {
+            "name": "desi_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Desi Spectrum"
+            }
+          },
+          {
+            "name": "sdss_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Sdss Spectrum"
+            }
+          },
+          {
+            "name": "table_values",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 26
+              },
+              "maxItems": 26,
+              "default": [],
+              "title": "Table Values"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search": {
       "get": {
         "summary": "Get Search",

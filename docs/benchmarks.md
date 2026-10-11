@@ -51,9 +51,8 @@ A container with the server's spec runs, per version:
 
 1. `import app.main`, in a fresh subprocess. A version's first import also compiles its `app/`, so compare later rounds;
 2. `lifespan`'s loads: `galaxy_count`, `labels`, `predictions`, `basis`, and `observed` for each observation column;
-3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches: `forms` (the query galaxy's forms), `scan` (every galaxy's mode sums), `combine`, `similarity`, `order`, `maps` and `predicted`;
-4. `pql.search()` whole at 8, 32 and 128 matches;
-5. under `kinds`, outside `total_p50_ms`: first query and warm, the scan (`scores` and the ranking) and `maps` for the top 32, at 16 contiguous spectrum tokens, all 272 spectrum tokens and 4 Legacy Survey table values; step 3 covers 4 image tokens.
+3. the stages of `pql.search()`, first query and warm, at 4 image tokens and 32 matches, each query with an empty agreement cache: `selection` (the selected slots by mode), `agreements` (building its agreement matrix), `sums` (the selected columns' sums), `combine`, `similarity`, `order`, `maps` and `predicted`, then `saliency` (one click under Population, from the built matrix). A click on a galaxy whose matrix is cached costs every stage but `agreements`;
+4. `pql.search()` whole at 8, 32 and 128 matches, each query on a random galaxy.
 
 The loads and the warm stages also record wall, user and system milliseconds (`usage_ms`), the warm stages as means. Modal runs containers under gVisor, which samples CPU time in 10 ms ticks and reports no page faults, so a CPU figure is coarse unless it spans many ticks. CPU is the whole process's, so OpenMP and OpenBLAS workers that spin after one stage's parallel region are charged to the next. `thread_pools` lists every BLAS and OpenMP pool in the process with its thread count.
 
@@ -61,7 +60,7 @@ Versions are the checked-out commit (after), `origin/main` (before), and the sto
 
 The best version has the lowest `total_p50_ms` (sum of warm stage medians at 32 matches) averaged over its rounds, among versions whose rounds all succeeded. A stored best missing from the clone is dropped with a note. If no version succeeds, best keeps the stored commit without its figure.
 
-The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does and as `main` does until this removal merges, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
+The stored report (2026-10-04, `6aa4197`) timed the cosine search, which is gone. A version whose `app/search.py` imports faiss, as that report's best does, fails its rounds on the locked dependencies, which no longer hold faiss. The PQL search is unmeasured.
 
 ## `backend_performance`
 
@@ -184,7 +183,7 @@ Raw, only the stellar-mass query beats its base rate by more than 0.05 in any sp
 
 ## `pql_quality`
 
-A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query is scored by `app.pql` against every galaxy, and reports the mean with a 95% bootstrap interval over queries:
+A container on the build image, with an L4 GPU, 16 CPU, 32 GiB requested and a 128 GiB limit, draws `--sample` galaxies with a spectrum and a DESI or SDSS redshift. It predicts each one again with its spectra and its redshift token removed, with the job's own code. Per galaxy it queries 16 contiguous observed spectrum tokens of its first spectrum survey, all its observed spectrum tokens, 4 Legacy Survey table values, and 4 HSC table values where it has an HSC match. Each query ranks every galaxy by `pql.scores`, from the query galaxy's agreement matrix; the hidden copy is scored by its own log overlaps with the query. It reports the mean with a 95% bootstrap interval over queries:
 
 - `redshift`: the median |Δz|/(1+z) of the top 10 galaxies with a redshift, the query galaxy excluded.
 - `identity` (spectrum token queries): whether the query galaxy, spectrum and redshift removed, ranks in the top 10 among every other galaxy.
