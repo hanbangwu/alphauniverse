@@ -4,7 +4,7 @@ Six Modal jobs; the README has the commands. Embeddings come first, then the pro
 
 Each job writes its artifacts in place, so a failed run leaves them incomplete; rerun the job. Each job commits the volume before it returns, since the commit Modal makes when the container exits must finish within 30 seconds. Every artifact holds one row per galaxy in dataset row order, and the app relies on that without checking it, so a build directory must come from one complete run of the pipeline.
 
-Every job runs on the build image, which adds the `build` dependency group (AION, scikit-learn, torchvision, umap-learn, wandb). The serving image installs only the main dependencies, which include torch and sentence-transformers for text search.
+Every job runs on the build image, which adds the `build` dependency group (AION, scikit-learn, torchvision, umap-learn, wandb). The serving image installs only the main dependencies, which include torch, for position-independent image scans and text search, and sentence-transformers, for text search.
 
 ## The dataset
 

@@ -71,7 +71,6 @@ BUILDING = Lock()
 MATRICES = OrderedDict()
 SUMS = OrderedDict()
 THREADS = pa.cpu_count()
-POOL = ThreadPoolExecutor(THREADS)
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -358,7 +357,8 @@ def cross_overlaps(
 def threaded(
     compute: Callable[[pa.RecordBatch], np.ndarray], batches: list[pa.RecordBatch]
 ) -> np.ndarray:
-    return np.concatenate(list(POOL.map(compute, batches)))
+    with ThreadPoolExecutor(THREADS) as pool:
+        return np.concatenate(list(pool.map(compute, batches)))
 
 
 def slices(rows: pa.RecordBatch) -> list[pa.RecordBatch]:
@@ -512,11 +512,13 @@ def products(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
 
 def column_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     forms = query_forms(row(galaxy), selected)
-    batches = list(
-        POOL.map(
-            partial(sums, selected=selected, forms=forms), predictions().to_batches()
+    with ThreadPoolExecutor(THREADS) as pool:
+        batches = list(
+            pool.map(
+                partial(sums, selected=selected, forms=forms),
+                predictions().to_batches(),
+            )
         )
-    )
     return {
         mode: np.concatenate([batch[mode] for batch in batches]) for mode in selected
     }
