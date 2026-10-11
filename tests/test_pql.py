@@ -1,4 +1,6 @@
+from collections import OrderedDict
 from pathlib import Path
+from threading import Thread
 
 import numpy as np
 import pyarrow as pa
@@ -154,24 +156,48 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     )
 
 
+def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+    own = dense(table.slice(GALAXY, 1), mode, TOP_CODES)[0, list(slots)]
+    overlaps = dense(table, mode, pql.KEPT) @ own.T
+    if mode in SPECTRUM_MODES:
+        overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
+    return np.log(overlaps).max(axis=1).sum(axis=1)
+
+
 def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
-    table: pa.Table,
+    table: pa.Table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    own = table.slice(GALAXY, 1)
+    monkeypatch.setattr(pql, "SUMS", OrderedDict())
+    monkeypatch.setattr(pql, "BLOCK_BYTES", 1)
     selected = {"ls_image": (0, 17, 300), "desi_spectrum": (40, 41, 42)}
     query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
 
+    chosen = pql.selection(query)
     sums = pql.mode_totals(
-        pql.agreements(GALAXY), pql.selection(query), pql.anywhere_slots(query)
+        pql.agreements(GALAXY), chosen, pql.positional_slots(chosen, query.anywhere)
     )
 
     for mode, slots in selected.items():
-        gallery = dense(table, mode, pql.KEPT)
-        overlaps = gallery @ dense(own, mode, TOP_CODES)[0, list(slots)].T
-        if mode in SPECTRUM_MODES:
-            overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
-        expected = np.log(overlaps).max(axis=1).sum(axis=1)
-        np.testing.assert_allclose(sums[mode], expected, rtol=1e-4, err_msg=mode)
+        np.testing.assert_allclose(
+            sums[mode], best_overlap_sums(table, mode, slots), rtol=1e-4, err_msg=mode
+        )
+
+
+def test_a_position_independent_search_ranks_by_the_best_overlap_sums(
+    table: pa.Table,
+) -> None:
+    slots = (0, 17, 300)
+    query = pql.Query(galaxy=GALAXY, ls_image=slots, anywhere=("ls_image",), matches=4)
+
+    results = pql.search(query)
+
+    expected = best_overlap_sums(table, "ls_image", slots)
+    others = np.delete(np.arange(len(expected)), GALAXY)
+    best = others[np.argsort(-expected[others], kind="stable")][: query.matches]
+    assert results.galaxies.tolist() == [GALAXY, *best.tolist()]
+    np.testing.assert_allclose(
+        results.sums["ls_image"], expected[results.galaxies], rtol=1e-4
+    )
 
 
 def test_a_position_independent_mode_without_a_selection_is_rejected(
@@ -182,8 +208,9 @@ def test_a_position_independent_mode_without_a_selection_is_rejected(
 
 
 def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
-    table: pa.Table,
+    table: pa.Table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(pql, "BLOCK_BYTES", 1)
     own = table.slice(GALAXY, 1)
     slots = [0, 17, 300]
     query = pql.Query(galaxy=GALAXY, ls_image=tuple(slots), anywhere=("ls_image",))
@@ -200,6 +227,34 @@ def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
     np.testing.assert_array_equal(
         results.positions["ls_image"], overlaps.argmax(axis=1)
     )
+
+
+def test_a_cached_matrix_is_served_while_another_galaxy_builds(tree: Path) -> None:
+    pql.agreements(GALAXY)
+    served = []
+
+    with pql.BUILDING:
+        worker = Thread(target=lambda: served.append(pql.agreements(GALAXY)))
+        worker.start()
+        worker.join(timeout=10)
+        assert served
+
+
+def test_the_saliency_sample_is_the_best_matches_and_other_galaxies(
+    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pql, "SALIENCY_MATCHES", 3)
+    monkeypatch.setattr(pql, "SALIENCY_BACKGROUND", 4)
+    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+
+    sample = pql.saliency_sample(anywhere)
+
+    scores = pql.scores(anywhere)
+    others = np.delete(np.arange(len(scores)), GALAXY)
+    best = others[np.argsort(-scores[others], kind="stable")][:3]
+    assert sample[:3].tolist() == best.tolist()
+    assert len(set(sample.tolist())) == 7
+    assert GALAXY not in sample
 
 
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
@@ -262,9 +317,9 @@ def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
     tree: Path,
 ) -> None:
     galaxy = int(
-        np.flatnonzero(np.logical_and.reduce([pql.observed(c) for c in OBSERVATIONS]))[
-            0
-        ]
+        np.flatnonzero(
+            np.logical_and.reduce([pql.observed(column) for column in OBSERVATIONS])
+        )[0]
     )
     everything = pql.Selection(
         galaxy=galaxy,

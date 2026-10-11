@@ -1,8 +1,9 @@
-from collections.abc import Iterator
-from functools import cache, lru_cache
+from collections import OrderedDict
+from collections.abc import Callable, Hashable, Iterator
+from functools import cache, partial
 from itertools import accumulate
 from threading import Lock
-from typing import Annotated, Literal, NamedTuple, Self
+from typing import Annotated, NamedTuple, Self, get_args
 
 import numpy as np
 import pyarrow as pa
@@ -26,6 +27,7 @@ from .config import (
     TOP_CODES,
     VOCABULARY,
     GalaxyIndex,
+    TokenMode,
     artifact,
 )
 from .search import tokens
@@ -63,6 +65,8 @@ BLOCK_BYTES = 64 * 2**20
 SALIENCY_MATCHES = 256
 SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
+MATRICES = OrderedDict()
+SUMS = OrderedDict()
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -72,7 +76,6 @@ SpectrumTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_SPECTRUM_TOKENS)], ...],
     Field(max_length=N_SPECTRUM_TOKENS),
 ]
-Anywhere = Literal[(*IMAGE_MODES, *SPECTRUM_MODES)]
 
 
 @cache
@@ -93,7 +96,7 @@ class Selection(BaseModel):
         Field(max_length=N_TABLE_VALUES),
     ] = ()
     anywhere: Annotated[
-        tuple[Anywhere, ...], Field(max_length=len(IMAGE_MODES) + len(SPECTRUM_MODES))
+        tuple[TokenMode, ...], Field(max_length=len(get_args(TokenMode)))
     ] = ()
 
     @model_validator(mode="after")
@@ -166,12 +169,12 @@ def predictions() -> pa.Table:
 
 
 @cache
-def basis() -> dict[str, tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
+def basis() -> dict[str, tuple[np.ndarray, np.ndarray, np.float32, np.ndarray]]:
     with np.load(artifact("prediction_basis")) as stored:
         fitted = {}
         for survey in SPECTRUM_SURVEYS:
-            mean = stored[f"{survey}_mean"]
-            directions = stored[f"{survey}_directions"]
+            mean = stored[f"{survey}_mean"].astype(np.float32)
+            directions = stored[f"{survey}_directions"].astype(np.float32)
             fitted[survey] = (mean, directions, mean @ mean, directions @ mean)
         return fitted
 
@@ -324,8 +327,6 @@ def cross_overlaps(
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
-    mean_square = np.float32(mean_square)
-    projected_mean = projected_mean.astype(np.float32)
     quantised = array(
         rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
     ).astype(np.float32)
@@ -345,7 +346,8 @@ def cross_overlaps(
 
 
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
-    return predictions().take(galaxies).combine_chunks().to_batches()[0]
+    rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
+    return pa.concat_tables(rows).combine_chunks().to_batches()[0]
 
 
 def best_log_overlaps(rows: pa.RecordBatch, mode: str, form: np.ndarray) -> np.ndarray:
@@ -380,14 +382,28 @@ def basket_maps(
 
 def basket_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {
-        mode: basket_sum(galaxy, mode, tuple(slots.tolist()))
+        mode: cached(
+            SUMS,
+            (galaxy, mode, *slots.tolist()),
+            partial(basket_sum, galaxy, mode, slots),
+        )
         for mode, slots in selected.items()
     }
 
 
-@lru_cache(maxsize=AGREEMENT_GALAXIES)
-def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
-    form = query_forms(row(galaxy), {mode: np.asarray(slots)})[mode]
+def cached[T](store: OrderedDict, key: Hashable, compute: Callable[[], T]) -> T:
+    if (found := store.get(key)) is not None:
+        return found
+    with BUILDING:
+        if key not in store:
+            store[key] = compute()
+            if len(store) > AGREEMENT_GALAXIES:
+                store.popitem(last=False)
+        return store[key]
+
+
+def basket_sum(galaxy: int, mode: str, slots: np.ndarray) -> np.ndarray:
+    form = query_forms(row(galaxy), {mode: slots})[mode]
     return np.concatenate(
         [
             best_log_overlaps(rows, mode, form).sum(axis=1)
@@ -443,11 +459,9 @@ def cosines(galaxy: int, mode: str) -> np.ndarray:
 
 
 def agreements(galaxy: int) -> Agreements:
-    with BUILDING:
-        return built(galaxy)
+    return cached(MATRICES, galaxy, partial(built, galaxy))
 
 
-@lru_cache(maxsize=AGREEMENT_GALAXIES)
 def built(galaxy: int) -> Agreements:
     forms = query_forms(row(galaxy), dict.fromkeys(MODES, slice(None)))
     values = np.empty((predictions().num_rows, WIDTH), np.float32)
@@ -500,20 +514,30 @@ def selected_peaks(
 
 
 def mode_totals(
-    found: Agreements, selected: dict[str, np.ndarray], anywhere: dict[str, np.ndarray]
+    found: Agreements,
+    selected: dict[str, np.ndarray],
+    positional: dict[str, np.ndarray],
 ) -> dict[str, np.ndarray]:
-    aligned = {mode: slots for mode, slots in selected.items() if mode not in anywhere}
-    return column_sums(found, aligned) | basket_sums(found.galaxy, anywhere)
+    aligned = {
+        mode: slots for mode, slots in selected.items() if mode not in positional
+    }
+    return column_sums(found, aligned) | basket_sums(found.galaxy, positional)
 
 
-def anywhere_slots(query: Selection) -> dict[str, np.ndarray]:
-    selected = selection(query)
-    return {mode: selected[mode] for mode in query.anywhere}
+def positional_slots(
+    selected: dict[str, np.ndarray], anywhere: tuple[str, ...]
+) -> dict[str, np.ndarray]:
+    return {mode: selected[mode] for mode in anywhere}
 
 
 def scores(query: Selection) -> np.ndarray:
+    selected = selection(query)
     return combine(
-        mode_totals(agreements(query.galaxy), selection(query), anywhere_slots(query))
+        mode_totals(
+            agreements(query.galaxy),
+            selected,
+            positional_slots(selected, query.anywhere),
+        )
     )
 
 
@@ -613,10 +637,8 @@ def similarity(shares: dict[str, np.ndarray]) -> np.ndarray:
     return np.exp(weighted / sum(weights.values()))
 
 
-def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
-    needed = {
-        OBSERVED_IN[mode] for mode in selection(query).keys() & OBSERVED_IN.keys()
-    }
+def predicted(selected: dict[str, np.ndarray], galaxies: np.ndarray) -> list[list[str]]:
+    needed = {OBSERVED_IN[mode] for mode in selected.keys() & OBSERVED_IN.keys()}
     return [
         [
             column
@@ -629,9 +651,9 @@ def predicted(query: Query, galaxies: np.ndarray) -> list[list[str]]:
 
 def search(query: Query) -> Results:
     selected = selection(query)
-    anywhere = anywhere_slots(query)
+    positional = positional_slots(selected, query.anywhere)
     found = agreements(query.galaxy)
-    totals = mode_totals(found, selected, anywhere)
+    totals = mode_totals(found, selected, positional)
     scored = combine(totals)
     shares = fractions(selected_peaks(found, selected), totals)
     order = np.argsort(-scored, kind="stable")
@@ -639,7 +661,7 @@ def search(query: Query) -> Results:
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
     shown, positions = basket_maps(
-        query.galaxy, galaxies, anywhere, selected_peaks(found, anywhere)
+        query.galaxy, galaxies, positional, selected_peaks(found, positional)
     )
     return Results(
         galaxies,
@@ -647,7 +669,7 @@ def search(query: Query) -> Results:
         similarity(shares)[galaxies],
         {mode: values[galaxies] for mode, values in totals.items()},
         {mode: np.exp(values[galaxies]) for mode, values in shares.items()},
-        predicted(query, galaxies),
+        predicted(selected, galaxies),
         maps(found, galaxies) | shown,
         positions,
     )
