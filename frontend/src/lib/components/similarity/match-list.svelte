@@ -11,7 +11,11 @@
 
 <span class="text-sm font-medium">Whole dataset</span>
 <p class="text-xs text-muted-foreground">
-  Matches are compared at the same place in the image and the same observed wavelength.
+  Image matches are compared {similarity.anywhere('ls_image')
+    ? 'anywhere in the image'
+    : 'at the same place in the image'}; spectrum matches {similarity.anywhere('desi_spectrum')
+    ? 'at any wavelength'
+    : 'at the same observed wavelength'}.
 </p>
 
 {#if similarity.error}

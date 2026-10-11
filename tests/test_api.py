@@ -211,6 +211,23 @@ def test_saliency_returns_one_row_with_every_map(client: TestClient) -> None:
     }
 
 
+def test_only_position_independent_modes_have_positions(client: TestClient) -> None:
+    table = _similarity(
+        client,
+        galaxy=0,
+        ls_image=[3, 4],
+        desi_spectrum=[10],
+        anywhere=["ls_image"],
+        matches=5,
+    )
+
+    assert table.column("ls_image_positions").null_count == 0
+    assert {
+        len(places) for places in table.column("ls_image_positions").to_pylist()
+    } == {2}
+    assert table.column("desi_spectrum_positions").null_count == table.num_rows
+
+
 def test_has_flags_say_which_galaxies_observed_each_mode(client: TestClient) -> None:
     table = _similarity(client, galaxy=1, ls_image=[100], matches=11)
     galaxies = table.column("galaxy").to_numpy()

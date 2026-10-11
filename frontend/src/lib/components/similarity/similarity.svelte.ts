@@ -59,7 +59,9 @@ export class Similarity {
         galaxy,
         app.view.imageTokens.value,
         app.view.spectrumTokens.value,
-        app.view.tableValues.value
+        app.view.tableValues.value,
+        app.view.imageAnywhere.value,
+        app.view.spectrumAnywhere.value
       )
     )
     this.#result = createQuery(() => similarityQuery(this.#submitted))
@@ -77,7 +79,8 @@ export class Similarity {
               galaxy,
               ls_image: this.draft.ls_image,
               desi_spectrum: this.draft.desi_spectrum,
-              table_values: this.draft.table_values
+              table_values: this.draft.table_values,
+              anywhere: this.draft.anywhere
             }
           : null
       )
@@ -139,12 +142,18 @@ export class Similarity {
     return this.#spectrumCosines.isError ? errorMessage(this.#spectrumCosines.error) : null
   }
 
-  get submittedImageTokens(): number[] {
-    return this.#submitted?.ls_image ?? []
+  anywhere(mode: 'ls_image' | 'desi_spectrum'): boolean {
+    return this.#result.data?.request.anywhere?.includes(mode) ?? false
   }
 
-  get submittedSpectrumTokens(): number[] {
-    return this.#submitted?.desi_spectrum ?? []
+  imageOutlinesAt(index: number): number[] {
+    const data = this.#result.data
+    return data?.imagePositions[index] ?? data?.request.ls_image ?? []
+  }
+
+  spectrumOutlinesAt(index: number): number[] {
+    const data = this.#result.data
+    return data?.spectrumPositions[index] ?? data?.request.desi_spectrum ?? []
   }
 
   get stale(): boolean {

@@ -16,7 +16,9 @@ export class SearchState {
     galaxy: number | null,
     imageTokens: number[],
     spectrumTokens: number[],
-    tableValues: number[]
+    tableValues: number[],
+    imageAnywhere: boolean,
+    spectrumAnywhere: boolean
   ): SimilarityQuery | null {
     const matches = this.count
     if (galaxy === null || matches === null) return null
@@ -26,6 +28,10 @@ export class SearchState {
       ls_image: imageTokens,
       desi_spectrum: spectrumTokens,
       table_values: tableValues,
+      anywhere: [
+        ...(imageAnywhere && imageTokens.length ? (['ls_image'] as const) : []),
+        ...(spectrumAnywhere && spectrumTokens.length ? (['desi_spectrum'] as const) : [])
+      ],
       matches
     }
   }

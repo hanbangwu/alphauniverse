@@ -17,6 +17,7 @@ import numpy as np
 from app import pql
 from app.config import (
     DATASET_REVISION,
+    N_SPECTRUM_TOKENS,
     OBSERVATIONS,
     galaxy_count,
     labels,
@@ -38,7 +39,9 @@ from scripts.benchmarks.common import (
     memory,
     queries,
     server,
+    spectrum_query,
     summary,
+    with_spectrum,
 )
 
 image = serving_image.add_local_python_source("modal_app")
@@ -56,6 +59,7 @@ STAGES = [
 ]
 KINDS = ("wall", "user", "system")
 SOURCES = ["app", "scripts", "modal_app.py"]
+WINDOW = 16
 REPORT = Path("docs/benchmarks/search_performance.json")
 ENTRY = (
     "import json, sys, time\n"
@@ -144,6 +148,47 @@ def whole_searches(runs: int, matches: int) -> dict[str, Any]:
     return summary([elapsed(partial(pql.search, query)) for query in batch[1:]])
 
 
+def anywhere_queries(count: int, matches: int) -> dict[str, list[pql.Query]]:
+    rng = np.random.default_rng(4)
+    holders = rng.choice(np.flatnonzero(with_spectrum()), count)
+    first = rng.integers(N_SPECTRUM_TOKENS - WINDOW + 1, size=count)
+    spectra = [
+        spectrum_query(int(galaxy), tuple(range(start, start + WINDOW)))
+        for galaxy, start in zip(holders, first, strict=True)
+    ]
+    return {
+        "ls_image": [
+            query.model_copy(update={"anywhere": ("ls_image",)})
+            for query in queries(count, IMAGE_TOKENS, matches)
+        ],
+        "spectrum": [
+            query.model_copy(
+                update={"anywhere": tuple(pql.selection(query)), "matches": matches}
+            )
+            for query in spectra
+        ],
+    }
+
+
+def anywhere_times(runs: int, matches: int) -> dict[str, Any]:
+    timed = {}
+    for kind, batch in anywhere_queries(runs + 1, matches).items():
+        searches, clicks = [], []
+        for query in batch:
+            pql.agreements(query.galaxy)
+            searches.append(elapsed(partial(pql.search, query)))
+            clicks.append(elapsed(partial(pql.saliency, query)))
+        timed[kind] = {
+            "cold_ms": {
+                "search": round(searches[0], 3),
+                "saliency": round(clicks[0], 3),
+            },
+            "search": summary(searches[1:]),
+            "saliency": summary(clicks[1:]),
+        }
+    return timed
+
+
 @app.function(image=image)
 def stages(runs: int, matches: int = 32) -> dict[str, Any]:
     loads = load_times()
@@ -183,6 +228,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
         "searches": {
             f"matches={asked}": whole_searches(runs, asked) for asked in MATCHES
         },
+        "anywhere": anywhere_times(runs, matches),
         "usage_ms": {
             "loads": {name: rounded(usage) for name, usage in loads.items()},
             "stages": {name: rounded(mean) for name, mean in means.items()},

@@ -27,7 +27,7 @@
 <div class="flex flex-col gap-5 pt-6">
   <div class="flex flex-col gap-5 md:flex-row md:justify-center md:*:max-w-xs">
     <GalaxyTile {galaxy} score={similarity.scoreAt(index)} />
-    <ImageTokenMap {values} selected={similarity.submittedImageTokens} />
+    <ImageTokenMap {values} selected={similarity.imageOutlinesAt(index)} />
     <ImageTokenMask {values} domain={similarity.imageDomain} control={display.matches} />
   </div>
   {#if elsewhere.length}
@@ -40,7 +40,7 @@
     map={similarity.spectrumMapAt(index)}
     heat={similarity.spectrumHeat}
     caption={similarity.score}
-    selected={similarity.submittedSpectrumTokens}
+    selected={similarity.spectrumOutlinesAt(index)}
     absent={predicted.includes(SPECTRUM_SURVEY)
       ? "No DESI spectrum: matched on AION's prediction"
       : undefined}

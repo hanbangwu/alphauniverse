@@ -154,6 +154,54 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
     )
 
 
+def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
+    table: pa.Table,
+) -> None:
+    own = table.slice(GALAXY, 1)
+    selected = {"ls_image": (0, 17, 300), "desi_spectrum": (40, 41, 42)}
+    query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
+
+    sums = pql.mode_totals(
+        pql.agreements(GALAXY), pql.selection(query), pql.anywhere_slots(query)
+    )
+
+    for mode, slots in selected.items():
+        gallery = dense(table, mode, pql.KEPT)
+        overlaps = gallery @ dense(own, mode, TOP_CODES)[0, list(slots)].T
+        if mode in SPECTRUM_MODES:
+            overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
+        expected = np.log(overlaps).max(axis=1).sum(axis=1)
+        np.testing.assert_allclose(sums[mode], expected, rtol=1e-4, err_msg=mode)
+
+
+def test_a_position_independent_mode_without_a_selection_is_rejected(
+    tree: Path,
+) -> None:
+    with pytest.raises(ValidationError):
+        pql.Query(galaxy=GALAXY, ls_image=(0,), anywhere=("desi_spectrum",))
+
+
+def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
+    table: pa.Table,
+) -> None:
+    own = table.slice(GALAXY, 1)
+    slots = [0, 17, 300]
+    query = pql.Query(galaxy=GALAXY, ls_image=tuple(slots), anywhere=("ls_image",))
+
+    results = pql.search(query)
+
+    shown = dense(table.take(results.galaxies), "ls_image", pql.KEPT)
+    selected = dense(own, "ls_image", TOP_CODES)[0, slots]
+    overlaps = np.log(shown @ selected.T)
+    peaks = np.log(selected.max(axis=-1))
+    np.testing.assert_allclose(
+        results.maps["ls_image"], np.exp((overlaps - peaks).max(axis=-1)), rtol=1e-4
+    )
+    np.testing.assert_array_equal(
+        results.positions["ls_image"], overlaps.argmax(axis=1)
+    )
+
+
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
     table: pa.Table,
 ) -> None:
@@ -167,25 +215,47 @@ def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
         np.testing.assert_allclose(found, unit @ unit.T, atol=1e-5, err_msg=mode)
 
 
+def partial_correlations(values: np.ndarray, chosen: np.ndarray) -> list[float]:
+    score = values[:, chosen].sum(axis=1)
+    control = (values.sum(axis=1) - score) / (pql.WIDTH - len(chosen))
+    design = np.c_[np.ones(len(values)), control]
+
+    def residual(target: np.ndarray) -> np.ndarray:
+        return target - design @ np.linalg.lstsq(design, target, rcond=None)[0]
+
+    return [
+        np.corrcoef(residual(score), residual(values[:, column]))[0, 1]
+        for column in range(pql.WIDTH)
+    ]
+
+
 def test_saliency_is_the_partial_correlation_over_the_other_galaxies(
     query: pql.Query,
 ) -> None:
     values = pql.agreements(GALAXY).values.astype(np.float64)
     others = np.delete(values, GALAXY, axis=0)
-    chosen = pql.columns(pql.selection(query))
-    score = others[:, chosen].sum(axis=1)
-    control = (others.sum(axis=1) - score) / (pql.WIDTH - len(chosen))
-    design = np.c_[np.ones(len(others)), control]
 
-    def residual(target: np.ndarray) -> np.ndarray:
-        return target - design @ np.linalg.lstsq(design, target, rcond=None)[0]
-
-    expected = [
-        np.corrcoef(residual(score), residual(others[:, column]))[0, 1]
-        for column in range(pql.WIDTH)
-    ]
+    expected = partial_correlations(others, pql.columns(pql.selection(query)))
 
     np.testing.assert_allclose(pql.saliency(query), expected, atol=1e-4)
+
+
+def test_position_independent_saliency_uses_each_slot_s_best_overlap(
+    table: pa.Table, query: pql.Query
+) -> None:
+    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+    values = pql.agreements(GALAXY).values.astype(np.float64)
+    others = np.delete(np.arange(len(values)), GALAXY)
+    gallery = dense(table.take(others), "ls_image", pql.KEPT)
+    own = dense(table.slice(GALAXY, 1), "ls_image", TOP_CODES)[0]
+    best = np.log(gallery @ own.T).max(axis=1)
+    start = pql.OFFSETS["ls_image"]
+    values = values[others]
+    values[:, start : start + N_IMAGE_TOKENS] = best
+
+    expected = partial_correlations(values, pql.columns(pql.selection(anywhere)))
+
+    np.testing.assert_allclose(pql.saliency(anywhere), expected, atol=1e-4)
 
 
 def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
