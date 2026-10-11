@@ -63,7 +63,7 @@ def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
     rest = (
         column(rows, f"{survey}_rest", N_IMAGE_TOKENS)
         if kept == pql.KEPT
-        else np.exp(column(rows, f"{survey}_tails", N_IMAGE_TOKENS))
+        else column(rows, f"{survey}_tails", N_IMAGE_TOKENS)
     )
     dense = np.repeat(
         (rest / (IMAGE_VOCABULARY - kept))[..., None], IMAGE_VOCABULARY, axis=-1
@@ -420,7 +420,7 @@ def test_image_token_overlaps_below_float32_range_are_floored() -> None:
     query = np.zeros((1, IMAGE_VOCABULARY), dtype=np.float32)
     query[0, 0] = 1
     codes = np.stack([np.arange(1, pql.KEPT + 1), np.arange(pql.KEPT)])[:, None]
-    probabilities = np.zeros((2, 1, pql.KEPT), dtype=np.float16)
+    probabilities = np.zeros((2, 1, pql.KEPT), dtype=np.float32)
     probabilities[0] = 1 / pql.KEPT
     probabilities[1, 0, 0] = 1
 

@@ -223,7 +223,7 @@ def dense_image_tokens(
         ],
         axis=-1,
     )[:, slots]
-    rest = np.exp(array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots])
+    rest = array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots]
     dense = np.repeat(
         (rest / (IMAGE_VOCABULARY - TOP_CODES))[..., None], IMAGE_VOCABULARY, axis=-1
     )
@@ -353,8 +353,7 @@ def cross_overlaps(
                 per_sample_weights=weights[chunk].flatten(0, 1),
                 mode="sum",
             ).view(-1, N_IMAGE_TOKENS, len(form))
-            overlaps.addcmul_(spread[chunk, :, None], totals)
-            yield chunk, overlaps.clamp_(min=PROBABILITY_FLOOR).numpy()
+            yield chunk, overlaps.addcmul_(spread[chunk, :, None], totals).numpy()
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
@@ -396,7 +395,7 @@ def best_log_overlaps(rows: pa.RecordBatch, mode: str, form: np.ndarray) -> np.n
     best = np.empty((rows.num_rows, len(form)))
     for chunk, overlaps in cross_overlaps(rows, mode, form):
         best[chunk] = overlaps.max(axis=1)
-    return np.log(best)
+    return np.log(np.maximum(best, PROBABILITY_FLOOR, out=best))
 
 
 def basket_maps(

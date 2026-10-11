@@ -67,7 +67,7 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
             galaxies, N_IMAGE_TOKENS, -1
         )
         rest = column(table, f"{survey}_rest").reshape(galaxies, N_IMAGE_TOKENS)
-        tails = np.exp(column(table, f"{survey}_tails").astype(np.float64))
+        tails = column(table, f"{survey}_tails")
         table_values = column(table, f"{survey}_table_values")
         np.testing.assert_allclose(
             kept.sum(-1) + query.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS),

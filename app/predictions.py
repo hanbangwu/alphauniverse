@@ -25,7 +25,7 @@ from .config import (
     artifact,
     device,
 )
-from .pql import PROBABILITY_FLOOR, prediction_batch, save_prediction_basis
+from .pql import prediction_batch, save_prediction_basis
 from .search import source
 
 CHUNK = 128
@@ -162,10 +162,10 @@ def image_token_codes(
     tails = beyond.sum(axis=1)
     return (
         codes.astype(np.uint16),
-        probabilities[:, :KEPT],
+        np.ascontiguousarray(probabilities[:, :KEPT]),
         probabilities[:, KEPT:].astype(np.float16),
         tails + probabilities[:, KEPT:].sum(axis=1),
-        np.log(np.maximum(tails, PROBABILITY_FLOOR)),
+        tails,
     )
 
 

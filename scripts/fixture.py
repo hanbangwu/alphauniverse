@@ -152,7 +152,7 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
             values[f"{survey}_rest"] = (
                 probabilities[:, KEPT:].sum(axis=1) + mass[:, -1]
             ).astype(np.float32)
-            values[f"{survey}_tails"] = np.log(mass[:, -1]).astype(np.float32)
+            values[f"{survey}_tails"] = mass[:, -1].astype(np.float32)
             values[f"{survey}_table_values"] = (
                 _softmax(3 * rng.standard_normal((len(table_values), VOCABULARY)))
                 .astype(np.float32)

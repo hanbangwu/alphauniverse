@@ -63,7 +63,7 @@ def floor(scheme: object, vocabulary: int) -> float:
     )
     if projected:
         return pql.SPECTRUM_TOKEN_FLOOR * VOCABULARY / vocabulary
-    return torch.finfo(torch.float32).tiny
+    return pql.PROBABILITY_FLOOR
 
 
 def step(low: torch.Tensor, high: torch.Tensor, bits: int) -> torch.Tensor:
@@ -349,10 +349,8 @@ class Current:
             )
         return (
             stored["codes"].long(),
-            torch.cat(
-                [stored["probabilities"], stored["query_probabilities"].float()], dim=-1
-            ),
-            stored["tails"].exp() / (self.vocabulary - TOP_CODES),
+            torch.cat([stored["probabilities"], stored["query_probabilities"]], dim=-1),
+            stored["tails"] / (self.vocabulary - TOP_CODES),
         )
 
     def projected(self, stored: Stored) -> torch.Tensor:

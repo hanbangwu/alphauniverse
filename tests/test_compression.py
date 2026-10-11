@@ -66,18 +66,18 @@ def test_lossless_schemes_decode_the_distribution() -> None:
 
 def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
     columns = {
-        field.name: field.type.list_size
+        field.name: field.type.list_size * field.type.value_type.byte_width
         for field in PREDICTIONS
         if field.name != "galaxy"
     }
     widths = {
-        "ls_image": columns["ls_codes"] * 2
-        + columns["ls_probabilities"] * 4
-        + columns["ls_query_probabilities"] * 2
-        + columns["ls_rest"] * 4
-        + columns["ls_tails"] * 4,
-        "ls_table": columns["ls_table_values"] * 4,
-        "redshift": columns["redshift"] * 4,
+        "ls_image": columns["ls_codes"]
+        + columns["ls_probabilities"]
+        + columns["ls_query_probabilities"]
+        + columns["ls_rest"]
+        + columns["ls_tails"],
+        "ls_table": columns["ls_table_values"],
+        "redshift": columns["redshift"],
     }
 
     for mode in predictions_module.MODES:
