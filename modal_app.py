@@ -72,7 +72,7 @@ def generate_predictions() -> None:
     gpu="L4",
     cpu=16,
     memory=(32 * 1024, 128 * 1024),
-    timeout=3 * 60 * 60,
+    timeout=6 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
