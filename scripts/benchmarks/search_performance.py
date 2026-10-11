@@ -135,7 +135,7 @@ def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
     marks.append(mark())
     pql.maps(found, galaxies)
     marks.append(mark())
-    pql.predicted(query, galaxies)
+    pql.predicted(selected, galaxies)
     marks.append(mark())
     pql.saliency(query)
     marks.append(mark())

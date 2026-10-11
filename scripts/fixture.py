@@ -31,7 +31,15 @@ from app.config import (
     store_schema,
     store_writer,
 )
-from app.pql import basis, prediction_batch, predictions, save_prediction_basis
+from app.pql import (
+    MATRICES,
+    SUMS,
+    basis,
+    observed,
+    prediction_batch,
+    predictions,
+    save_prediction_basis,
+)
 from app.search import source, tokens
 from app.text_search import aion_gemma_space
 
@@ -166,8 +174,11 @@ def forget() -> None:
         aion_gemma_space,
         predictions,
         basis,
+        observed,
     ):
         cached.cache_clear()
+    MATRICES.clear()
+    SUMS.clear()
 
 
 def build(galaxies: int, seed: int = 0) -> Path:
