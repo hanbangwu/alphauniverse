@@ -19,7 +19,7 @@ uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
 uv run modal run -m scripts.benchmarks.projection_quality
 uv run modal run -m scripts.benchmarks.text_search_quality
 uv run modal run -m scripts.benchmarks.pql_quality          # --sample, default 1000
-uv run modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200
+uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
