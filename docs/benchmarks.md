@@ -19,7 +19,7 @@ uv run modal run -m scripts.benchmarks.backend_performance  # --runs, default 30
 uv run modal run -m scripts.benchmarks.projection_quality
 uv run modal run -m scripts.benchmarks.text_search_quality
 uv run modal run -m scripts.benchmarks.pql_quality          # --sample, default 1000
-uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200
+uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --fit 512, --queries 200, --modes every mode
 ```
 
 - The performance scripts refuse to run with uncommitted changes.
@@ -179,16 +179,16 @@ It needs `predictions` and `prediction_basis` from `generate_predictions`. Unmea
 
 ## `compression_quality`
 
-Measures how each way of storing a predicted distribution changes PQL's scores and rankings, for every mode in `app.predictions.MODES`. Unlike the other benchmarks it predicts its own galaxies, densely, from `tokens`; it also reads `mean_points` for the galaxy count and the dataset for spectra's wavelengths and redshifts. Each mode runs in its own container, as `pql_quality`'s, with a 24-hour timeout, and the local entrypoint combines them.
+Measures how each way of storing a predicted distribution changes PQL's scores and rankings, for every mode in `app.predictions.MODES`. Unlike the other benchmarks it predicts its own galaxies, densely, from `tokens`; it also reads `mean_points` for the galaxy count and the dataset for spectra's wavelengths and redshifts. Each mode runs in its own container, as `pql_quality`'s, with a 24-hour timeout, and the local entrypoint combines them. `--modes`, comma-separated, limits a run to those modes; its budgets then total only them.
 
 - **Galaxies** (`SEED`): `--sample` scored galaxies, up to half of them drawn from galaxies with SDSS, then from galaxies with HSC or DESI up to half the sample, the rest from all galaxies; and `--fit` other galaxies whose predictions fit the mode's PCA basis, so every scored galaxy is out of sample. Image modes are held in fp16, the rest in fp32.
-- **Schemes** (`scripts/benchmarks/compression.py`, 218 per mode): the store's current scheme, with the fit galaxies' basis for spectra; dense; the top k codes; the fewest codes holding mass p; and PCA coefficients. Top-k and top-p either spread the rest of the mass evenly or drop it, and every scheme is stored at fp32, fp16, bf16, 8 bits or 4 bits. The levels are listed in #214.
+- **Schemes** (`scripts/benchmarks/compression.py`, 219 per mode): the store's current scheme, with the fit galaxies' basis for spectra; dense, also as fp32 probabilities; the top k codes; the fewest codes holding mass p; and PCA coefficients. Top-k and top-p either spread the rest of the mass evenly or drop it, and every scheme is stored at fp32, fp16, bf16, 8 bits or 4 bits.
 - **Queries**: `--queries` galaxies per mode, drawn from those observing it, each with selections of one slot, a block or window, and all slots, as in `selections`. Image and spectrum modes also score the 16-slot selection position-independently (`16 anywhere`): each selected slot takes its best overlap over every slot of the other galaxy, as `app.pql` does for `anywhere`. Each query is scored against the sample and against a copy of itself predicted with the mode's tokens hidden. For table values and the redshift, the exact reference, the current scheme and the dense log-probability schemes take the overlap as a log-sum-exp of the log-probabilities, as `app.pql` does; every other overlap is floored at float32's smallest normal number, and at `app.pql`'s spectrum token floor for PCA schemes.
 - **Per scheme**: bytes per galaxy; the share of floored overlaps; the median and 99th percentile of |log overlap − exact|; one query's scan of 16 slots on the CPU; and per selection size, with the gallery compressed alone and with both sides compressed, the Spearman correlation of the summed score with the dense one (tied ranks averaged), top-10 and top-32 overlap, identity (the hidden copy ranks first) and the median top-10 |Δz|/(1+z).
 - **Choices**: per mode, the smallest scheme whose both-sides figures meet `TARGETS` at every size (identity may not drop by more than its target); and for corpus totals of 1, 2, 4 and 8 GB, the schemes that maximise the lowest median Spearman over modes and sizes. A NaN Spearman, as when a query's compressed scores are all equal, fails the targets and counts as −∞.
 - **Check**: for the image modes, the log overlaps of 64 galaxies with fp16 and fp32 references.
 
-The report is too large for the workflow's step summary; it is in the run's artifact. Unmeasured.
+A full run's report is over the workflow's step summary limit; it is in the run's artifact. Unmeasured.
 
 ## Scaling ceilings
 
