@@ -47,6 +47,7 @@ def generate_embeddings() -> None:
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_embeddings()
+    cache_volume.commit()
 
 
 @app.function(
@@ -63,6 +64,7 @@ def generate_predictions() -> None:
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_predictions()
+    cache_volume.commit()
 
 
 @app.function(
@@ -80,6 +82,7 @@ def generate_projections() -> None:
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_projections()
+    cache_volume.commit()
 
 
 @app.function(
@@ -96,6 +99,7 @@ def generate_pairs() -> None:
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_pairs()
+    cache_volume.commit()
 
 
 @app.function(
@@ -111,6 +115,7 @@ def generate_alignment() -> None:
     from app.alignment import generate_alignment
 
     generate_alignment()
+    cache_volume.commit()
 
 
 @app.function(
@@ -125,6 +130,7 @@ def generate_aion_gemma_space() -> None:
     from app.alignment import generate_aion_gemma_space
 
     generate_aion_gemma_space()
+    cache_volume.commit()
 
 
 serving_image = (
