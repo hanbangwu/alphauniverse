@@ -20,9 +20,26 @@ SDSS               spectrum 3500–10463 Å, resampled to 0.8 Å
 It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test. Galaxy Zoo 10 morphologies colour the map; PROVABGS stellar masses, star formation rates and redshifts are the ground truth in the text search benchmark.
 
 .. toctree::
-   :maxdepth: 2
+   :caption: Background
 
-   explanation
+   concepts
+
+.. toctree::
+   :caption: Methods
+
+   methods/map
+   methods/similarity-search
+   methods/query-maps
+   methods/text-search
+
+.. toctree::
+   :caption: Using the site
+
+   using
+
+.. toctree::
+   :caption: Project
+
    benchmarks
    how-to
    reference

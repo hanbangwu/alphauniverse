@@ -13,7 +13,9 @@ paths:
 - Each fact has one home: before adding to a doc, re-read it and cut what the addition duplicates. The homes are:
   - `README.md`: a brief showcase of the features, how to start the site locally, and a link to the docs.
   - `docs/index.rst`: what alphaUniverse is and the dataset.
-  - `docs/explanation.rst`: how each feature works.
+  - `docs/concepts.rst`: what AION does with a galaxy: tokens, embeddings, predictions.
+  - `docs/methods/`: how each feature works, one page each.
+  - `docs/using.rst`: what the panels show.
   - `docs/benchmarks.rst`: what each benchmark measures, with its figures drawn from its report.
   - `docs/how-to.rst`: the commands.
   - `docs/reference.rst`: the pipeline, the artifacts, the HTTP API, and the tests and CI.
