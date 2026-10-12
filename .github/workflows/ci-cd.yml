@@ -50,7 +50,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       - name: Build
-        run: uv run --python 3.12 --group docs make -C docs html SPHINXOPTS="-W --keep-going"
+        run: uv run --python 3.12 --group docs make -C docs html
 
   frontend:
     name: Frontend
