@@ -28,7 +28,7 @@ extensions = [
     "sphinxcontrib.openapi",
 ]
 
-autodoc_default_options = {"members": True, "undoc-members": True, "no-value": True}
+autodoc_default_options = {"members": True, "undoc-members": True}
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
@@ -42,9 +42,7 @@ mathjax_path = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
 
 def schema_block(app, what, name, obj, options, lines):
     if isinstance(obj, pa.Schema):
-        lines[:] = ["::", ""] + [
-            f"   {line}" for line in str(obj).splitlines()
-        ]
+        lines[:] = ["::", ""] + [f"   {line}" for line in str(obj).splitlines()]
 
 
 def setup(app):
