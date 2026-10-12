@@ -334,6 +334,16 @@ def test_position_independent_saliency_uses_each_slot_s_best_overlap(
     np.testing.assert_allclose(pql.saliency(anywhere), expected, atol=1e-4)
 
 
+def test_position_independent_saliency_builds_no_agreement_matrix(
+    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pql, "MATRICES", OrderedDict())
+
+    pql.saliency(query.model_copy(update={"anywhere": ("ls_image",)}))
+
+    assert not pql.MATRICES
+
+
 def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
     tree: Path,
 ) -> None:
