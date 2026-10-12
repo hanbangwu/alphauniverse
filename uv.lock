@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -233,13 +233,8 @@ dev = [
 ]
 docs = [
     { name = "bokeh" },
-    { name = "polymathic-aion", extra = ["torch"] },
-    { name = "scikit-learn" },
     { name = "sphinx" },
     { name = "sphinxcontrib-openapi" },
-    { name = "torchvision" },
-    { name = "umap-learn" },
-    { name = "wandb" },
 ]
 
 [package.metadata]
@@ -277,13 +272,8 @@ dev = [
 ]
 docs = [
     { name = "bokeh", specifier = ">=3.10.0" },
-    { name = "polymathic-aion", extras = ["torch"], specifier = ">=0.0.2" },
-    { name = "scikit-learn", specifier = ">=1.9.1" },
     { name = "sphinx", specifier = ">=9.1.0" },
     { name = "sphinxcontrib-openapi", specifier = ">=0.10.0" },
-    { name = "torchvision", specifier = ">=0.29.1" },
-    { name = "umap-learn", specifier = ">=0.5.12" },
-    { name = "wandb", specifier = ">=0.30.0" },
 ]
 
 [[package]]

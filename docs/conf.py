@@ -20,13 +20,10 @@ author = "Hanbang Wu, Biprateep Dey, Nolan Koblischke, Joshua Speagle"
 
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
     "bokeh.sphinxext.bokeh_plot",
     "sphinxcontrib.openapi",
 ]
-
-autodoc_default_options = {"members": True, "undoc-members": True}
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
