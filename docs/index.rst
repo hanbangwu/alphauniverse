@@ -1,7 +1,7 @@
 alphaUniverse
 =============
 
-alphaUniverse shows how `AION <https://arxiv.org/abs/2510.17960>`_, Polymathic AI's foundation model for astronomy, sees the galaxies of the COSMOS field. You can browse every galaxy on a map of AION's internal representation, ask AION which galaxies resemble one you pick in the image regions, wavelengths or catalogue values you choose, and search the field in plain English.
+alphaUniverse shows how AION :cite:p:`parker2025aion`, Polymathic AI's foundation model for astronomy, sees the galaxies of the COSMOS field. You can browse every galaxy on a map of AION's internal representation, ask AION which galaxies resemble one you pick in the image regions, wavelengths or catalogue values you choose, and search the field in plain English.
 
 The data
 --------
@@ -26,3 +26,4 @@ It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at 
    benchmarks
    how-to
    reference
+   references
