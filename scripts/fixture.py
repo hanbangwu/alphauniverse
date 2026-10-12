@@ -136,12 +136,13 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
         }
         for survey, table_values in TABLE_VALUE_SURVEYS.items():
             mass = rng.dirichlet(np.full(TOP_CODES + 1, 0.3), size=N_IMAGE_TOKENS)
-            values[f"{survey}_codes"] = (
+            codes = (
                 rng.random((N_IMAGE_TOKENS, IMAGE_VOCABULARY))
                 .argpartition(TOP_CODES, axis=1)[:, :TOP_CODES]
                 .astype(np.uint16)
-                .reshape(-1)
             )
+            values[f"{survey}_codes"] = codes[:, :KEPT].reshape(-1)
+            values[f"{survey}_query_codes"] = codes[:, KEPT:].reshape(-1)
             probabilities = -np.sort(-mass[:, :TOP_CODES], axis=1)
             values[f"{survey}_probabilities"] = (
                 probabilities[:, :KEPT].astype(np.float32).reshape(-1)

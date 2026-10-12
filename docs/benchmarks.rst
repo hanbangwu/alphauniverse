@@ -146,7 +146,7 @@ Search quality
 
 ``pql_quality`` hides each sampled galaxy's spectra and redshift, predicts it again, and checks whether similarity search still finds what was hidden: the median :math:`|\Delta z| / (1 + z)` of the top 10 matches, whether the hidden copy ranks in the top 10, and whether merely having a spectrum, rather than resembling the query, lifts a galaxy into the top 32. No report is committed yet.
 
-``compression_quality`` measures how each way of storing AION's predicted distributions changes the similarity scores and rankings, against the exact distributions, including the storage described in :doc:`explanation`. No report is committed yet.
+``compression_quality`` measures how each way of storing AION's predicted distributions changes the similarity scores and rankings, against the exact distributions, including the storage described in :doc:`reference`. No report is committed yet.
 
 Speed
 -----

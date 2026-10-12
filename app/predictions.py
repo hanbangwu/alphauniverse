@@ -152,9 +152,7 @@ def flushed(probabilities: np.ndarray, codes: int = 1) -> np.ndarray:
     return np.where(probabilities < PROBABILITY_FLOOR * codes, 0, probabilities)
 
 
-def image_token_codes(
-    log_probabilities: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def image_token_codes(log_probabilities: np.ndarray) -> dict[str, np.ndarray]:
     candidates = np.argpartition(-log_probabilities, TOP_CODES - 1, axis=1)[
         :, :TOP_CODES
     ]
@@ -166,13 +164,14 @@ def image_token_codes(
     np.put_along_axis(beyond, codes, 0, axis=1)
     tails = beyond.sum(axis=1)
     vocabulary = log_probabilities.shape[1]
-    return (
-        codes.astype(np.uint16),
-        flushed(probabilities[:, :KEPT]),
-        probabilities[:, KEPT:].astype(np.float16),
-        flushed(tails + probabilities[:, KEPT:].sum(axis=1), vocabulary - KEPT),
-        flushed(tails, vocabulary - TOP_CODES),
-    )
+    return {
+        "codes": codes[:, :KEPT].astype(np.uint16),
+        "probabilities": flushed(probabilities[:, :KEPT]),
+        "rest": flushed(tails + probabilities[:, KEPT:].sum(axis=1), vocabulary - KEPT),
+        "query_codes": codes[:, KEPT:].astype(np.uint16),
+        "query_probabilities": probabilities[:, KEPT:].astype(np.float16),
+        "tails": flushed(tails, vocabulary - TOP_CODES),
+    }
 
 
 class Moments:
@@ -235,14 +234,8 @@ def record(
         REDSHIFT: flushed(np.exp(predicted[REDSHIFT_KEY][0])),
     }
     for survey, image_key in IMAGES.items():
-        codes, probabilities, query_probabilities, rest, tails = image_token_codes(
-            predicted[image_key]
-        )
-        values[f"{survey}_codes"] = codes.reshape(-1)
-        values[f"{survey}_probabilities"] = probabilities.reshape(-1)
-        values[f"{survey}_query_probabilities"] = query_probabilities.reshape(-1)
-        values[f"{survey}_rest"] = rest
-        values[f"{survey}_tails"] = tails
+        for name, part in image_token_codes(predicted[image_key]).items():
+            values[f"{survey}_{name}"] = part.reshape(-1)
         values[f"{survey}_table_values"] = flushed(
             np.exp(np.concatenate([predicted[key][0] for key in TABLE_VALUES[survey]]))
         )

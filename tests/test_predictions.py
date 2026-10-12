@@ -99,8 +99,9 @@ def test_kept_image_token_codes_are_the_most_probable_in_descending_order() -> N
         np.random.default_rng(1).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
     )
 
-    codes = predictions_module.image_token_codes(log_probabilities)[0]
+    stored = predictions_module.image_token_codes(log_probabilities)
 
+    codes = np.concatenate([stored["codes"], stored["query_codes"]], axis=1)
     assert np.array_equal(codes, np.argsort(-log_probabilities, axis=1)[:, :TOP_CODES])
 
 
@@ -212,14 +213,13 @@ def test_stored_image_probabilities_are_those_of_their_codes() -> None:
         np.random.default_rng(2).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
     ).astype(np.float32)
 
-    codes, probabilities, query_probabilities, _, _ = (
-        predictions_module.image_token_codes(log_probabilities)
-    )
+    stored = predictions_module.image_token_codes(log_probabilities)
 
+    codes = np.concatenate([stored["codes"], stored["query_codes"]], axis=1)
     exact = np.exp(np.take_along_axis(log_probabilities, codes.astype(np.intp), axis=1))
-    np.testing.assert_array_equal(probabilities, exact[:, :KEPT])
+    np.testing.assert_array_equal(stored["probabilities"], exact[:, :KEPT])
     np.testing.assert_allclose(
-        query_probabilities, exact[:, KEPT:], rtol=np.finfo(np.float16).eps
+        stored["query_probabilities"], exact[:, KEPT:], rtol=np.finfo(np.float16).eps
     )
 
 
@@ -227,10 +227,8 @@ def test_probabilities_below_float32_range_are_stored_as_zero() -> None:
     log_probabilities = np.full((1, IMAGE_VOCABULARY), -95, dtype=np.float32)
     log_probabilities[0, 0] = 0
 
-    _, probabilities, _, rest, tails = predictions_module.image_token_codes(
-        log_probabilities
-    )
+    stored = predictions_module.image_token_codes(log_probabilities)
 
-    np.testing.assert_array_equal(probabilities, [[1] + [0] * (KEPT - 1)])
-    np.testing.assert_array_equal(rest, [0])
-    np.testing.assert_array_equal(tails, [0])
+    np.testing.assert_array_equal(stored["probabilities"], [[1] + [0] * (KEPT - 1)])
+    np.testing.assert_array_equal(stored["rest"], [0])
+    np.testing.assert_array_equal(stored["tails"], [0])

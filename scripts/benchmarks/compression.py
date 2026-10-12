@@ -329,19 +329,23 @@ class Current:
         flat = flat.float().cpu().numpy()
         if self.kind == "image":
             parts = image_token_codes(flat)
-            names = ("codes", "probabilities", "query_probabilities", "rest", "tails")
         else:
-            parts = coefficients(
-                np.exp(flat),
-                self.basis.mean.cpu().numpy(),
-                self.basis.directions[:SPECTRUM_TOKEN_RANK].cpu().numpy(),
+            parts = dict(
+                zip(
+                    ("quantised", "offsets", "steps"),
+                    coefficients(
+                        np.exp(flat),
+                        self.basis.mean.cpu().numpy(),
+                        self.basis.directions[:SPECTRUM_TOKEN_RANK].cpu().numpy(),
+                    ),
+                    strict=True,
+                )
             )
-            names = ("quantised", "offsets", "steps")
         return {
             name: torch.from_numpy(array)
             .reshape(*shape, *array.shape[1:])
             .to(log_probabilities.device)
-            for name, array in zip(names, parts, strict=True)
+            for name, array in parts.items()
         }
 
     def image(
@@ -349,12 +353,12 @@ class Current:
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if side == "gallery":
             return (
-                stored["codes"][..., :KEPT].long(),
+                stored["codes"].long(),
                 stored["probabilities"],
                 stored["rest"] / (self.vocabulary - KEPT),
             )
         return (
-            stored["codes"].long(),
+            torch.cat([stored["codes"], stored["query_codes"]], dim=-1).long(),
             torch.cat([stored["probabilities"], stored["query_probabilities"]], dim=-1),
             stored["tails"] / (self.vocabulary - TOP_CODES),
         )

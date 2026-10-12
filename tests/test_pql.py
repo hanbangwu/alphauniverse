@@ -46,20 +46,21 @@ def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
     return values.astype(np.float64).reshape(rows.num_rows, *shape)
 
 
-def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
-    codes = column(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES).astype(np.int64)
-    probabilities = np.concatenate(
+def top_codes(rows: pa.Table, survey: str, name: str) -> np.ndarray:
+    return np.concatenate(
         [
-            column(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, pql.KEPT),
+            column(rows, f"{survey}_{name}", N_IMAGE_TOKENS, pql.KEPT),
             column(
-                rows,
-                f"{survey}_query_probabilities",
-                N_IMAGE_TOKENS,
-                TOP_CODES - pql.KEPT,
+                rows, f"{survey}_query_{name}", N_IMAGE_TOKENS, TOP_CODES - pql.KEPT
             ),
         ],
         axis=-1,
     )
+
+
+def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
+    codes = top_codes(rows, survey, "codes").astype(np.int64)
+    probabilities = top_codes(rows, survey, "probabilities")
     rest = (
         column(rows, f"{survey}_rest", N_IMAGE_TOKENS)
         if kept == pql.KEPT

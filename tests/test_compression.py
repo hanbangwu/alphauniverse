@@ -75,8 +75,9 @@ def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
     widths = {
         "ls_image": columns["ls_codes"]
         + columns["ls_probabilities"]
-        + columns["ls_query_probabilities"]
         + columns["ls_rest"]
+        + columns["ls_query_codes"]
+        + columns["ls_query_probabilities"]
         + columns["ls_tails"],
         "ls_table": columns["ls_table_values"],
         "redshift": columns["redshift"],
@@ -102,15 +103,14 @@ def test_the_current_scheme_decodes_the_query_as_search_reads_it() -> None:
         np.full(mode.vocabulary, 0.05), size=(1, slots)
     )
     stored = scheme.encode(torch.from_numpy(np.log(np.maximum(drawn, 1e-30))))
-    names = ("codes", "probabilities", "query_probabilities", "tails")
     rows = pa.record_batch(
         [
             pa.FixedSizeListArray.from_arrays(
-                stored[name].flatten().numpy(), stored[name][0].numel()
+                values.flatten().numpy(), values[0].numel()
             )
-            for name in names
+            for values in stored.values()
         ],
-        names=[f"{mode.survey}_{name}" for name in names],
+        names=[f"{mode.survey}_{name}" for name in stored],
     )
 
     np.testing.assert_allclose(
