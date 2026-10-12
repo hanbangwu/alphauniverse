@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 CACHE_PATH = "/cache"
 SERVING_CPU = 8
-SERVING_MEMORY = (8 * 1024, 32 * 1024)
+SERVING_MEMORY = (4 * 1024, 32 * 1024)
 SERVING_MAX_INPUTS = 16
 SERVING_MAX_CONTAINERS = 1
 SERVING_SCALEDOWN_WINDOW = 5 * 60
@@ -17,7 +17,7 @@ SERVING_ENVIRONMENT = {"OPENBLAS_NUM_THREADS": "1"}
 
 app = modal.App("alphauniverse")
 
-cache_volume = modal.Volume.from_name("alphauniverse-cache", create_if_missing=True)
+cache_volume = modal.Volume.from_name("scratch-cache", create_if_missing=True)
 
 environment = {
     "ALPHAUNIVERSE_CACHE": CACHE_PATH,
@@ -36,10 +36,10 @@ build_image = (
 
 @app.function(
     image=build_image,
-    gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=3 * 60 * 60,
+    gpu="T4",
+    cpu=(2, 4),
+    memory=(8 * 1024, 32 * 1024),
+    timeout=1 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
@@ -53,10 +53,10 @@ def generate_embeddings() -> None:
 
 @app.function(
     image=build_image,
-    gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=24 * 60 * 60,
+    gpu="T4",
+    cpu=(8, 16),
+    memory=(4 * 1024, 16 * 1024),
+    timeout=2 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_predictions() -> None:
@@ -71,9 +71,9 @@ def generate_predictions() -> None:
 @app.function(
     image=build_image,
     gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=6 * 60 * 60,
+    cpu=4,
+    memory=(32 * 1024, 64 * 1024),
+    timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
@@ -106,8 +106,8 @@ def generate_pairs() -> None:
 @app.function(
     image=build_image,
     gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
+    cpu=4,
+    memory=(32 * 1024, 64 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
     secrets=[modal.Secret.from_name("wandb-secret")],
@@ -122,9 +122,9 @@ def generate_alignment() -> None:
 @app.function(
     image=build_image,
     gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=60 * 60,
+    cpu=4,
+    memory=(32 * 1024, 64 * 1024),
+    timeout=1 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_aion_gemma_space() -> None:
