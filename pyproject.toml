@@ -34,7 +34,6 @@ build = [
 ]
 dataset = ["dask[distributed]>=2026.8.0", "lsdb>=0.11.0"]
 docs = [
-  { include-group = "build" },
   "bokeh>=3.10.0",
   "furo>=2025.12.19",
   "sphinx>=9.1.0",
