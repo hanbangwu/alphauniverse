@@ -25,6 +25,7 @@ from app.config import (
 from modal_app import (
     CACHE_PATH,
     SERVING_CPU,
+    SERVING_ENVIRONMENT,
     SERVING_MEMORY,
     app,
     cache_volume,
@@ -259,6 +260,7 @@ def stages(runs: int, matches: int = 32) -> dict[str, Any]:
 
 @app.function(
     image=image,
+    env=SERVING_ENVIRONMENT,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
     volumes={CACHE_PATH: cache_volume},

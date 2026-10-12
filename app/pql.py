@@ -1,5 +1,7 @@
+import math
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from functools import cache, partial
 from itertools import accumulate
 from threading import Lock
@@ -8,6 +10,7 @@ from typing import Annotated, NamedTuple, Self, get_args
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+import torch
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import (
@@ -61,12 +64,13 @@ OFFSETS = {
 WIDTH = sum(WIDTHS.values())
 AGREEMENT_GALAXIES = 8
 BATCH = 256
-BLOCK_BYTES = 64 * 2**20
+CHUNK = 16
 SALIENCY_MATCHES = 256
 SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
 MATRICES = OrderedDict()
 SUMS = OrderedDict()
+THREADS = pa.cpu_count()
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -311,40 +315,55 @@ def log_overlaps(
 
 def cross_overlaps(
     rows: pa.RecordBatch, mode: str, form: np.ndarray
-) -> Iterator[tuple[int, np.ndarray]]:
+) -> Iterator[tuple[slice, np.ndarray]]:
     if mode in IMAGE_MODES:
         codes, probabilities, spread = top_image_tokens(
             rows, IMAGE_MODES[mode], slice(None), KEPT
         )
-        codes = codes.astype(np.intp)
-        folded = probabilities - spread[..., None]
-        block = max(1, BLOCK_BYTES // (4 * codes.size))
-        for start in range(0, len(form), block):
-            part = form[start : start + block]
-            yield (
-                start,
-                np.einsum("gck,bgck->bgc", folded, part[:, codes])
-                + spread * part.sum(axis=-1)[:, None, None],
-            )
+        indices = torch.from_numpy(codes.astype(np.int64))
+        weights = torch.from_numpy(probabilities - spread[..., None])
+        spread = torch.from_numpy(spread)
+        table = torch.from_numpy(np.ascontiguousarray(form.T))
+        totals = torch.from_numpy(form.sum(axis=-1))
+        for start in range(0, rows.num_rows, CHUNK):
+            chunk = slice(start, start + CHUNK)
+            overlaps = torch.nn.functional.embedding_bag(
+                indices[chunk].flatten(0, 1),
+                table,
+                per_sample_weights=weights[chunk].flatten(0, 1),
+                mode="sum",
+            ).view(-1, N_IMAGE_TOKENS, len(form))
+            yield chunk, overlaps.addcmul_(spread[chunk, :, None], totals).numpy()
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
     quantised = array(
         rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
-    ).astype(np.float32)
-    offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)
-    steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)
-    block = max(1, BLOCK_BYTES // (4 * offsets.size))
-    for start in range(0, len(form), block):
-        part = form[start : start + block].astype(np.float32)
-        weights = projected_mean + part
-        overlaps = (
-            mean_square
-            + part @ projected_mean
-            + offsets[..., None] * weights.sum(axis=-1)
-            + steps[..., None] * (quantised @ weights.T)
-        )
-        yield start, np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR).transpose(2, 0, 1)
+    )
+    offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[..., None]
+    steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[..., None]
+    weights = projected_mean + form
+    base = mean_square + np.einsum("br,r->b", form, projected_mean)
+    totals = weights.sum(axis=-1)
+    for start in range(0, rows.num_rows, CHUNK):
+        chunk = slice(start, start + CHUNK)
+        overlaps = quantised[chunk].astype(np.float32) @ weights.T
+        overlaps *= steps[chunk]
+        overlaps += offsets[chunk] * totals
+        overlaps += base
+        yield chunk, np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR, out=overlaps)
+
+
+def threaded(
+    compute: Callable[[pa.RecordBatch], np.ndarray], batches: list[pa.RecordBatch]
+) -> np.ndarray:
+    with ThreadPoolExecutor(THREADS) as pool:
+        return np.concatenate(list(pool.map(compute, batches)))
+
+
+def slices(rows: pa.RecordBatch) -> list[pa.RecordBatch]:
+    size = math.ceil(rows.num_rows / THREADS)
+    return [rows.slice(start, size) for start in range(0, rows.num_rows, size)]
 
 
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
@@ -354,8 +373,8 @@ def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
 
 def best_log_overlaps(rows: pa.RecordBatch, mode: str, form: np.ndarray) -> np.ndarray:
     best = np.empty((rows.num_rows, len(form)))
-    for start, overlaps in cross_overlaps(rows, mode, form):
-        best[:, start : start + len(overlaps)] = overlaps.max(axis=-1).T
+    for chunk, overlaps in cross_overlaps(rows, mode, form):
+        best[chunk] = overlaps.max(axis=1)
     return np.log(best)
 
 
@@ -368,14 +387,11 @@ def basket_maps(
     shown, positions = {}, {}
     for mode, form in query_forms(row(galaxy), selected).items():
         scale = np.exp(-peaks[mode])
-        shown[mode] = np.zeros((rows.num_rows, WIDTHS[mode]), np.float32)
+        shown[mode] = np.empty((rows.num_rows, WIDTHS[mode]), np.float32)
         positions[mode] = np.empty((rows.num_rows, len(form)), np.int32)
-        for start, overlaps in cross_overlaps(rows, mode, form):
-            stop = start + len(overlaps)
-            shown[mode] = np.maximum(
-                shown[mode], (overlaps * scale[start:stop, None, None]).max(axis=0)
-            )
-            positions[mode][:, start:stop] = overlaps.argmax(axis=-1).T
+        for chunk, overlaps in cross_overlaps(rows, mode, form):
+            shown[mode][chunk] = (overlaps * scale).max(axis=-1)
+            positions[mode][chunk] = overlaps.argmax(axis=1)
     return shown, positions
 
 
@@ -403,11 +419,9 @@ def cached[T](store: OrderedDict, key: Hashable, compute: Callable[[], T]) -> T:
 
 def basket_sum(galaxy: int, mode: str, slots: np.ndarray) -> np.ndarray:
     form = query_forms(row(galaxy), {mode: slots})[mode]
-    return np.concatenate(
-        [
-            best_log_overlaps(rows, mode, form).sum(axis=1)
-            for rows in predictions().to_batches()
-        ]
+    return threaded(
+        lambda rows: best_log_overlaps(rows, mode, form).sum(axis=1),
+        predictions().to_batches(),
     )
 
 
@@ -474,13 +488,9 @@ def agreement_rows(rows: pa.RecordBatch, forms: dict[str, np.ndarray]) -> np.nda
 
 
 def built(galaxy: int) -> Agreements:
-    forms = galaxy_forms(galaxy)
-    values = np.empty((predictions().num_rows, WIDTH), np.float32)
-    start = 0
-    for rows in predictions().to_batches():
-        stop = start + rows.num_rows
-        values[start:stop] = agreement_rows(rows, forms)
-        start = stop
+    values = threaded(
+        partial(agreement_rows, forms=galaxy_forms(galaxy)), predictions().to_batches()
+    )
     others = np.arange(len(values)) != galaxy
     means = (values.sum(axis=0, dtype=np.float64) - values[galaxy]) / others.sum()
     squares = np.zeros(WIDTH)
@@ -587,11 +597,11 @@ def saliency_sample(query: Selection) -> np.ndarray:
 def sampled_values(query: Selection, found: Agreements) -> np.ndarray:
     sample = saliency_sample(query)
     values = found.values[sample].astype(np.float64)
-    rows = gathered(sample)
+    parts = slices(gathered(sample))
     forms = query_forms(row(query.galaxy), dict.fromkeys(query.anywhere, slice(None)))
     for mode, form in forms.items():
-        values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = best_log_overlaps(
-            rows, mode, form
+        values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = threaded(
+            partial(best_log_overlaps, mode=mode, form=form), parts
         )
     return values
 

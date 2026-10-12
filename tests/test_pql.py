@@ -180,7 +180,7 @@ def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
     table: pa.Table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(pql, "SUMS", OrderedDict())
-    monkeypatch.setattr(pql, "BLOCK_BYTES", 1)
+    monkeypatch.setattr(pql, "CHUNK", 2)
     selected = {"ls_image": (0, 17, 300), "desi_spectrum": (40, 41, 42)}
     query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
 
@@ -220,7 +220,7 @@ def test_a_position_independent_mode_without_a_selection_is_rejected(
 def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
     table: pa.Table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pql, "BLOCK_BYTES", 1)
+    monkeypatch.setattr(pql, "CHUNK", 2)
     own = table.slice(GALAXY, 1)
     slots = [0, 17, 300]
     query = pql.Query(galaxy=GALAXY, ls_image=tuple(slots), anywhere=("ls_image",))
