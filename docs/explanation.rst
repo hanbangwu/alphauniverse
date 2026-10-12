@@ -53,7 +53,7 @@ AION was trained by hiding some of a galaxy's tokens and predicting them from th
 Similarity search
 -----------------
 
-You pick a galaxy :math:`q` and a selection: image cells, spectrum tokens, catalogue values, or any mix. Each kind is a *mode* :math:`m` with selected slots :math:`S_m`. alphaUniverse then ranks every other galaxy :math:`g` by how well AION's predictions for it agree with its predictions for :math:`q` at those slots (:py:func:`app.pql.search`).
+You pick a galaxy :math:`q` and a selection: image cells, spectrum tokens, catalogue values, or any mix. Each survey's image, spectrum or catalogue values, and the redshift, is a *mode* :math:`m` with selected slots :math:`S_m`. alphaUniverse then ranks every other galaxy :math:`g` by how well AION's predictions for it agree with its predictions for :math:`q` at those slots (:py:func:`app.pql.search`).
 
 At one slot the agreement is the *overlap*, the probability that a code drawn from each prediction is the same:
 

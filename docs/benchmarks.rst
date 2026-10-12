@@ -55,12 +55,11 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
        index_position=None,
        height=140,
    )
-   job = report["job"]
    show(
        column(
            Div(
                text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"{report['size']:,} embeddings; {job['cpu']} CPU, no GPU."
+               f"{report['size']:,} embeddings."
            ),
            chart,
            table,
@@ -129,88 +128,46 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
        width=760,
        height=400,
    )
-   job = report["job"]
    show(
        column(
            Div(
                text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"{report['galaxies']:,} held-out galaxies; {job['cpu']} CPU, one {job['gpu']}."
+               f"{report['galaxies']:,} held-out galaxies."
            ),
            chart,
            table,
        )
    )
 
-Search quality
---------------
+Similarity search quality
+-------------------------
 
-``pql_quality`` hides each sampled galaxy's spectra and redshift, predicts it again, and checks whether similarity search still finds what was hidden: the median :math:`|\Delta z| / (1 + z)` of the top 10 matches, whether the hidden copy ranks in the top 10, and whether merely having a spectrum, rather than resembling the query, lifts a galaxy into the top 32. No report is committed yet.
+Does similarity search find physically similar galaxies? ``search_quality`` samples galaxies with a DESI or SDSS spectrum and a redshift, and searches from each with four selections: 16 consecutive observed spectrum tokens, every observed spectrum token, four random Legacy Survey catalogue values, and, for galaxies with an HSC match, four random HSC catalogue values. It reports, as a mean over queries with a 95% bootstrap interval:
 
-``compression_quality`` measures how each way of storing AION's predicted distributions changes the similarity scores and rankings, against the exact distributions, including the storage described in :doc:`explanation`. No report is committed yet.
+- **redshift**: the median :math:`|\Delta z| / (1 + z)` of the top 10 matches with a known redshift; lower is better.
+- **identity**: each sampled galaxy is predicted again with its spectra and redshift hidden; the fraction of spectrum queries for which that hidden copy would rank in the top 10.
+- **availability** and **evidence**: in 20 draws, half the sampled galaxies are swapped for their hidden copies. Among the top 32, the share that kept their spectrum, minus that share in the pool, over galaxies more than :math:`|\Delta z| / (1 + z) = 0.01` from the query (availability) and within it (evidence). Availability above 0 means merely having a spectrum lifts a galaxy; evidence above 0 means a spectrum helps the galaxies that do resemble the query.
 
-Speed
------
+No report from the current script is committed yet.
 
-``search_performance`` times each stage of a similarity search in a container built like the server, comparing the current commit with ``main``. Its committed report timed the search that predictive query likelihood replaced, so no current figures are shown.
+Similarity search speed
+-----------------------
 
-``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. The server runs in one container. Similarity search figures in the committed report predate the current search and are not shown.
+In a container built like the server, ``search_performance`` times the checked-out commit and, when its code differs, the stored report's fastest version, alternating them so neither always runs first. Every figure is from a running server:
 
-.. bokeh-plot::
+- the median time of each stage of a search, and its share of the whole;
+- building a galaxy's agreement matrix, and the Population map from it, on 4 galaxies;
+- whole searches with 4 image cells selected, at 32, 64 and 128 matches;
+- an any-position search over 4 image cells, and its Population map.
 
-   import json
-   from pathlib import Path
+No report from the current script is committed yet.
 
-   from bokeh.layouts import column
-   from bokeh.models import ColumnDataSource, DataTable, Div, TableColumn, Whisker
-   from bokeh.plotting import figure, show
+Storage quality
+---------------
 
-   report = json.loads(Path("benchmarks/backend_performance.json").read_text())
-   routes = {
-       "meta": "/meta",
-       "coverage": "/galaxy/{g}",
-       "image": "/galaxy/{g}/image",
-       "tokens": "/galaxy/{g}/image/tokens",
-       "spectrum": "/galaxy/{g}/spectrum",
-       "spectrum tokens": "/galaxy/{g}/spectrum/tokens",
-       "table": "/galaxy/{g}/table",
-       "text search": "/search/text",
-   }
-   warm = report["requests"]["warm"]
-   source = ColumnDataSource(
-       {
-           "route": list(routes.values()),
-           "p50_ms": [warm[name]["p50_ms"] for name in routes],
-           "p95_ms": [warm[name]["p95_ms"] for name in routes],
-           "runs": [warm[name]["runs"] for name in routes],
-       }
-   )
-   chart = figure(
-       y_range=list(reversed(routes.values())),
-       x_axis_label="latency (ms)",
-       height=320,
-       width=760,
-       title="Warm requests: median (bar) to 95th percentile (whisker)",
-       tooltips=[("p50", "@p50_ms ms"), ("p95", "@p95_ms ms"), ("runs", "@runs")],
-   )
-   chart.hbar(y="route", right="p50_ms", height=0.6, source=source)
-   chart.add_layout(Whisker(source=source, base="route", lower="p50_ms", upper="p95_ms", dimension="width"))
-   table = DataTable(
-       source=source,
-       columns=[TableColumn(field=name, title=name) for name in ("route", "p50_ms", "p95_ms", "runs")],
-       index_position=None,
-       width=760,
-       height=260,
-   )
-   server = report["server"]
-   show(
-       column(
-           Div(
-               text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"server {server['cpu']} CPU, {server['memory_mb'][0]:,} MB requested; "
-               f"first <code>/search/text</code> on a fresh server, loading EmbeddingGemma: "
-               f"{report['requests']['cold_text_search_ms'] / 1000:.1f} s."
-           ),
-           chart,
-           table,
-       )
-   )
+AION predicts a probability for every code at every slot of every galaxy, which stored exactly would take hundreds of gigabytes; the site stores a compact form, described in :doc:`reference`. ``compression_quality`` checks that searching the compact form ranks galaxies as the exact predictions would. For each mode it predicts a sample of galaxies exactly, runs queries of several sizes on both forms, and reports the stored size per galaxy and, over queries, the median and 5th percentile of the Spearman rank correlation between every galaxy's two scores, the median fraction of the exact top 10 kept, and ``search_quality``'s identity and redshift measures under both forms. No report from the current script is committed yet.
+
+Request speed
+-------------
+
+``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``/meta``, a similarity search, a text search, a galaxy's image, its spectrum and its catalogue table, it times the first request of each kind to a fresh server (*cold*, paying for what that request loads first) and then 30 more to the running server (*warm*). No report from the current script is committed yet.

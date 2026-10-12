@@ -1,6 +1,4 @@
 import json
-import math
-import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from functools import partial
@@ -22,28 +20,16 @@ from scripts.benchmarks.common import (
     git,
     memory,
     observed_spectrum_tokens,
+    redshifts,
 )
-from scripts.benchmarks.pql_quality import redshifts
 
 app = modal.App("alphauniverse-compression-quality")
 image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/compression_quality.json")
-TOPS = (10, 32)
+TOP = 10
 WINDOW = 16
-TIMED = 16
 SLOT_CHUNK = 32
-GALAXY_CHUNK = 16
-DIFFERENCES = 1_000_000
-CHECK = 64
-BUDGETS = (1e9, 2e9, 4e9, 8e9)
-TARGETS = {
-    "spearman_median": 0.99,
-    "spearman_p5": 0.95,
-    "top10_median": 0.9,
-    "identity": 0.005,
-    "relevance": 0.005,
-}
 
 Mode = predictions.Mode
 kind = compression.kind
@@ -53,7 +39,7 @@ def slot_count(mode: Mode) -> int:
     return len(mode.keys) * len(mode.positions)
 
 
-def draw(sample: int, fit: int) -> tuple[np.ndarray, np.ndarray]:
+def draw(sample: int) -> np.ndarray:
     rng = np.random.default_rng(SEED)
     sdss = np.flatnonzero(pql.observed("sdss"))
     chosen = rng.choice(sdss, min(len(sdss), sample // 2), replace=False)
@@ -65,34 +51,25 @@ def draw(sample: int, fit: int) -> tuple[np.ndarray, np.ndarray]:
     chosen = np.concatenate(
         (chosen, rng.choice(rest, sample - len(chosen), replace=False))
     )
-    remaining = np.setdiff1d(rest, chosen)
-    fitting = rng.choice(remaining, min(fit, len(remaining)), replace=False)
-    return np.sort(chosen), np.sort(fitting)
+    return np.sort(chosen)
 
 
-def predict(
-    galaxies: np.ndarray, mode: Mode, hidden: bool = False, check: int = 0
-) -> tuple[np.ndarray, np.ndarray]:
+def predict(galaxies: np.ndarray, mode: Mode, hidden: bool = False) -> np.ndarray:
     rows = tokens().select(STORE_COLUMNS).take(galaxies).to_pylist()
-    shape = (slot_count(mode), mode.vocabulary)
     found = np.empty(
-        (len(galaxies), *shape),
+        (len(galaxies), slot_count(mode), mode.vocabulary),
         dtype=np.float16 if kind(mode) == "image" else np.float32,
     )
-    exact = np.empty((min(check, len(galaxies)), *shape), dtype=np.float32)
     targets = {key: mode.positions for key in mode.keys}
     for position, row in enumerate(rows):
         context = predictions.inputs(row)
         if hidden:
             for key in mode.keys:
                 context.pop(key, None)
-        values = predictions.distributions(
+        found[position] = predictions.distributions(
             predictions.predictions(context, targets), mode
         )
-        found[position] = values
-        if position < len(exact):
-            exact[position] = values
-    return found, exact
+    return found
 
 
 def selections(
@@ -142,16 +119,6 @@ def chunks(
         )
 
 
-def logarithmic(scheme: Any, mode: Mode) -> bool:
-    if kind(mode) in ("image", "spectrum"):
-        return False
-    return (
-        scheme is None
-        or isinstance(scheme, compression.Current)
-        or (isinstance(scheme, compression.Dense) and scheme.precision.domain == "log")
-    )
-
-
 def exponentiated(log_probabilities: torch.Tensor) -> torch.Tensor:
     return log_probabilities.float().exp()
 
@@ -163,7 +130,7 @@ def shifted(log_probabilities: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor
 
 def log_products(
     form: torch.Tensor, decoded: torch.Tensor, unseen: torch.Tensor, minimum: float
-) -> tuple[torch.Tensor, torch.Tensor, int]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     form_values, form_largest = shifted(form)
     decoded_values, decoded_largest = shifted(decoded)
     unseen_values, unseen_largest = shifted(unseen)
@@ -174,33 +141,27 @@ def log_products(
         + form_largest[:, :, None]
         + decoded_largest[:, None, :],
         own.clamp_min(minimum).log() + form_largest + unseen_largest,
-        int((overlaps < minimum).sum()),
     )
 
 
 def products(
     form: torch.Tensor, decoded: torch.Tensor, unseen: torch.Tensor, minimum: float
-) -> tuple[torch.Tensor, torch.Tensor, int]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     overlaps = torch.einsum("qsv,gsv->sqg", form, decoded)
     own = torch.einsum("qsv,qsv->sq", form, unseen)
-    return (
-        overlaps.clamp_min(minimum).log(),
-        own.clamp_min(minimum).log(),
-        int((overlaps < minimum).sum()),
-    )
+    return overlaps.clamp_min(minimum).log(), own.clamp_min(minimum).log()
 
 
 class Overlaps(NamedTuple):
-    found: dict[str, torch.Tensor]
-    pairs: dict[str, torch.Tensor]
-    crossed: dict[str, torch.Tensor]
-    crossed_pairs: dict[str, torch.Tensor]
+    found: torch.Tensor
+    pairs: torch.Tensor
+    crossed: torch.Tensor | None
+    crossed_pairs: torch.Tensor | None
     bits: int
-    floored: float
 
 
 def log_overlaps(
-    scheme: Any,
+    scheme: compression.Current | None,
     mode: Mode,
     gallery: np.ndarray,
     queries: np.ndarray,
@@ -208,88 +169,70 @@ def log_overlaps(
     device: torch.device,
     window: torch.Tensor | None = None,
 ) -> Overlaps:
-    sides = ("exact",) if scheme is None else ("gallery", "both")
     shape = (gallery.shape[1], len(queries))
-    found = {side: torch.empty(*shape, len(gallery), device=device) for side in sides}
-    pairs = {side: torch.empty(*shape, device=device) for side in sides}
-    crossed: dict[str, torch.Tensor] = {}
-    crossed_pairs: dict[str, torch.Tensor] = {}
-    if logarithmic(scheme, mode):
+    found = torch.empty(*shape, len(gallery), device=device)
+    pairs = torch.empty(*shape, device=device)
+    crossed = crossed_pairs = None
+    if kind(mode) not in ("image", "spectrum"):
         overlap, minimum = log_products, torch.finfo(torch.float64).tiny
-        decode = compression.load
-        query_decode = compression.load
+        decode = query_decode = scheme and scheme.log_values
         exact = torch.Tensor.float
     else:
-        overlap, minimum = products, compression.floor(scheme, mode.vocabulary)
+        overlap = products
+        minimum = scheme.floor if scheme else torch.finfo(torch.float32).tiny
         decode = scheme and scheme.decode
         query_decode = scheme and partial(scheme.decode, side="query")
         exact = exponentiated
     if window is not None:
         selected = [row.nonzero()[:, 0] for row in window]
         targets = anywhere_forms(scheme, gallery, queries, selected, device)
-        for side in sides:
-            crossed[side] = torch.zeros(*shape, len(gallery), device=device)
-            crossed_pairs[side] = torch.zeros(*shape, device=device)
-            for position, slots in enumerate(selected):
-                crossed[side][slots, position] = -torch.inf
-                crossed_pairs[side][slots, position] = -torch.inf
-    bits = floored = 0
+        crossed = torch.zeros(*shape, len(gallery), device=device)
+        crossed_pairs = torch.zeros(*shape, device=device)
+        for position, slots in enumerate(selected):
+            crossed[slots, position] = -torch.inf
+            crossed_pairs[slots, position] = -torch.inf
+    bits = 0
     for part, rows, unseen in chunks(gallery, hidden, device):
-        query = exact(rows[queries])
         if scheme is None:
             decoded, decoded_unseen = exact(rows), exact(unseen)
-            forms = {"exact": query}
+            form = exact(rows[queries])
         else:
             stored = scheme.encode(rows)
             bits += scheme.bits(stored)
             decoded = decode(stored)
             decoded_unseen = decode(scheme.encode(unseen))
-            forms = {
-                "gallery": query,
-                "both": query_decode(scheme.encode(rows[queries])),
-            }
-        for side, form in forms.items():
-            found[side][part], pairs[side][part], below = overlap(
-                form, decoded, decoded_unseen, minimum
+            form = query_decode(scheme.encode(rows[queries]))
+        found[part], pairs[part] = overlap(form, decoded, decoded_unseen, minimum)
+        if crossed is None:
+            continue
+        for position, (slots, target) in enumerate(zip(selected, targets, strict=True)):
+            overlaps = torch.einsum("kv,gcv->kgc", target, decoded)
+            crossed[slots, position] = torch.maximum(
+                crossed[slots, position],
+                overlaps.clamp_min(minimum).log().amax(dim=-1),
             )
-            floored += below
-        for side, best in crossed.items():
-            own_best = crossed_pairs[side]
-            for position, (slots, form) in enumerate(
-                zip(selected, targets[side], strict=True)
-            ):
-                overlaps = torch.einsum("kv,gcv->kgc", form, decoded)
-                best[slots, position] = torch.maximum(
-                    best[slots, position],
-                    overlaps.clamp_min(minimum).log().amax(dim=-1),
-                )
-                own = torch.einsum("kv,cv->kc", form, decoded_unseen[position])
-                own_best[slots, position] = torch.maximum(
-                    own_best[slots, position],
-                    own.clamp_min(minimum).log().amax(dim=-1),
-                )
-    total = sum(values.numel() for values in found.values())
-    return Overlaps(found, pairs, crossed, crossed_pairs, bits, floored / total)
+            own = torch.einsum("kv,cv->kc", target, decoded_unseen[position])
+            crossed_pairs[slots, position] = torch.maximum(
+                crossed_pairs[slots, position],
+                own.clamp_min(minimum).log().amax(dim=-1),
+            )
+    return Overlaps(found, pairs, crossed, crossed_pairs, bits)
 
 
 def anywhere_forms(
-    scheme: Any,
+    scheme: compression.Current | None,
     gallery: np.ndarray,
     queries: np.ndarray,
     selected: list[torch.Tensor],
     device: torch.device,
-) -> dict[str, list[torch.Tensor]]:
+) -> list[torch.Tensor]:
     rows = [
         torch.from_numpy(gallery[query][slots.cpu().numpy()]).to(device)[None]
         for query, slots in zip(queries, selected, strict=True)
     ]
-    exact = [exponentiated(own)[0] for own in rows]
     if scheme is None:
-        return {"exact": exact}
-    return {
-        "gallery": exact,
-        "both": [scheme.decode(scheme.encode(own), side="query")[0] for own in rows],
-    }
+        return [exponentiated(own)[0] for own in rows]
+    return [scheme.decode(scheme.encode(own), side="query")[0] for own in rows]
 
 
 def ranks(scores: torch.Tensor) -> torch.Tensor:
@@ -321,7 +264,7 @@ def relevance(
 ) -> torch.Tensor:
     gallery = redshift[others]
     ranked = scores.masked_fill(~torch.isfinite(gallery), -torch.inf)
-    top = ranked.topk(min(TOPS[0], ranked.shape[-1]), dim=-1).indices
+    top = ranked.topk(min(TOP, ranked.shape[-1]), dim=-1).indices
     offsets = (gallery.gather(-1, top) - own[:, None]).abs() / (1 + own[:, None])
     return offsets.nanmedian(dim=-1).values
 
@@ -345,17 +288,18 @@ def summary(
     correlation = spearman(scores, exact)
     unseen = torch.einsum("sq,qs->q", pairs, weights)
     unseen_exact = torch.einsum("sq,qs->q", reference_pairs, weights)
-    own = redshift[positions]
-    known = torch.isfinite(own)
+    shared = (chosen(scores, TOP) & chosen(exact, TOP)).sum(dim=-1)
     result = {
         "spearman_median": float(correlation.median()),
         "spearman_p5": float(correlation.quantile(0.05)),
-        "spearman_min": float(correlation.min()),
+        f"top{TOP}_median": float((shared / min(TOP, galaxies - 1)).median()),
         "identity": float((unseen > scores.amax(dim=-1)).float().mean()),
         "identity_exact": float((unseen_exact > exact.amax(dim=-1)).float().mean()),
         "relevance": None,
         "relevance_exact": None,
     }
+    own = redshift[positions]
+    known = torch.isfinite(own)
     if known.any():
         result["relevance"] = float(
             relevance(scores, others, redshift, own)[known].nanmedian()
@@ -363,50 +307,7 @@ def summary(
         result["relevance_exact"] = float(
             relevance(exact, others, redshift, own)[known].nanmedian()
         )
-    for top in TOPS:
-        shared = (chosen(scores, top) & chosen(exact, top)).sum(dim=-1)
-        result[f"top{top}_median"] = float((shared / min(top, galaxies - 1)).median())
     return result
-
-
-def slot_errors(found: torch.Tensor, reference: torch.Tensor) -> dict[str, float]:
-    differences = (found - reference).abs().reshape(-1)
-    generator = torch.Generator(device=differences.device).manual_seed(SEED)
-    picked = torch.randint(
-        len(differences),
-        (min(DIFFERENCES, len(differences)),),
-        generator=generator,
-        device=differences.device,
-    )
-    sampled = differences[picked]
-    return {"median": float(sampled.median()), "p99": float(sampled.quantile(0.99))}
-
-
-def scan_ms(scheme: Any, gallery: np.ndarray, query: np.ndarray) -> float:
-    stored = scheme.encode(torch.from_numpy(gallery[:, :TIMED]).float())
-    form = torch.from_numpy(query[:TIMED]).float().exp()
-    timings = []
-    for _ in range(3):
-        start = time.perf_counter()
-        scheme.overlap(stored, form)
-        timings.append((time.perf_counter() - start) * 1000)
-    return round(min(timings), 3)
-
-
-def reference_check(
-    exact: np.ndarray, gallery: np.ndarray, device: torch.device
-) -> dict[str, Any]:
-    full = torch.from_numpy(exact).to(device).exp()
-    half = torch.from_numpy(gallery[: len(exact)]).to(device).float().exp()
-    differences = (
-        torch.einsum("asv,bsv->sab", half, half).log()
-        - torch.einsum("asv,bsv->sab", full, full).log()
-    ).abs()
-    return {
-        "galaxies": len(full),
-        "median": float(differences.median()),
-        "max": float(differences.max()),
-    }
 
 
 @app.function(
@@ -417,18 +318,15 @@ def reference_check(
     timeout=24 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
+def measure(name: str, sample: int, queries: int) -> dict[str, Any]:
     mode = next(mode for mode in predictions.MODES if mode.name == name)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    galaxies, fitting = draw(sample, fit)
-    started = time.perf_counter()
-    gallery, exact = predict(galaxies, mode, check=CHECK)
-    fitted, _ = predict(fitting, mode)
+    galaxies = draw(sample)
+    gallery = predict(galaxies, mode)
     seen = np.flatnonzero(pql.observed(mode.survey)[galaxies])
     rng = np.random.default_rng([SEED, predictions.MODES.index(mode)])
     picked = np.sort(rng.choice(seen, min(queries, len(seen)), replace=False))
-    unseen, _ = predict(galaxies[picked], mode, hidden=True)
-    prediction_s = time.perf_counter() - started
+    unseen = predict(galaxies[picked], mode, hidden=True)
 
     chosen_slots = [
         selections(mode, int(galaxies[position]), rng) for position in picked
@@ -442,168 +340,61 @@ def measure(name: str, sample: int, fit: int, queries: int) -> dict[str, Any]:
     positions = torch.from_numpy(picked).to(device)
     redshift = torch.from_numpy(redshifts()[galaxies]).float().to(device)
 
-    basis = compression.Basis(max(compression.RANKS))
-    basis.fit(
-        torch.from_numpy(fitted[start : start + GALAXY_CHUNK]).to(device)
-        for start in range(0, len(fitting), GALAXY_CHUNK)
+    basis = (
+        [torch.from_numpy(array).to(device) for array in pql.basis()[mode.survey][:2]]
+        if kind(mode) == "spectrum"
+        else []
     )
-    timed = {
-        scheme.name: scheme
-        for scheme in compression.schemes(mode, basis.to(torch.device("cpu")))
-    }
+    scheme = compression.Current(mode, *basis)
     window = masks["16"] if kind(mode) in ("image", "spectrum") else None
     reference = log_overlaps(None, mode, gallery, picked, unseen, device, window)
-    entries = {}
-    for scheme in compression.schemes(mode, basis):
-        found, pairs, crossed, crossed_pairs, bits, floored = log_overlaps(
-            scheme, mode, gallery, picked, unseen, device, window
+    stored = log_overlaps(scheme, mode, gallery, picked, unseen, device, window)
+    sizes = {
+        size: summary(
+            stored.found,
+            stored.pairs,
+            reference.found,
+            reference.pairs,
+            mask,
+            positions,
+            redshift,
         )
-        entries[scheme.name] = {
-            "bytes_per_galaxy": bits / 8 / len(gallery),
-            "scan_ms": scan_ms(timed[scheme.name], gallery, gallery[picked[0]]),
-            "floored": floored,
-            "slot_error": {
-                side: slot_errors(found[side], reference.found["exact"])
-                for side in found
-            },
-            "sizes": {
-                size: {
-                    side: summary(
-                        found[side],
-                        pairs[side],
-                        reference.found["exact"],
-                        reference.pairs["exact"],
-                        mask,
-                        positions,
-                        redshift,
-                    )
-                    for side in found
-                }
-                for size, mask in masks.items()
-            },
-        }
-        if window is not None:
-            entries[scheme.name]["sizes"]["16 anywhere"] = {
-                side: summary(
-                    crossed[side],
-                    crossed_pairs[side],
-                    reference.crossed["exact"],
-                    reference.crossed_pairs["exact"],
-                    window,
-                    positions,
-                    redshift,
-                )
-                for side in crossed
-            }
+        for size, mask in masks.items()
+    }
+    if window is not None:
+        sizes["16 anywhere"] = summary(
+            stored.crossed,
+            stored.crossed_pairs,
+            reference.crossed,
+            reference.crossed_pairs,
+            window,
+            positions,
+            redshift,
+        )
     return {
         "galaxies": galaxy_count(),
         "sample": len(galaxies),
-        "fit": len(fitting),
         "queries": len(picked),
-        "prediction_s": round(prediction_s, 1),
-        "fp16_reference_check": reference_check(exact, gallery, device)
-        if kind(mode) == "image"
-        else None,
-        "schemes": entries,
+        "bytes_per_galaxy": stored.bits / 8 / len(gallery),
+        "sizes": sizes,
         "environment": environment(),
         "device": str(device),
         "memory": memory(),
     }
 
 
-def meets(entry: dict[str, Any]) -> bool:
-    for result in entry["sizes"].values():
-        both = result["both"]
-        if (
-            not (both["spearman_median"] >= TARGETS["spearman_median"])
-            or not (both["spearman_p5"] >= TARGETS["spearman_p5"])
-            or both["top10_median"] < TARGETS["top10_median"]
-            or both["identity_exact"] - both["identity"] > TARGETS["identity"]
-        ):
-            return False
-        if both["relevance_exact"] is not None and not (
-            abs(both["relevance"] - both["relevance_exact"]) <= TARGETS["relevance"]
-        ):
-            return False
-    return True
-
-
-def worst(entry: dict[str, Any]) -> float:
-    medians = [result["both"]["spearman_median"] for result in entry["sizes"].values()]
-    return -math.inf if any(map(math.isnan, medians)) else min(medians)
-
-
-def choices(results: dict[str, dict[str, Any]], total: int) -> dict[str, Any]:
-    accurate = {
-        mode: min(
-            (name for name, entry in entries.items() if meets(entry)),
-            key=lambda name: entries[name]["bytes_per_galaxy"],
-            default=None,
-        )
-        for mode, entries in results.items()
-    }
-    thresholds = sorted(
-        {worst(entry) for entries in results.values() for entry in entries.values()},
-        reverse=True,
-    )
-    budgets = {}
-    for budget in BUDGETS:
-        budgets[f"{budget / 1e9:g}_gb"] = None
-        for threshold in thresholds:
-            picks = {
-                mode: min(
-                    (
-                        name
-                        for name, entry in entries.items()
-                        if worst(entry) >= threshold
-                    ),
-                    key=lambda name: entries[name]["bytes_per_galaxy"],
-                    default=None,
-                )
-                for mode, entries in results.items()
-            }
-            if None in picks.values():
-                continue
-            size = total * sum(
-                results[mode][name]["bytes_per_galaxy"] for mode, name in picks.items()
-            )
-            if size <= budget:
-                budgets[f"{budget / 1e9:g}_gb"] = {
-                    "worst_spearman_median": threshold,
-                    "corpus_bytes": size,
-                    "schemes": picks,
-                }
-                break
-    return {"accuracy": accurate, "budgets": budgets}
-
-
-def report(measured: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    total = next(iter(measured.values()))["galaxies"]
-    return {
-        "targets": TARGETS,
-        "modes": measured,
-        "choices": choices(
-            {name: result["schemes"] for name, result in measured.items()}, total
-        ),
-    }
-
-
 @app.local_entrypoint()
-def main(
-    sample: int = 1024, fit: int = 512, queries: int = 200, modes: str = ""
-) -> None:
+def main(sample: int = 1024, queries: int = 200, modes: str = "") -> None:
     every = [mode.name for mode in predictions.MODES]
     names = list(dict.fromkeys(modes.split(","))) if modes else every
     if unknown := sorted(set(names) - set(every)):
         raise SystemExit(f"Unknown modes {unknown}; choose from {every}.")
-    measured = measure.map(
-        names, kwargs={"sample": sample, "fit": fit, "queries": queries}
-    )
+    measured = measure.map(names, kwargs={"sample": sample, "queries": queries})
     written = {
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        **report(dict(zip(names, measured, strict=True))),
+        "modes": dict(zip(names, measured, strict=True)),
     }
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(written, indent=2) + "\n")

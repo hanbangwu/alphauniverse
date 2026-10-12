@@ -7,18 +7,9 @@ from typing import Any
 import modal
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 
 from app import pql
-from app.config import (
-    DATASET_REVISION,
-    DESI,
-    REDSHIFT,
-    SDSS,
-    SPECTRUM_SURVEYS,
-    TOKEN_SURVEYS,
-)
-from app.dataset import dataset
+from app.config import DATASET_REVISION, REDSHIFT, SPECTRUM_SURVEYS, TOKEN_SURVEYS
 from app.search import (
     FIRST_HSC_TABLE_VALUE,
     FIRST_LS_TABLE_VALUE,
@@ -28,35 +19,27 @@ from app.search import (
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import (
+    TABLE_VALUES,
     environment,
     git,
     memory,
     observed_spectrum_tokens,
+    redshifts,
     spectrum_query,
     wavelength,
     with_spectrum,
 )
 
-app = modal.App("alphauniverse-pql-quality")
+app = modal.App("alphauniverse-search-quality")
 image = build_image.add_local_python_source("modal_app")
 
-REPORT = Path("docs/benchmarks/pql_quality.json")
+REPORT = Path("docs/benchmarks/search_quality.json")
 WINDOW = 16
-TABLE_VALUES = 4
 TOP = 10
 POOL = 32
 FLIPS = 20
 NEAR = 0.01
 RESAMPLES = 10_000
-
-
-def redshifts() -> np.ndarray:
-    columns = dataset().data
-    return (
-        pc.coalesce(columns.column(f"Z{DESI}"), columns.column(f"Z{SDSS}"))
-        .fill_null(np.nan)
-        .to_numpy()
-    )
 
 
 def selections(galaxy: int, rng: np.random.Generator) -> dict[str, pql.Query]:
@@ -148,7 +131,7 @@ def interval(values: list[float]) -> dict[str, Any]:
     timeout=6 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def benchmark_pql_quality(sample: int) -> dict[str, Any]:
+def benchmark_search_quality(sample: int) -> dict[str, Any]:
     redshift = redshifts()
     known = np.isfinite(redshift)
     rng = np.random.default_rng(0)
@@ -211,7 +194,7 @@ def main(sample: int = 1000) -> None:
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        **benchmark_pql_quality.remote(sample),
+        **benchmark_search_quality.remote(sample),
     }
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")

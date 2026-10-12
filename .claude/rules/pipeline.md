@@ -2,6 +2,7 @@
 paths:
   - "app/encode.py"
   - "app/parametric_umap.py"
+  - "app/predictions.py"
   - "app/dataset.py"
   - "app/search.py"
   - "app/text_search.py"

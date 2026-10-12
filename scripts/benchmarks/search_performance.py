@@ -1,6 +1,5 @@
 import io
 import json
-import resource
 import subprocess
 import sys
 import tarfile
@@ -15,13 +14,7 @@ from typing import Any
 import numpy as np
 
 from app import pql
-from app.config import (
-    DATASET_REVISION,
-    N_SPECTRUM_TOKENS,
-    OBSERVATIONS,
-    galaxy_count,
-    labels,
-)
+from app.config import DATASET_REVISION
 from modal_app import (
     CACHE_PATH,
     SERVING_CPU,
@@ -32,16 +25,13 @@ from modal_app import (
 )
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
-    MATCHES,
     elapsed,
     environment,
     git,
     memory,
     queries,
     server,
-    spectrum_query,
     summary,
-    with_spectrum,
 )
 
 image = serving_image.add_local_python_source("modal_app")
@@ -56,203 +46,102 @@ STAGES = [
     "maps",
     "predicted",
 ]
-CLICK = ["agreements", "saliency"]
-KINDS = ("wall", "user", "system")
+MATCHES = (32, 64, 128)
+SAMPLES = 4
 SOURCES = ["app", "scripts", "modal_app.py"]
-WINDOW = 16
 REPORT = Path("docs/benchmarks/search_performance.json")
 ENTRY = (
-    "import json, sys, time\n"
-    "start = time.perf_counter()\n"
-    "import app.main\n"
-    "import_ms = round((time.perf_counter() - start) * 1000, 3)\n"
+    "import json, sys\n"
     "from app.config import DATASET_REVISION\n"
     "try:\n"
     "    from scripts.benchmarks.search_performance import stages\n"
     "except ModuleNotFoundError:\n"
     "    from scripts.benchmark import stages\n"
     "print(json.dumps(stages.local(int(sys.argv[1]))"
-    " | {'revision': DATASET_REVISION, 'import_ms': import_ms}))"
+    " | {'revision': DATASET_REVISION}))"
 )
 
 
-def mark() -> tuple[float, float, float]:
-    used = resource.getrusage(resource.RUSAGE_SELF)
-    return time.perf_counter(), used.ru_utime, used.ru_stime
-
-
-def usages(
-    names: list[str], marks: list[tuple[float, float, float]]
-) -> dict[str, dict[str, float]]:
-    return {
-        name: {
-            kind: (end - begin) * 1000
-            for kind, begin, end in zip(KINDS, start, stop, strict=True)
-        }
-        for name, (start, stop) in zip(names, pairwise(marks), strict=True)
-    }
-
-
-def rounded(usage: dict[str, float]) -> dict[str, float]:
-    return {kind: round(milliseconds, 3) for kind, milliseconds in usage.items()}
-
-
-def load_times() -> dict[str, dict[str, float]]:
-    loads = {
-        "galaxy_count": galaxy_count,
-        "labels": labels,
-        "predictions": pql.predictions,
-        "basis": pql.basis,
-        **{
-            f"observed_{column}": partial(pql.observed, column)
-            for column in OBSERVATIONS
-        },
-    }
-    marks = [mark()]
-    for load in loads.values():
-        load()
-        marks.append(mark())
-    return usages(list(loads), marks)
-
-
-def stage_times(query: pql.Query) -> dict[str, dict[str, float]]:
-    pql.MATRICES.clear()
-    marks = [mark()]
+def stage_times(query: pql.Query) -> dict[str, float]:
+    marks = [time.perf_counter()]
     selected = pql.selection(query)
-    marks.append(mark())
+    marks.append(time.perf_counter())
     forms = pql.galaxy_forms(query.galaxy)
     peaks = pql.slot_peaks(forms)
-    marks.append(mark())
+    marks.append(time.perf_counter())
     totals = pql.mode_totals(query.galaxy, selected, {})
-    marks.append(mark())
+    marks.append(time.perf_counter())
     scored = pql.combine(totals)
-    marks.append(mark())
+    marks.append(time.perf_counter())
     pql.similarity(pql.fractions(pql.selected_peaks(peaks, selected), totals))
-    marks.append(mark())
+    marks.append(time.perf_counter())
     order = np.argsort(-scored, kind="stable")
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
-    marks.append(mark())
+    marks.append(time.perf_counter())
     pql.maps(forms, peaks, pql.gathered(galaxies))
-    marks.append(mark())
+    marks.append(time.perf_counter())
     pql.predicted(selected, galaxies)
-    marks.append(mark())
-    pql.agreements(query.galaxy)
-    marks.append(mark())
-    pql.saliency(query)
-    marks.append(mark())
-    return usages([*STAGES, *CLICK], marks)
+    marks.append(time.perf_counter())
+    return {
+        name: (stop - start) * 1000
+        for name, (start, stop) in zip(STAGES, pairwise(marks), strict=True)
+    }
+
+
+def matrix_times(batch: list[pql.Query]) -> dict[str, Any]:
+    pql.MATRICES.clear()
+    builds = [elapsed(partial(pql.agreements, query.galaxy)) for query in batch]
+    clicks = [elapsed(partial(pql.saliency, query)) for query in batch]
+    return {"agreements": summary(builds), "saliency": summary(clicks)}
 
 
 def whole_searches(runs: int, matches: int) -> dict[str, Any]:
-    galaxies = (
-        np.random.default_rng(1)
-        .choice(galaxy_count(), pql.AGREEMENT_GALAXIES, replace=False)
-        .tolist()
-    )
+    batch = queries(runs + 1, IMAGE_TOKENS, matches)
+    pql.search(batch[0])
+    return summary([elapsed(partial(pql.search, query)) for query in batch[1:]])
+
+
+def anywhere_times(runs: int, galaxies: list[int]) -> dict[str, Any]:
     batch = [
-        query.model_copy(update={"galaxy": galaxy})
+        query.model_copy(update={"galaxy": galaxy, "anywhere": ("ls_image",)})
         for query, galaxy in zip(
-            queries(runs + len(galaxies), IMAGE_TOKENS, matches), cycle(galaxies)
+            queries(runs + 1, IMAGE_TOKENS, MATCHES[0]), cycle(galaxies)
         )
     ]
-    for query in batch[: len(galaxies)]:
-        pql.search(query)
-    return summary(
-        [elapsed(partial(pql.search, query)) for query in batch[len(galaxies) :]]
-    )
-
-
-def anywhere_queries(count: int, matches: int) -> dict[str, list[pql.Query]]:
-    rng = np.random.default_rng(4)
-    holders = rng.choice(np.flatnonzero(with_spectrum()), count)
-    first = rng.integers(N_SPECTRUM_TOKENS - WINDOW + 1, size=count)
-    spectra = [
-        spectrum_query(int(galaxy), tuple(range(start, start + WINDOW)))
-        for galaxy, start in zip(holders, first, strict=True)
-    ]
-    return {
-        "ls_image": [
-            query.model_copy(update={"anywhere": ("ls_image",)})
-            for query in queries(count, IMAGE_TOKENS, matches)
-        ],
-        "spectrum": [
-            query.model_copy(
-                update={"anywhere": tuple(pql.selection(query)), "matches": matches}
-            )
-            for query in spectra
-        ],
-    }
-
-
-def anywhere_times(runs: int, matches: int) -> dict[str, Any]:
-    timed = {}
-    for kind, batch in anywhere_queries(runs + 1, matches).items():
-        searches, clicks = [], []
-        for query in batch:
-            pql.agreements(query.galaxy)
-            searches.append(elapsed(partial(pql.search, query)))
-            clicks.append(elapsed(partial(pql.saliency, query)))
-        timed[kind] = {
-            "cold_ms": {
-                "search": round(searches[0], 3),
-                "saliency": round(clicks[0], 3),
-            },
-            "search": summary(searches[1:]),
-            "saliency": summary(clicks[1:]),
-        }
-    return timed
+    searches = [elapsed(partial(pql.search, query)) for query in batch]
+    clicks = [elapsed(partial(pql.saliency, query)) for query in batch]
+    return {"search": summary(searches[1:]), "saliency": summary(clicks[1:])}
 
 
 @app.function(image=image)
-def stages(runs: int, matches: int = 32) -> dict[str, Any]:
-    loads = load_times()
-
+def stages(runs: int, matches: int = MATCHES[0]) -> dict[str, Any]:
     batch = queries(runs + 1, IMAGE_TOKENS, matches)
-    cold = stage_times(batch[0])
-    samples: dict[str, list[dict[str, float]]] = {name: [] for name in cold}
-
-    for query in batch[1:]:
-        for name, usage in stage_times(query).items():
-            samples[name].append(usage)
-
+    stage_times(batch[0])
+    samples = [stage_times(query) for query in batch[1:]]
     medians = {
-        name: float(np.median([usage["wall"] for usage in values]))
-        for name, values in samples.items()
+        name: float(np.median([sample[name] for sample in samples])) for name in STAGES
     }
-    means = {
-        name: {
-            kind: float(np.mean([usage[kind] for usage in values])) for kind in KINDS
-        }
-        for name, values in samples.items()
-    }
-    total = sum(medians[name] for name in STAGES)
+    total = sum(medians.values())
+    clicked = batch[1 : SAMPLES + 1]
     return {
         "environment": environment(),
-        "load_ms": {name: round(usage["wall"], 3) for name, usage in loads.items()},
         "runs": runs,
         "matches": matches,
-        "cold_stages_ms": {
-            name: round(usage["wall"], 3) for name, usage in cold.items()
-        },
         "total_p50_ms": round(total, 3),
         "stages": {
             name: {
-                "p50_ms": round(medians[name], 3),
-                "share": round(medians[name] / total, 4),
+                "p50_ms": round(median, 3),
+                "share": round(median / total, 4),
             }
-            for name in STAGES
+            for name, median in medians.items()
         },
-        "click_p50_ms": {name: round(medians[name], 3) for name in CLICK},
+        "matrices": matrix_times(clicked),
         "searches": {
             f"matches={asked}": whole_searches(runs, asked) for asked in MATCHES
         },
-        "anywhere": anywhere_times(runs, matches),
-        "usage_ms": {
-            "loads": {name: rounded(usage) for name, usage in loads.items()},
-            "stages": {name: rounded(mean) for name, mean in means.items()},
-        },
+        "anywhere": anywhere_times(runs, [query.galaxy for query in clicked]),
         "memory": memory(),
     }
 
@@ -269,8 +158,8 @@ def benchmark_search_performance(
 ) -> dict[str, Any]:
     report = {"environment": environment(), "order": order}
     root = Path(tempfile.mkdtemp())
-    for name, source in sources.items():
-        with tarfile.open(fileobj=io.BytesIO(source)) as bundle:
+    for name, source_archive in sources.items():
+        with tarfile.open(fileobj=io.BytesIO(source_archive)) as bundle:
             bundle.extractall(root / name, filter="data")
 
     rounds: dict[str, list[dict[str, Any]]] = {name: [] for name in sources}
@@ -299,15 +188,8 @@ def benchmark_search_performance(
 def main(runs: int = 30) -> None:
     if git("status", "--porcelain"):
         raise SystemExit("Commit every change first: the benchmark times commits.")
-    git("fetch", "origin", "main")
-    commits = {
-        "after": git("rev-parse", "HEAD"),
-        "before": git("rev-parse", "origin/main"),
-    }
-    code = {
-        git("rev-parse", *(f"{commit}:{source}" for source in SOURCES))
-        for commit in commits.values()
-    }
+    commits = {"current": git("rev-parse", "HEAD")}
+    current_code = git("rev-parse", *(f"HEAD:{source}" for source in SOURCES))
     notes = []
     stored = json.loads(REPORT.read_text()).get("best") if REPORT.exists() else None
     if stored:
@@ -319,13 +201,16 @@ def main(runs: int = 30) -> None:
             notes.append(f"best {stored['commit']} is not in this clone")
             stored = None
         else:
-            if stored_code not in code:
+            if stored_code != current_code:
                 commits["best"] = stored["commit"]
     names = list(commits)
     sources = {
         name: subprocess.check_output(["git", "archive", commit, *SOURCES])
         for name, commit in commits.items()
     }
+    timed = benchmark_search_performance.remote(
+        sources, names + names[::-1] if len(names) > 1 else names, runs
+    )
     report = {
         "commit": git("describe", "--always"),
         "commits": commits,
@@ -333,10 +218,7 @@ def main(runs: int = 30) -> None:
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "server": server(),
-        "stages": benchmark_search_performance.remote(
-            sources, names + names[::-1], runs
-        )
-        | {"locked_dependencies": "after"},
+        "stages": timed | {"locked_dependencies": "current"},
     }
     means = {
         name: float(np.mean([entry["total_p50_ms"] for entry in rounds]))

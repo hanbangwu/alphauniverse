@@ -1,54 +1,17 @@
 {
-  "commit": "3005bac-dirty",
+  "commit": "11bdd92",
   "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
-  "date": "2026-10-05T15:26:20+00:00",
-  "job": {
-    "cpu": 16,
-    "memory_mb": [
-      32768,
-      131072
-    ],
-    "gpu": null
-  },
+  "date": "2026-10-12T00:20:01+00:00",
   "environment": {
     "cpu": {
       "vendor_id": "AuthenticAMD",
       "cpu family": "25",
-      "model": "17",
+      "model": "1",
       "model name": "unknown"
     },
     "cpu_count": 32,
-    "faiss_threads": 16,
     "omp_num_threads": "16",
     "thread_pools": [
-      {
-        "user_api": "blas",
-        "internal_api": "openblas",
-        "num_threads": 16,
-        "prefix": "libscipy_openblas",
-        "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-61654e39.so",
-        "version": "0.3.34.0.0",
-        "threading_layer": "pthreads",
-        "architecture": "SkylakeX"
-      },
-      {
-        "user_api": "openmp",
-        "internal_api": "openmp",
-        "num_threads": 16,
-        "prefix": "libgomp",
-        "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libgomp-e985bcbb.so.1.0.0",
-        "version": null
-      },
-      {
-        "user_api": "blas",
-        "internal_api": "openblas",
-        "num_threads": 16,
-        "prefix": "libopenblas",
-        "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libopenblaso-r0-d77a1985.3.15.so",
-        "version": "0.3.15",
-        "threading_layer": "openmp",
-        "architecture": "Zen"
-      },
       {
         "user_api": "openmp",
         "internal_api": "openmp",
@@ -62,22 +25,46 @@
         "internal_api": "openblas",
         "num_threads": 16,
         "prefix": "libscipy_openblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+        "version": "0.3.34.106.0",
+        "threading_layer": "pthreads",
+        "architecture": "Haswell"
+      },
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 16,
+        "prefix": "libscipy_openblas",
         "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
         "version": "0.3.31.dev",
         "threading_layer": "pthreads",
-        "architecture": "SkylakeX"
+        "architecture": "Haswell"
+      },
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 16,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/scikit_learn.libs/libgomp-e985bcbb.so.1.0.0",
+        "version": null
       }
     ]
   },
   "size": 10000,
   "neighbours": {
     "15": {
-      "preservation": 0.3064,
-      "trustworthiness": 0.8926
+      "preservation": 0.302,
+      "trustworthiness": 0.8943
     },
     "100": {
-      "preservation": 0.3336,
-      "trustworthiness": 0.8173
+      "preservation": 0.3357,
+      "trustworthiness": 0.826
     }
+  },
+  "memory": {
+    "peak_rss_mib": 74660.0,
+    "arrow_peak_mib": 221.2,
+    "resident_files_mib": 3112.5,
+    "resident_anonymous_mib": 869.5
   }
 }

@@ -9,10 +9,10 @@ on:
         type: choice
         options:
           - search_performance
+          - search_quality
           - backend_performance
           - projection_quality
           - text_search_quality
-          - pql_quality
           - compression_quality
       args:
         description: Arguments for the script, such as --runs 50; empty keeps its defaults
