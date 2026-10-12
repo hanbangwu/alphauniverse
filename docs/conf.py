@@ -20,7 +20,6 @@ author = "Hanbang Wu, Biprateep Dey, Nolan Koblischke, Joshua Speagle"
 
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.viewcode",
     "bokeh.sphinxext.bokeh_plot",
     "sphinxcontrib.openapi",
 ]
