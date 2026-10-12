@@ -338,6 +338,7 @@ def test_position_independent_saliency_builds_no_agreement_matrix(
     query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(pql, "MATRICES", OrderedDict())
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
 
     pql.saliency(query.model_copy(update={"anywhere": ("ls_image",)}))
 
@@ -351,7 +352,7 @@ def test_a_later_position_independent_saliency_on_the_galaxy_reuses_its_sample(
     anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
     first = pql.saliency(anywhere)
     monkeypatch.setattr(
-        pql, "sampled_values", lambda *arguments: pytest.fail("sample recomputed")
+        pql, "sampled", lambda *arguments: pytest.fail("sample recomputed")
     )
 
     np.testing.assert_array_equal(pql.saliency(anywhere), first)

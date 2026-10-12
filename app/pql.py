@@ -586,24 +586,18 @@ def maps(
 
 
 def saliency(query: Selection) -> np.ndarray:
-    chosen = columns(selection(query))
-    if not query.anywhere:
+    if query.anywhere:
+        found = cached(
+            SAMPLES,
+            (query.galaxy, frozenset(query.anywhere)),
+            partial(sampled, query.galaxy, query.anywhere),
+        )
+        others = np.ones(len(found.values), bool)
+    else:
         found = agreements(query.galaxy)
         others = np.arange(len(found.values)) != query.galaxy
-        return partial_correlations(
-            found.values, found.spread, found.totals, chosen, others
-        )
-    values = cached(
-        SAMPLES,
-        (query.galaxy, frozenset(query.anywhere)),
-        partial(sampled_values, query.galaxy, query.anywhere),
-    )
     return partial_correlations(
-        values,
-        values.std(axis=0),
-        values.sum(axis=1),
-        chosen,
-        np.ones(len(values), bool),
+        found.values, found.spread, found.totals, columns(selection(query)), others
     )
 
 
@@ -614,7 +608,7 @@ def saliency_sample(galaxy: int) -> np.ndarray:
     )
 
 
-def sampled_values(galaxy: int, anywhere: tuple[str, ...]) -> np.ndarray:
+def sampled(galaxy: int, anywhere: tuple[str, ...]) -> Agreements:
     forms = galaxy_forms(galaxy)
     parts = slices(gathered(saliency_sample(galaxy)))
     values = threaded(partial(agreement_rows, forms=forms), parts).astype(np.float64)
@@ -622,7 +616,7 @@ def sampled_values(galaxy: int, anywhere: tuple[str, ...]) -> np.ndarray:
         values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = threaded(
             partial(best_log_overlaps, mode=mode, form=forms[mode]), parts
         )
-    return values
+    return Agreements(values, values.std(axis=0), values.sum(axis=1))
 
 
 def partial_correlations(
