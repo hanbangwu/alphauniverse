@@ -246,13 +246,8 @@ dev = [
 docs = [
     { name = "bokeh" },
     { name = "furo" },
-    { name = "polymathic-aion", extra = ["torch"] },
-    { name = "scikit-learn" },
     { name = "sphinx" },
     { name = "sphinxcontrib-openapi" },
-    { name = "torchvision" },
-    { name = "umap-learn" },
-    { name = "wandb" },
 ]
 
 [package.metadata]
@@ -291,13 +286,8 @@ dev = [
 docs = [
     { name = "bokeh", specifier = ">=3.10.0" },
     { name = "furo", specifier = ">=2025.12.19" },
-    { name = "polymathic-aion", extras = ["torch"], specifier = ">=0.0.2" },
-    { name = "scikit-learn", specifier = ">=1.9.1" },
     { name = "sphinx", specifier = ">=9.1.0" },
     { name = "sphinxcontrib-openapi", specifier = ">=0.10.0" },
-    { name = "torchvision", specifier = ">=0.29.1" },
-    { name = "umap-learn", specifier = ">=0.5.12" },
-    { name = "wandb", specifier = ">=0.30.0" },
 ]
 
 [[package]]

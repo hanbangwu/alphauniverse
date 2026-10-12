@@ -53,7 +53,7 @@ AION was trained by hiding some of a galaxy's tokens and predicting them from th
 Similarity search
 -----------------
 
-You pick a galaxy :math:`q` and a selection: image cells, spectrum tokens, catalogue values, or any mix. Each kind is a *mode* :math:`m` with selected slots :math:`S_m`. alphaUniverse then ranks every other galaxy :math:`g` by how well AION's predictions for it agree with its predictions for :math:`q` at those slots (:py:func:`app.pql.search`).
+You pick a galaxy :math:`q` and a selection: image cells, spectrum tokens, catalogue values, or any mix. Each kind is a *mode* :math:`m` with selected slots :math:`S_m`. alphaUniverse then ranks every other galaxy :math:`g` by how well AION's predictions for it agree with its predictions for :math:`q` at those slots (``app.pql.search``).
 
 At one slot the agreement is the *overlap*, the probability that a code drawn from each prediction is the same:
 
@@ -103,7 +103,7 @@ Query maps
 
 Before you search, the query galaxy's panels can shade its own slots.
 
-**This galaxy** shows, at each slot :math:`c` of an image or spectrum mode :math:`m`, how alike AION predicts it is to the selection in that mode: the best cosine between predicted distributions, :math:`\max_{s \in S_m} \cos(p_{q,s}, p_{q,c})` (:py:func:`app.pql.cosines`). Catalogue values are not shaded.
+**This galaxy** shows, at each slot :math:`c` of an image or spectrum mode :math:`m`, how alike AION predicts it is to the selection in that mode: the best cosine between predicted distributions, :math:`\max_{s \in S_m} \cos(p_{q,s}, p_{q,c})` (``app.pql.cosines``). Catalogue values are not shaded.
 
 **Population** asks a different question: across the whole field, where does agreeing with :math:`q` go with matching the selection? For each slot :math:`c` it takes, over every other galaxy, the partial correlation between the galaxy's selection score :math:`S(g) = \sum_{s \in S} \log O_s(q, g)` and its agreement there, :math:`A_c(g) = \log O_c(q, g)`, controlling for its mean agreement outside the selection, :math:`C(g)`:
 
@@ -112,7 +112,7 @@ Before you search, the query galaxy's panels can shade its own slots.
    \rho_c = \frac{r(A_c, S) - r(A_c, C)\, r(S, C)}
    {\sqrt{\bigl(1 - r(A_c, C)^2\bigr)\bigl(1 - r(S, C)^2\bigr)}},
 
-where :math:`r` is the Pearson correlation over galaxies (:py:func:`app.pql.saliency`). A high :math:`\rho_c` marks a slot whose agreement predicts a good match beyond the galaxies simply resembling :math:`q` overall. With Any position, the correlation runs over the 256 best matches and 256 random other galaxies.
+where :math:`r` is the Pearson correlation over galaxies (``app.pql.saliency``). A high :math:`\rho_c` marks a slot whose agreement predicts a good match beyond the galaxies simply resembling :math:`q` overall. With Any position, the correlation runs over the 256 best matches and 256 random other galaxies.
 
 Text search
 -----------
@@ -127,7 +127,7 @@ For each galaxy, alphaUniverse pairs two vectors: AION's mean embedding :math:`a
    {\lVert W_2\, \mathrm{GELU}(W_1 a + b_1) + b_2 \rVert},
    \qquad W_1 \in \mathbb{R}^{2048 \times 768},
 
-is trained on 70% of the galaxies to minimise :math:`1 - \cos(f(a_g), e_g)`, carrying AION's view of each galaxy into EmbeddingGemma's space. A query is embedded by EmbeddingGemma as :math:`t`, and galaxies are ranked by :math:`\cos(f(a_g), t)` (:py:func:`app.text_search.text_search`). :doc:`benchmarks` measures how well these rankings recover PROVABGS properties.
+is trained on 70% of the galaxies to minimise :math:`1 - \cos(f(a_g), e_g)`, carrying AION's view of each galaxy into EmbeddingGemma's space. A query is embedded by EmbeddingGemma as :math:`t`, and galaxies are ranked by :math:`\cos(f(a_g), t)` (``app.text_search.text_search``). :doc:`benchmarks` measures how well these rankings recover PROVABGS properties.
 
 What the panels show
 --------------------
