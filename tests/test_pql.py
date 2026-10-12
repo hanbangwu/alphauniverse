@@ -46,14 +46,26 @@ def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
     return values.astype(np.float64).reshape(rows.num_rows, *shape)
 
 
-def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
-    codes = column(rows, f"{survey}_codes", N_IMAGE_TOKENS, TOP_CODES).astype(np.int64)
-    probabilities = np.exp(
-        column(rows, f"{survey}_log_probabilities", N_IMAGE_TOKENS, TOP_CODES)
+def top_codes(rows: pa.Table, survey: str, name: str) -> np.ndarray:
+    return np.concatenate(
+        [
+            column(rows, f"{survey}_{name}", N_IMAGE_TOKENS, pql.KEPT),
+            column(
+                rows, f"{survey}_query_{name}", N_IMAGE_TOKENS, TOP_CODES - pql.KEPT
+            ),
+        ],
+        axis=-1,
     )
-    rest = np.exp(column(rows, f"{survey}_tails", N_IMAGE_TOKENS)) + probabilities[
-        ..., kept:
-    ].sum(axis=-1)
+
+
+def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
+    codes = top_codes(rows, survey, "codes").astype(np.int64)
+    probabilities = top_codes(rows, survey, "probabilities")
+    rest = (
+        column(rows, f"{survey}_rest", N_IMAGE_TOKENS)
+        if kept == pql.KEPT
+        else column(rows, f"{survey}_tails", N_IMAGE_TOKENS)
+    )
     dense = np.repeat(
         (rest / (IMAGE_VOCABULARY - kept))[..., None], IMAGE_VOCABULARY, axis=-1
     )
@@ -76,7 +88,7 @@ def dense(rows: pa.Table, mode: str, kept: int) -> np.ndarray:
     if kind == "spectrum":
         return dense_spectrum_tokens(rows, survey)
     name, count, vocabulary = TABLE_MODES[mode]
-    return np.exp(column(rows, name, count, vocabulary))
+    return column(rows, name, count, vocabulary)
 
 
 def log_overlaps(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.ndarray:
@@ -129,8 +141,9 @@ def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
 
 
 def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
-    table: pa.Table, query: pql.Query
+    table: pa.Table, query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(pql, "BLOCK", 200)
     galaxies = np.asarray([3, 0])
     own = table.slice(GALAXY, 1)
     shown = table.take(galaxies)
@@ -159,13 +172,16 @@ def test_a_search_reads_what_the_agreement_matrix_holds(query: pql.Query) -> Non
 
     found = pql.agreements(GALAXY).values[results.galaxies]
     for mode, slots in pql.selection(query).items():
-        np.testing.assert_array_equal(
+        np.testing.assert_allclose(
             results.sums[mode],
             found[:, pql.OFFSETS[mode] + slots].sum(axis=1, dtype=np.float64),
+            rtol=1e-5 if mode in TABLE_MODES else 0,
         )
     peaks = pql.slot_peaks(pql.galaxy_forms(GALAXY))
     for mode, values in pql.by_mode(np.exp(found - peaks)).items():
-        np.testing.assert_array_equal(results.maps[mode], values)
+        np.testing.assert_allclose(
+            results.maps[mode], values, rtol=1e-5 if mode == "table_values" else 0
+        )
 
 
 def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
@@ -180,7 +196,7 @@ def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
     table: pa.Table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(pql, "SUMS", OrderedDict())
-    monkeypatch.setattr(pql, "BLOCK_BYTES", 1)
+    monkeypatch.setattr(pql, "CHUNK", 2)
     selected = {"ls_image": (0, 17, 300), "desi_spectrum": (40, 41, 42)}
     query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
 
@@ -220,7 +236,7 @@ def test_a_position_independent_mode_without_a_selection_is_rejected(
 def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
     table: pa.Table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pql, "BLOCK_BYTES", 1)
+    monkeypatch.setattr(pql, "CHUNK", 2)
     own = table.slice(GALAXY, 1)
     slots = [0, 17, 300]
     query = pql.Query(galaxy=GALAXY, ls_image=tuple(slots), anywhere=("ls_image",))
@@ -250,21 +266,16 @@ def test_a_cached_matrix_is_served_while_another_galaxy_builds(tree: Path) -> No
         assert served
 
 
-def test_the_saliency_sample_is_the_best_matches_and_other_galaxies(
-    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+def test_the_saliency_sample_is_other_galaxies_fixed_by_the_galaxy(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pql, "SALIENCY_MATCHES", 3)
-    monkeypatch.setattr(pql, "SALIENCY_BACKGROUND", 4)
-    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+    monkeypatch.setattr(pql, "SALIENCY_SAMPLE", 7)
 
-    sample = pql.saliency_sample(anywhere)
+    sample = pql.saliency_sample(GALAXY)
 
-    scores = pql.scores(anywhere)
-    others = np.delete(np.arange(len(scores)), GALAXY)
-    best = others[np.argsort(-scores[others], kind="stable")][:3]
-    assert sample[:3].tolist() == best.tolist()
     assert len(set(sample.tolist())) == 7
     assert GALAXY not in sample
+    np.testing.assert_array_equal(pql.saliency_sample(GALAXY), sample)
 
 
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
@@ -306,21 +317,46 @@ def test_saliency_is_the_partial_correlation_over_the_other_galaxies(
 
 
 def test_position_independent_saliency_uses_each_slot_s_best_overlap(
-    table: pa.Table, query: pql.Query
+    table: pa.Table, query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(pql, "SALIENCY_SAMPLE", 7)
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
     anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
-    values = pql.agreements(GALAXY).values.astype(np.float64)
-    others = np.delete(np.arange(len(values)), GALAXY)
-    gallery = dense(table.take(others), "ls_image", pql.KEPT)
+    sample = pql.saliency_sample(GALAXY)
+    values = pql.agreements(GALAXY).values[sample].astype(np.float64)
+    gallery = dense(table.take(sample), "ls_image", pql.KEPT)
     own = dense(table.slice(GALAXY, 1), "ls_image", TOP_CODES)[0]
-    best = np.log(gallery @ own.T).max(axis=1)
     start = pql.OFFSETS["ls_image"]
-    values = values[others]
-    values[:, start : start + N_IMAGE_TOKENS] = best
+    values[:, start : start + N_IMAGE_TOKENS] = np.log(gallery @ own.T).max(axis=1)
 
     expected = partial_correlations(values, pql.columns(pql.selection(anywhere)))
 
     np.testing.assert_allclose(pql.saliency(anywhere), expected, atol=1e-4)
+
+
+def test_position_independent_saliency_builds_no_agreement_matrix(
+    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pql, "MATRICES", OrderedDict())
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
+
+    pql.saliency(query.model_copy(update={"anywhere": ("ls_image",)}))
+
+    assert not pql.MATRICES
+
+
+def test_a_later_position_independent_saliency_on_the_galaxy_reuses_its_sample(
+    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
+    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+    first = pql.saliency(anywhere)
+    monkeypatch.setattr(
+        pql, "sampled", lambda *arguments: pytest.fail("sample recomputed")
+    )
+
+    np.testing.assert_array_equal(pql.saliency(anywhere), first)
+    pql.saliency(anywhere.model_copy(update={"ls_image": anywhere.ls_image[:1]}))
 
 
 def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
@@ -389,18 +425,27 @@ def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
     np.testing.assert_allclose(pql.scores(query), expected)
 
 
-def test_table_value_overlaps_stay_finite_where_float32_probabilities_underflow() -> (
-    None
-):
-    query = np.full((1, VOCABULARY), -120.0, dtype=np.float32)
-    gallery = np.full((3, 1, VOCABULARY), -120.0, dtype=np.float32)
-    query[0, 0] = 0
-    gallery[:, 0, 1] = 0
+@pytest.mark.parametrize(
+    ("mode", "vocabulary"), [("ls_image", IMAGE_VOCABULARY), ("ls_table", VOCABULARY)]
+)
+def test_aligned_overlaps_below_float32_range_are_floored(
+    table: pa.Table, mode: str, vocabulary: int
+) -> None:
+    form = np.zeros((1, vocabulary), dtype=np.float32)
 
-    found = pql.table_value_overlaps(gallery, query)
+    found = pql.log_overlaps(table.to_batches()[0], mode, np.asarray([0]), form)
 
-    expected = np.log(np.exp(gallery.astype(np.float64) + query).sum(axis=-1))
-    np.testing.assert_allclose(found, expected, rtol=1e-6)
+    np.testing.assert_allclose(found, np.log(pql.PROBABILITY_FLOOR), rtol=1e-6)
+
+
+def test_position_independent_overlaps_below_float32_range_are_floored(
+    table: pa.Table,
+) -> None:
+    form = np.zeros((1, IMAGE_VOCABULARY), dtype=np.float32)
+
+    found = pql.best_log_overlaps(table.to_batches()[0], "ls_image", form)
+
+    np.testing.assert_allclose(found, np.log(pql.PROBABILITY_FLOOR), rtol=1e-6)
 
 
 def test_a_repeated_slot_counts_once(tree: Path) -> None:

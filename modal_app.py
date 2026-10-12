@@ -13,6 +13,7 @@ SERVING_MEMORY = (8 * 1024, 32 * 1024)
 SERVING_MAX_INPUTS = 16
 SERVING_MAX_CONTAINERS = 1
 SERVING_SCALEDOWN_WINDOW = 5 * 60
+SERVING_ENVIRONMENT = {"OPENBLAS_NUM_THREADS": "1"}
 
 app = modal.App("alphauniverse")
 
@@ -143,6 +144,7 @@ serving_image = (
 
 @app.function(
     image=serving_image,
+    env=SERVING_ENVIRONMENT,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
     timeout=10 * 60,

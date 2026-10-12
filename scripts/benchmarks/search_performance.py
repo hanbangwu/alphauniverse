@@ -7,7 +7,7 @@ import tempfile
 import time
 from datetime import UTC, datetime
 from functools import partial
-from itertools import cycle, pairwise
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ from app.config import DATASET_REVISION
 from modal_app import (
     CACHE_PATH,
     SERVING_CPU,
+    SERVING_ENVIRONMENT,
     SERVING_MEMORY,
     app,
     cache_volume,
@@ -103,16 +104,18 @@ def whole_searches(runs: int, matches: int) -> dict[str, Any]:
     return summary([elapsed(partial(pql.search, query)) for query in batch[1:]])
 
 
-def anywhere_times(runs: int, galaxies: list[int]) -> dict[str, Any]:
-    batch = [
-        query.model_copy(update={"galaxy": galaxy, "anywhere": ("ls_image",)})
-        for query, galaxy in zip(
-            queries(runs + 1, IMAGE_TOKENS, MATCHES[0]), cycle(galaxies)
-        )
-    ]
-    searches = [elapsed(partial(pql.search, query)) for query in batch]
-    clicks = [elapsed(partial(pql.saliency, query)) for query in batch]
-    return {"search": summary(searches[1:]), "saliency": summary(clicks[1:])}
+def anywhere_times(runs: int) -> dict[str, Any]:
+    searches, clicks, repeats = [], [], []
+    for query in queries(runs + 1, IMAGE_TOKENS, MATCHES[0]):
+        anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+        searches.append(elapsed(partial(pql.search, anywhere)))
+        clicks.append(elapsed(partial(pql.saliency, anywhere)))
+        repeats.append(elapsed(partial(pql.saliency, anywhere)))
+    return {
+        "search": summary(searches[1:]),
+        "saliency": summary(clicks[1:]),
+        "repeat_saliency": summary(repeats[1:]),
+    }
 
 
 @app.function(image=image)
@@ -141,13 +144,14 @@ def stages(runs: int, matches: int = MATCHES[0]) -> dict[str, Any]:
         "searches": {
             f"matches={asked}": whole_searches(runs, asked) for asked in MATCHES
         },
-        "anywhere": anywhere_times(runs, [query.galaxy for query in clicked]),
+        "anywhere": anywhere_times(runs),
         "memory": memory(),
     }
 
 
 @app.function(
     image=image,
+    env=SERVING_ENVIRONMENT,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
     volumes={CACHE_PATH: cache_volume},

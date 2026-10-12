@@ -10,7 +10,13 @@ import numpy as np
 import torch
 
 from app import pql, predictions
-from app.config import DATASET_REVISION, SEED, STORE_COLUMNS, galaxy_count
+from app.config import (
+    DATASET_REVISION,
+    PROBABILITY_FLOOR,
+    SEED,
+    STORE_COLUMNS,
+    galaxy_count,
+)
 from app.dataset import spectrum
 from app.search import tokens
 from modal_app import CACHE_PATH, build_image, cache_volume
@@ -173,16 +179,15 @@ def log_overlaps(
     found = torch.empty(*shape, len(gallery), device=device)
     pairs = torch.empty(*shape, device=device)
     crossed = crossed_pairs = None
-    if kind(mode) not in ("image", "spectrum"):
+    if scheme is None and kind(mode) not in ("image", "spectrum"):
         overlap, minimum = log_products, torch.finfo(torch.float64).tiny
-        decode = query_decode = scheme and scheme.log_values
         exact = torch.Tensor.float
     else:
         overlap = products
-        minimum = scheme.floor if scheme else torch.finfo(torch.float32).tiny
-        decode = scheme and scheme.decode
-        query_decode = scheme and partial(scheme.decode, side="query")
+        minimum = scheme.floor if scheme else PROBABILITY_FLOOR
         exact = exponentiated
+    decode = scheme and scheme.decode
+    query_decode = scheme and partial(scheme.decode, side="query")
     if window is not None:
         selected = [row.nonzero()[:, 0] for row in window]
         targets = anywhere_forms(scheme, gallery, queries, selected, device)

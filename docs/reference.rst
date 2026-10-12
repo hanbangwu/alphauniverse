@@ -10,7 +10,7 @@ The build pipeline and the app share nothing but files. Six Modal jobs write art
 Job                       Reads                                         Writes
 ========================= ============================================= =======================================
 generate_embeddings       the dataset                                   encoded, codebook, tokens
-generate_predictions      tokens                                        predictions, prediction_basis
+generate_predictions      tokens                                        probabilities, probability_basis
 generate_projections      the dataset, encoded                          mean_points, full_points,
                                                                         parametric_umap
 generate_pairs            the dataset, encoded                          pairs
@@ -28,22 +28,25 @@ Artifacts
 .. autofunction:: app.config.store_schema
    :no-index:
 
-``predictions`` is an uncompressed Arrow IPC file of AION's predictions at every slot. Image tokens keep their 64 most probable codes and the log of the remaining mass; search reads each galaxy's 16 most probable and spreads the rest evenly over the other codes, but the query galaxy's full 64; catalogue values and the redshift keep every log-probability; spectrum tokens keep 256 coefficients on a per-survey PCA basis, quantised to 8 bits as ``offset + code × step``.
+``probabilities`` is an uncompressed Arrow IPC file of AION's predictions at every slot. Image tokens keep their 64 most probable codes with their probabilities, the mass beyond the first 16 and the mass beyond all 64; search reads each galaxy's 16 most probable and spreads the rest evenly over the other codes, but the query galaxy's full 64; catalogue values and the redshift keep every probability; spectrum tokens keep 256 coefficients on a per-survey PCA basis, quantised to 8 bits as ``offset + code × step``.
 
 .. autodata:: app.config.PREDICTIONS
    :no-index:
+   :no-value:
 
-``prediction_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``.
+``probability_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``.
 
 ``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet:
 
 .. autodata:: app.config.POINTS
    :no-index:
+   :no-value:
 
 ``pairs`` is Parquet, AION's mean embedding and EmbeddingGemma's image embedding per galaxy:
 
 .. autodata:: app.config.PAIRS
    :no-index:
+   :no-value:
 
 ``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text map's weights; ``alignment`` also holds the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.save`` of every galaxy's unit vector in EmbeddingGemma's space, ``float32``, galaxies × 768.
 
@@ -52,22 +55,13 @@ HTTP API
 
 Every endpoint is ``GET``; ``/projections/{projection}`` and ``/downloads/{role}`` also answer ``HEAD``. A request whose ``If-None-Match`` matches the response's ETag gets ``304 Not Modified``. Artifact files carry Starlette's ETag, from size and modification time; every other response's ETag is an MD5 of its body. Every response carries ``Cache-Control: no-cache``.
 
-The first Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the last 8; builds run one at a time.
+The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the last 8. An Any position map builds no matrix: it computes the rows of its sample of galaxies, described under ``/saliency`` below, and the server keeps them for the last 8 pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
 
 .. openapi:: ../frontend/openapi.json
 
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. The image and spectrum endpoints, EmbeddingGemma and ``generate_pairs`` are untested, and the frontend has no tests.
+Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image``, ``/galaxy/{galaxy}/spectrum``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, and the frontend has no tests.
 
-Continuous integration lints and tests every pull request and checks that ``frontend/openapi.json`` is current; on ``main`` it then deploys to Modal.
-
-Python modules
---------------
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   app
+Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal.

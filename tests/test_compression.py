@@ -1,8 +1,10 @@
 import importlib
 
 import numpy as np
+import pyarrow as pa
 import pytest
 
+from app import pql
 from app.config import PREDICTIONS, SPECTRUM_TOKEN_RANK
 
 torch = pytest.importorskip("torch")
@@ -46,16 +48,19 @@ def test_the_current_overlap_is_the_overlap_of_what_it_decodes(kind: str) -> Non
 
 def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
     columns = {
-        field.name: field.type.list_size
+        field.name: field.type.list_size * field.type.value_type.byte_width
         for field in PREDICTIONS
         if field.name != "galaxy"
     }
     widths = {
-        "ls_image": columns["ls_codes"] * 2
-        + columns["ls_log_probabilities"] * 2
-        + columns["ls_tails"] * 4,
-        "ls_table": columns["ls_table_values"] * 2,
-        "redshift": columns["redshift"] * 2,
+        "ls_image": columns["ls_codes"]
+        + columns["ls_probabilities"]
+        + columns["ls_rest"]
+        + columns["ls_query_codes"]
+        + columns["ls_query_probabilities"]
+        + columns["ls_tails"],
+        "ls_table": columns["ls_table_values"],
+        "redshift": columns["redshift"],
     }
 
     for mode in predictions_module.MODES:
@@ -68,6 +73,36 @@ def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
         )
         stored = scheme.encode(torch.from_numpy(np.log(np.maximum(drawn, 1e-30))))
         assert scheme.bits(stored) == widths[mode.name] * 8
+
+
+def test_the_current_scheme_reads_gallery_and_query_images_as_search_does() -> None:
+    mode = next(mode for mode in predictions_module.MODES if mode.name == "ls_image")
+    scheme = compression.Current(mode)
+    slots = len(mode.keys) * len(mode.positions)
+    drawn = np.random.default_rng(6).dirichlet(
+        np.full(mode.vocabulary, 0.05), size=(1, slots)
+    )
+    stored = scheme.encode(torch.from_numpy(np.log(np.maximum(drawn, 1e-30))))
+    rows = pa.record_batch(
+        [
+            pa.FixedSizeListArray.from_arrays(
+                values.flatten().numpy(), values[0].numel()
+            )
+            for values in stored.values()
+        ],
+        names=[f"{mode.survey}_{name}" for name in stored],
+    )
+
+    np.testing.assert_allclose(
+        scheme.decode(stored, side="query").numpy(),
+        pql.dense_image_tokens(rows, mode.survey, slice(None)),
+    )
+    for found, read in zip(
+        scheme.image(stored),
+        pql.top_image_tokens(rows, mode.survey, slice(None)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(found.numpy(), read)
 
 
 def test_exact_log_overlaps_match_float64_where_float32_probabilities_underflow() -> (

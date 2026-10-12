@@ -85,4 +85,4 @@ Build this documentation
 
    uv run --group docs make -C docs html
 
-The site is written to ``docs/_build/html``. The benchmark pages read the reports relative to ``docs/``, so build from the Makefile.
+The site is written to ``docs/_build/html``. Any warning fails the build, as it does in CI. The benchmark pages read the reports relative to ``docs/``, so build from the Makefile.

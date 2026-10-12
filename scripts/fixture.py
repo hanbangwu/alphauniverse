@@ -12,6 +12,7 @@ from app.config import (
     DIM,
     GEMMA_DIM,
     IMAGE_VOCABULARY,
+    KEPT,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
@@ -34,6 +35,7 @@ from app.config import (
 )
 from app.pql import (
     MATRICES,
+    SAMPLES,
     SUMS,
     basis,
     observed,
@@ -109,9 +111,9 @@ def _store(
         )
 
 
-def _log_softmax(logits: np.ndarray) -> np.ndarray:
-    shifted = logits - logits.max(axis=-1, keepdims=True)
-    return shifted - np.log(np.exp(shifted).sum(axis=-1, keepdims=True))
+def _softmax(logits: np.ndarray) -> np.ndarray:
+    exponentials = np.exp(logits - logits.max(axis=-1, keepdims=True))
+    return exponentials / exponentials.sum(axis=-1, keepdims=True)
 
 
 def _predictions(rng: np.random.Generator, galaxies: int) -> None:
@@ -129,27 +131,33 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
     for galaxy in range(galaxies):
         values = {
             "galaxy": np.asarray([galaxy], dtype=np.int32),
-            REDSHIFT: _log_softmax(3 * rng.standard_normal(REDSHIFT_VOCABULARY)).astype(
-                np.float16
+            REDSHIFT: _softmax(3 * rng.standard_normal(REDSHIFT_VOCABULARY)).astype(
+                np.float32
             ),
         }
         for survey, table_values in TABLE_VALUE_SURVEYS.items():
             mass = rng.dirichlet(np.full(TOP_CODES + 1, 0.3), size=N_IMAGE_TOKENS)
-            values[f"{survey}_codes"] = (
+            codes = (
                 rng.random((N_IMAGE_TOKENS, IMAGE_VOCABULARY))
                 .argpartition(TOP_CODES, axis=1)[:, :TOP_CODES]
                 .astype(np.uint16)
-                .reshape(-1)
             )
-            values[f"{survey}_log_probabilities"] = (
-                np.log(-np.sort(-mass[:, :TOP_CODES], axis=1))
-                .astype(np.float16)
-                .reshape(-1)
+            values[f"{survey}_codes"] = codes[:, :KEPT].reshape(-1)
+            values[f"{survey}_query_codes"] = codes[:, KEPT:].reshape(-1)
+            probabilities = -np.sort(-mass[:, :TOP_CODES], axis=1)
+            values[f"{survey}_probabilities"] = (
+                probabilities[:, :KEPT].astype(np.float32).reshape(-1)
             )
-            values[f"{survey}_tails"] = np.log(mass[:, -1]).astype(np.float32)
+            values[f"{survey}_query_probabilities"] = (
+                probabilities[:, KEPT:].astype(np.float16).reshape(-1)
+            )
+            values[f"{survey}_rest"] = (
+                probabilities[:, KEPT:].sum(axis=1) + mass[:, -1]
+            ).astype(np.float32)
+            values[f"{survey}_tails"] = mass[:, -1].astype(np.float32)
             values[f"{survey}_table_values"] = (
-                _log_softmax(3 * rng.standard_normal((len(table_values), VOCABULARY)))
-                .astype(np.float16)
+                _softmax(3 * rng.standard_normal((len(table_values), VOCABULARY)))
+                .astype(np.float32)
                 .reshape(-1)
             )
         for survey in SPECTRUM_SURVEYS:
@@ -160,7 +168,7 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
             values[f"{survey}_offsets"] = -128 * steps
             values[f"{survey}_steps"] = steps
         records.append(values)
-    with pa.ipc.new_file(artifact("predictions"), PREDICTIONS) as writer:
+    with pa.ipc.new_file(artifact("probabilities"), PREDICTIONS) as writer:
         for chunk in batched(records, PREDICTION_BATCH):
             writer.write_batch(prediction_batch(list(chunk)))
 
@@ -182,6 +190,7 @@ def forget() -> None:
     ):
         cached.cache_clear()
     MATRICES.clear()
+    SAMPLES.clear()
     SUMS.clear()
 
 

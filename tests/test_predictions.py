@@ -9,6 +9,7 @@ import pytest
 from app.config import (
     ANCHOR,
     IMAGE_VOCABULARY,
+    KEPT,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
@@ -38,8 +39,10 @@ def store(
         build_dir().mkdir(parents=True)
         shutil.copy(tokens, artifact("tokens"))
         predictions_module.generate_predictions()
-        table = pa.ipc.open_file(pa.memory_map(str(artifact("predictions")))).read_all()
-        with np.load(artifact("prediction_basis")) as basis:
+        table = pa.ipc.open_file(
+            pa.memory_map(str(artifact("probabilities")))
+        ).read_all()
+        with np.load(artifact("probability_basis")) as basis:
             return table, dict(basis)
 
 
@@ -55,20 +58,24 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 
     assert table.schema.equals(PREDICTIONS)
     assert table["galaxy"].to_pylist() == list(range(galaxies))
-    redshift = np.exp(column(table, REDSHIFT).astype(np.float64))
+    redshift = column(table, REDSHIFT)
     np.testing.assert_allclose(redshift.reshape(galaxies, -1).sum(-1), 1, atol=0.02)
     for survey, keys in predictions_module.TABLE_VALUES.items():
-        kept = np.exp(column(table, f"{survey}_log_probabilities").astype(np.float64))
-        tails = np.exp(column(table, f"{survey}_tails").astype(np.float64))
-        table_values = np.exp(
-            column(table, f"{survey}_table_values").astype(np.float64)
+        kept = column(table, f"{survey}_probabilities").reshape(
+            galaxies, N_IMAGE_TOKENS, -1
         )
+        query = column(table, f"{survey}_query_probabilities").reshape(
+            galaxies, N_IMAGE_TOKENS, -1
+        )
+        rest = column(table, f"{survey}_rest").reshape(galaxies, N_IMAGE_TOKENS)
+        tails = column(table, f"{survey}_tails")
+        table_values = column(table, f"{survey}_table_values")
         np.testing.assert_allclose(
-            kept.reshape(galaxies, N_IMAGE_TOKENS, -1).sum(-1)
-            + tails.reshape(galaxies, N_IMAGE_TOKENS),
+            kept.sum(-1) + query.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS),
             1,
-            atol=0.02,
+            atol=1e-3,
         )
+        np.testing.assert_allclose(kept.sum(-1) + rest, 1, atol=1e-5)
         np.testing.assert_allclose(
             table_values.reshape(galaxies, len(keys), -1).sum(-1), 1, atol=0.02
         )
@@ -92,8 +99,9 @@ def test_kept_image_token_codes_are_the_most_probable_in_descending_order() -> N
         np.random.default_rng(1).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
     )
 
-    codes, _, _ = predictions_module.image_token_codes(log_probabilities)
+    stored = predictions_module.image_token_codes(log_probabilities)
 
+    codes = np.concatenate([stored["codes"], stored["query_codes"]], axis=1)
     assert np.array_equal(codes, np.argsort(-log_probabilities, axis=1)[:, :TOP_CODES])
 
 
@@ -198,3 +206,29 @@ def test_one_batched_decode_matches_decoding_each_block_of_slots_alone(
         with torch.inference_mode():
             alone = torch.log_softmax(embedding.forward_logits(states), dim=-1)
         np.testing.assert_allclose(batched[key], alone.numpy(), atol=2e-3)
+
+
+def test_stored_image_probabilities_are_those_of_their_codes() -> None:
+    log_probabilities = np.log(
+        np.random.default_rng(2).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
+    ).astype(np.float32)
+
+    stored = predictions_module.image_token_codes(log_probabilities)
+
+    codes = np.concatenate([stored["codes"], stored["query_codes"]], axis=1)
+    exact = np.exp(np.take_along_axis(log_probabilities, codes.astype(np.intp), axis=1))
+    np.testing.assert_array_equal(stored["probabilities"], exact[:, :KEPT])
+    np.testing.assert_allclose(
+        stored["query_probabilities"], exact[:, KEPT:], rtol=np.finfo(np.float16).eps
+    )
+
+
+def test_probabilities_below_float32_range_are_stored_as_zero() -> None:
+    log_probabilities = np.full((1, IMAGE_VOCABULARY), -95, dtype=np.float32)
+    log_probabilities[0, 0] = 0
+
+    stored = predictions_module.image_token_codes(log_probabilities)
+
+    np.testing.assert_array_equal(stored["probabilities"], [[1] + [0] * (KEPT - 1)])
+    np.testing.assert_array_equal(stored["rest"], [0])
+    np.testing.assert_array_equal(stored["tails"], [0])
