@@ -266,21 +266,16 @@ def test_a_cached_matrix_is_served_while_another_galaxy_builds(tree: Path) -> No
         assert served
 
 
-def test_the_saliency_sample_is_the_best_matches_and_other_galaxies(
-    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+def test_the_saliency_sample_is_other_galaxies_fixed_by_the_galaxy(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pql, "SALIENCY_MATCHES", 3)
-    monkeypatch.setattr(pql, "SALIENCY_BACKGROUND", 4)
-    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+    monkeypatch.setattr(pql, "SALIENCY_SAMPLE", 7)
 
-    sample = pql.saliency_sample(anywhere)
+    sample = pql.saliency_sample(GALAXY)
 
-    scores = pql.scores(anywhere)
-    others = np.delete(np.arange(len(scores)), GALAXY)
-    best = others[np.argsort(-scores[others], kind="stable")][:3]
-    assert sample[:3].tolist() == best.tolist()
     assert len(set(sample.tolist())) == 7
     assert GALAXY not in sample
+    np.testing.assert_array_equal(pql.saliency_sample(GALAXY), sample)
 
 
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
@@ -322,21 +317,46 @@ def test_saliency_is_the_partial_correlation_over_the_other_galaxies(
 
 
 def test_position_independent_saliency_uses_each_slot_s_best_overlap(
-    table: pa.Table, query: pql.Query
+    table: pa.Table, query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(pql, "SALIENCY_SAMPLE", 7)
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
     anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
-    values = pql.agreements(GALAXY).values.astype(np.float64)
-    others = np.delete(np.arange(len(values)), GALAXY)
-    gallery = dense(table.take(others), "ls_image", pql.KEPT)
+    sample = pql.saliency_sample(GALAXY)
+    values = pql.agreements(GALAXY).values[sample].astype(np.float64)
+    gallery = dense(table.take(sample), "ls_image", pql.KEPT)
     own = dense(table.slice(GALAXY, 1), "ls_image", TOP_CODES)[0]
-    best = np.log(gallery @ own.T).max(axis=1)
     start = pql.OFFSETS["ls_image"]
-    values = values[others]
-    values[:, start : start + N_IMAGE_TOKENS] = best
+    values[:, start : start + N_IMAGE_TOKENS] = np.log(gallery @ own.T).max(axis=1)
 
     expected = partial_correlations(values, pql.columns(pql.selection(anywhere)))
 
     np.testing.assert_allclose(pql.saliency(anywhere), expected, atol=1e-4)
+
+
+def test_position_independent_saliency_builds_no_agreement_matrix(
+    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pql, "MATRICES", OrderedDict())
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
+
+    pql.saliency(query.model_copy(update={"anywhere": ("ls_image",)}))
+
+    assert not pql.MATRICES
+
+
+def test_a_later_position_independent_saliency_on_the_galaxy_reuses_its_sample(
+    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
+    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+    first = pql.saliency(anywhere)
+    monkeypatch.setattr(
+        pql, "sampled", lambda *arguments: pytest.fail("sample recomputed")
+    )
+
+    np.testing.assert_array_equal(pql.saliency(anywhere), first)
+    pql.saliency(anywhere.model_copy(update={"ls_image": anywhere.ls_image[:1]}))
 
 
 def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(

@@ -190,11 +190,11 @@ def anywhere_queries(count: int, matches: int) -> dict[str, list[pql.Query]]:
 def anywhere_times(runs: int, matches: int) -> dict[str, Any]:
     timed = {}
     for kind, batch in anywhere_queries(runs + 1, matches).items():
-        searches, clicks = [], []
+        searches, clicks, repeats = [], [], []
         for query in batch:
-            pql.agreements(query.galaxy)
             searches.append(elapsed(partial(pql.search, query)))
             clicks.append(elapsed(partial(pql.saliency, query)))
+            repeats.append(elapsed(partial(pql.saliency, query)))
         timed[kind] = {
             "cold_ms": {
                 "search": round(searches[0], 3),
@@ -202,6 +202,7 @@ def anywhere_times(runs: int, matches: int) -> dict[str, Any]:
             },
             "search": summary(searches[1:]),
             "saliency": summary(clicks[1:]),
+            "repeat_saliency": summary(repeats[1:]),
         }
     return timed
 

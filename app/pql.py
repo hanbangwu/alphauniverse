@@ -24,6 +24,7 @@ from .config import (
     PREDICTIONS,
     PROBABILITY_FLOOR,
     REDSHIFT,
+    SALIENCY_SAMPLE,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
@@ -72,10 +73,9 @@ AGREEMENT_GALAXIES = 8
 BATCH = 256
 CHUNK = 16
 BLOCK = 8192
-SALIENCY_MATCHES = 256
-SALIENCY_BACKGROUND = 256
 BUILDING = Lock()
 MATRICES = OrderedDict()
+SAMPLES = OrderedDict()
 SUMS = OrderedDict()
 THREADS = pa.cpu_count()
 
@@ -586,43 +586,36 @@ def maps(
 
 
 def saliency(query: Selection) -> np.ndarray:
-    found = agreements(query.galaxy)
-    chosen = columns(selection(query))
-    if not query.anywhere:
+    if query.anywhere:
+        modes = frozenset(query.anywhere)
+        found = cached(
+            SAMPLES, (query.galaxy, modes), partial(sampled, query.galaxy, modes)
+        )
+        others = np.ones(len(found.values), bool)
+    else:
+        found = agreements(query.galaxy)
         others = np.arange(len(found.values)) != query.galaxy
-        return partial_correlations(
-            found.values, found.spread, found.totals, chosen, others
-        )
-    values = sampled_values(query, found)
     return partial_correlations(
-        values,
-        values.std(axis=0),
-        values.sum(axis=1),
-        chosen,
-        np.ones(len(values), bool),
+        found.values, found.spread, found.totals, columns(selection(query)), others
     )
 
 
-def saliency_sample(query: Selection) -> np.ndarray:
-    order = np.argsort(-scores(query), kind="stable")
-    order = order[order != query.galaxy]
-    rest = order[SALIENCY_MATCHES:]
-    background = np.random.default_rng(query.galaxy).choice(
-        rest, min(SALIENCY_BACKGROUND, len(rest)), replace=False
+def saliency_sample(galaxy: int) -> np.ndarray:
+    others = np.delete(np.arange(predictions().num_rows), galaxy)
+    return np.random.default_rng(galaxy).choice(
+        others, min(SALIENCY_SAMPLE, len(others)), replace=False
     )
-    return np.concatenate([order[:SALIENCY_MATCHES], background])
 
 
-def sampled_values(query: Selection, found: Agreements) -> np.ndarray:
-    sample = saliency_sample(query)
-    values = found.values[sample].astype(np.float64)
-    parts = slices(gathered(sample))
-    forms = query_forms(row(query.galaxy), dict.fromkeys(query.anywhere, slice(None)))
-    for mode, form in forms.items():
+def sampled(galaxy: int, anywhere: frozenset[str]) -> Agreements:
+    forms = galaxy_forms(galaxy)
+    parts = slices(gathered(saliency_sample(galaxy)))
+    values = threaded(partial(agreement_rows, forms=forms), parts).astype(np.float64)
+    for mode in anywhere:
         values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = threaded(
-            partial(best_log_overlaps, mode=mode, form=form), parts
+            partial(best_log_overlaps, mode=mode, form=forms[mode]), parts
         )
-    return values
+    return Agreements(values, values.std(axis=0), values.sum(axis=1))
 
 
 def partial_correlations(

@@ -35,6 +35,7 @@ from app.config import (
 )
 from app.pql import (
     MATRICES,
+    SAMPLES,
     SUMS,
     basis,
     observed,
@@ -189,6 +190,7 @@ def forget() -> None:
     ):
         cached.cache_clear()
     MATRICES.clear()
+    SAMPLES.clear()
     SUMS.clear()
 
 
