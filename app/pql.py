@@ -563,9 +563,7 @@ def by_mode(values: np.ndarray) -> dict[str, np.ndarray]:
 def maps(
     forms: dict[str, np.ndarray], peaks: np.ndarray, rows: pa.RecordBatch
 ) -> dict[str, np.ndarray]:
-    return by_mode(
-        np.exp(threaded(partial(agreement_rows, forms=forms), slices(rows)) - peaks)
-    )
+    return by_mode(np.exp(agreement_rows(rows, forms) - peaks))
 
 
 def saliency(query: Selection) -> np.ndarray:
