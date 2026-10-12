@@ -75,6 +75,7 @@ BLOCK = 8192
 SALIENCY_SAMPLE = 512
 BUILDING = Lock()
 MATRICES = OrderedDict()
+SAMPLES = OrderedDict()
 SUMS = OrderedDict()
 THREADS = pa.cpu_count()
 
@@ -592,7 +593,11 @@ def saliency(query: Selection) -> np.ndarray:
         return partial_correlations(
             found.values, found.spread, found.totals, chosen, others
         )
-    values = sampled_values(query.galaxy, query.anywhere)
+    values = cached(
+        SAMPLES,
+        (query.galaxy, frozenset(query.anywhere)),
+        partial(sampled_values, query.galaxy, query.anywhere),
+    )
     return partial_correlations(
         values,
         values.std(axis=0),
