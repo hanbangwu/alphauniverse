@@ -14,6 +14,8 @@ paths:
   - `README.md`: a brief showcase of the features, how to start the site locally, and a link to the docs.
   - `docs/index.rst`: what alphaUniverse is and the dataset.
   - `docs/concepts.rst`: what AION does with a galaxy: tokens, embeddings, predictions.
+  - `docs/glossary.rst`: one-line definitions of the terms the pages use, linked with `:term:`.
+  - `docs/figures/`: schematics as SVG, drawn in `currentColor` and included with `.. raw:: html` so they follow the light and dark themes.
   - `docs/methods/`: how each feature works, one page each.
   - `docs/using.rst`: what the panels show.
   - `docs/benchmarks.rst`: what each benchmark measures, with its figures drawn from its report.

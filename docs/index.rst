@@ -23,6 +23,7 @@ It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at 
    :caption: Background
 
    concepts
+   glossary
 
 .. toctree::
    :caption: Methods
