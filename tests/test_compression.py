@@ -1,8 +1,10 @@
 import importlib
 
 import numpy as np
+import pyarrow as pa
 import pytest
 
+from app import pql
 from app.config import PREDICTIONS
 
 torch = pytest.importorskip("torch")
@@ -90,6 +92,31 @@ def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
         )
         stored = scheme.encode(torch.from_numpy(np.log(np.maximum(drawn, 1e-30))))
         assert scheme.bits(stored) == widths[mode.name] * 8
+
+
+def test_the_current_scheme_decodes_the_query_as_search_reads_it() -> None:
+    mode = next(mode for mode in predictions_module.MODES if mode.name == "ls_image")
+    scheme = compression.Current(mode, compression.Basis(1))
+    slots = len(mode.keys) * len(mode.positions)
+    drawn = np.random.default_rng(6).dirichlet(
+        np.full(mode.vocabulary, 0.05), size=(1, slots)
+    )
+    stored = scheme.encode(torch.from_numpy(np.log(np.maximum(drawn, 1e-30))))
+    names = ("codes", "probabilities", "query_probabilities", "tails")
+    rows = pa.record_batch(
+        [
+            pa.FixedSizeListArray.from_arrays(
+                stored[name].flatten().numpy(), stored[name][0].numel()
+            )
+            for name in names
+        ],
+        names=[f"{mode.survey}_{name}" for name in names],
+    )
+
+    np.testing.assert_allclose(
+        scheme.decode(stored, side="query").numpy(),
+        pql.dense_image_tokens(rows, mode.survey, slice(None)),
+    )
 
 
 def test_quantised_values_are_within_half_a_step() -> None:

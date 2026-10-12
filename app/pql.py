@@ -22,6 +22,7 @@ from .config import (
     N_TABLE_VALUES,
     OBSERVATIONS,
     PREDICTIONS,
+    PROBABILITY_FLOOR,
     REDSHIFT,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
@@ -37,7 +38,6 @@ from .config import (
 from .search import tokens
 
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
-PROBABILITY_FLOOR = np.finfo(np.float32).tiny
 OBSERVED_IN = {
     mode: survey
     for mode, survey in (
@@ -250,7 +250,7 @@ def image_token_overlaps(
             np.einsum("gsk,gsk->gs", weights, at_codes)
             + spread[:, block] * totals[block]
         )
-    return np.maximum(overlaps, PROBABILITY_FLOOR, out=overlaps)
+    return overlaps
 
 
 def spectrum_token_coefficients(
@@ -294,7 +294,7 @@ def table_value_overlaps(
     overlaps = np.empty((len(gallery), len(query)), np.float32)
     for index, slot in enumerate(np.arange(gallery.shape[1])[slots]):
         overlaps[:, index] = gallery[:, slot] @ query[index]
-    return np.maximum(overlaps, PROBABILITY_FLOOR)
+    return overlaps
 
 
 def query_forms(
@@ -330,7 +330,7 @@ def log_overlaps(
         overlaps = table_value_overlaps(
             table_value_probabilities(rows, mode), slots, form
         )
-    return np.log(overlaps)
+    return np.log(np.maximum(overlaps, PROBABILITY_FLOOR, out=overlaps))
 
 
 def cross_overlaps(

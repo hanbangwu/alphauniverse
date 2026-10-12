@@ -9,6 +9,7 @@ import pytest
 from app.config import (
     ANCHOR,
     IMAGE_VOCABULARY,
+    KEPT,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
@@ -72,7 +73,7 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
         np.testing.assert_allclose(
             kept.sum(-1) + query.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS),
             1,
-            atol=0.02,
+            atol=1e-3,
         )
         np.testing.assert_allclose(kept.sum(-1) + rest, 1, atol=1e-5)
         np.testing.assert_allclose(
@@ -204,3 +205,32 @@ def test_one_batched_decode_matches_decoding_each_block_of_slots_alone(
         with torch.inference_mode():
             alone = torch.log_softmax(embedding.forward_logits(states), dim=-1)
         np.testing.assert_allclose(batched[key], alone.numpy(), atol=2e-3)
+
+
+def test_stored_image_probabilities_are_those_of_their_codes() -> None:
+    log_probabilities = np.log(
+        np.random.default_rng(2).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
+    ).astype(np.float32)
+
+    codes, probabilities, query_probabilities, _, _ = (
+        predictions_module.image_token_codes(log_probabilities)
+    )
+
+    exact = np.exp(np.take_along_axis(log_probabilities, codes.astype(np.intp), axis=1))
+    np.testing.assert_array_equal(probabilities, exact[:, :KEPT])
+    np.testing.assert_allclose(
+        query_probabilities, exact[:, KEPT:], rtol=np.finfo(np.float16).eps
+    )
+
+
+def test_probabilities_below_float32_range_are_stored_as_zero() -> None:
+    log_probabilities = np.full((1, IMAGE_VOCABULARY), -95, dtype=np.float32)
+    log_probabilities[0, 0] = 0
+
+    _, probabilities, _, rest, tails = predictions_module.image_token_codes(
+        log_probabilities
+    )
+
+    np.testing.assert_array_equal(probabilities, [[1] + [0] * (KEPT - 1)])
+    np.testing.assert_array_equal(rest, [0])
+    np.testing.assert_array_equal(tails, [0])

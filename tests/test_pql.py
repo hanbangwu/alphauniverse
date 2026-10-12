@@ -404,31 +404,27 @@ def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
     np.testing.assert_allclose(pql.scores(query), expected)
 
 
-def test_table_value_overlaps_below_float32_range_are_floored() -> None:
-    query = np.zeros((1, VOCABULARY), dtype=np.float32)
-    gallery = np.zeros((2, 1, VOCABULARY), dtype=np.float32)
-    query[0, 0] = 1
-    gallery[0, 0, 1] = 1
-    gallery[1, 0, 0] = 1
+@pytest.mark.parametrize(
+    ("mode", "vocabulary"), [("ls_image", IMAGE_VOCABULARY), ("ls_table", VOCABULARY)]
+)
+def test_aligned_overlaps_below_float32_range_are_floored(
+    table: pa.Table, mode: str, vocabulary: int
+) -> None:
+    form = np.zeros((1, vocabulary), dtype=np.float32)
 
-    found = pql.table_value_overlaps(gallery, slice(None), query)
+    found = pql.log_overlaps(table.to_batches()[0], mode, np.asarray([0]), form)
 
-    np.testing.assert_array_equal(found, [[pql.PROBABILITY_FLOOR], [1]])
+    np.testing.assert_allclose(found, np.log(pql.PROBABILITY_FLOOR), rtol=1e-6)
 
 
-def test_image_token_overlaps_below_float32_range_are_floored() -> None:
-    query = np.zeros((1, IMAGE_VOCABULARY), dtype=np.float32)
-    query[0, 0] = 1
-    codes = np.stack([np.arange(1, pql.KEPT + 1), np.arange(pql.KEPT)])[:, None]
-    probabilities = np.zeros((2, 1, pql.KEPT), dtype=np.float32)
-    probabilities[0] = 1 / pql.KEPT
-    probabilities[1, 0, 0] = 1
+def test_position_independent_overlaps_below_float32_range_are_floored(
+    table: pa.Table,
+) -> None:
+    form = np.zeros((1, IMAGE_VOCABULARY), dtype=np.float32)
 
-    found = pql.image_token_overlaps(
-        query, codes, probabilities, np.zeros((2, 1), dtype=np.float32)
-    )
+    found = pql.best_log_overlaps(table.to_batches()[0], "ls_image", form)
 
-    np.testing.assert_array_equal(found, [[pql.PROBABILITY_FLOOR], [1]])
+    np.testing.assert_allclose(found, np.log(pql.PROBABILITY_FLOOR), rtol=1e-6)
 
 
 def test_a_repeated_slot_counts_once(tree: Path) -> None:

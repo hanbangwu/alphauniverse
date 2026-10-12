@@ -15,6 +15,7 @@ from .config import (
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
+    PROBABILITY_FLOOR,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
     SEED,
@@ -147,6 +148,10 @@ def predictions(
     return decode(encoded, encoder_mask, targets)
 
 
+def flushed(probabilities: np.ndarray, codes: int = 1) -> np.ndarray:
+    return np.where(probabilities < PROBABILITY_FLOOR * codes, 0, probabilities)
+
+
 def image_token_codes(
     log_probabilities: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -160,12 +165,13 @@ def image_token_codes(
     beyond = np.exp(log_probabilities)
     np.put_along_axis(beyond, codes, 0, axis=1)
     tails = beyond.sum(axis=1)
+    vocabulary = log_probabilities.shape[1]
     return (
         codes.astype(np.uint16),
-        np.ascontiguousarray(probabilities[:, :KEPT]),
+        flushed(probabilities[:, :KEPT]),
         probabilities[:, KEPT:].astype(np.float16),
-        tails + probabilities[:, KEPT:].sum(axis=1),
-        tails,
+        flushed(tails + probabilities[:, KEPT:].sum(axis=1), vocabulary - KEPT),
+        flushed(tails, vocabulary - TOP_CODES),
     )
 
 
@@ -226,7 +232,7 @@ def record(
 ) -> dict[str, np.ndarray]:
     values: dict[str, np.ndarray] = {
         "galaxy": np.asarray([galaxy], dtype=np.int32),
-        REDSHIFT: np.exp(predicted[REDSHIFT_KEY][0]),
+        REDSHIFT: flushed(np.exp(predicted[REDSHIFT_KEY][0])),
     }
     for survey, image_key in IMAGES.items():
         codes, probabilities, query_probabilities, rest, tails = image_token_codes(
@@ -237,8 +243,8 @@ def record(
         values[f"{survey}_query_probabilities"] = query_probabilities.reshape(-1)
         values[f"{survey}_rest"] = rest
         values[f"{survey}_tails"] = tails
-        values[f"{survey}_table_values"] = np.exp(
-            np.concatenate([predicted[key][0] for key in TABLE_VALUES[survey]])
+        values[f"{survey}_table_values"] = flushed(
+            np.exp(np.concatenate([predicted[key][0] for key in TABLE_VALUES[survey]]))
         )
     for survey, key in SPECTRA.items():
         quantised, offsets, steps = coefficients(

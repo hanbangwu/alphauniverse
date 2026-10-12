@@ -5,7 +5,13 @@ import numpy as np
 import torch
 
 from app import pql
-from app.config import KEPT, SPECTRUM_TOKEN_RANK, TOP_CODES, VOCABULARY
+from app.config import (
+    KEPT,
+    PROBABILITY_FLOOR,
+    SPECTRUM_TOKEN_RANK,
+    TOP_CODES,
+    VOCABULARY,
+)
 from app.predictions import Mode, coefficients, image_token_codes
 
 KS = (1, 2, 4, 8, 16, 32, 64, 128, 256)
@@ -63,7 +69,7 @@ def floor(scheme: object, vocabulary: int) -> float:
     )
     if projected:
         return pql.SPECTRUM_TOKEN_FLOOR * VOCABULARY / vocabulary
-    return pql.PROBABILITY_FLOOR
+    return PROBABILITY_FLOOR
 
 
 def step(low: torch.Tensor, high: torch.Tensor, bits: int) -> torch.Tensor:
