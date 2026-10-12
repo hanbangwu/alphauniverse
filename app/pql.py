@@ -48,6 +48,11 @@ OBSERVED_IN = {
     ).items()
     if survey in OBSERVATIONS
 }
+QUERY_COLUMNS = [
+    f"{survey}_{name}"
+    for survey in IMAGE_MODES.values()
+    for name in ("query_codes", "query_probabilities", "tails")
+]
 TABLE_SLOTS = [
     (mode, slot) for mode, (_, count, _) in TABLE_MODES.items() for slot in range(count)
 ]
@@ -384,7 +389,8 @@ def slices(rows: pa.RecordBatch) -> list[pa.RecordBatch]:
 
 
 def gathered(galaxies: np.ndarray) -> pa.RecordBatch:
-    rows = [predictions().slice(galaxy, 1) for galaxy in galaxies.tolist()]
+    gallery = predictions().drop_columns(QUERY_COLUMNS)
+    rows = [gallery.slice(galaxy, 1) for galaxy in galaxies.tolist()]
     return pa.concat_tables(rows).combine_chunks().to_batches()[0]
 
 
