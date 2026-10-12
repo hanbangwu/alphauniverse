@@ -213,11 +213,14 @@ def search_performance():
     found = report("search_performance")
     if found is None:
         return missing()
+    rounds = found["stages"]["rounds"]
     stages_by_round = [
         (name, str(position), measured["stages"])
-        for name, rounds in found["stages"]["rounds"].items()
-        for position, measured in enumerate(rounds)
+        for name, entries in rounds.items()
+        for position, measured in enumerate(entries)
+        if "stages" in measured
     ]
+    failed = [name for name, entries in rounds.items() if not any("stages" in measured for measured in entries)]
     stages = list(stages_by_round[0][2])
     source = ColumnDataSource(
         {"factor": [(name, position) for name, position, _ in stages_by_round]}
@@ -232,5 +235,7 @@ def search_performance():
         **WIDTH,
     )
     chart.vbar_stack(stages, x="factor", width=0.8, color=Category10_10[: len(stages)], legend_label=stages, source=source)
-    versions = ", ".join(f"{name} <code>{commit[:7]}</code>" for name, commit in found["commits"].items())
+    versions = ", ".join(
+        f"{name} <code>{commit[:7]}</code>{' (failed)' if name in failed else ''}" for name, commit in found["commits"].items()
+    )
     return column(heading(found, f"versions: {versions}", cpus(found["stages"])), chart, **WIDTH)
