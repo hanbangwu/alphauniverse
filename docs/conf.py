@@ -5,6 +5,7 @@
 
 import dataclasses
 import sys
+from functools import partial
 from pathlib import Path
 
 import pyarrow as pa
@@ -31,6 +32,21 @@ extensions = [
     "sphinxcontrib.openapi",
 ]
 
+round_brackets = partial(BracketStyle, left="(", right=")")
+
+
+@dataclasses.dataclass
+class AstronomyReferenceStyle(AuthorYearReferenceStyle):
+    bracket_parenthetical: BracketStyle = dataclasses.field(
+        default_factory=round_brackets
+    )
+    bracket_textual: BracketStyle = dataclasses.field(default_factory=round_brackets)
+    author_year_sep: str = " "
+
+
+sphinxcontrib.bibtex.plugin.register_plugin(
+    "sphinxcontrib.bibtex.style.referencing", "astronomy", AstronomyReferenceStyle
+)
 bibtex_bibfiles = ["references.bib"]
 bibtex_reference_style = "astronomy"
 
@@ -51,21 +67,3 @@ def schema_block(app, what, name, obj, options, lines):
 
 def setup(app):
     app.connect("autodoc-process-docstring", schema_block)
-
-
-def round_brackets():
-    return BracketStyle(left="(", right=")")
-
-
-@dataclasses.dataclass
-class AstronomyReferenceStyle(AuthorYearReferenceStyle):
-    bracket_parenthetical: BracketStyle = dataclasses.field(
-        default_factory=round_brackets
-    )
-    bracket_textual: BracketStyle = dataclasses.field(default_factory=round_brackets)
-    author_year_sep: str = " "
-
-
-sphinxcontrib.bibtex.plugin.register_plugin(
-    "sphinxcontrib.bibtex.style.referencing", "astronomy", AstronomyReferenceStyle
-)
