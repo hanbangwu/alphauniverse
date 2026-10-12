@@ -43,7 +43,7 @@ mathjax_path = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
 def schema_block(app, what, name, obj, options, lines):
     if isinstance(obj, pa.Schema):
         lines[:] = ["::", ""] + [
-            f"   {line}" for line in obj.to_string(show_schema_metadata=False).splitlines()
+            f"   {line}" for line in str(obj).splitlines()
         ]
 
 
