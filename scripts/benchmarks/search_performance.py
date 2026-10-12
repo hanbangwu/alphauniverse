@@ -186,8 +186,6 @@ def benchmark_search_performance(
 
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
-    if git("status", "--porcelain"):
-        raise SystemExit("Commit every change first: the benchmark times commits.")
     commits = {"current": git("rev-parse", "HEAD")}
     current_code = git("rev-parse", *(f"HEAD:{source}" for source in SOURCES))
     notes = []

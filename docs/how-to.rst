@@ -74,7 +74,7 @@ Run a benchmark
    uv run modal run -m scripts.benchmarks.text_search_quality
    uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --queries 200, --modes every mode
 
-Each writes its report to ``docs/benchmarks/<script>.json``. The performance scripts refuse to run with uncommitted changes.
+Each writes its report to ``docs/benchmarks/<script>.json``.
 
 From GitHub, start the Benchmark workflow from the Actions tab, pick a branch, a script and optionally its flags. The report appears in the run's summary and as its artifact; the workflow does not commit it. A job past six hours stops without a report.
 

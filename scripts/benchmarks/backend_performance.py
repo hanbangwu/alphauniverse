@@ -81,8 +81,6 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
 
 @app.local_entrypoint()
 def main(runs: int = 30) -> None:
-    if git("status", "--porcelain"):
-        raise SystemExit("Commit every change first: the benchmark times commits.")
     report = {
         "commit": git("describe", "--always"),
         "revision": DATASET_REVISION,
