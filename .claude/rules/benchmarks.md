@@ -22,3 +22,4 @@ paths:
 - Compare memory with a container's limit through `resident_anonymous_mib`: pages of memory-mapped files do not count against Modal's limit.
 - Code that reads an artifact larger than one batch reads it in batches into preallocated arrays, and never holds a second copy of it.
 - `docs/benchmarks.rst` draws every figure from the reports in `docs/benchmarks/` when the docs build, and names each report's commit and date; it never types a figure. It does not show figures from code that no longer exists.
+- Committing a report is the only step that updates the page: each script's plot, a function in `docs/benchmark_plots.py` that `docs/benchmarks.rst` calls, reads only its report's keys and shows whatever the report holds. A change to a script that renames or drops a key its plot reads updates the plot in the same pull request, and the docs build in CI checks it against the committed report.
