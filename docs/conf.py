@@ -28,7 +28,7 @@ extensions = [
     "sphinxcontrib.openapi",
 ]
 
-autodoc_default_options = {"members": True, "undoc-members": True}
+autodoc_default_options = {"members": True, "undoc-members": True, "no-value": True}
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
