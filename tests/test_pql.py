@@ -317,17 +317,17 @@ def test_saliency_is_the_partial_correlation_over_the_other_galaxies(
 
 
 def test_position_independent_saliency_uses_each_slot_s_best_overlap(
-    table: pa.Table, query: pql.Query
+    table: pa.Table, query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(pql, "SALIENCY_SAMPLE", 7)
+    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
     anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
-    values = pql.agreements(GALAXY).values.astype(np.float64)
-    others = np.delete(np.arange(len(values)), GALAXY)
-    gallery = dense(table.take(others), "ls_image", pql.KEPT)
+    sample = pql.saliency_sample(GALAXY)
+    values = pql.agreements(GALAXY).values[sample].astype(np.float64)
+    gallery = dense(table.take(sample), "ls_image", pql.KEPT)
     own = dense(table.slice(GALAXY, 1), "ls_image", TOP_CODES)[0]
-    best = np.log(gallery @ own.T).max(axis=1)
     start = pql.OFFSETS["ls_image"]
-    values = values[others]
-    values[:, start : start + N_IMAGE_TOKENS] = best
+    values[:, start : start + N_IMAGE_TOKENS] = np.log(gallery @ own.T).max(axis=1)
 
     expected = partial_correlations(values, pql.columns(pql.selection(anywhere)))
 

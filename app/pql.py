@@ -24,6 +24,7 @@ from .config import (
     PREDICTIONS,
     PROBABILITY_FLOOR,
     REDSHIFT,
+    SALIENCY_SAMPLE,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
@@ -72,7 +73,6 @@ AGREEMENT_GALAXIES = 8
 BATCH = 256
 CHUNK = 16
 BLOCK = 8192
-SALIENCY_SAMPLE = 512
 BUILDING = Lock()
 MATRICES = OrderedDict()
 SAMPLES = OrderedDict()
@@ -587,10 +587,9 @@ def maps(
 
 def saliency(query: Selection) -> np.ndarray:
     if query.anywhere:
+        modes = frozenset(query.anywhere)
         found = cached(
-            SAMPLES,
-            (query.galaxy, frozenset(query.anywhere)),
-            partial(sampled, query.galaxy, query.anywhere),
+            SAMPLES, (query.galaxy, modes), partial(sampled, query.galaxy, modes)
         )
         others = np.ones(len(found.values), bool)
     else:
@@ -608,7 +607,7 @@ def saliency_sample(galaxy: int) -> np.ndarray:
     )
 
 
-def sampled(galaxy: int, anywhere: tuple[str, ...]) -> Agreements:
+def sampled(galaxy: int, anywhere: frozenset[str]) -> Agreements:
     forms = galaxy_forms(galaxy)
     parts = slices(gathered(saliency_sample(galaxy)))
     values = threaded(partial(agreement_rows, forms=forms), parts).astype(np.float64)

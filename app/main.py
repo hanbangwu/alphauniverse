@@ -28,6 +28,7 @@ from .config import (
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     REDSHIFT_TABLE_VALUE,
+    SALIENCY_SAMPLE,
     SPECTRUM_MODES,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
@@ -399,7 +400,7 @@ def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Arr
     "correlation over every other galaxy between its score on the selection and its "
     "agreement with the query galaxy at that slot, controlling for its mean agreement "
     "outside the selection. With anywhere, the correlation runs over "
-    f"{pql.SALIENCY_SAMPLE} other galaxies drawn at random with the query galaxy as "
+    f"{SALIENCY_SAMPLE} other galaxies drawn at random with the query galaxy as "
     "the seed, and a mode named in anywhere takes, at each slot, the best agreement "
     "at any slot of that mode. One row, one list column per map.",
 )
