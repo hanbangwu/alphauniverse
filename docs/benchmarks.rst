@@ -18,6 +18,7 @@ How faithfully does the map keep neighbours? ``projection_quality`` takes 10,000
 where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 dimensions. Preservation is 1 when the map keeps every neighbour; random positions would keep :math:`k / (n - 1)`. Trustworthiness penalises points that look close on the map but are far apart in 768 dimensions; random positions score near 0.5.
 
 .. bokeh-plot::
+   :source-position: none
 
    import json
    from pathlib import Path
@@ -45,6 +46,7 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
        x_range=FactorRange(*source.data["factor"]),
        y_range=(0, 1),
        height=300,
+       sizing_mode="stretch_width",
        title="Neighbours kept, by k",
        tooltips=[("k", "@neighbours"), ("metric", "@metric"), ("value", "@value")],
    )
@@ -54,6 +56,7 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
        columns=[TableColumn(field=name, title=name) for name in ("neighbours", "metric", "value")],
        index_position=None,
        height=140,
+       sizing_mode="stretch_width",
    )
    environment = report["environment"]
    show(
@@ -64,6 +67,7 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
            ),
            chart,
            table,
+           sizing_mode="stretch_width",
        )
    )
 
@@ -88,6 +92,7 @@ with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each query ranks the
 The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it; *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
 
 .. bokeh-plot::
+   :source-position: none
 
    import json
    from pathlib import Path
@@ -115,7 +120,7 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
        y_range=FactorRange(*reversed(chart_source.data["factor"])),
        x_range=(0, 1),
        height=560,
-       width=760,
+       sizing_mode="stretch_width",
        title="Average precision, raw (bars) against the base rate (ticks)",
        tooltips=[("average precision", "@average_precision"), ("base rate", "@base_rate")],
    )
@@ -126,7 +131,7 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
        source=ColumnDataSource({name: [row[name] for row in rows] for name in names}),
        columns=[TableColumn(field=name, title=name) for name in names],
        index_position=None,
-       width=760,
+       sizing_mode="stretch_width",
        height=400,
    )
    environment = report["environment"]
@@ -138,6 +143,7 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
            ),
            chart,
            table,
+           sizing_mode="stretch_width",
        )
    )
 
@@ -156,6 +162,7 @@ Speed
 ``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. The server runs in one container. Similarity search figures in the committed report predate the current search and are not shown.
 
 .. bokeh-plot::
+   :source-position: none
 
    import json
    from pathlib import Path
@@ -186,9 +193,10 @@ Speed
    )
    chart = figure(
        y_range=list(reversed(routes.values())),
+       x_range=(0, 1.05 * max(source.data["p95_ms"])),
        x_axis_label="latency (ms)",
        height=320,
-       width=760,
+       sizing_mode="stretch_width",
        title="Warm requests: median (bar) to 95th percentile (whisker)",
        tooltips=[("p50", "@p50_ms ms"), ("p95", "@p95_ms ms"), ("runs", "@runs")],
    )
@@ -198,7 +206,7 @@ Speed
        source=source,
        columns=[TableColumn(field=name, title=name) for name in ("route", "p50_ms", "p95_ms", "runs")],
        index_position=None,
-       width=760,
+       sizing_mode="stretch_width",
        height=260,
    )
    server = report["server"]
@@ -212,5 +220,6 @@ Speed
            ),
            chart,
            table,
+           sizing_mode="stretch_width",
        )
    )
