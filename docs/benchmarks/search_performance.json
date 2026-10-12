@@ -1,0 +1,172 @@
+{
+  "commit": "791445d",
+  "commits": {
+    "current": "791445d56ccea52740e1ac258ea59368505c29f3"
+  },
+  "notes": [],
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-10-12T05:46:47+00:00",
+  "server": {
+    "cpu": 8,
+    "memory_mb": [
+      8192,
+      32768
+    ],
+    "max_inputs": 16,
+    "max_containers": 1,
+    "scaledown_window_s": 300
+  },
+  "stages": {
+    "environment": {
+      "cpu": {
+        "vendor_id": "AuthenticAMD",
+        "cpu family": "25",
+        "model": "17",
+        "model name": "unknown"
+      },
+      "cpu_count": 24,
+      "omp_num_threads": "8",
+      "thread_pools": [
+        {
+          "user_api": "blas",
+          "internal_api": "openblas",
+          "num_threads": 8,
+          "prefix": "libscipy_openblas",
+          "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+          "version": "0.3.34.106.0",
+          "threading_layer": "pthreads",
+          "architecture": "SkylakeX"
+        }
+      ]
+    },
+    "order": [
+      "current"
+    ],
+    "rounds": {
+      "current": [
+        {
+          "environment": {
+            "cpu": {
+              "vendor_id": "AuthenticAMD",
+              "cpu family": "25",
+              "model": "17",
+              "model name": "unknown"
+            },
+            "cpu_count": 24,
+            "omp_num_threads": "8",
+            "thread_pools": [
+              {
+                "user_api": "blas",
+                "internal_api": "openblas",
+                "num_threads": 8,
+                "prefix": "libscipy_openblas",
+                "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+                "version": "0.3.34.106.0",
+                "threading_layer": "pthreads",
+                "architecture": "SkylakeX"
+              }
+            ]
+          },
+          "runs": 30,
+          "matches": 32,
+          "total_p50_ms": 72.241,
+          "stages": {
+            "selection": {
+              "p50_ms": 0.067,
+              "share": 0.0009
+            },
+            "forms": {
+              "p50_ms": 10.287,
+              "share": 0.1424
+            },
+            "sums": {
+              "p50_ms": 31.676,
+              "share": 0.4385
+            },
+            "combine": {
+              "p50_ms": 0.003,
+              "share": 0.0
+            },
+            "similarity": {
+              "p50_ms": 0.048,
+              "share": 0.0007
+            },
+            "order": {
+              "p50_ms": 1.402,
+              "share": 0.0194
+            },
+            "maps": {
+              "p50_ms": 28.732,
+              "share": 0.3977
+            },
+            "predicted": {
+              "p50_ms": 0.025,
+              "share": 0.0003
+            }
+          },
+          "matrices": {
+            "agreements": {
+              "runs": 4,
+              "p50_ms": 13708.086,
+              "p95_ms": 14058.101
+            },
+            "saliency": {
+              "runs": 4,
+              "p50_ms": 22.788,
+              "p95_ms": 43.536
+            }
+          },
+          "searches": {
+            "matches=32": {
+              "runs": 30,
+              "p50_ms": 68.62,
+              "p95_ms": 73.081
+            },
+            "matches=64": {
+              "runs": 30,
+              "p50_ms": 92.984,
+              "p95_ms": 99.326
+            },
+            "matches=128": {
+              "runs": 30,
+              "p50_ms": 161.285,
+              "p95_ms": 174.629
+            }
+          },
+          "anywhere": {
+            "search": {
+              "runs": 30,
+              "p50_ms": 5654.776,
+              "p95_ms": 5877.205
+            },
+            "saliency": {
+              "runs": 30,
+              "p50_ms": 21204.86,
+              "p95_ms": 21665.091
+            }
+          },
+          "memory": {
+            "peak_rss_mib": 9462.1,
+            "arrow_peak_mib": 242.4,
+            "resident_files_mib": 8392.2,
+            "resident_anonymous_mib": 907.9
+          },
+          "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+          "position": 0
+        }
+      ]
+    },
+    "memory": {
+      "peak_rss_mib": 289.0,
+      "arrow_peak_mib": 0.0,
+      "resident_files_mib": 169.7,
+      "resident_anonymous_mib": 119.3
+    },
+    "locked_dependencies": "current"
+  },
+  "best": {
+    "name": "current",
+    "commit": "791445d56ccea52740e1ac258ea59368505c29f3",
+    "total_p50_ms": 72.241
+  }
+}
