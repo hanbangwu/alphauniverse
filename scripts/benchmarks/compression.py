@@ -358,7 +358,7 @@ class Current:
                 stored["rest"] / (self.vocabulary - KEPT),
             )
         return (
-            torch.cat([stored["codes"], stored["query_codes"]], dim=-1).long(),
+            torch.cat([stored["codes"].long(), stored["query_codes"].long()], dim=-1),
             torch.cat([stored["probabilities"], stored["query_probabilities"]], dim=-1),
             stored["tails"] / (self.vocabulary - TOP_CODES),
         )

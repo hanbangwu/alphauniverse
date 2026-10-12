@@ -215,19 +215,16 @@ def dense_image_tokens(
 ) -> np.ndarray:
     codes, probabilities, _ = top_image_tokens(rows, survey, slots)
     width = TOP_CODES - KEPT
+    query_codes = array(rows, f"{survey}_query_codes", N_IMAGE_TOKENS, width)[:, slots]
+    query_probabilities = array(
+        rows, f"{survey}_query_probabilities", N_IMAGE_TOKENS, width
+    )[:, slots]
     tails = array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots]
     dense = np.repeat(
         (tails / (IMAGE_VOCABULARY - TOP_CODES))[..., None], IMAGE_VOCABULARY, axis=-1
     )
-    np.put_along_axis(dense, codes.astype(np.intp), probabilities, axis=-1)
-    np.put_along_axis(
-        dense,
-        array(rows, f"{survey}_query_codes", N_IMAGE_TOKENS, width)[:, slots].astype(
-            np.intp
-        ),
-        array(rows, f"{survey}_query_probabilities", N_IMAGE_TOKENS, width)[:, slots],
-        axis=-1,
-    )
+    np.put_along_axis(dense, codes, probabilities, axis=-1)
+    np.put_along_axis(dense, query_codes, query_probabilities, axis=-1)
     return dense
 
 

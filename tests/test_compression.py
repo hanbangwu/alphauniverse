@@ -95,7 +95,7 @@ def test_the_current_scheme_takes_the_bytes_the_store_gives_each_mode() -> None:
         assert scheme.bits(stored) == widths[mode.name] * 8
 
 
-def test_the_current_scheme_decodes_the_query_as_search_reads_it() -> None:
+def test_the_current_scheme_reads_gallery_and_query_images_as_search_does() -> None:
     mode = next(mode for mode in predictions_module.MODES if mode.name == "ls_image")
     scheme = compression.Current(mode, compression.Basis(1))
     slots = len(mode.keys) * len(mode.positions)
@@ -117,6 +117,12 @@ def test_the_current_scheme_decodes_the_query_as_search_reads_it() -> None:
         scheme.decode(stored, side="query").numpy(),
         pql.dense_image_tokens(rows, mode.survey, slice(None)),
     )
+    for found, read in zip(
+        scheme.image(stored),
+        pql.top_image_tokens(rows, mode.survey, slice(None)),
+        strict=True,
+    ):
+        np.testing.assert_allclose(found.numpy(), read)
 
 
 def test_quantised_values_are_within_half_a_step() -> None:
