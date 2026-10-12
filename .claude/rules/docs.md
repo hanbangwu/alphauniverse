@@ -17,5 +17,6 @@ paths:
   - `docs/benchmarks.rst`: what each benchmark measures, with its figures drawn from its report.
   - `docs/how-to.rst`: the commands.
   - `docs/reference.rst`: the pipeline, the artifacts, the HTTP API, and the tests and CI.
+  - `docs/references.bib`: every paper the docs cite, cited with `:cite:p:` or `:cite:t:` and listed on `docs/references.rst`.
 - Facts the code holds (schemas, routes) are rendered from it by Sphinx, not restated.
 - A rule goes in the narrowest place it applies: a path-scoped file in `.claude/rules/` when it concerns certain files, `CLAUDE.md` only when it applies to the whole repository.

@@ -26,9 +26,4 @@ It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at 
    benchmarks
    how-to
    reference
-
-References
-----------
-
-.. bibliography::
-   :filter: docname in docnames
+   references

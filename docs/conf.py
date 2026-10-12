@@ -3,10 +3,14 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import dataclasses
 import sys
 from pathlib import Path
 
 import pyarrow as pa
+import sphinxcontrib.bibtex.plugin
+from sphinxcontrib.bibtex.style.referencing import BracketStyle
+from sphinxcontrib.bibtex.style.referencing.author_year import AuthorYearReferenceStyle
 
 sys.path.insert(0, Path(__file__).parents[1].resolve().as_posix())
 
@@ -28,7 +32,7 @@ extensions = [
 ]
 
 bibtex_bibfiles = ["references.bib"]
-bibtex_reference_style = "author_year"
+bibtex_reference_style = "astronomy"
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
@@ -47,3 +51,21 @@ def schema_block(app, what, name, obj, options, lines):
 
 def setup(app):
     app.connect("autodoc-process-docstring", schema_block)
+
+
+def round_brackets():
+    return BracketStyle(left="(", right=")")
+
+
+@dataclasses.dataclass
+class AstronomyReferenceStyle(AuthorYearReferenceStyle):
+    bracket_parenthetical: BracketStyle = dataclasses.field(
+        default_factory=round_brackets
+    )
+    bracket_textual: BracketStyle = dataclasses.field(default_factory=round_brackets)
+    author_year_sep: str = " "
+
+
+sphinxcontrib.bibtex.plugin.register_plugin(
+    "sphinxcontrib.bibtex.style.referencing", "astronomy", AstronomyReferenceStyle
+)
