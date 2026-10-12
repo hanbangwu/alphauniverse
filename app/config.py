@@ -143,8 +143,8 @@ ARTIFACTS: dict[str, str] = {
     "pairs": "parquet",
     "alignment": "pt",
     "aion_gemma_space": "npy",
-    "predictions": "arrow",
-    "prediction_basis": "npz",
+    "probabilities": "arrow",
+    "probability_basis": "npz",
 }
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
@@ -182,6 +182,8 @@ PAIRS = pa.schema(
 
 
 TOP_CODES = 64
+KEPT = 16
+PROBABILITY_FLOOR = float(np.finfo(np.float32).tiny)
 SPECTRUM_TOKEN_RANK = 256
 IMAGE_VOCABULARY = 4375
 VOCABULARY = 1024
@@ -203,23 +205,29 @@ OBSERVATIONS = {
 PREDICTIONS = pa.schema(
     [
         pa.field("galaxy", pa.int32()),
-        pa.field(REDSHIFT, pa.list_(pa.float16(), REDSHIFT_VOCABULARY)),
+        pa.field(REDSHIFT, pa.list_(pa.float32(), REDSHIFT_VOCABULARY)),
     ]
     + [
         field
         for survey, columns in TABLE_VALUE_SURVEYS.items()
         for field in (
+            pa.field(f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * KEPT)),
             pa.field(
-                f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * TOP_CODES)
+                f"{survey}_probabilities", pa.list_(pa.float32(), N_IMAGE_TOKENS * KEPT)
+            ),
+            pa.field(f"{survey}_rest", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
+            pa.field(
+                f"{survey}_query_codes",
+                pa.list_(pa.uint16(), N_IMAGE_TOKENS * (TOP_CODES - KEPT)),
             ),
             pa.field(
-                f"{survey}_log_probabilities",
-                pa.list_(pa.float16(), N_IMAGE_TOKENS * TOP_CODES),
+                f"{survey}_query_probabilities",
+                pa.list_(pa.float16(), N_IMAGE_TOKENS * (TOP_CODES - KEPT)),
             ),
             pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
             pa.field(
                 f"{survey}_table_values",
-                pa.list_(pa.float16(), len(columns) * VOCABULARY),
+                pa.list_(pa.float32(), len(columns) * VOCABULARY),
             ),
         )
     ]

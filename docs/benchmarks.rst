@@ -76,7 +76,7 @@ Does similarity search find galaxies that are physically alike? ``pql_quality`` 
 Prediction storage
 ------------------
 
-How much does compressing AION's predictions change search results? ``compression_quality`` scores sampled queries with the exact distributions and with each storage scheme, and compares the rankings: the median and 5th-percentile Spearman correlation with the exact ranking, the median overlap of the top 10, and the change in the identity and relevance checks. The chart and first table show the stored scheme (:doc:`reference`) for each mode and selection size, with only the other galaxies' predictions compressed, as search reads them; the second table gives, per mode, the most compact scheme that meets every target.
+How much does compressing AION's predictions change search results? ``compression_quality`` scores sampled queries with the exact distributions and with each storage scheme, and compares the rankings: the median and 5th-percentile Spearman correlation with the exact ranking, the median overlap of the top 10, and the change in the identity and relevance checks. The chart and first table show the scheme stored at the report's commit (:doc:`reference` describes the current one) for each mode and selection size, with only the other galaxies' predictions compressed, as search reads them; the second table gives, per mode, the most compact scheme that meets every target.
 
 .. bokeh-plot::
    :source-position: none

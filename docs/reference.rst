@@ -10,7 +10,7 @@ The build pipeline and the app share nothing but files. Six Modal jobs write art
 Job                       Reads                                         Writes
 ========================= ============================================= =======================================
 generate_embeddings       the dataset                                   encoded, codebook, tokens
-generate_predictions      tokens                                        predictions, prediction_basis
+generate_predictions      tokens                                        probabilities, probability_basis
 generate_projections      the dataset, encoded                          mean_points, full_points,
                                                                         parametric_umap
 generate_pairs            the dataset, encoded                          pairs
@@ -28,13 +28,13 @@ Artifacts
 .. autofunction:: app.config.store_schema
    :no-index:
 
-``predictions`` is an uncompressed Arrow IPC file of AION's predictions at every slot. Image tokens keep their 64 most probable codes and the log of the remaining mass; search reads each galaxy's 16 most probable and spreads the rest evenly over the other codes, but the query galaxy's full 64; catalogue values and the redshift keep every log-probability; spectrum tokens keep 256 coefficients on a per-survey PCA basis, quantised to 8 bits as ``offset + code × step``.
+``probabilities`` is an uncompressed Arrow IPC file of AION's predictions at every slot. Image tokens keep their 64 most probable codes with their probabilities, the mass beyond the first 16 and the mass beyond all 64; search reads each galaxy's 16 most probable and spreads the rest evenly over the other codes, but the query galaxy's full 64; catalogue values and the redshift keep every probability; spectrum tokens keep 256 coefficients on a per-survey PCA basis, quantised to 8 bits as ``offset + code × step``.
 
 .. autodata:: app.config.PREDICTIONS
    :no-index:
    :no-value:
 
-``prediction_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``.
+``probability_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``.
 
 ``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet:
 

@@ -5,7 +5,13 @@ import numpy as np
 import torch
 
 from app import pql
-from app.config import SPECTRUM_TOKEN_RANK, TOP_CODES, VOCABULARY
+from app.config import (
+    KEPT,
+    PROBABILITY_FLOOR,
+    SPECTRUM_TOKEN_RANK,
+    TOP_CODES,
+    VOCABULARY,
+)
 from app.predictions import Mode, coefficients, image_token_codes
 
 KS = (1, 2, 4, 8, 16, 32, 64, 128, 256)
@@ -63,7 +69,7 @@ def floor(scheme: object, vocabulary: int) -> float:
     )
     if projected:
         return pql.SPECTRUM_TOKEN_FLOOR * VOCABULARY / vocabulary
-    return torch.finfo(torch.float32).tiny
+    return PROBABILITY_FLOOR
 
 
 def step(low: torch.Tensor, high: torch.Tensor, bits: int) -> torch.Tensor:
@@ -312,7 +318,7 @@ class Current:
         self.vocabulary = mode.vocabulary
         self.kind = kind(mode)
         self.basis = basis
-        self.dense = Dense(FLOATS[1])
+        self.dense = Dense(PROBABILITY)
         self.name = "current"
 
     def encode(self, log_probabilities: torch.Tensor) -> Stored:
@@ -323,30 +329,38 @@ class Current:
         flat = flat.float().cpu().numpy()
         if self.kind == "image":
             parts = image_token_codes(flat)
-            names = ("codes", "kept", "tails")
         else:
-            parts = coefficients(
-                np.exp(flat),
-                self.basis.mean.cpu().numpy(),
-                self.basis.directions[:SPECTRUM_TOKEN_RANK].cpu().numpy(),
+            parts = dict(
+                zip(
+                    ("quantised", "offsets", "steps"),
+                    coefficients(
+                        np.exp(flat),
+                        self.basis.mean.cpu().numpy(),
+                        self.basis.directions[:SPECTRUM_TOKEN_RANK].cpu().numpy(),
+                    ),
+                    strict=True,
+                )
             )
-            names = ("quantised", "offsets", "steps")
         return {
             name: torch.from_numpy(array)
             .reshape(*shape, *array.shape[1:])
             .to(log_probabilities.device)
-            for name, array in zip(names, parts, strict=True)
+            for name, array in parts.items()
         }
 
     def image(
-        self, stored: Stored, kept: int
+        self, stored: Stored, side: str = "gallery"
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        probabilities = stored["kept"].float().exp()
-        rest = stored["tails"].exp() + probabilities[..., kept:].sum(dim=-1)
+        if side == "gallery":
+            return (
+                stored["codes"].long(),
+                stored["probabilities"],
+                stored["rest"] / (self.vocabulary - KEPT),
+            )
         return (
-            stored["codes"][..., :kept].long(),
-            probabilities[..., :kept],
-            rest / (self.vocabulary - kept),
+            torch.cat([stored["codes"].long(), stored["query_codes"].long()], dim=-1),
+            torch.cat([stored["probabilities"], stored["query_probabilities"]], dim=-1),
+            stored["tails"] / (self.vocabulary - TOP_CODES),
         )
 
     def projected(self, stored: Stored) -> torch.Tensor:
@@ -357,8 +371,7 @@ class Current:
 
     def decode(self, stored: Stored, side: str = "gallery") -> torch.Tensor:
         if self.kind == "image":
-            kept = pql.KEPT if side == "gallery" else TOP_CODES
-            codes, probabilities, spread = self.image(stored, kept)
+            codes, probabilities, spread = self.image(stored, side)
             dense = spread[..., None].expand(*spread.shape, self.vocabulary).clone()
             return dense.scatter_(-1, codes, probabilities)
         if self.kind == "spectrum":
@@ -368,7 +381,7 @@ class Current:
 
     def overlap(self, stored: Stored, query: torch.Tensor) -> torch.Tensor:
         if self.kind == "image":
-            parts = [part.cpu().numpy() for part in self.image(stored, pql.KEPT)]
+            parts = [part.cpu().numpy() for part in self.image(stored)]
             overlaps = pql.image_token_overlaps(query.cpu().numpy(), *parts)
             return torch.from_numpy(overlaps).to(query.device)
         if self.kind == "spectrum":
@@ -377,9 +390,9 @@ class Current:
                 self.projected(stored) * (query @ directions.T)
             ).sum(dim=-1)
         overlaps = pql.table_value_overlaps(
-            load(stored).cpu().numpy(), query.log().cpu().numpy()
+            load(stored).cpu().numpy(), slice(None), query.cpu().numpy()
         )
-        return torch.from_numpy(overlaps).exp().to(query.device)
+        return torch.from_numpy(overlaps).to(query.device)
 
     def bits(self, stored: Stored) -> int:
         return 8 * sum(
