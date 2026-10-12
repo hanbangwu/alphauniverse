@@ -17,7 +17,7 @@ SERVING_ENVIRONMENT = {"OPENBLAS_NUM_THREADS": "1"}
 
 app = modal.App("alphauniverse")
 
-cache_volume = modal.Volume.from_name("scratch-cache", create_if_missing=True)
+cache_volume = modal.Volume.from_name("alphauniverse-cache", create_if_missing=True)
 
 environment = {
     "ALPHAUNIVERSE_CACHE": CACHE_PATH,
