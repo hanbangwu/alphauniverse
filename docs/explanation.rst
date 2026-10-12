@@ -41,7 +41,7 @@ with :math:`a` and :math:`b` set by UMAP's ``min_dist`` of 0.1. Training draws p
 
 .. math::
 
-   \mathcal{L} = -\log q(d_{ij}) - \sum_{k} \log\bigl(1 - q(d_{ik})\bigr),
+   \mathcal{L} = -\log q(d_{ij}) - \frac{1}{5} \sum_{k} \log\bigl(1 - q(d_{ik})\bigr),
 
 pulling neighbours together and pushing random points apart.
 
@@ -103,7 +103,7 @@ Query maps
 
 Before you search, the query galaxy's panels can shade its own slots.
 
-**This galaxy** shows, at each slot :math:`c`, how alike AION predicts it is to the selection: the best cosine between predicted distributions, :math:`\max_{s \in S} \cos(p_{q,s}, p_{q,c})` (:py:func:`app.pql.cosines`).
+**This galaxy** shows, at each slot :math:`c` of an image or spectrum mode :math:`m`, how alike AION predicts it is to the selection in that mode: the best cosine between predicted distributions, :math:`\max_{s \in S_m} \cos(p_{q,s}, p_{q,c})` (:py:func:`app.pql.cosines`). Catalogue values are not shaded.
 
 **Population** asks a different question: across the whole field, where does agreeing with :math:`q` go with matching the selection? For each slot :math:`c` it takes, over every other galaxy, the partial correlation between the galaxy's selection score :math:`S(g) = \sum_{s \in S} \log O_s(q, g)` and its agreement there, :math:`A_c(g) = \log O_c(q, g)`, controlling for its mean agreement outside the selection, :math:`C(g)`:
 

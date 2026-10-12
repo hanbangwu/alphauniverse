@@ -55,12 +55,12 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
        index_position=None,
        height=140,
    )
-   job = report["job"]
+   environment = report["environment"]
    show(
        column(
            Div(
                text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"{report['size']:,} embeddings; {job['cpu']} CPU, no GPU."
+               f"{report['size']:,} embeddings; {environment['cpu_count']} CPUs visible to the container."
            ),
            chart,
            table,
@@ -129,12 +129,12 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
        width=760,
        height=400,
    )
-   job = report["job"]
+   environment = report["environment"]
    show(
        column(
            Div(
                text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"{report['galaxies']:,} held-out galaxies; {job['cpu']} CPU, one {job['gpu']}."
+               f"{report['galaxies']:,} held-out galaxies; {environment['cpu_count']} CPUs visible to the container."
            ),
            chart,
            table,
@@ -144,7 +144,7 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
 Search quality
 --------------
 
-``pql_quality`` hides each sampled galaxy's spectra and redshift, predicts it again, and checks whether similarity search still finds what was hidden: the median :math:`|\Delta z| / (1 + z)` of the top 10 matches, whether the hidden copy ranks in the top 10, and whether merely having a spectrum, rather than resembling the query, lifts a galaxy into the top 32. No report is committed yet.
+``pql_quality`` samples galaxies with a spectrum and a redshift and measures the median :math:`|\Delta z| / (1 + z)` of each one's top 10 matches. It also hides each sampled galaxy's spectra and redshift, predicts it again, and checks whether the hidden copy ranks in the top 10, and whether merely having a spectrum, rather than resembling the query, lifts a galaxy into the top 32. Its redshift is DESI's, else SDSS's, without the flag or limit AION's input uses. No report is committed yet.
 
 ``compression_quality`` measures how each way of storing AION's predicted distributions changes the similarity scores and rankings, against the exact distributions, including the storage described in :doc:`explanation`. No report is committed yet.
 
