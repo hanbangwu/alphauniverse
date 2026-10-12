@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 210" width="100%" role="img" aria-labelledby="similarity-title" font-family="sans-serif" font-size="12" fill="none" stroke="currentColor">
+  <title id="similarity-title">At each selected slot, AION's predicted distributions for the query and for another galaxy are multiplied code by code and summed into an overlap; the log overlaps are added within each mode, each mode's total is standardised over all galaxies, and the standardised totals are averaged into the score.</title>
+  <defs>
+    <marker id="similarity-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor" stroke="none"/>
+    </marker>
+  </defs>
+  <g fill="currentColor" stroke="none" text-anchor="middle">
+    <text x="105" y="20" font-weight="bold">one selected slot</text>
+    <text x="330" y="20" font-weight="bold">overlap</text>
+    <text x="465" y="20" font-weight="bold">each mode</text>
+    <text x="625" y="20" font-weight="bold">score</text>
+  </g>
+  <g fill="currentColor" stroke="none" font-size="11">
+    <text x="20" y="62">query</text>
+    <text x="20" y="142">galaxy</text>
+  </g>
+  <g fill="currentColor" fill-opacity="0.3" stroke="none">
+    <rect x="80" y="62" width="14" height="8"/><rect x="96" y="35" width="14" height="35"/><rect x="112" y="50" width="14" height="20"/><rect x="128" y="64" width="14" height="6"/><rect x="144" y="67" width="14" height="3"/>
+    <rect x="80" y="135" width="14" height="15"/><rect x="96" y="120" width="14" height="30"/><rect x="112" y="125" width="14" height="25"/><rect x="128" y="142" width="14" height="8"/><rect x="144" y="146" width="14" height="4"/>
+  </g>
+  <line x1="76" y1="70" x2="162" y2="70"/><line x1="76" y1="150" x2="162" y2="150"/>
+  <g fill="currentColor" stroke="none" text-anchor="middle" font-size="11">
+    <text x="119" y="86">codes t</text>
+    <text x="119" y="166">codes t</text>
+    <text x="119" y="108">×</text>
+  </g>
+  <line x1="175" y1="108" x2="245" y2="108" marker-end="url(#similarity-arrow)"/>
+  <text x="210" y="100" fill="currentColor" stroke="none" text-anchor="middle" font-size="11">sum over t</text>
+  <text x="330" y="113" fill="currentColor" stroke="none" text-anchor="middle" font-size="14">O = Σ p_q p_g</text>
+  <line x1="400" y1="108" x2="425" y2="108" marker-end="url(#similarity-arrow)"/>
+  <g fill="currentColor" stroke="none" text-anchor="middle" font-size="11">
+    <text x="465" y="70">image: Σ log O</text>
+    <text x="465" y="100">spectrum: Σ log O</text>
+    <text x="465" y="130">table: Σ log O</text>
+    <text x="465" y="165">standardise each</text>
+    <text x="465" y="179">over all galaxies</text>
+  </g>
+  <line x1="530" y1="108" x2="575" y2="108" marker-end="url(#similarity-arrow)"/>
+  <text x="625" y="113" fill="currentColor" stroke="none" text-anchor="middle">average</text>
+</svg>
