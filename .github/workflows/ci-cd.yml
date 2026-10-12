@@ -42,6 +42,16 @@ jobs:
           uv run --python 3.12 python -m scripts.openapi
           git diff --exit-code --stat frontend/openapi.json || { echo "::error::frontend/openapi.json is stale; run 'uv run python -m scripts.openapi' and commit"; exit 1; }
 
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build
+        run: uv run --python 3.12 --group docs make -C docs html SPHINXOPTS="-W --keep-going"
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
