@@ -21,7 +21,7 @@ paths:
   | `app/main.py`                                                            | `reference.rst`, `using.rst`                                  |
   | `app/dataset.py`, `scripts/alphauniverse_cosmos.py`                      | `index.rst`                                                   |
   | `modal_app.py`                                                           | `reference.rst`, `how-to.rst`                                 |
-  | `scripts/benchmarks/**`                                                  | `benchmarks.rst`, `how-to.rst`                                |
+  | `scripts/benchmarks/**`                                                  | `benchmarks.rst`, `benchmark_plots.py`, `how-to.rst`          |
   | `tests/**`, `scripts/fixture.py`, `.github/workflows/**`                 | `reference.rst`, `how-to.rst`                                 |
   | `frontend/src/**`                                                        | `using.rst`, the matching page in `methods/`                  |
 
