@@ -1,7 +1,7 @@
 Benchmarks
 ==========
 
-Every benchmark runs on Modal against the artifacts the live site serves, and writes a report to ``docs/benchmarks/<script>.json``. The charts and tables below are drawn from those reports when the documentation is built, so each shows exactly one run, named by its commit and date. Figures compare only within one run, never across runs or machines. :doc:`how-to` explains how to run them.
+Every benchmark runs on Modal against the artifacts the live site serves, and writes a report to ``docs/benchmarks/<script>.json``. The charts and tables below are drawn from those reports when the documentation is built, so each shows exactly one run, named by its commit and date, and a newly committed report updates its section. Figures compare only within one run, never across runs or machines. :doc:`how-to` explains how to run them.
 
 Projection quality
 ------------------
@@ -20,56 +20,11 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
 .. bokeh-plot::
    :source-position: none
 
-   import json
-   from pathlib import Path
+   from bokeh.plotting import show
 
-   from bokeh.layouts import column
-   from bokeh.models import ColumnDataSource, DataTable, Div, FactorRange, TableColumn
-   from bokeh.plotting import figure, show
+   from benchmark_plots import projection_quality
 
-   report = json.loads(Path("benchmarks/projection_quality.json").read_text())
-   metrics = ("preservation", "trustworthiness")
-   rows = [
-       (str(neighbours), metric, values[metric])
-       for neighbours, values in report["neighbours"].items()
-       for metric in metrics
-   ]
-   source = ColumnDataSource(
-       {
-           "factor": [(neighbours, metric) for neighbours, metric, _ in rows],
-           "neighbours": [neighbours for neighbours, _, _ in rows],
-           "metric": [metric for _, metric, _ in rows],
-           "value": [value for _, _, value in rows],
-       }
-   )
-   chart = figure(
-       x_range=FactorRange(*source.data["factor"]),
-       y_range=(0, 1),
-       height=300,
-       sizing_mode="stretch_width",
-       title="Neighbours kept, by k",
-       tooltips=[("k", "@neighbours"), ("metric", "@metric"), ("value", "@value")],
-   )
-   chart.vbar(x="factor", top="value", width=0.8, source=source)
-   table = DataTable(
-       source=source,
-       columns=[TableColumn(field=name, title=name) for name in ("neighbours", "metric", "value")],
-       index_position=None,
-       height=140,
-       sizing_mode="stretch_width",
-   )
-   environment = report["environment"]
-   show(
-       column(
-           Div(
-               text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"{report['size']:,} embeddings; {environment['cpu_count']} CPUs visible to the container."
-           ),
-           chart,
-           table,
-           sizing_mode="stretch_width",
-       )
-   )
+   show(projection_quality())
 
 Text search quality
 -------------------
@@ -94,132 +49,68 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
 .. bokeh-plot::
    :source-position: none
 
-   import json
-   from pathlib import Path
+   from bokeh.plotting import show
 
-   from bokeh.layouts import column
-   from bokeh.models import ColumnDataSource, DataTable, Div, FactorRange, TableColumn
-   from bokeh.plotting import figure, show
+   from benchmark_plots import text_search_quality
 
-   report = json.loads(Path("benchmarks/text_search_quality.json").read_text())
-   rows = [
-       {"query": query, "space": space, "centring": centring} | figures
-       for query, spaces in report["queries"].items()
-       for space, centrings in spaces.items()
-       for centring, figures in centrings.items()
-   ]
-   raw = [row for row in rows if row["centring"] == "raw"]
-   chart_source = ColumnDataSource(
-       {
-           "factor": [(row["query"], row["space"]) for row in raw],
-           "average_precision": [row["average_precision"] for row in raw],
-           "base_rate": [row["base_rate"] for row in raw],
-       }
-   )
-   chart = figure(
-       y_range=FactorRange(*reversed(chart_source.data["factor"])),
-       x_range=(0, 1),
-       height=560,
-       sizing_mode="stretch_width",
-       title="Average precision, raw (bars) against the base rate (ticks)",
-       tooltips=[("average precision", "@average_precision"), ("base rate", "@base_rate")],
-   )
-   chart.hbar(y="factor", right="average_precision", height=0.8, source=chart_source)
-   chart.scatter(x="base_rate", y="factor", marker="dash", angle=1.5708, size=18, color="black", source=chart_source)
-   names = ("query", "space", "centring", "base_rate", "average_precision", "precision@10", "precision@100")
-   table = DataTable(
-       source=ColumnDataSource({name: [row[name] for row in rows] for name in names}),
-       columns=[TableColumn(field=name, title=name) for name in names],
-       index_position=None,
-       sizing_mode="stretch_width",
-       height=400,
-   )
-   environment = report["environment"]
-   show(
-       column(
-           Div(
-               text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"{report['galaxies']:,} held-out galaxies; {environment['cpu_count']} CPUs visible to the container."
-           ),
-           chart,
-           table,
-           sizing_mode="stretch_width",
-       )
-   )
+   show(text_search_quality())
 
-Search quality
---------------
+Similarity search quality
+-------------------------
 
-``pql_quality`` samples galaxies with a spectrum and a redshift and measures the median :math:`|\Delta z| / (1 + z)` of each one's top 10 matches. It also hides each sampled galaxy's spectra and redshift, predicts it again, and checks whether the hidden copy ranks in the top 10, and whether merely having a spectrum, rather than resembling the query, lifts a galaxy into the top 32. Its redshift is DESI's, else SDSS's, without the flag or limit AION's input uses. No report is committed yet.
+Does similarity search find galaxies that are physically alike? ``pql_quality`` samples galaxies with a spectrum and a redshift, searches from each with four kinds of selection (16 consecutive spectrum tokens, every observed spectrum token, four Legacy Survey catalogue values, four HSC catalogue values) and reports, as a mean over queries with a 95% bootstrap interval:
 
-``compression_quality`` measures how each way of storing AION's predicted distributions changes the similarity scores and rankings, against the exact distributions, including the storage described in :doc:`reference`. No report is committed yet.
-
-Speed
------
-
-``search_performance`` times each stage of a similarity search in a container built like the server, comparing the current commit with ``main``. Its committed report timed the search that predictive query likelihood replaced, so no current figures are shown.
-
-``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. The server runs in one container. Similarity search figures in the committed report predate the current search and are not shown.
+- **redshift**: the median :math:`|\Delta z| / (1 + z)` between the query and its top 10 matches; lower is better. Its redshift is DESI's, else SDSS's, without the flag or limit AION's input uses.
+- **identity**: the fraction of queries whose own galaxy, with its spectra and redshift hidden and predicted again, ranks in the top 10; higher is better.
+- **availability** and **evidence**: each sampled galaxy is shown either with its spectrum or with it hidden, at random; these are how much more often a galaxy shown with its spectrum lands in the top 32 than its share, for galaxies more than 0.01 in :math:`|\Delta z| / (1 + z)` from the query (availability) and within it (evidence). Availability near 0 means having a spectrum alone does not lift a galaxy; positive evidence means a spectrum helps real matches.
 
 .. bokeh-plot::
    :source-position: none
 
-   import json
-   from pathlib import Path
+   from bokeh.plotting import show
 
-   from bokeh.layouts import column
-   from bokeh.models import ColumnDataSource, DataTable, Div, TableColumn, Whisker
-   from bokeh.plotting import figure, show
+   from benchmark_plots import pql_quality
 
-   report = json.loads(Path("benchmarks/backend_performance.json").read_text())
-   routes = {
-       "meta": "/meta",
-       "coverage": "/galaxy/{g}",
-       "image": "/galaxy/{g}/image",
-       "tokens": "/galaxy/{g}/image/tokens",
-       "spectrum": "/galaxy/{g}/spectrum",
-       "spectrum tokens": "/galaxy/{g}/spectrum/tokens",
-       "table": "/galaxy/{g}/table",
-       "text search": "/search/text",
-   }
-   warm = report["requests"]["warm"]
-   source = ColumnDataSource(
-       {
-           "route": list(routes.values()),
-           "p50_ms": [warm[name]["p50_ms"] for name in routes],
-           "p95_ms": [warm[name]["p95_ms"] for name in routes],
-           "runs": [warm[name]["runs"] for name in routes],
-       }
-   )
-   chart = figure(
-       y_range=list(reversed(routes.values())),
-       x_range=(0, 1.05 * max(source.data["p95_ms"])),
-       x_axis_label="latency (ms)",
-       height=320,
-       sizing_mode="stretch_width",
-       title="Warm requests: median (bar) to 95th percentile (whisker)",
-       tooltips=[("p50", "@p50_ms ms"), ("p95", "@p95_ms ms"), ("runs", "@runs")],
-   )
-   chart.hbar(y="route", right="p50_ms", height=0.6, source=source)
-   chart.add_layout(Whisker(source=source, base="route", lower="p50_ms", upper="p95_ms", dimension="width"))
-   table = DataTable(
-       source=source,
-       columns=[TableColumn(field=name, title=name) for name in ("route", "p50_ms", "p95_ms", "runs")],
-       index_position=None,
-       sizing_mode="stretch_width",
-       height=260,
-   )
-   server = report["server"]
-   show(
-       column(
-           Div(
-               text=f"Commit <code>{report['commit']}</code>, {report['date'][:10]}; "
-               f"server {server['cpu']} CPU, {server['memory_mb'][0]:,} MB requested; "
-               f"first <code>/search/text</code> on a fresh server, loading EmbeddingGemma: "
-               f"{report['requests']['cold_text_search_ms'] / 1000:.1f} s."
-           ),
-           chart,
-           table,
-           sizing_mode="stretch_width",
-       )
-   )
+   show(pql_quality())
+
+Prediction storage
+------------------
+
+How much does compressing AION's predictions change search results? ``compression_quality`` scores sampled queries with the exact distributions and with each storage scheme, and compares the rankings: the median and 5th-percentile Spearman correlation with the exact ranking, the median overlap of the top 10, and the change in the identity and relevance checks. The chart and first table show the stored scheme (:doc:`reference`) for each mode and selection size, with only the other galaxies' predictions compressed, as search reads them; the second table gives, per mode, the most compact scheme that meets every target.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import compression_quality
+
+   show(compression_quality())
+
+Search speed
+------------
+
+``search_performance`` times each stage of a similarity search in a container built like the server, for the checked-out commit and ``main`` in alternating rounds.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import search_performance
+
+   show(search_performance())
+
+Request speed
+-------------
+
+``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. The server runs in one container. Warm figures exclude each route's first requests; the cold figures are each kind's first request to a freshly started server.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import backend_performance
+
+   show(backend_performance())

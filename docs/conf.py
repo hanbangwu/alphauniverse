@@ -14,6 +14,7 @@ from sphinxcontrib.bibtex.style.referencing import BracketStyle
 from sphinxcontrib.bibtex.style.referencing.author_year import AuthorYearReferenceStyle
 
 sys.path.insert(0, Path(__file__).parents[1].resolve().as_posix())
+sys.path.insert(0, Path(__file__).parent.resolve().as_posix())
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
