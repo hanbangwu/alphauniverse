@@ -266,21 +266,16 @@ def test_a_cached_matrix_is_served_while_another_galaxy_builds(tree: Path) -> No
         assert served
 
 
-def test_the_saliency_sample_is_the_best_matches_and_other_galaxies(
-    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+def test_the_saliency_sample_is_other_galaxies_fixed_by_the_galaxy(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pql, "SALIENCY_MATCHES", 3)
-    monkeypatch.setattr(pql, "SALIENCY_BACKGROUND", 4)
-    anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
+    monkeypatch.setattr(pql, "SALIENCY_SAMPLE", 7)
 
-    sample = pql.saliency_sample(anywhere)
+    sample = pql.saliency_sample(GALAXY)
 
-    scores = pql.scores(anywhere)
-    others = np.delete(np.arange(len(scores)), GALAXY)
-    best = others[np.argsort(-scores[others], kind="stable")][:3]
-    assert sample[:3].tolist() == best.tolist()
     assert len(set(sample.tolist())) == 7
     assert GALAXY not in sample
+    np.testing.assert_array_equal(pql.saliency_sample(GALAXY), sample)
 
 
 def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
