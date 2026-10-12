@@ -29,4 +29,4 @@ where :math:`r` is the Pearson correlation over galaxies (``app.pql.saliency``).
 .. raw:: html
    :file: ../figures/query-maps.svg
 
-With Any position, :math:`A_c` and :math:`T` use the best overlap anywhere in the other galaxy's image or spectrum, and the correlation runs over the 256 best matches and 256 random other galaxies, since the best overlap at every slot of every galaxy would take too long to compute.
+With Any position, :math:`A_c` and :math:`T` use the best overlap anywhere in the other galaxy's image or spectrum, and the correlation runs over 512 other galaxies drawn at random, the same for every selection on the query galaxy, since the best overlap at every slot of every galaxy would take too long to compute.

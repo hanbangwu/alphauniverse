@@ -398,9 +398,10 @@ def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Arr
     description="For the query galaxy, at every slot of every mode, the partial "
     "correlation over every other galaxy between its score on the selection and its "
     "agreement with the query galaxy at that slot, controlling for its mean agreement "
-    "outside the selection. A mode named in anywhere takes, at each slot, the best "
-    "agreement at any slot of that mode, over the top 256 matches and 256 random "
-    "other galaxies. One row, one list column per map.",
+    "outside the selection. With anywhere, the correlation runs over 512 other "
+    "galaxies drawn at random with the query galaxy as the seed, and a mode named in "
+    "anywhere takes, at each slot, the best agreement at any slot of that mode. One "
+    "row, one list column per map.",
 )
 def get_saliency(query: Annotated[pql.Selection, Query()]) -> Response:
     fields, columns = map_arrays(pql.by_mode(pql.saliency(query)[None]))

@@ -55,7 +55,7 @@ HTTP API
 
 Every endpoint is ``GET``; ``/projections/{projection}`` and ``/downloads/{role}`` also answer ``HEAD``. A request whose ``If-None-Match`` matches the response's ETag gets ``304 Not Modified``. Artifact files carry Starlette's ETag, from size and modification time; every other response's ETag is an MD5 of its body. Every response carries ``Cache-Control: no-cache``.
 
-The first Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the last 8; builds run one at a time.
+The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the last 8; builds run one at a time. An Any position map builds no matrix: it computes the rows of its 512 sampled galaxies, and the server keeps them for the last 8 pairs of galaxy and Any position modes; these computations take turns with the builds.
 
 .. openapi:: ../frontend/openapi.json
 
