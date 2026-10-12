@@ -23,8 +23,12 @@ author = "Hanbang Wu, Biprateep Dey, Nolan Koblischke, Joshua Speagle"
 extensions = [
     "sphinx.ext.autodoc",
     "bokeh.sphinxext.bokeh_plot",
+    "sphinxcontrib.bibtex",
     "sphinxcontrib.openapi",
 ]
+
+bibtex_bibfiles = ["references.bib"]
+bibtex_reference_style = "author_year"
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
