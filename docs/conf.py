@@ -6,6 +6,8 @@
 import sys
 from pathlib import Path
 
+import pyarrow as pa
+
 sys.path.insert(0, Path(__file__).parents[1].resolve().as_posix())
 
 # -- Project information -----------------------------------------------------
@@ -28,13 +30,20 @@ extensions = [
 
 autodoc_default_options = {"members": True, "undoc-members": True}
 
-templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "alabaster"
-html_static_path = ["_static"]
+html_theme = "furo"
 mathjax_path = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+
+
+def schema_block(app, what, name, obj, options, lines):
+    if isinstance(obj, pa.Schema):
+        lines[:] = ["::", ""] + [f"   {line}" for line in str(obj).splitlines()]
+
+
+def setup(app):
+    app.connect("autodoc-process-docstring", schema_block)
