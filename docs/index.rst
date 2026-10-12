@@ -1,7 +1,7 @@
 alphaUniverse
 =============
 
-alphaUniverse shows how `AION <https://arxiv.org/abs/2510.17960>`_, Polymathic AI's foundation model for astronomy, sees the galaxies of the COSMOS field. You can browse every galaxy on a map of AION's internal representation, ask AION which galaxies resemble one you pick in the image regions, wavelengths or catalogue values you choose, and search the field in plain English.
+alphaUniverse shows how AION :cite:p:`parker2025aion`, Polymathic AI's foundation model for astronomy, sees the galaxies of the COSMOS field. You can browse every galaxy on a map of AION's internal representation, ask AION which galaxies resemble one you pick in the image regions, wavelengths or catalogue values you choose, and search the field in plain English.
 
 The data
 --------
@@ -20,9 +20,28 @@ SDSS               spectrum 3500–10463 Å, resampled to 0.8 Å
 It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test. Galaxy Zoo 10 morphologies colour the map; PROVABGS stellar masses, star formation rates and redshifts are the ground truth in the text search benchmark.
 
 .. toctree::
-   :maxdepth: 2
+   :caption: Background
 
-   explanation
+   concepts
+   glossary
+
+.. toctree::
+   :caption: Methods
+
+   methods/map
+   methods/similarity-search
+   methods/query-maps
+   methods/text-search
+
+.. toctree::
+   :caption: Using the site
+
+   using
+
+.. toctree::
+   :caption: Project
+
    benchmarks
    how-to
    reference
+   references

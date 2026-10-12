@@ -32,6 +32,7 @@ Artifacts
 
 .. autodata:: app.config.PREDICTIONS
    :no-index:
+   :no-value:
 
 ``probability_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``.
 
@@ -39,11 +40,13 @@ Artifacts
 
 .. autodata:: app.config.POINTS
    :no-index:
+   :no-value:
 
 ``pairs`` is Parquet, AION's mean embedding and EmbeddingGemma's image embedding per galaxy:
 
 .. autodata:: app.config.PAIRS
    :no-index:
+   :no-value:
 
 ``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text map's weights; ``alignment`` also holds the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.save`` of every galaxy's unit vector in EmbeddingGemma's space, ``float32``, galaxies × 768.
 
@@ -59,15 +62,6 @@ The first Population map (``/saliency``) on a galaxy builds its agreement matrix
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. The image and spectrum endpoints, EmbeddingGemma and ``generate_pairs`` are untested, and the frontend has no tests.
+Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image``, ``/galaxy/{galaxy}/spectrum``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, and the frontend has no tests.
 
-Continuous integration lints and tests every pull request and checks that ``frontend/openapi.json`` is current; on ``main`` it then deploys to Modal.
-
-Python modules
---------------
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   app
+Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal.

@@ -1,7 +1,7 @@
 {
-  "commit": "853bac8",
+  "commit": "11bdd92",
   "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
-  "date": "2026-10-10T01:31:51+00:00",
+  "date": "2026-10-12T00:20:21+00:00",
   "server": {
     "cpu": 8,
     "memory_mb": [
@@ -16,12 +16,11 @@
     "environment": {
       "cpu": {
         "vendor_id": "AuthenticAMD",
-        "cpu family": "25",
-        "model": "1",
+        "cpu family": "23",
+        "model": "49",
         "model name": "unknown"
       },
       "cpu_count": 17,
-      "faiss_threads": 1,
       "omp_num_threads": "1",
       "thread_pools": [
         {
@@ -33,127 +32,130 @@
           "version": "0.3.34.106.0",
           "threading_layer": "pthreads",
           "architecture": "Haswell"
-        },
-        {
-          "user_api": "blas",
-          "internal_api": "openblas",
-          "num_threads": 1,
-          "prefix": "libopenblas",
-          "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libopenblaso-r0-d77a1985.3.15.so",
-          "version": "0.3.15",
-          "threading_layer": "openmp",
-          "architecture": "Zen"
-        },
-        {
-          "user_api": "openmp",
-          "internal_api": "openmp",
-          "num_threads": 1,
-          "prefix": "libgomp",
-          "filepath": "/.uv/.venv/lib/python3.12/site-packages/faiss_cpu.libs/libgomp-e985bcbb.so.1.0.0",
-          "version": null
         }
       ]
     },
-    "cold_meta_ms": 18103.107,
-    "cold_similarity_ms": 524.115,
-    "cold_text_search_ms": 35499.752,
+    "cold_meta_ms": 9896.129,
+    "cold_similarity_ms": 2680.633,
+    "cold_text_search_ms": 36010.291,
     "warm": {
       "meta": {
         "runs": 30,
-        "p50_ms": 127.522,
-        "p95_ms": 134.544
+        "p50_ms": 204.915,
+        "p95_ms": 210.308
       },
       "image": {
         "runs": 30,
-        "p50_ms": 139.822,
-        "p95_ms": 151.042
+        "p50_ms": 221.472,
+        "p95_ms": 284.327
       },
       "tokens": {
         "runs": 30,
-        "p50_ms": 125.839,
-        "p95_ms": 132.795
+        "p50_ms": 203.866,
+        "p95_ms": 210.373
       },
       "coverage": {
         "runs": 30,
-        "p50_ms": 126.045,
-        "p95_ms": 130.537
+        "p50_ms": 201.806,
+        "p95_ms": 207.844
       },
       "table": {
         "runs": 30,
-        "p50_ms": 138.731,
-        "p95_ms": 150.596
+        "p50_ms": 210.135,
+        "p95_ms": 226.926
+      },
+      "cosines": {
+        "runs": 30,
+        "p50_ms": 247.44,
+        "p95_ms": 258.32
       },
       "text search": {
         "runs": 30,
-        "p50_ms": 283.562,
-        "p95_ms": 315.888
+        "p50_ms": 349.473,
+        "p95_ms": 370.872
       },
-      "similarity scalars matches=32": {
+      "similarity table values matches=32": {
         "runs": 30,
-        "p50_ms": 231.466,
-        "p95_ms": 263.649
+        "p50_ms": 979.859,
+        "p95_ms": 1074.948
+      },
+      "saliency": {
+        "runs": 30,
+        "p50_ms": 283.897,
+        "p95_ms": 295.019
       },
       "similarity matches=8": {
         "runs": 30,
-        "p50_ms": 164.14,
-        "p95_ms": 173.95
+        "p50_ms": 277.778,
+        "p95_ms": 348.181
       },
       "similarity matches=32": {
         "runs": 30,
-        "p50_ms": 224.543,
-        "p95_ms": 254.899
+        "p50_ms": 306.57,
+        "p95_ms": 318.34
       },
       "similarity matches=128": {
         "runs": 30,
-        "p50_ms": 428.589,
-        "p95_ms": 502.782
+        "p50_ms": 429.816,
+        "p95_ms": 447.82
       },
       "spectrum": {
         "runs": 30,
-        "p50_ms": 130.396,
-        "p95_ms": 144.89
+        "p50_ms": 217.531,
+        "p95_ms": 230.036
       },
       "spectrum tokens": {
         "runs": 30,
-        "p50_ms": 126.423,
-        "p95_ms": 133.52
+        "p50_ms": 240.991,
+        "p95_ms": 422.307
       },
-      "similarity spans matches=32": {
+      "similarity spectrum tokens matches=32": {
         "runs": 30,
-        "p50_ms": 253.385,
-        "p95_ms": 275.519
+        "p50_ms": 286.467,
+        "p95_ms": 395.651
       },
-      "similarity patches and spans matches=32": {
+      "similarity image tokens and spectrum tokens matches=32": {
         "runs": 30,
-        "p50_ms": 236.947,
-        "p95_ms": 258.193
+        "p50_ms": 327.388,
+        "p95_ms": 347.416
       }
     },
     "concurrency": {
       "clients=1": {
         "runs": 30,
-        "p50_ms": 231.581,
-        "p95_ms": 261.954,
-        "requests_per_s": 4.26
+        "p50_ms": 306.722,
+        "p95_ms": 412.142,
+        "requests_per_s": 3.16
       },
       "clients=4": {
         "runs": 120,
-        "p50_ms": 288.603,
-        "p95_ms": 344.994,
-        "requests_per_s": 13.42
+        "p50_ms": 547.81,
+        "p95_ms": 851.021,
+        "requests_per_s": 6.42
       },
       "clients=16": {
         "runs": 480,
-        "p50_ms": 1052.723,
-        "p95_ms": 1394.922,
-        "requests_per_s": 15.61
+        "p50_ms": 2342.468,
+        "p95_ms": 2524.539,
+        "requests_per_s": 6.86
       },
       "clients=32": {
         "runs": 960,
-        "p50_ms": 2101.874,
-        "p95_ms": 2643.248,
-        "requests_per_s": 15.63
+        "p50_ms": 4966.087,
+        "p95_ms": 5417.42,
+        "requests_per_s": 6.44
+      },
+      "new galaxies clients=4": {
+        "runs": 4,
+        "p50_ms": 43215.543,
+        "p95_ms": 66314.875,
+        "requests_per_s": 0.06
       }
+    },
+    "new_galaxy": {
+      "runs": 30,
+      "p50_ms": 18661.451,
+      "p95_ms": 19682.876
     }
   }
 }
