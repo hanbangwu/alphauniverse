@@ -137,7 +137,7 @@ def generate_observed_grams() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_template_embeddings() -> None:
-    from app.embeddings import generate_template_embeddings
+    from app.observed_grams import generate_template_embeddings
 
     generate_template_embeddings()
     cache_volume.commit()

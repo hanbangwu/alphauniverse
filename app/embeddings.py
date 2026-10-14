@@ -2,15 +2,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from . import pql, templates
-from .config import (
-    GRAM_NAMES,
-    MODES,
-    TOKEN_EMBEDDING_RANK,
-    TOKEN_GRAMS,
-    artifact,
-    device,
-)
+from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
 
 BATCH = 1024
 
@@ -57,27 +49,3 @@ def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> Non
 def generate_token_embeddings() -> None:
     for name in tqdm(GRAM_NAMES, desc="token embeddings"):
         saved(f"token_embedding_{name}", embedding(loaded(f"token_gram_{name}")))
-
-
-def predictive_widths() -> dict[str, np.ndarray]:
-    with np.load(artifact("observed_reference")) as references:
-        depths = {mode: references[f"{mode}_depth"] for mode in MODES}
-    count = pql.predictions().num_rows
-    found = {mode: np.empty(count, np.float32) for mode in MODES}
-    start = 0
-    for rows in tqdm(pql.predictions().to_batches(), desc="widths"):
-        for mode, values in templates.widths(rows, depths).items():
-            found[mode][start : start + rows.num_rows] = values
-        start += rows.num_rows
-    return found
-
-
-def generate_template_embeddings() -> None:
-    widths = predictive_widths()
-    for mode, names in TOKEN_GRAMS.items():
-        for name in tqdm(names, desc=mode):
-            saved(
-                f"template_embedding_{name}",
-                embedding(loaded(f"template_gram_{name}")),
-                widths=widths[mode],
-            )
