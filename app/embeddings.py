@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from .config import GRAM_NAMES, artifact, device
 
@@ -17,31 +18,36 @@ def loaded(name: str) -> torch.Tensor:
     return gram
 
 
-def centred(gram: torch.Tensor) -> torch.Tensor:
-    symmetric = (gram + gram.T) / 2
-    means = symmetric.mean(dim=0)
-    return symmetric - means - means[:, None] + means.mean()
+def centred(gram: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    offsets = gram.mean(dim=0)
+    return gram - gram.mean(dim=1, keepdim=True) - offsets + gram.mean(), offsets
 
 
-def embedding(gram: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    eigenvalues, eigenvectors = torch.linalg.eigh(centred(gram))
-    eigenvalues, top = eigenvalues.flip(0), eigenvectors[:, -RANK:].flip(1)
-    return top * eigenvalues[: top.shape[1]].clamp_min(0).sqrt(), eigenvalues
+def embedding(gram: torch.Tensor) -> dict[str, torch.Tensor]:
+    matrix, offsets = centred(gram)
+    values, vectors = torch.linalg.eigh(matrix.T @ matrix)
+    singular_values = values.flip(0).clamp_min(0).sqrt()
+    right = vectors[:, -min(RANK, len(gram) - 1) :].flip(1)
+    scale = singular_values[: right.shape[1]].sqrt()
+    return {
+        "queries": matrix @ right / scale,
+        "galleries": right * scale,
+        "offsets": offsets,
+        "singular_values": singular_values,
+    }
 
 
 def scores(
-    vectors: torch.Tensor, self_scores: torch.Tensor, queries: torch.Tensor
+    queries: torch.Tensor, galleries: torch.Tensor, offsets: torch.Tensor
 ) -> torch.Tensor:
-    return queries @ vectors.T - (vectors.square().sum(dim=1) - self_scores) / 2
+    return queries @ galleries.T + offsets
 
 
 def generate_token_embeddings() -> None:
-    for name in GRAM_NAMES:
-        gram = loaded(name)
-        vectors, eigenvalues = embedding(gram)
+    for name in tqdm(GRAM_NAMES, desc="token embeddings"):
+        found = embedding(loaded(name))
         np.savez(
             artifact(f"token_embedding_{name}"),
-            vectors=vectors.float().cpu().numpy(),
-            self_scores=gram.diagonal().float().cpu().numpy(),
-            eigenvalues=eigenvalues.cpu().numpy(),
+            singular_values=found.pop("singular_values").cpu().numpy(),
+            **{part: values.float().cpu().numpy() for part, values in found.items()},
         )
