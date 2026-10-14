@@ -19,12 +19,13 @@ def test_a_row_with_search_s_representation_equals_search_with_every_slot_select
     aligned = pql.mode_totals(GALAXY, selected, {})
     anywhere = pql.mode_totals(GALAXY, selected, positional)
     queries = {
-        mode: grams.forms(mode).dense(slice(GALAXY, GALAXY + 1)) for mode in TOKEN_GRAMS
+        mode: grams.forms(mode, pql.predictions()).dense(slice(GALAXY, GALAXY + 1))
+        for mode in TOKEN_GRAMS
     }
     monkeypatch.setattr(pql, "query_image_tokens", pql.top_image_tokens)
 
     for mode, names in TOKEN_GRAMS.items():
-        gallery = grams.forms(mode)
+        gallery = grams.forms(mode, pql.predictions())
         found = grams.scores(queries[mode], gallery.dense(slice(None)), gallery)
         for name, row, expected in zip(names, found, (aligned[mode], anywhere[mode])):
             np.testing.assert_allclose(row[0], expected, rtol=1e-6, err_msg=name)
@@ -39,7 +40,7 @@ def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
     grams.generate_token_grams()
 
     for mode, names in TOKEN_GRAMS.items():
-        forms = grams.forms(mode)
+        forms = grams.forms(mode, pql.predictions())
         everyone = forms.dense(slice(None))
         for name, expected in zip(names, grams.scores(everyone, everyone, forms)):
             np.testing.assert_allclose(
@@ -47,4 +48,21 @@ def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
                 expected,
                 rtol=1e-6,
                 err_msg=name,
+            )
+
+
+def test_rows_of_other_queries_are_their_rows_against_every_galaxy(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(grams, "ROWS", 2 * N_IMAGE_TOKENS)
+    chosen = [GALAXY, 0, 5]
+    table = pql.predictions().take(chosen)
+
+    for mode, names in TOKEN_GRAMS.items():
+        gallery = grams.forms(mode, pql.predictions())
+        found = grams.rows(mode, grams.forms(mode, table), len(chosen), gallery)
+        everyone = gallery.dense(slice(None))
+        for name, expected in zip(names, grams.scores(everyone, everyone, gallery)):
+            np.testing.assert_allclose(
+                found[name], expected[chosen], rtol=1e-6, err_msg=name
             )

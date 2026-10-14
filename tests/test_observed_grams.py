@@ -147,6 +147,15 @@ def test_template_tiles_give_both_directions_of_the_nearest_patch_score(
             )
 
 
+def test_a_template_gram_is_minus_half_the_squared_distance_between_templates() -> None:
+    rng = np.random.default_rng(4)
+    left, right = (torch.from_numpy(rng.normal(size=(count, 7))) for count in (3, 5))
+
+    found = observed_grams.template_gram(left, right)
+
+    np.testing.assert_allclose(found, -0.5 * torch.cdist(left, right) ** 2, rtol=1e-9)
+
+
 def image(rng: np.random.Generator, survey: str) -> dict:
     size = CROP_PIXELS + 8
     shape = (len(BANDS[survey]), size, size)

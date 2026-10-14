@@ -33,15 +33,14 @@ def padded(vocabulary: int) -> int:
 
 
 def stacked(
-    parts: Callable[[pa.RecordBatch], tuple[np.ndarray, ...]],
+    table: pa.Table, parts: Callable[[pa.RecordBatch], tuple[np.ndarray, ...]]
 ) -> list[torch.Tensor]:
-    count = pql.predictions().num_rows
     stored, start = [], 0
-    for rows in pql.predictions().to_batches():
+    for rows in table.to_batches():
         tensors = [torch.tensor(array) for array in parts(rows)]
         if not stored:
             stored = [
-                tensor.new_empty((count, *tensor.shape[1:]), device=device())
+                tensor.new_empty((table.num_rows, *tensor.shape[1:]), device=device())
                 for tensor in tensors
             ]
         for target, tensor in zip(stored, tensors, strict=True):
@@ -50,12 +49,12 @@ def stacked(
     return stored
 
 
-def image_forms(survey: str) -> Forms:
+def image_forms(survey: str, table: pa.Table) -> Forms:
     def parts(rows: pa.RecordBatch) -> tuple[np.ndarray, ...]:
         codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
         return codes.astype(np.int64), probabilities, spread
 
-    codes, probabilities, spread = stacked(parts)
+    codes, probabilities, spread = stacked(table, parts)
 
     def dense(part: slice) -> torch.Tensor:
         tile = spread.new_zeros((*spread[part].shape, padded(IMAGE_VOCABULARY)))
@@ -65,12 +64,13 @@ def image_forms(survey: str) -> Forms:
     return Forms(dense, 0.0, PROBABILITY_FLOOR)
 
 
-def spectrum_forms(survey: str) -> Forms:
+def spectrum_forms(survey: str, table: pa.Table) -> Forms:
     _, _, mean_square, projected_mean = pql.basis()[survey]
     (coefficients,) = stacked(
+        table,
         lambda rows: (
             pql.spectrum_token_coefficients(rows, survey, slice(None)) + projected_mean,
-        )
+        ),
     )
     return Forms(
         lambda part: coefficients[part],
@@ -79,22 +79,22 @@ def spectrum_forms(survey: str) -> Forms:
     )
 
 
-def table_forms(mode: str) -> Forms:
+def table_forms(mode: str, table: pa.Table) -> Forms:
     def parts(rows: pa.RecordBatch) -> tuple[np.ndarray]:
         values = pql.table_value_probabilities(rows, mode)
         padding = padded(values.shape[-1]) - values.shape[-1]
         return (np.pad(values, ((0, 0), (0, 0), (0, padding))),)
 
-    (values,) = stacked(parts)
+    (values,) = stacked(table, parts)
     return Forms(lambda part: values[part], 0.0, PROBABILITY_FLOOR)
 
 
-def forms(mode: str) -> Forms:
+def forms(mode: str, table: pa.Table) -> Forms:
     if mode in IMAGE_MODES:
-        return image_forms(IMAGE_MODES[mode])
+        return image_forms(IMAGE_MODES[mode], table)
     if mode in SPECTRUM_MODES:
-        return spectrum_forms(SPECTRUM_MODES[mode])
-    return table_forms(mode)
+        return spectrum_forms(SPECTRUM_MODES[mode], table)
+    return table_forms(mode, table)
 
 
 def summed(overlaps: torch.Tensor, forms: Forms, dim: int) -> torch.Tensor:
@@ -142,8 +142,28 @@ def gram(mode: str, forms: Forms) -> dict[str, torch.Tensor]:
     return found
 
 
+def rows(
+    mode: str, queries: Forms, count: int, gallery: Forms
+) -> dict[str, torch.Tensor]:
+    total = pql.predictions().num_rows
+    size = ROWS // pql.WIDTHS[mode]
+    found = {
+        name: torch.empty(count, total, device=device()) for name in TOKEN_GRAMS[mode]
+    }
+    for first in range(0, count, size):
+        part = slice(first, first + size)
+        left = queries.dense(part)
+        for second in range(0, total, size):
+            columns = slice(second, second + size)
+            for matrix, values in zip(
+                found.values(), scores(left, gallery.dense(columns), gallery)
+            ):
+                matrix[part, columns] = values
+    return found
+
+
 def generate_token_grams() -> None:
     torch.backends.cuda.matmul.fp32_precision = "tf32"
     for mode in TOKEN_GRAMS:
-        for name, matrix in gram(mode, forms(mode)).items():
+        for name, matrix in gram(mode, forms(mode, pql.predictions())).items():
             np.save(artifact(f"token_gram_{name}"), matrix.cpu().numpy())

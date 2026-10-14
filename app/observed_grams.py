@@ -145,10 +145,20 @@ def template_features(
     )
 
 
-def template_gram(scaled: torch.Tensor) -> torch.Tensor:
-    values = scaled.double()
-    norms = 0.5 * (values**2).sum(dim=1)
-    return values @ values.T - norms[:, None] - norms[None, :]
+def template_gram(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+    left, right = left.double(), right.double()
+    return (
+        left @ right.T
+        - 0.5 * (left**2).sum(dim=1)[:, None]
+        - 0.5 * (right**2).sum(dim=1)[None, :]
+    )
+
+
+def at_depth(templates: torch.Tensor, depth: torch.Tensor, mode: str) -> torch.Tensor:
+    scaled = templates * depth
+    if mode in SPECTRUM_MODES:
+        scaled /= scaled.norm(dim=1, keepdim=True)
+    return scaled
 
 
 def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
@@ -178,10 +188,8 @@ def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         references["amplitudes"] = amplitude
     depth = information.median(dim=0).values.sqrt().float()
     references["depth"] = depth
-    scaled = queries * depth
-    if free:
-        scaled /= scaled.norm(dim=1, keepdim=True)
-    matrices[f"template_gram_{mode}"] = template_gram(scaled)
+    scaled = at_depth(queries, depth, mode)
+    matrices[f"template_gram_{mode}"] = template_gram(scaled, scaled)
     if len(TOKEN_GRAMS[mode]) > 1:
         kept = slotted(depth[None], mode)[0].sum(-1) > 0
         matrices[f"data_gram_{mode}_anywhere"] = anywhere(

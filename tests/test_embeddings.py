@@ -58,3 +58,20 @@ def test_at_full_rank_scores_rank_galaxies_as_a_one_way_gram_does() -> None:
 
     difference = found["queries"] @ found["galleries"].T + found["offsets"] - gram
     np.testing.assert_allclose(difference - difference[:, :1], 0, atol=1e-9)
+
+
+def test_a_galaxy_s_own_row_scores_as_its_stored_query_vector() -> None:
+    gram = torch.from_numpy(
+        np.random.default_rng(2).standard_normal((GALAXIES, GALAXIES))
+    )
+    found = embeddings.embedding(gram)
+    chosen = [3, 0, 17]
+
+    for rank in (RANK, GALAXIES - 1):
+        expected = (
+            found["queries"][chosen, :rank] @ found["galleries"][:, :rank].T
+            + found["offsets"]
+        )
+        np.testing.assert_allclose(
+            embeddings.scores(gram[chosen], found, rank), expected, atol=1e-9
+        )

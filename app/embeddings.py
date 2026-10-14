@@ -36,6 +36,16 @@ def embedding(gram: torch.Tensor) -> dict[str, torch.Tensor]:
     }
 
 
+def scores(
+    rows: torch.Tensor, found: dict[str, torch.Tensor], rank: int
+) -> torch.Tensor:
+    offsets = found["offsets"]
+    centred = rows - rows.mean(dim=1, keepdim=True) - offsets + offsets.mean()
+    galleries = found["galleries"][:, :rank]
+    singular_values = found["singular_values"][:rank].to(galleries)
+    return centred @ (galleries / singular_values) @ galleries.T + offsets
+
+
 def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> None:
     singular_values = found.pop("singular_values")
     np.savez(
