@@ -186,7 +186,7 @@ def token_embedding_quality():
         title="Share of the exact top 10 found with the stored vectors, by k",
         **WIDTH,
     )
-    for (name, curve), colour in zip(curves.items(), Category20_20, strict=False):
+    for (name, curve), colour in zip(curves.items(), Category20_20):
         chart.line(ranks, [curve[str(rank)]["top10"] for rank in ranks], legend_label=name, color=colour, line_width=2)
     chart.legend.location = "bottom_right"
     chart.legend.click_policy = "hide"
