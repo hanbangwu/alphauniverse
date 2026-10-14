@@ -234,24 +234,28 @@ def template_quality():
     recovered.add_layout(Whisker(source=source, base="mode", lower="p5", upper="p95"))
     recovered.xaxis.major_label_orientation = 0.8
     charts = [recovered]
-    for key, label in (("radius", "radius (px)"), ("rest_wavelength", "rest wavelength (Å)")):
-        chart = figure(height=300, x_axis_label=label, y_axis_label="mean normalised residual", title=f"Residuals by {label.split(' (')[0]}", **WIDTH)
+    for key in ("radius", "rest_wavelength"):
+        chart = figure(height=300, x_axis_label=key.replace("_", " "), y_axis_label="mean normalised residual", title=f"Residuals by {key.replace('_', ' ')}", **WIDTH)
         lines = [(mode, model) for mode, measured in modes.items() if key in measured for model in ("template", "floor")]
         for (mode, model), colour in zip(lines, Category10_10):
-            profile = modes[mode][key]
-            chart.line(profile["centres"], profile[model]["mean"], legend_label=f"{mode} {model}", color=colour, line_width=2)
+            chart.line(modes[mode][key]["centres"], modes[mode][key][model], legend_label=f"{mode} {model}", color=colour, line_width=2)
         chart.legend.click_policy = "hide"
         charts.append(chart)
     rows = [
         {
             "mode": mode,
             "galaxies": measured["galaxies"],
-            **{f"{model} χ²ν, median": measured["chi2"][model]["p50"] for model in ("template", "floor", "null")},
+            **{f"{model} χ²ν, median": values["p50"] for model, values in measured["chi2"].items()},
             "recovered, median": measured["recovered"]["p50"],
         }
         for mode, measured in modes.items()
     ]
-    return column(heading(found, found["device"]), *charts, table(rows, list(rows[0])), **WIDTH)
+    pulls = [
+        {"value": name, **{f"{model}, median |pull|": value for model, value in values.items()}}
+        for measured in modes.values()
+        for name, values in measured.get("median_absolute_pull", {}).items()
+    ]
+    return column(heading(found, found["device"]), *charts, table(rows, list(rows[0])), table(pulls, list(pulls[0])), **WIDTH)
 
 
 def backend_performance():
