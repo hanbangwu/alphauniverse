@@ -3,6 +3,7 @@ from typing import get_args
 
 import numpy as np
 import pytest
+import torch
 
 from app import grams, pql
 from app.config import N_IMAGE_TOKENS, TOKEN_GRAMS, TokenMode, artifact
@@ -33,6 +34,7 @@ def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(grams, "ROWS", 5 * N_IMAGE_TOKENS)
+    monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
 
     grams.generate_token_grams()
 
