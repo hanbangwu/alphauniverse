@@ -3,7 +3,7 @@ from pathlib import Path
 
 from bokeh.layouts import column
 from bokeh.models import ColumnDataSource, DataTable, Div, FactorRange, TableColumn, Whisker
-from bokeh.palettes import Category10_10
+from bokeh.palettes import Category10_10, Category20_20
 from bokeh.plotting import figure
 
 REPORTS = Path(__file__).parent / "benchmarks"
@@ -164,6 +164,48 @@ def compression_quality():
     first = next(iter(found["modes"].values()))
     return column(
         heading(found, f"{first['queries']} queries over {first['sample']:,} sampled galaxies per mode"),
+        chart,
+        table(rows, list(rows[0])),
+        **WIDTH,
+    )
+
+
+def token_embedding_quality():
+    found = report("token_embedding_quality")
+    if found is None:
+        return missing()
+    ranks = found["ranks"]
+    curves = {name: matrix["stored"] for name, matrix in found["matrices"].items()} | {
+        f"{name}, combined": combined for name, combined in found["combined"].items()
+    }
+    chart = figure(
+        x_axis_type="log",
+        x_axis_label="k",
+        y_range=(0, 1.05),
+        height=420,
+        title="Share of the exact top 10 found with the stored vectors, by k",
+        **WIDTH,
+    )
+    for (name, curve), colour in zip(curves.items(), Category20_20, strict=False):
+        chart.line(ranks, [curve[str(rank)]["top10"] for rank in ranks], legend_label=name, color=colour, line_width=2)
+    chart.legend.location = "bottom_right"
+    chart.legend.click_policy = "hide"
+    last = str(ranks[-1])
+    rows = [
+        {
+            "matrix": name,
+            f"top 10 at k = {last}": matrix["stored"][last]["top10"],
+            f"top 100 at k = {last}": matrix["stored"][last]["top100"],
+            f"positive MDS top 10 at k = {last}": matrix["positive"][last]["top10"],
+            f"energy at k = {last}": matrix["energy"][last],
+            "negative share": matrix["negative_share"],
+            "antisymmetric share": matrix.get("antisymmetric_share"),
+            "symmetric part's top 10": matrix.get("symmetric", {}).get("top10"),
+        }
+        for name, matrix in found["matrices"].items()
+    ]
+    return column(
+        heading(found, f"every one of {found['galaxies']:,} galaxies as a query", found["device"]),
         chart,
         table(rows, list(rows[0])),
         **WIDTH,
