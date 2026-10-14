@@ -34,7 +34,7 @@ def test_image_latents_average_the_codebook_over_each_cell_s_stored_distribution
 
         np.testing.assert_allclose(
             found.cpu().numpy(),
-            (dense.to(vectors) @ vectors).cpu().numpy(),
+            (dense.to(vectors.device).double() @ vectors.double()).cpu().numpy(),
             atol=1e-5,
             err_msg=mode,
         )
