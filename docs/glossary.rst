@@ -20,7 +20,7 @@ Glossary
       A :term:`mode`'s :term:`templates <template>` compared with each other at the :term:`typical depth`: minus half the squared distance between every pair. See :doc:`reference`.
 
    typical depth
-      The median inverse variance of each pixel or value over the galaxies observed in a :term:`mode`.
+      The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
 
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.

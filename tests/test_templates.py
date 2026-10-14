@@ -160,7 +160,7 @@ def test_quantiles_skip_bins_without_a_value() -> None:
     np.testing.assert_array_equal(found, [[[1.0]], [[3.0]], [[5.0]]])
 
 
-def test_widths_are_zero_for_certain_codes_and_scale_table_spreads_by_depth(
+def test_widths_are_the_predicted_spread_in_every_mode(
     tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = certain(
@@ -178,6 +178,17 @@ def test_widths_are_zero_for_certain_codes_and_scale_table_spreads_by_depth(
 
     for mode in IMAGE_MODES:
         np.testing.assert_allclose(found[mode], 0, atol=1e-6, err_msg=mode)
+    for mode, survey in SPECTRUM_MODES.items():
+        vectors = templates.codebook(templates.decoder(mode), VOCABULARY).double()
+        coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
+        dense = torch.from_numpy(pql.distributions(mode, coefficients)).to(vectors)
+        variance = dense @ vectors**2 - (dense @ vectors) ** 2
+        np.testing.assert_allclose(
+            found[mode],
+            variance.sum(-1).mean(-1).sqrt().cpu().numpy(),
+            rtol=1e-4,
+            err_msg=mode,
+        )
     for mode, bins in values.items():
         cumulative = pql.table_value_probabilities(rows, mode)[0].cumsum(axis=-1)
         lower, upper = (

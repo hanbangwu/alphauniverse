@@ -27,6 +27,7 @@ from scripts.fixture import covered
 
 MODE = "hsc_image"
 GALAXY = 7
+UNMEASURED = 0
 WIDTH = len(BANDS["hsc"]) * CROP_PIXELS**2
 
 
@@ -71,22 +72,16 @@ def test_same_place_scores_are_chi_square_differences_from_the_reference() -> No
 
 
 def slot_scores(
-    query: torch.Tensor,
-    reference: torch.Tensor,
-    values: torch.Tensor,
-    information: torch.Tensor,
+    query: torch.Tensor, values: torch.Tensor, information: torch.Tensor
 ) -> torch.Tensor:
-    query, reference, values, information = (
+    query, values, information = (
         observed_grams.slotted(part[None], MODE)[0]
-        for part in (query, reference, values, information)
+        for part in (query, values, information)
     )
-    scores = (
-        query @ (information * values).T
-        - 0.5 * query**2 @ information.T
-        - (
-            (information * values * reference).sum(-1)
-            - 0.5 * (information * reference**2).sum(-1)
-        )
+    scores = -0.5 * (
+        query**2 @ information.T
+        - 2 * query @ (information * values).T
+        + (information * values**2).sum(-1)
     )
     scores[:, information.sum(-1) == 0] = -torch.inf
     return scores
@@ -100,12 +95,11 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
     queries = random_data(rng, 3)[0].float()
     values, information = random_data(rng, 5)
     information[1].view(-1, CROP_PIXELS, CROP_PIXELS)[:, : CROP_PIXELS // 2] = 0
-    reference = queries.mean(dim=0)
     kept = torch.ones(N_IMAGE_TOKENS, dtype=torch.bool)
 
     found = observed_grams.anywhere(
         *observed_grams.data_features(
-            queries, reference, information * values, information, MODE, kept
+            queries, information * values, information, MODE, kept
         ),
         symmetric=False,
     )
@@ -113,10 +107,7 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
     for query in range(len(queries)):
         for gallery in range(len(values)):
             expected = slot_scores(
-                queries[query].double(),
-                reference.double(),
-                values[gallery],
-                information[gallery],
+                queries[query].double(), values[gallery], information[gallery]
             )
             np.testing.assert_allclose(
                 found[query, gallery], expected.amax(dim=1).sum(), rtol=1e-4
@@ -156,11 +147,11 @@ def image(rng: np.random.Generator, survey: str) -> dict:
     }
 
 
-def spectrum(rng: np.random.Generator, wavelength: np.ndarray) -> dict:
+def spectrum(rng: np.random.Generator, wavelength: np.ndarray, valid: bool) -> dict:
     return {
         "lambda": wavelength,
         "flux": rng.normal(1, 0.1, len(wavelength)),
-        "ivar": rng.random(len(wavelength)),
+        "ivar": rng.random(len(wavelength)) * valid,
         "mask": np.zeros(len(wavelength), dtype=bool),
     }
 
@@ -180,7 +171,7 @@ def dataset(rng: np.random.Generator) -> Dataset:
             ],
             **{
                 TOKEN_SURVEYS[survey]: [
-                    spectrum(rng, wavelengths[survey])
+                    spectrum(rng, wavelengths[survey], galaxy != UNMEASURED)
                     if covered(survey, galaxy)
                     else None
                     for galaxy in galaxies
@@ -222,6 +213,8 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
     for mode in MODES:
         free = mode in SPECTRUM_MODES
         galaxies = observations.observed(mode)
+        if free:
+            galaxies = galaxies[galaxies != UNMEASURED]
         queries = torch.from_numpy(np.load(artifact(f"template_{mode}")))
         queries = queries.reshape(len(queries), -1)
         reference = torch.from_numpy(references[f"{mode}_reference"])
@@ -244,8 +237,13 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
             err_msg=mode,
         )
         if free:
-            amplitudes = torch.from_numpy(references[f"{mode}_amplitudes"])[:, None]
-            weighted, information = weighted * amplitudes, information * amplitudes**2
+            own = queries[galaxies].double()
+            amplitudes = (own * weighted).sum(1) / (own**2 * information).sum(1)
+            np.testing.assert_allclose(
+                references[f"{mode}_amplitudes"], amplitudes, rtol=1e-9, err_msg=mode
+            )
+            weighted = weighted * amplitudes[:, None]
+            information = information * amplitudes[:, None] ** 2
         depth = information.median(dim=0).values.sqrt()
         np.testing.assert_allclose(
             references[f"{mode}_depth"], depth, rtol=1e-6, err_msg=mode
@@ -267,12 +265,13 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         anywhere = np.load(artifact(f"data_gram_{name}"))
         np.testing.assert_allclose(
             anywhere,
-            observed_grams.anywhere(
+            torch.from_numpy(references[f"{mode}_saturation"])
+            + observed_grams.anywhere(
                 *observed_grams.data_features(
-                    queries, reference, weighted, information, mode, kept
+                    queries, weighted, information, mode, kept
                 ),
                 symmetric=False,
-            ),
+            ).double(),
             rtol=1e-5,
             err_msg=name,
         )
@@ -325,3 +324,4 @@ def test_template_embeddings_decompose_each_template_gram_with_widths(
             np.testing.assert_allclose(
                 found["widths"][GALAXY], expected[mode][0], rtol=1e-6, err_msg=name
             )
+            assert np.isfinite(found["widths"]).all(), name
