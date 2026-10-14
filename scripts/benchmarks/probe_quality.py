@@ -6,6 +6,7 @@ from typing import Any
 import modal
 import numpy as np
 from sklearn.linear_model import RidgeCV
+from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -67,10 +68,9 @@ def scores(features: np.ndarray, values: np.ndarray) -> dict[str, dict[str, floa
         ("knn", KNeighborsRegressor(NEIGHBOURS)),
     ):
         predicted = cross_val_predict(model, features, values, cv=folds)
-        residual = values - predicted
         found[label] = {
-            "r2": round(float(1 - residual.var() / values.var()), 4),
-            "rms": round(float(np.sqrt((residual**2).mean())), 4),
+            "r2": round(float(r2_score(values, predicted)), 4),
+            "rms": round(float(root_mean_squared_error(values, predicted)), 4),
         }
     return found
 

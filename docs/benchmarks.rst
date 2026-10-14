@@ -155,7 +155,7 @@ For each mode and for the two full-object scores of ``token_embedding_quality``,
 Property probes
 ---------------
 
-How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate and redshift for the galaxies that have them, from two kinds of features: AION's mean embeddings, and each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbours, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode.
+How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate and redshift for the galaxies that have them, from two kinds of features: AION's mean embeddings, and each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbours, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode's vectors; AION's mean embedding keeps the redshift's token.
 
 .. bokeh-plot::
    :source-position: none
