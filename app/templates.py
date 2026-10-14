@@ -109,9 +109,10 @@ def bin_values(mode: str) -> np.ndarray:
     values = np.full((len(TABLE_MODALITIES[mode]), vocabulary), np.nan, np.float32)
     for row, modality in zip(values, TABLE_MODALITIES[mode], strict=True):
         quantizer = loaded(modality).quantizer
-        row[: quantizer.codebook_size] = quantizer.decode(
-            torch.arange(quantizer.codebook_size)
-        )
+        decoded = quantizer.decode(torch.arange(quantizer.codebook_size)).numpy()
+        top = np.isfinite(decoded[:-1]).sum()
+        row[:top] = decoded[:top]
+        row[top] = decoded[top - 1]
     return values
 
 
