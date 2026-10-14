@@ -24,12 +24,14 @@ def embedding(gram: torch.Tensor) -> dict[str, torch.Tensor]:
     matrix = centred(gram)
     values, vectors = torch.linalg.eigh(matrix.T @ matrix)
     singular_values = values.flip(0).clamp_min(0).sqrt()
-    right = vectors[:, -TOKEN_EMBEDDING_RANK:].flip(1)
-    scale = singular_values[:TOKEN_EMBEDDING_RANK].sqrt()
+    rank = min(TOKEN_EMBEDDING_RANK, len(gram) - 1)
+    right = vectors[:, -rank:].flip(1)
+    scale = singular_values[:rank].sqrt()
     return {
         "queries": matrix @ right / scale,
         "galleries": right * scale,
         "offsets": gram.mean(dim=0),
+        "self_scores": gram.diagonal(),
         "singular_values": singular_values,
     }
 
@@ -37,8 +39,9 @@ def embedding(gram: torch.Tensor) -> dict[str, torch.Tensor]:
 def generate_token_embeddings() -> None:
     for name in tqdm(GRAM_NAMES, desc="token embeddings"):
         found = embedding(loaded(name))
+        singular_values = found.pop("singular_values")
         np.savez(
             artifact(f"token_embedding_{name}"),
-            singular_values=found.pop("singular_values").cpu().numpy(),
+            singular_values=singular_values.cpu().numpy(),
             **{part: values.float().cpu().numpy() for part, values in found.items()},
         )

@@ -7,12 +7,16 @@ from typing import Any
 
 import modal
 import numpy as np
+import torch
+from tqdm import tqdm
 
+from app import embeddings
 from app.config import (
     DATASET_REVISION,
     GRAM_NAMES,
     TOKEN_EMBEDDING_RANK,
     TOKEN_GRAMS,
+    artifact,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
@@ -31,8 +35,6 @@ COMBINED = {
 
 
 def top(score: Callable, count: int):
-    import torch
-
     found = []
     for first in range(0, count, BATCH):
         scores = score(slice(first, first + BATCH)).clone()
@@ -91,16 +93,15 @@ def combined_rows(rows: slice, parts: list[Callable]):
     volumes={CACHE_PATH: cache_volume},
 )
 def measure() -> dict[str, Any]:
-    import torch
-    from tqdm import tqdm
-
-    from app import embeddings
-    from app.config import artifact
-
     grams, vectors, matrices = {}, {}, {}
     for name in tqdm(GRAM_NAMES, desc="matrices"):
         gram = embeddings.loaded(name)
         symmetric = (gram + gram.T) / 2
+        asymmetry = (gram - symmetric).square().sum() / (
+            gram - gram.mean()
+        ).square().sum()
+        grams[name] = gram.float()
+        del gram
         eigenvalues, eigenvectors = torch.linalg.eigh(embeddings.centred(symmetric))
         positions = (
             eigenvectors[:, -TOKEN_EMBEDDING_RANK:]
@@ -109,11 +110,10 @@ def measure() -> dict[str, Any]:
         positions = positions.flip(1).float()
         stored = np.load(artifact(f"token_embedding_{name}"))
         vectors[name] = {
-            part: torch.from_numpy(stored[part]).to(gram.device)
+            part: torch.from_numpy(stored[part]).to(symmetric.device)
             for part in ("queries", "galleries", "offsets")
         }
-        grams[name] = gram.float()
-        exact = top(partial(matrix_rows, matrix=grams[name]), len(gram))
+        exact = top(partial(matrix_rows, matrix=grams[name]), len(symmetric))
         energy = stored["singular_values"] ** 2
         energy = energy.cumsum() / energy.sum()
         negative = eigenvalues[eigenvalues < 0]
@@ -142,17 +142,11 @@ def measure() -> dict[str, Any]:
             },
         }
         if name not in TOKEN_GRAMS:
-            matrices[name]["antisymmetric_share"] = round(
-                float(
-                    ((gram - gram.T) / 2).square().sum()
-                    / (gram - gram.mean()).square().sum()
-                ),
-                4,
-            )
+            matrices[name]["antisymmetric_share"] = round(float(asymmetry), 4)
             matrices[name]["symmetric"] = agreement(
                 partial(matrix_rows, matrix=symmetric), exact
             )
-        del gram, symmetric, eigenvalues, eigenvectors
+        del symmetric, eigenvalues, eigenvectors
 
     galaxies = len(grams[GRAM_NAMES[0]])
     combined = {}

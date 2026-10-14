@@ -44,12 +44,12 @@ def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centred_gra
         np.testing.assert_allclose(
             found["offsets"], gram.mean(axis=0), rtol=1e-5, err_msg=name
         )
+        np.testing.assert_array_equal(
+            found["self_scores"], np.diagonal(gram), err_msg=name
+        )
 
 
-def test_at_full_rank_scores_rank_galaxies_as_a_one_way_gram_does(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(embeddings, "TOKEN_EMBEDDING_RANK", GALAXIES - 1)
+def test_at_full_rank_scores_rank_galaxies_as_a_one_way_gram_does() -> None:
     gram = torch.from_numpy(
         np.random.default_rng(1).standard_normal((GALAXIES, GALAXIES))
     )
