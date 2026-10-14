@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import cache
-from io import BytesIO
 from itertools import batched
 from typing import TYPE_CHECKING, Annotated, NamedTuple
 
@@ -63,17 +62,18 @@ def embed_queries(texts: list[str]) -> np.ndarray:
 
 
 def spectrum_plot(spectrum: dict[str, np.ndarray]) -> PIL.Image.Image:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
 
     figure = Figure(figsize=PLOT_INCHES)
+    canvas = FigureCanvasAgg(figure)
     axes = figure.subplots()
     axes.plot(spectrum["wavelength"], smoothed(spectrum["flux"]), color="grey")
     axes.set_xlim(
         SPECTRUM_ORIGIN, SPECTRUM_ORIGIN + N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_WIDTH
     )
-    buffer = BytesIO()
-    figure.savefig(buffer, format="png")
-    return PIL.Image.open(buffer).convert("RGB")
+    canvas.draw()
+    return PIL.Image.fromarray(np.asarray(canvas.buffer_rgba())).convert("RGB")
 
 
 def photos(galaxy: np.ndarray) -> Iterator[list[PIL.Image.Image]]:
@@ -111,28 +111,28 @@ def mean_embeddings(survey: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def generate_pairs() -> None:
-    with pq.ParquetWriter(artifact("pairs"), PAIRS, compression="zstd") as writer:
-        for modality, survey in TEXT_SURVEYS.items():
-            galaxy, aion = mean_embeddings(survey)
-            gemma = np.concatenate(
-                [
-                    text_model().encode(batch, prompt_name="Document")
-                    for batch in tqdm(DOCUMENTS[modality](galaxy), desc=modality)
-                ]
-            )
-            writer.write_table(
-                pa.table(
-                    {
-                        "galaxy": galaxy,
-                        "modality": np.full(len(galaxy), modality),
-                        "aion": pa.FixedSizeListArray.from_arrays(aion.ravel(), DIM),
-                        "gemma": pa.FixedSizeListArray.from_arrays(
-                            gemma.ravel(), GEMMA_DIM
-                        ),
-                    },
-                    schema=PAIRS,
-                )
-            )
+    for modality, survey in TEXT_SURVEYS.items():
+        galaxy, aion = mean_embeddings(survey)
+        gemma = np.concatenate(
+            [
+                text_model().encode(batch, prompt_name="Document")
+                for batch in tqdm(DOCUMENTS[modality](galaxy), desc=modality)
+            ]
+        )
+        pq.write_table(
+            pa.table(
+                {
+                    "galaxy": galaxy,
+                    "aion": pa.FixedSizeListArray.from_arrays(aion.ravel(), DIM),
+                    "gemma": pa.FixedSizeListArray.from_arrays(
+                        gemma.ravel(), GEMMA_DIM
+                    ),
+                },
+                schema=PAIRS,
+            ),
+            artifact(f"pairs_{modality}"),
+            compression="zstd",
+        )
 
 
 @cache

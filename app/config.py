@@ -164,7 +164,6 @@ def store_writer(role: str) -> pq.ParquetWriter | pa.ipc.RecordBatchFileWriter:
 PAIRS = pa.schema(
     [
         pa.field("galaxy", pa.int32()),
-        pa.field("modality", pa.string()),
         pa.field("aion", pa.list_(pa.float32(), DIM)),
         pa.field("gemma", pa.list_(pa.float32(), GEMMA_DIM)),
     ]
@@ -205,7 +204,7 @@ ARTIFACTS: dict[str, str] = {
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
-    "pairs": "parquet",
+    **{f"pairs_{modality}": "parquet" for modality in TEXT_SURVEYS},
     "alignment": "pt",
     "aion_gemma_space": "npz",
     "probabilities": "arrow",

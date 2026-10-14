@@ -40,29 +40,26 @@ def benchmark_text_search_quality() -> dict[str, Any]:
     import torch
     from sklearn.metrics import average_precision_score
 
-    from app.alignment import AlignmentMap, apply_linear, held_out, pairs
-    from app.config import PROVABGS, TEXT_SURVEYS, artifact, device
+    from app.alignment import apply_linear, held_out, pairs, trained
+    from app.config import PROVABGS, TEXT_SURVEYS, artifact, device, galaxy_count
     from app.dataset import dataset
     from app.text_search import embed_queries
 
     saved = torch.load(artifact("alignment"), map_location=device())
-    spaces = {}
+    held, spaces = {}, {}
     for modality in TEXT_SURVEYS:
         galaxy, aion, gemma = pairs(modality)
         validation = held_out(galaxy)
         aion, gemma = aion[validation], gemma[validation]
-        model = AlignmentMap().to(device())
-        model.load_state_dict(saved[modality]["mlp"])
+        held[modality] = galaxy[validation.cpu().numpy()]
         with torch.no_grad():
             documents = {
                 "gemma": gemma,
                 "linear": apply_linear(saved[modality]["linear"], aion),
-                "mlp": model.eval()(aion),
+                "mlp": trained(saved[modality]["mlp"])(aion),
             }
-        held = galaxy[validation.cpu().numpy()]
         spaces |= {
-            f"{modality} {name}": (held, rows.cpu().numpy())
-            for name, rows in documents.items()
+            (modality, name): rows.cpu().numpy() for name, rows in documents.items()
         }
 
     columns = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", "redshift": "Z_HP"}
@@ -81,18 +78,17 @@ def benchmark_text_search_quality() -> dict[str, Any]:
             / np.linalg.norm(rows - rows.mean(axis=0), axis=-1, keepdims=True)
         ),
     }
-    scored = {
-        (space, centring): (galaxy, transform(documents) @ transform(text).T)
-        for space, (galaxy, documents) in spaces.items()
-        for centring, transform in centrings.items()
-    }
-    for centring in centrings:
-        galaxy, combined = scored[("image mlp", centring)]
-        spectra, scores = scored[("spectrum mlp", centring)]
-        combined = combined.copy()
-        rows = np.searchsorted(galaxy, spectra)
-        combined[rows] = np.maximum(combined[rows], scores)
-        scored[("combined mlp", centring)] = (galaxy, combined)
+    scored = {}
+    for centring, transform in centrings.items():
+        queries = transform(text)
+        combined = np.full((galaxy_count(), len(CUTS)), -np.inf)
+        for (modality, name), documents in spaces.items():
+            scores = transform(documents) @ queries.T
+            scored[(f"{modality} {name}", centring)] = (held[modality], scores)
+            if name == "mlp":
+                combined[held[modality]] = np.maximum(combined[held[modality]], scores)
+        everyone = np.unique(np.concatenate(list(held.values())))
+        scored[("combined mlp", centring)] = (everyone, combined[everyone])
 
     report = {}
     for index, (query, (column, low, high)) in enumerate(CUTS):
@@ -115,7 +111,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
 
     return {
         "environment": environment(),
-        "galaxies": len(spaces["image mlp"][0]),
+        "galaxies": len(everyone),
         "queries": report,
         "memory": memory(),
     }

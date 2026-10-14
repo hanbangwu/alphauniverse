@@ -19,8 +19,8 @@ from .config import (
     TextModality,
     artifact,
     device,
+    galaxy_count,
 )
-from .dataset import dataset
 
 BATCH = 1024
 EPOCHS = 50
@@ -41,11 +41,15 @@ class AlignmentMap(nn.Module):
         return F.normalize(self.layers(aion), dim=-1)
 
 
+def trained(weights: dict) -> AlignmentMap:
+    model = AlignmentMap().to(device())
+    model.load_state_dict(weights)
+    return model.eval()
+
+
 def pairs(modality: TextModality) -> tuple[np.ndarray, torch.Tensor, torch.Tensor]:
     table = pq.read_table(
-        artifact("pairs"),
-        columns=["galaxy", "aion", "gemma"],
-        filters=[("modality", "==", modality)],
+        artifact(f"pairs_{modality}"), columns=["galaxy", "aion", "gemma"]
     )
     galaxy = np.asarray(table.column("galaxy"))
     aion, gemma = (
@@ -62,7 +66,7 @@ def pairs(modality: TextModality) -> tuple[np.ndarray, torch.Tensor, torch.Tenso
 
 def held_out(galaxy: np.ndarray) -> torch.Tensor:
     _, validation = train_test_split(
-        np.arange(len(dataset())), test_size=VALIDATION, random_state=SEED
+        np.arange(galaxy_count()), test_size=VALIDATION, random_state=SEED
     )
     return torch.as_tensor(np.isin(galaxy, validation), device=device())
 
@@ -169,10 +173,8 @@ def generate_aion_gemma_space() -> None:
     vectors, galaxies, modalities = [], [], []
     for modality in TEXT_SURVEYS:
         galaxy, aion, _ = pairs(modality)
-        model = AlignmentMap().to(device())
-        model.load_state_dict(saved[modality]["mlp"])
         with torch.no_grad():
-            vectors.append(model.eval()(aion).cpu().numpy())
+            vectors.append(trained(saved[modality]["mlp"])(aion).cpu().numpy())
         galaxies.append(galaxy)
         modalities.append(np.full(len(galaxy), modality))
     np.savez(

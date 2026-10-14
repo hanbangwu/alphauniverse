@@ -232,14 +232,17 @@ def build(galaxies: int, seed: int = 0) -> Path:
         compression="zstd",
     )
 
-    spectra = rows[[covered(TEXT_SURVEYS["spectrum"], galaxy) for galaxy in rows]]
-    vectors = rng.standard_normal((galaxies + len(spectra), GEMMA_DIM))
-    vectors = vectors.astype(np.float32)
+    held = {
+        modality: rows[[covered(survey, galaxy) for galaxy in rows]]
+        for modality, survey in TEXT_SURVEYS.items()
+    }
+    galaxy = np.concatenate(list(held.values())).astype(np.int32)
+    vectors = rng.standard_normal((len(galaxy), GEMMA_DIM)).astype(np.float32)
     np.savez(
         artifact("aion_gemma_space"),
         vectors=vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
-        galaxy=np.concatenate([rows, spectra]).astype(np.int32),
-        modality=np.repeat(["image", "spectrum"], [galaxies, len(spectra)]),
+        galaxy=galaxy,
+        modality=np.repeat(list(held), [len(members) for members in held.values()]),
     )
 
     _predictions(rng, galaxies)
