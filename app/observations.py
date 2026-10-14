@@ -10,6 +10,7 @@ from .config import (
     HSC,
     IMAGE_MODES,
     MODE_SURVEYS,
+    REDSHIFT,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
     TABLE_VALUE_SURVEYS,
@@ -104,7 +105,7 @@ def gridded(
 
 
 def table_values(mode: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    if MODE_SURVEYS[mode] not in TABLE_VALUE_SURVEYS:
+    if mode == REDSHIFT:
         rows = redshift_rows(galaxies)
         chosen = [REDSHIFT_COLUMNS[redshift(row)] for row in rows]
         return (
@@ -138,7 +139,7 @@ def measured(
     else:
         flux, errors = table_values(mode, galaxies)
         kept = np.isfinite(flux) & (errors > 0)
-        information = np.where(kept, np.where(kept, errors, 1) ** -2.0, 0)
+        information = np.where(kept, errors, np.inf) ** -2.0
     values = np.where(kept, flux, 0).reshape(len(galaxies), -1)
     information = information.reshape(len(galaxies), -1)
     return information * values, information, (information * values**2).sum(axis=1)

@@ -8,25 +8,15 @@ from .config import (
     GRID,
     IMAGE_MODES,
     MODES,
-    N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     SPECTRUM_MODES,
     TOKEN_GRAMS,
     artifact,
     device,
 )
+from .grams import ROWS
 
 BATCH = 256
-ROWS = 64 * N_IMAGE_TOKENS
-
-
-def loaded(mode: str) -> torch.Tensor:
-    stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
-    found = torch.empty((len(stored), stored[0].size), device=device())
-    for start in range(0, len(stored), BATCH):
-        rows = slice(start, start + BATCH)
-        found[rows] = torch.tensor(stored[rows].reshape(-1, found.shape[1]))
-    return found
 
 
 def gathered(mode: str, galaxies: np.ndarray) -> list[torch.Tensor]:
@@ -93,17 +83,16 @@ def saturation(
 
 def slotted(values: torch.Tensor, mode: str) -> torch.Tensor:
     if mode in IMAGE_MODES:
-        cell = CROP_PIXELS // GRID
-        bands = values.shape[1] // CROP_PIXELS**2
-        cells = values.reshape(len(values), bands, GRID, cell, GRID, cell)
-        return cells.permute(0, 2, 4, 1, 3, 5).reshape(len(values), N_IMAGE_TOKENS, -1)
+        pixels = values.reshape(len(values), -1, CROP_PIXELS, CROP_PIXELS)
+        cells = torch.nn.functional.pixel_unshuffle(pixels, CROP_PIXELS // GRID)
+        return cells.flatten(2).transpose(1, 2)
     return values.reshape(len(values), N_SPECTRUM_TOKENS, -1)
 
 
 def anywhere(left: torch.Tensor, right: torch.Tensor, symmetric: bool) -> torch.Tensor:
     slots = left.shape[1]
     size = ROWS // slots
-    found = torch.empty((len(left), len(right)), dtype=torch.float64, device=device())
+    found = torch.empty((len(left), len(right)), device=device())
     for first in tqdm(range(0, len(left), size), desc="any position"):
         rows = slice(first, first + size)
         query = left[rows].flatten(0, 1)
@@ -129,19 +118,18 @@ def data_features(
     mode: str,
     kept: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    templates = slotted(queries, mode)[:, kept]
+    patches = slotted(queries, mode)[:, kept]
     reference = slotted(reference[None], mode)[0, kept].double()
     weighted = slotted(weighted, mode)[:, kept]
     information = slotted(information, mode)[:, kept]
-    offsets = (weighted * reference).sum(-1) - 0.5 * (information * reference**2).sum(
-        -1
-    )
+    offsets = (weighted * reference - 0.5 * information * reference**2).sum(-1)
     offsets[information.sum(-1) == 0] = torch.inf
     return (
+        torch.cat((patches, patches**2, torch.ones_like(patches[..., :1])), dim=-1),
         torch.cat(
-            (templates, templates**2, torch.ones_like(templates[..., :1])), dim=-1
+            (weighted.float(), -0.5 * information.float(), -offsets[..., None].float()),
+            dim=-1,
         ),
-        torch.cat((weighted, -0.5 * information, -offsets[..., None]), dim=-1).float(),
     )
 
 
@@ -157,15 +145,21 @@ def template_features(
     )
 
 
-def grams(
-    mode: str,
-) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-    queries = loaded(mode)
+def template_gram(scaled: torch.Tensor) -> torch.Tensor:
+    values = scaled.double()
+    norms = 0.5 * (values**2).sum(dim=1)
+    return values @ values.T - norms[:, None] - norms[None, :]
+
+
+def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    queries = embeddings.loaded(f"template_{mode}", torch.float32).flatten(1)
     reference = queries.median(dim=0).values
     galaxies = observations.observed(mode)
     weighted, information, squares = gathered(mode, galaxies)
     free = mode in SPECTRUM_MODES
-    measured = {mode: same_place(queries, reference, weighted, information, free)}
+    matrices = {
+        f"data_gram_{mode}": same_place(queries, reference, weighted, information, free)
+    }
     references = {
         "reference": reference,
         "galleries": torch.from_numpy(galaxies),
@@ -174,43 +168,34 @@ def grams(
     if free:
         own = queries[galaxies].double()
         amplitude = (own * weighted).sum(1) / (own**2 * information).sum(1)
-        weighted = weighted * amplitude[:, None]
-        information = information * amplitude[:, None] ** 2
+        weighted *= amplitude[:, None]
+        information *= amplitude[:, None] ** 2
         references["amplitudes"] = amplitude
     depth = information.median(dim=0).values.sqrt().float()
     references["depth"] = depth
     scaled = queries * depth
     if free:
         scaled /= scaled.norm(dim=1, keepdim=True)
-    expected = {mode: same_place_distances(scaled)}
+    matrices[f"template_gram_{mode}"] = template_gram(scaled)
     if len(TOKEN_GRAMS[mode]) > 1:
         kept = slotted(depth[None], mode)[0].sum(-1) > 0
-        name = f"{mode}_anywhere"
-        measured[name] = anywhere(
+        matrices[f"data_gram_{mode}_anywhere"] = anywhere(
             *data_features(queries, reference, weighted, information, mode, kept),
             symmetric=False,
         )
-        expected[name] = anywhere(
+        matrices[f"template_gram_{mode}_anywhere"] = anywhere(
             *template_features(scaled, mode, kept), symmetric=True
         )
-    return measured, expected, references
-
-
-def same_place_distances(scaled: torch.Tensor) -> torch.Tensor:
-    values = scaled.double()
-    norms = 0.5 * (values**2).sum(dim=1)
-    return values @ values.T - norms[:, None] - norms[None, :]
+    return matrices, references
 
 
 def generate_observed_grams() -> None:
     torch.backends.cuda.matmul.fp32_precision = "ieee"
     references = {}
     for mode in tqdm(MODES, desc="observed grams"):
-        measured, expected, values = grams(mode)
-        for name, matrix in measured.items():
-            np.save(artifact(f"data_gram_{name}"), matrix.float().cpu().numpy())
-        for name, matrix in expected.items():
-            np.save(artifact(f"template_gram_{name}"), matrix.float().cpu().numpy())
+        matrices, values = grams(mode)
+        for role, matrix in matrices.items():
+            np.save(artifact(role), matrix.float().cpu().numpy())
         references |= {
             f"{mode}_{part}": tensor.cpu().numpy() for part, tensor in values.items()
         }

@@ -162,7 +162,8 @@ def generate_templates() -> None:
         found.flush()
 
 
-def spread(means: torch.Tensor, squares: torch.Tensor) -> np.ndarray:
+def deviation(moments: torch.Tensor) -> np.ndarray:
+    means, squares = moments.chunk(2, dim=-1)
     return (squares - means**2).sum(dim=-1).mean(dim=-1).sqrt().cpu().numpy()
 
 
@@ -172,16 +173,12 @@ def widths(
     found = {}
     for mode, survey in IMAGE_MODES.items():
         vectors = codebook(decoder(mode), IMAGE_VOCABULARY)
-        found[mode] = spread(
-            image_latents(rows, survey, vectors),
-            image_latents(rows, survey, vectors**2),
-        )
+        moments = torch.cat((vectors, vectors**2), dim=-1)
+        found[mode] = deviation(image_latents(rows, survey, moments))
     for mode, survey in SPECTRUM_MODES.items():
         vectors = codebook(decoder(mode), VOCABULARY)
-        found[mode] = spread(
-            spectrum_latents(rows, survey, vectors),
-            spectrum_latents(rows, survey, vectors**2),
-        )
+        moments = torch.cat((vectors, vectors**2), dim=-1)
+        found[mode] = deviation(spectrum_latents(rows, survey, moments))
     for mode in TABLE_MODES:
         probabilities, values = (
             pql.table_value_probabilities(rows, mode),

@@ -26,6 +26,7 @@ from app.observations import MAGNITUDE_ERRORS
 from scripts.fixture import covered
 
 MODE = "hsc_image"
+GALAXY = 7
 WIDTH = len(BANDS["hsc"]) * CROP_PIXELS**2
 
 
@@ -39,7 +40,7 @@ def random_data(
 
 def test_same_place_scores_are_chi_square_differences_from_the_reference() -> None:
     rng = np.random.default_rng(0)
-    queries, _ = random_data(rng, 3)
+    queries = random_data(rng, 3)[0].float()
     values, information = random_data(rng, 4)
     reference = queries.mean(dim=0)
 
@@ -53,18 +54,18 @@ def test_same_place_scores_are_chi_square_differences_from_the_reference() -> No
 
     for free in (False, True):
         found = observed_grams.same_place(
-            queries.float(), reference.float(), information * values, information, free
+            queries, reference, information * values, information, free
         )
         saturation = observed_grams.saturation(
-            reference.float(),
+            reference,
             information * values,
             information,
             (information * values**2).sum(-1),
             free,
         )
 
-        null = chi_square(reference.float().double(), free)
-        expected = 0.5 * (null - chi_square(queries.float().double()[:, None], free))
+        null = chi_square(reference.double(), free)
+        expected = 0.5 * (null - chi_square(queries.double()[:, None], free))
         np.testing.assert_allclose(found, expected, rtol=1e-9, err_msg=str(free))
         np.testing.assert_allclose(saturation, 0.5 * null, rtol=1e-9, err_msg=str(free))
 
@@ -96,7 +97,7 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
 ) -> None:
     monkeypatch.setattr(observed_grams, "ROWS", 2 * N_IMAGE_TOKENS)
     rng = np.random.default_rng(1)
-    queries, _ = random_data(rng, 3)
+    queries = random_data(rng, 3)[0].float()
     values, information = random_data(rng, 5)
     information[1].view(-1, CROP_PIXELS, CROP_PIXELS)[:, : CROP_PIXELS // 2] = 0
     reference = queries.mean(dim=0)
@@ -104,12 +105,7 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
 
     found = observed_grams.anywhere(
         *observed_grams.data_features(
-            queries.float(),
-            reference.float(),
-            information * values,
-            information,
-            MODE,
-            kept,
+            queries, reference, information * values, information, MODE, kept
         ),
         symmetric=False,
     )
@@ -117,8 +113,8 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
     for query in range(len(queries)):
         for gallery in range(len(values)):
             expected = slot_scores(
-                queries[query].float().double(),
-                reference.float().double(),
+                queries[query].double(),
+                reference.double(),
                 values[gallery],
                 information[gallery],
             )
@@ -254,12 +250,12 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         np.testing.assert_allclose(
             references[f"{mode}_depth"], depth, rtol=1e-6, err_msg=mode
         )
-        scaled = queries.double() * depth
+        scaled = queries * torch.from_numpy(references[f"{mode}_depth"])
         if free:
             scaled /= scaled.norm(dim=1, keepdim=True)
         np.testing.assert_allclose(
             np.load(artifact(f"template_gram_{mode}")),
-            -0.5 * torch.cdist(scaled, scaled) ** 2,
+            -0.5 * torch.cdist(scaled.double(), scaled.double()) ** 2,
             rtol=1e-4,
             atol=1e-3,
             err_msg=mode,
@@ -282,9 +278,16 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         )
         if not free:
             assert (anywhere >= same - 1e-3 * (1 + np.abs(same))).all(), name
-        nearest = np.load(artifact(f"template_gram_{name}"))
-        np.testing.assert_allclose(np.diagonal(nearest), 0, atol=1e-2, err_msg=name)
-        assert (nearest <= 1e-2).all(), name
+        np.testing.assert_allclose(
+            np.load(artifact(f"template_gram_{name}")),
+            observed_grams.anywhere(
+                *observed_grams.template_features(scaled, mode, kept),
+                symmetric=True,
+            ),
+            rtol=1e-5,
+            atol=1e-5,
+            err_msg=name,
+        )
 
 
 def test_template_embeddings_decompose_each_template_gram_with_widths(
@@ -297,23 +300,28 @@ def test_template_embeddings_decompose_each_template_gram_with_widths(
             artifact(f"template_gram_{name}"),
             rng.normal(size=(count, count)).astype(np.float32),
         )
+    depths = {
+        **{mode: rng.random(values) for mode, (_, values, _) in TABLE_MODES.items()},
+        **{mode: rng.random(1) for mode in (*IMAGE_MODES, *SPECTRUM_MODES)},
+    }
     np.savez(
         artifact("observed_reference"),
-        **{
-            f"{mode}_depth": rng.random(values)
-            for mode, (_, values, _) in TABLE_MODES.items()
-        },
-        **{f"{mode}_depth": rng.random(1) for mode in (*IMAGE_MODES, *SPECTRUM_MODES)},
+        **{f"{mode}_depth": depth for mode, depth in depths.items()},
     )
 
     observed_grams.generate_template_embeddings()
 
-    for name in GRAM_NAMES:
-        gram = np.load(artifact(f"template_gram_{name}")).astype(np.float64)
-        found = np.load(artifact(f"template_embedding_{name}"))
-        difference = found["queries"] @ found["galleries"].T + found["offsets"] - gram
-        np.testing.assert_allclose(
-            difference - difference[:, :1], 0, atol=1e-3, err_msg=name
-        )
-        assert found["widths"].shape == (count,), name
-        assert np.isfinite(found["widths"]).all(), name
+    expected = templates.widths(pql.row(GALAXY), depths)
+    for mode, names in TOKEN_GRAMS.items():
+        for name in names:
+            gram = np.load(artifact(f"template_gram_{name}")).astype(np.float64)
+            found = np.load(artifact(f"template_embedding_{name}"))
+            difference = (
+                found["queries"] @ found["galleries"].T + found["offsets"] - gram
+            )
+            np.testing.assert_allclose(
+                difference - difference[:, :1], 0, atol=1e-3, err_msg=name
+            )
+            np.testing.assert_allclose(
+                found["widths"][GALAXY], expected[mode][0], rtol=1e-6, err_msg=name
+            )
