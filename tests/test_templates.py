@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pyarrow as pa
@@ -12,6 +13,7 @@ from app.config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
+    REDSHIFT,
     SPECTRUM_MODES,
     VOCABULARY,
     artifact,
@@ -119,6 +121,29 @@ def test_each_stored_template_is_its_galaxy_s_in_every_mode(
         np.testing.assert_allclose(
             stored[GALAXY], found[0], rtol=1e-5, atol=1e-5, err_msg=mode
         )
+
+
+@pytest.mark.parametrize(
+    ("decoded", "expected"),
+    [
+        ([1.0, 2.0, 3.0, 1e9], [1.0, 2.0, 3.0, 3.0]),
+        ([1.0, 2.0, np.nan, np.nan], [1.0, 2.0, 2.0, np.nan]),
+    ],
+)
+def test_a_scalar_codec_s_open_top_bin_takes_its_lower_edge(
+    decoded: list[float], expected: list[float], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    quantizer = SimpleNamespace(
+        codebook_size=len(decoded), decode=torch.tensor(decoded).__getitem__
+    )
+    monkeypatch.setattr(
+        templates, "loaded", lambda _: SimpleNamespace(quantizer=quantizer)
+    )
+
+    found = templates.bin_values(REDSHIFT)
+
+    np.testing.assert_array_equal(found[0, : len(decoded)], expected)
+    assert np.isnan(found[0, len(decoded) :]).all()
 
 
 def test_medians_skip_bins_without_a_value() -> None:
