@@ -84,10 +84,10 @@ def test_each_stored_template_is_its_galaxy_s_in_every_mode(
         )
 
 
-def test_expected_values_skip_bins_without_a_value() -> None:
-    values = np.array([[1.0, 3.0, np.nan]], np.float32)
-    probabilities = np.array([[[0.25, 0.25, 0.5]]], np.float32)
+def test_medians_skip_bins_without_a_value() -> None:
+    values = np.array([[1.0, 3.0, np.nan, 5.0]], np.float32)
+    probabilities = np.array([[[0.2, 0.2, 0.5, 0.1]]], np.float32)
 
-    found = templates.expected(probabilities, values)
+    found = templates.medians(probabilities, values)
 
-    np.testing.assert_allclose(found, [[2.0]])
+    np.testing.assert_array_equal(found, [[3.0]])

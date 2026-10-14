@@ -61,8 +61,7 @@ def image_latents(
 
 
 @torch.inference_mode()
-def image_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarray:
-    latents = image_latents(rows, survey, codebook(codec, IMAGE_VOCABULARY))
+def decoded_images(codec: Codec, latents: torch.Tensor, survey: str) -> np.ndarray:
     decoded = codec._decode(latents, bands=DECODED_BANDS).flux
     channels = [DECODED_BANDS.index(band) for band in BANDS[survey]]
     scale = codec.rescaler.convert_zeropoint(ZERO_POINTS[survey])
@@ -70,6 +69,15 @@ def image_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarr
 
 
 @torch.inference_mode()
+def decoded_spectra(codec: Codec, latents: torch.Tensor) -> np.ndarray:
+    return (codec._decode(latents, normalization=None).flux + 1).cpu().numpy()
+
+
+def image_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarray:
+    vectors = codebook(codec, IMAGE_VOCABULARY)
+    return decoded_images(codec, image_latents(rows, survey, vectors), survey)
+
+
 def spectrum_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarray:
     vectors = codebook(codec, VOCABULARY)
     mean, directions, coefficients = (
@@ -80,8 +88,7 @@ def spectrum_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.nd
         )
     )
     latents = mean @ vectors + coefficients @ (directions @ vectors)
-    decoded = codec._decode(latents.transpose(1, 2), normalization=None).flux
-    return (decoded + 1).cpu().numpy()
+    return decoded_spectra(codec, latents.transpose(1, 2))
 
 
 def bin_values(mode: str) -> np.ndarray:
@@ -95,9 +102,12 @@ def bin_values(mode: str) -> np.ndarray:
     return values
 
 
-def expected(probabilities: np.ndarray, values: np.ndarray) -> np.ndarray:
-    weights = np.where(np.isnan(values), 0, probabilities)
-    return (weights * np.nan_to_num(values)).sum(axis=-1) / weights.sum(axis=-1)
+def medians(probabilities: np.ndarray, values: np.ndarray) -> np.ndarray:
+    cumulative = np.where(np.isnan(values), 0, probabilities).cumsum(axis=-1)
+    index = (cumulative < cumulative[..., -1:] / 2).sum(axis=-1, keepdims=True)
+    return np.take_along_axis(
+        np.broadcast_to(values, probabilities.shape), index, axis=-1
+    )[..., 0]
 
 
 def templates(
@@ -113,7 +123,7 @@ def templates(
             for mode, survey in SPECTRUM_MODES.items()
         },
         **{
-            mode: expected(pql.table_value_probabilities(rows, mode), values[mode])
+            mode: medians(pql.table_value_probabilities(rows, mode), values[mode])
             for mode in TABLE_MODES
         },
     }
