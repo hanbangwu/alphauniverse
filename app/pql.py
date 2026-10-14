@@ -17,6 +17,7 @@ from .config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     KEPT,
+    MODE_SURVEYS,
     MODES,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
@@ -24,13 +25,11 @@ from .config import (
     OBSERVATIONS,
     PREDICTIONS,
     PROBABILITY_FLOOR,
-    REDSHIFT,
     SALIENCY_SAMPLE,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
     TABLE_MODES,
-    TABLE_VALUE_SURVEYS,
     TOP_CODES,
     VOCABULARY,
     GalaxyIndex,
@@ -41,14 +40,7 @@ from .search import tokens
 
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
 OBSERVED_IN = {
-    mode: survey
-    for mode, survey in (
-        IMAGE_MODES
-        | SPECTRUM_MODES
-        | {f"{survey}_table": survey for survey in TABLE_VALUE_SURVEYS}
-        | {REDSHIFT: REDSHIFT}
-    ).items()
-    if survey in OBSERVATIONS
+    mode: survey for mode, survey in MODE_SURVEYS.items() if survey in OBSERVATIONS
 }
 QUERY_COLUMNS = [
     f"{survey}_{name}"

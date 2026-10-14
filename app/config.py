@@ -187,6 +187,12 @@ TABLE_MODES = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
     f"{survey}_table": (f"{survey}_table_values", len(columns), VOCABULARY)
     for survey, columns in TABLE_VALUE_SURVEYS.items()
 }
+MODE_SURVEYS = (
+    IMAGE_MODES
+    | SPECTRUM_MODES
+    | {f"{survey}_table": survey for survey in TABLE_VALUE_SURVEYS}
+    | {REDSHIFT: REDSHIFT}
+)
 OBSERVATIONS = {
     "hsc": "HSC match",
     "desi": "DESI spectrum",
