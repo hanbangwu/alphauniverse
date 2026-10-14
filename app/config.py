@@ -223,6 +223,9 @@ ARTIFACTS: dict[str, str] = {
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
     **{f"token_embedding_{name}": "npz" for name in GRAM_NAMES},
     **{f"template_{mode}": "npy" for mode in MODES},
+    **{f"data_gram_{name}": "npy" for name in GRAM_NAMES},
+    **{f"template_gram_{name}": "npy" for name in GRAM_NAMES},
+    "observed_reference": "npz",
 }
 
 PREDICTIONS = pa.schema(
