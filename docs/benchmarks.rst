@@ -117,6 +117,20 @@ How closely does AION's predicted observation match a galaxy's own data? ``templ
 
    show(template_quality())
 
+Template embeddings
+-------------------
+
+How much of exact against-data search do the template embeddings keep? ``template_embedding_quality`` takes every galaxy as a query and the galaxies observed in each mode as the gallery, leaving the query out, and compares the top 10 and top 100 with three rankings: the :term:`against-data score` :math:`S`; :math:`S / S_\text{sat}`, the share of each gallery galaxy's :term:`saturation` the query's template reaches; and the :term:`template Gram`. The template Gram's agreement with the two exact rankings measures the typical-depth approximation alone, and the stored vectors' agreement with the template Gram the components left out. For each galaxy observed in the mode, it also reports the rank of the galaxy's own data in its own row under :math:`S` and :math:`S / S_\text{sat}`.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import template_embedding_quality
+
+   show(template_embedding_quality())
+
 Search speed
 ------------
 

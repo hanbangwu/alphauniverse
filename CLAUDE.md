@@ -28,6 +28,7 @@ uv run modal run -m scripts.benchmarks.text_search_quality  # measure text searc
 uv run --group build modal run -m scripts.benchmarks.compression_quality  # measure prediction storage on Modal
 uv run modal run -m scripts.benchmarks.token_embedding_quality  # measure token embeddings on Modal
 uv run --group build modal run -m scripts.benchmarks.template_quality  # measure templates against data on Modal
+uv run modal run -m scripts.benchmarks.template_embedding_quality  # measure template embeddings against data on Modal
 uv run python -m scripts.openapi                            # regenerate frontend/openapi.json
 ```
 
