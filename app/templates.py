@@ -1,3 +1,5 @@
+from functools import cache
+
 import numpy as np
 import pyarrow as pa
 import torch
@@ -41,12 +43,17 @@ TABLE_MODALITIES = {
 }
 
 
+@cache
+def loaded(modality: type) -> Codec:
+    return encode.codec()._load_codec(modality)
+
+
 def decoder(mode: str) -> Codec:
-    return encode.codec()._load_codec(MODALITIES[mode]).to(device())
+    return loaded(MODALITIES[mode]).to(device())
 
 
 def codebook(codec: Codec, vocabulary: int) -> torch.Tensor:
-    return codec.quantizer.decode(torch.arange(vocabulary, device=device())).float()
+    return codec.quantizer.decode(torch.arange(vocabulary, device=device()))
 
 
 def image_latents(
@@ -95,7 +102,7 @@ def bin_values(mode: str) -> np.ndarray:
     _, _, vocabulary = TABLE_MODES[mode]
     values = np.full((len(TABLE_MODALITIES[mode]), vocabulary), np.nan, np.float32)
     for row, modality in zip(values, TABLE_MODALITIES[mode], strict=True):
-        quantizer = encode.codec()._load_codec(modality).quantizer
+        quantizer = loaded(modality).quantizer
         row[: quantizer.codebook_size] = quantizer.decode(
             torch.arange(quantizer.codebook_size)
         )
@@ -104,26 +111,22 @@ def bin_values(mode: str) -> np.ndarray:
 
 def medians(probabilities: np.ndarray, values: np.ndarray) -> np.ndarray:
     cumulative = np.where(np.isnan(values), 0, probabilities).cumsum(axis=-1)
-    index = (cumulative < cumulative[..., -1:] / 2).sum(axis=-1, keepdims=True)
-    return np.take_along_axis(
-        np.broadcast_to(values, probabilities.shape), index, axis=-1
-    )[..., 0]
+    index = (cumulative < cumulative[..., -1:] / 2).sum(axis=-1)
+    return values[np.arange(len(values)), index]
 
 
-def templates(
-    rows: pa.RecordBatch, decoders: dict[str, Codec], values: dict[str, np.ndarray]
-) -> dict[str, np.ndarray]:
+def templates(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
     return {
         **{
-            mode: image_templates(decoders[mode], rows, survey)
+            mode: image_templates(decoder(mode), rows, survey)
             for mode, survey in IMAGE_MODES.items()
         },
         **{
-            mode: spectrum_templates(decoders[mode], rows, survey)
+            mode: spectrum_templates(decoder(mode), rows, survey)
             for mode, survey in SPECTRUM_MODES.items()
         },
         **{
-            mode: medians(pql.table_value_probabilities(rows, mode), values[mode])
+            mode: medians(pql.table_value_probabilities(rows, mode), bin_values(mode))
             for mode in TABLE_MODES
         },
     }
@@ -131,12 +134,10 @@ def templates(
 
 def generate_templates() -> None:
     torch.backends.cudnn.conv.fp32_precision = "ieee"
-    decoders = {mode: decoder(mode) for mode in MODALITIES}
-    values = {mode: bin_values(mode) for mode in TABLE_MODES}
     count = pql.predictions().num_rows
     stored, start = {}, 0
     for rows in tqdm(pql.predictions().to_batches(), desc="templates"):
-        for mode, found in templates(rows, decoders, values).items():
+        for mode, found in templates(rows).items():
             if mode not in stored:
                 stored[mode] = open_memmap(
                     artifact(f"template_{mode}"),

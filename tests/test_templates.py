@@ -72,9 +72,7 @@ def test_each_stored_template_is_its_galaxy_s_in_every_mode(
 
     templates.generate_templates()
 
-    decoders = {mode: templates.decoder(mode) for mode in templates.MODALITIES}
-    values = {mode: templates.bin_values(mode) for mode in templates.TABLE_MODALITIES}
-    expected = templates.templates(pql.row(GALAXY), decoders, values)
+    expected = templates.templates(pql.row(GALAXY))
     for mode, found in expected.items():
         stored = np.load(artifact(f"template_{mode}"))
         assert len(stored) == pql.predictions().num_rows

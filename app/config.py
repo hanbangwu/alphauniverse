@@ -194,9 +194,10 @@ OBSERVATIONS = {
     REDSHIFT: "usable redshift",
 }
 
+MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
 TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
-    for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+    for mode in MODES
 }
 GRAM_NAMES = tuple(name for names in TOKEN_GRAMS.values() for name in names)
 TOKEN_EMBEDDING_RANK = 1024
@@ -215,7 +216,7 @@ ARTIFACTS: dict[str, str] = {
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
     **{f"token_embedding_{name}": "npz" for name in GRAM_NAMES},
-    **{f"template_{mode}": "npy" for mode in TOKEN_GRAMS},
+    **{f"template_{mode}": "npy" for mode in MODES},
 }
 
 PREDICTIONS = pa.schema(
