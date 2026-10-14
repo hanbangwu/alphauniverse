@@ -8,7 +8,12 @@ from typing import Any
 import modal
 import numpy as np
 
-from app.config import DATASET_REVISION, GRAM_NAMES, TOKEN_GRAMS
+from app.config import (
+    DATASET_REVISION,
+    GRAM_NAMES,
+    TOKEN_EMBEDDING_RANK,
+    TOKEN_GRAMS,
+)
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -16,9 +21,8 @@ app = modal.App("alphauniverse-token-embedding-quality")
 image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/token_embedding_quality.json")
-RANKS = (8, 16, 32, 64, 128, 256, 512, 1024)
-TOP = 100
-SHORT = 10
+RANKS = tuple(TOKEN_EMBEDDING_RANK // 2**halvings for halvings in range(7, -1, -1))
+TOP = (10, 100)
 BATCH = 1024
 COMBINED = {
     "same_place": tuple(TOKEN_GRAMS),
@@ -26,28 +30,19 @@ COMBINED = {
 }
 
 
-def ranked(scores, first: int):
+def top(score: Callable, count: int):
     import torch
 
-    scores = scores.clone()
-    rows = torch.arange(len(scores), device=scores.device)
-    scores[rows, first + rows] = -torch.inf
-    return scores.topk(TOP, dim=1).indices
+    found = []
+    for first in range(0, count, BATCH):
+        scores = score(slice(first, first + BATCH)).clone()
+        scores.diagonal(first).fill_(-torch.inf)
+        found.append(scores.topk(max(TOP), dim=1).indices)
+    return torch.cat(found)
 
 
-def exact_top(rows: Callable, count: int):
-    import torch
-
-    return torch.cat(
-        [
-            ranked(rows(slice(first, first + BATCH)), first)
-            for first in range(0, count, BATCH)
-        ]
-    )
-
-
-def agreement(rows: Callable, exact) -> dict[str, float]:
-    found = exact_top(rows, len(exact))
+def agreement(score: Callable, exact) -> dict[str, float]:
+    found = top(score, len(exact))
     return {
         f"top{count}": round(
             float(
@@ -58,7 +53,7 @@ def agreement(rows: Callable, exact) -> dict[str, float]:
             ),
             4,
         )
-        for count in (SHORT, TOP)
+        for count in TOP
     }
 
 
@@ -66,26 +61,19 @@ def matrix_rows(rows: slice, matrix):
     return matrix[rows].float()
 
 
-def truncated(vectors: dict, rank: int) -> dict:
-    return {
-        "queries": vectors["queries"][:, :rank],
-        "galleries": vectors["galleries"][:, :rank],
-        "offsets": vectors["offsets"],
-    }
-
-
-def stored_rows(rows: slice, queries, galleries, offsets):
-    from app.embeddings import scores
-
-    return scores(queries[rows], galleries, offsets)
+def stored_rows(rows: slice, vectors: dict, rank: int):
+    return (
+        vectors["queries"][rows, :rank] @ vectors["galleries"][:, :rank].T
+        + vectors["offsets"]
+    )
 
 
 def positive_rows(rows: slice, positions, diagonal):
     return positions[rows] @ positions.T - ((positions**2).sum(dim=1) - diagonal) / 2
 
 
-def standardised(rows):
-    return (rows - rows.mean(dim=1, keepdim=True)) / rows.std(
+def standardised(scores):
+    return (scores - scores.mean(dim=1, keepdim=True)) / scores.std(
         dim=1, correction=0, keepdim=True
     )
 
@@ -97,9 +85,9 @@ def combined_rows(rows: slice, parts: list[Callable]):
 @app.function(
     image=image,
     gpu="H100!",
-    cpu=8,
-    memory=(32 * 1024, 64 * 1024),
-    timeout=15 * 60,
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=8 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def measure() -> dict[str, Any]:
@@ -109,74 +97,79 @@ def measure() -> dict[str, Any]:
     from app import embeddings
     from app.config import artifact
 
-    grams, vectors, exact, matrices = {}, {}, {}, {}
+    grams, vectors, matrices = {}, {}, {}
     for name in tqdm(GRAM_NAMES, desc="matrices"):
         gram = embeddings.loaded(name)
         symmetric = (gram + gram.T) / 2
-        eigenvalues, eigenvectors = torch.linalg.eigh(embeddings.centred(symmetric)[0])
-        eigenvalues, eigenvectors = eigenvalues.flip(0), eigenvectors.flip(1)
+        eigenvalues, eigenvectors = torch.linalg.eigh(embeddings.centred(symmetric))
+        positions = (
+            eigenvectors[:, -TOKEN_EMBEDDING_RANK:]
+            * eigenvalues[-TOKEN_EMBEDDING_RANK:].clamp_min(0).sqrt()
+        )
+        positions = positions.flip(1).float()
         stored = np.load(artifact(f"token_embedding_{name}"))
         vectors[name] = {
             part: torch.from_numpy(stored[part]).to(gram.device)
             for part in ("queries", "galleries", "offsets")
         }
         grams[name] = gram.float()
-        exact[name] = exact_top(partial(matrix_rows, matrix=grams[name]), len(gram))
+        exact = top(partial(matrix_rows, matrix=grams[name]), len(gram))
         energy = stored["singular_values"] ** 2
         energy = energy.cumsum() / energy.sum()
         negative = eigenvalues[eigenvalues < 0]
-        matrix = {
+        matrices[name] = {
             "negative_eigenvalues": len(negative),
             "negative_share": round(
                 float(negative.abs().sum() / eigenvalues.abs().sum()), 4
             ),
             "energy": {rank: round(float(energy[rank - 1]), 4) for rank in RANKS},
-            "stored": {},
-            "positive": {},
+            "stored": {
+                rank: agreement(
+                    partial(stored_rows, vectors=vectors[name], rank=rank), exact
+                )
+                for rank in RANKS
+            },
+            "positive": {
+                rank: agreement(
+                    partial(
+                        positive_rows,
+                        positions=positions[:, :rank],
+                        diagonal=grams[name].diagonal(),
+                    ),
+                    exact,
+                )
+                for rank in RANKS
+            },
         }
-        for rank in RANKS:
-            matrix["stored"][rank] = agreement(
-                partial(stored_rows, **truncated(vectors[name], rank)), exact[name]
-            )
-            positions = eigenvectors[:, :rank] * eigenvalues[:rank].clamp_min(0).sqrt()
-            matrix["positive"][rank] = agreement(
-                partial(
-                    positive_rows,
-                    positions=positions.float(),
-                    diagonal=grams[name].diagonal(),
-                ),
-                exact[name],
-            )
         if name not in TOKEN_GRAMS:
-            matrix["antisymmetric_share"] = round(
+            matrices[name]["antisymmetric_share"] = round(
                 float(
                     ((gram - gram.T) / 2).square().sum()
                     / (gram - gram.mean()).square().sum()
                 ),
                 4,
             )
-            matrix["symmetric"] = agreement(
-                partial(matrix_rows, matrix=symmetric), exact[name]
+            matrices[name]["symmetric"] = agreement(
+                partial(matrix_rows, matrix=symmetric), exact
             )
-        matrices[name] = matrix
         del gram, symmetric, eigenvalues, eigenvectors
-        torch.cuda.empty_cache()
 
+    galaxies = len(grams[GRAM_NAMES[0]])
     combined = {}
     for combination, names in tqdm(COMBINED.items(), desc="combined"):
-        truth = exact_top(
+        truth = top(
             partial(
                 combined_rows,
                 parts=[partial(matrix_rows, matrix=grams[name]) for name in names],
             ),
-            len(exact[names[0]]),
+            galaxies,
         )
         combined[combination] = {
             rank: agreement(
                 partial(
                     combined_rows,
                     parts=[
-                        partial(stored_rows, **truncated(vectors[name], rank))
+                        partial(stored_rows, vectors=vectors[name], rank=rank)
                         for name in names
                     ],
                 ),
@@ -188,7 +181,7 @@ def measure() -> dict[str, Any]:
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name(),
-        "galaxies": len(exact[GRAM_NAMES[0]]),
+        "galaxies": galaxies,
         "ranks": RANKS,
         "matrices": matrices,
         "combined": combined,

@@ -195,6 +195,7 @@ TOKEN_GRAMS = {
     for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
 }
 GRAM_NAMES = tuple(name for names in TOKEN_GRAMS.values() for name in names)
+TOKEN_EMBEDDING_RANK = 1024
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",

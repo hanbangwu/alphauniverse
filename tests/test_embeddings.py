@@ -11,33 +11,23 @@ GALAXIES = 40
 RANK = 5
 
 
-@pytest.fixture(scope="module")
-def stored(tree: Path) -> dict[str, tuple[np.ndarray, dict[str, np.ndarray]]]:
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
-        patch.setattr(embeddings, "RANK", RANK)
-        grams.generate_token_grams()
-        embeddings.generate_token_embeddings()
-    return {
-        name: (
-            np.load(artifact(f"token_gram_{name}")),
-            dict(np.load(artifact(f"token_embedding_{name}"))),
-        )
-        for name in GRAM_NAMES
-    }
-
-
 def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centred_gram(
-    stored: dict[str, tuple[np.ndarray, dict[str, np.ndarray]]],
+    tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for name, (gram, found) in stored.items():
-        gram = gram.astype(np.float64)
+    monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
+    monkeypatch.setattr(embeddings, "TOKEN_EMBEDDING_RANK", RANK)
+
+    grams.generate_token_grams()
+    embeddings.generate_token_embeddings()
+
+    for name in GRAM_NAMES:
+        gram = np.load(artifact(f"token_gram_{name}")).astype(np.float64)
+        found = np.load(artifact(f"token_embedding_{name}"))
         centred = (
             gram - gram.mean(axis=1, keepdims=True) - gram.mean(axis=0) + gram.mean()
         )
         residual = centred - found["queries"] @ found["galleries"].T
         singular_values = found["singular_values"]
-
         np.testing.assert_allclose(
             (residual**2).sum(),
             (singular_values[RANK:] ** 2).sum(),
@@ -56,14 +46,15 @@ def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centred_gra
         )
 
 
-def test_at_full_rank_scores_rank_galaxies_as_a_one_way_gram_does() -> None:
+def test_at_full_rank_scores_rank_galaxies_as_a_one_way_gram_does(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(embeddings, "TOKEN_EMBEDDING_RANK", GALAXIES - 1)
     gram = torch.from_numpy(
         np.random.default_rng(1).standard_normal((GALAXIES, GALAXIES))
     )
 
     found = embeddings.embedding(gram)
 
-    difference = (
-        embeddings.scores(found["queries"], found["galleries"], found["offsets"]) - gram
-    )
+    difference = found["queries"] @ found["galleries"].T + found["offsets"] - gram
     np.testing.assert_allclose(difference - difference[:, :1], 0, atol=1e-9)

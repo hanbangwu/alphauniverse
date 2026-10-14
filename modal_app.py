@@ -88,7 +88,7 @@ def generate_token_grams() -> None:
     gpu="H100!",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
-    timeout=10 * 60,
+    timeout=5 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_token_embeddings() -> None:
