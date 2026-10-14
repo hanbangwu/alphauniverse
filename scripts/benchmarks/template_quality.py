@@ -60,7 +60,9 @@ def chunks(galaxies: np.ndarray) -> list[np.ndarray]:
 
 
 def cells(column: str, galaxies: np.ndarray) -> pa.StructArray:
-    return dataset().data.column(column).take(pa.array(galaxies)).combine_chunks()
+    first = int(galaxies[0])
+    covering = dataset().data.column(column).slice(first, int(galaxies[-1]) + 1 - first)
+    return covering.take(pa.array(galaxies - first)).combine_chunks()
 
 
 def pixels(images: pa.StructArray, field: str, bands: int) -> np.ndarray:
@@ -129,8 +131,9 @@ class Profile:
     def report(self) -> dict[str, Any]:
         counts = self.sums[MODELS[0]][0]
         shown = counts > 0
+        centres = (self.edges[:-1] + self.edges[1:]) / 2
         return {
-            "edges": self.edges.tolist(),
+            "centres": centres[shown].tolist(),
             "pixels": counts[shown].astype(int).tolist(),
             **{
                 model: {
@@ -313,7 +316,7 @@ def table_quality(mode: str) -> dict[str, Any]:
     gpu="L4",
     cpu=4,
     memory=(16 * 1024, 32 * 1024),
-    timeout=20 * 60,
+    timeout=60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def measure() -> dict[str, Any]:
