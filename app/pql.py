@@ -215,9 +215,9 @@ def top_image_tokens(
     return codes, probabilities, rest / (IMAGE_VOCABULARY - KEPT)
 
 
-def dense_image_tokens(
+def query_image_tokens(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     codes, probabilities, _ = top_image_tokens(rows, survey, slots)
     width = TOP_CODES - KEPT
     query_codes = array(rows, f"{survey}_query_codes", N_IMAGE_TOKENS, width)[:, slots]
@@ -225,11 +225,19 @@ def dense_image_tokens(
         rows, f"{survey}_query_probabilities", N_IMAGE_TOKENS, width
     )[:, slots]
     tails = array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots]
-    dense = np.repeat(
-        (tails / (IMAGE_VOCABULARY - TOP_CODES))[..., None], IMAGE_VOCABULARY, axis=-1
+    return (
+        np.concatenate((codes, query_codes), axis=-1),
+        np.concatenate((probabilities, query_probabilities), axis=-1),
+        tails / (IMAGE_VOCABULARY - TOP_CODES),
     )
+
+
+def dense_image_tokens(
+    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
+) -> np.ndarray:
+    codes, probabilities, spread = query_image_tokens(rows, survey, slots)
+    dense = np.repeat(spread[..., None], IMAGE_VOCABULARY, axis=-1)
     np.put_along_axis(dense, codes, probabilities, axis=-1)
-    np.put_along_axis(dense, query_codes, query_probabilities, axis=-1)
     return dense
 
 
