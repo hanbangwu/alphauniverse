@@ -113,13 +113,6 @@ def image_data(survey: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarra
     )
 
 
-def mean_template(stored: np.ndarray) -> np.ndarray:
-    total = np.zeros(stored.shape[1:])
-    for part in chunks(np.arange(len(stored))):
-        total += stored[part].sum(axis=0, dtype=np.float64)
-    return (total / len(stored)).astype(np.float32)
-
-
 class Profile:
     def __init__(self, edges: np.ndarray) -> None:
         self.edges = edges
@@ -145,9 +138,11 @@ class Profile:
 
 
 def summary(chi2: dict[str, np.ndarray]) -> dict[str, Any]:
+    measured = np.all([np.isfinite(values) for values in chi2.values()], axis=0)
+    chi2 = {model: values[measured] for model, values in chi2.items()}
     recovered = (chi2["null"] - chi2["template"]) / (chi2["null"] - chi2["floor"])
     return {
-        "galaxies": len(chi2["template"]),
+        "galaxies": int(measured.sum()),
         "chi2": {model: percentiles(values) for model, values in chi2.items()},
         "recovered": percentiles(recovered[np.isfinite(recovered)]),
     }
@@ -156,7 +151,7 @@ def summary(chi2: dict[str, np.ndarray]) -> dict[str, Any]:
 def image_quality(mode: str, survey: str) -> dict[str, Any]:
     codec = templates.decoder(mode)
     stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
-    null = mean_template(stored)
+    null = stored.mean(axis=0, dtype=np.float64)
     centre = (CROP_PIXELS - 1) / 2
     rows, columns = np.indices((CROP_PIXELS, CROP_PIXELS))
     radius = np.broadcast_to(
@@ -200,11 +195,11 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
     codec = templates.decoder(mode)
     grid = codec.latent_grid.wavelength.cpu().numpy()
     stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
-    null = mean_template(stored)
+    null = stored.mean(axis=0, dtype=np.float64)
     value, _, warning = REDSHIFT_COLUMNS[survey]
     galaxies = observed(mode)
     profile = Profile(REST)
-    chi2 = {model: np.empty(len(galaxies)) for model in MODELS}
+    chi2 = {model: np.full(len(galaxies), np.nan) for model in MODELS}
     for start in tqdm(range(0, len(galaxies), BATCH), desc=mode):
         part = galaxies[start : start + BATCH]
         spectra = taken(dataset().data.column(TOKEN_SURVEYS[survey]), part)
@@ -223,6 +218,8 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
             )
             valid = (wavelength > 0) & (ivar > 0) & ~mask
             wavelength, flux, ivar = wavelength[valid], flux[valid], ivar[valid]
+            if len(flux) < 2:
+                continue
             residuals = {}
             for model, values in models.items():
                 shape = np.interp(wavelength, grid, values[row])
@@ -262,12 +259,14 @@ def table_quality(mode: str) -> dict[str, Any]:
     measured, errors = table_data(mode, galaxies)
     values = templates.bin_values(mode)
     first = N_IMAGE_TOKENS if SURVEYS[mode] in IMAGE_MODES.values() else 0
-    own = own_codes(mode, galaxies, first, len(values))
+    own = np.concatenate(
+        [own_codes(mode, part, first, len(values)) for part in chunks(galaxies)]
+    )
     stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
     models = {
         "template": stored[galaxies],
         "floor": values[np.arange(len(values)), own],
-        "null": mean_template(stored),
+        "null": stored.mean(axis=0, dtype=np.float64),
     }
     pulls = {model: (measured - found) / errors for model, found in models.items()}
     pulls = {
