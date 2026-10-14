@@ -99,8 +99,8 @@ def stored_rows(
 def block(name: str, mode: str, references: dict) -> dict[str, Any]:
     galleries = torch.from_numpy(references[f"{mode}_galleries"]).to(device())
     saturation = torch.from_numpy(references[f"{mode}_saturation"]).float().to(device())
-    measured = embeddings.loaded(f"data_gram_{name}").float()
-    expected = embeddings.loaded(f"template_gram_{name}").float()
+    measured = embeddings.loaded(f"data_gram_{name}", torch.float32)
+    expected = embeddings.loaded(f"template_gram_{name}", torch.float32)
     stored = np.load(artifact(f"template_embedding_{name}"))
     vectors = {
         part: torch.from_numpy(stored[part]).to(device())

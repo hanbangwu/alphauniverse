@@ -7,9 +7,9 @@ from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
 BATCH = 1024
 
 
-def loaded(role: str) -> torch.Tensor:
+def loaded(role: str, dtype: torch.dtype = torch.float64) -> torch.Tensor:
     stored = np.load(artifact(role), mmap_mode="r")
-    gram = torch.empty(stored.shape, dtype=torch.float64, device=device())
+    gram = torch.empty(stored.shape, dtype=dtype, device=device())
     for start in range(0, len(stored), BATCH):
         rows = slice(start, start + BATCH)
         gram[rows] = torch.tensor(stored[rows], device=gram.device)
