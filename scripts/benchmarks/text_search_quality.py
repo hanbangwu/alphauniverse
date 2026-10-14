@@ -41,33 +41,33 @@ def benchmark_text_search_quality() -> dict[str, Any]:
     from sklearn.metrics import average_precision_score
 
     from app.alignment import AlignmentMap, apply_linear, held_out, pairs
-    from app.config import PROVABGS, artifact, device
+    from app.config import PROVABGS, TEXT_SURVEYS, artifact, device
     from app.dataset import dataset
     from app.text_search import embed_queries
 
-    galaxy, aion, gemma = pairs()
-    validation = held_out(galaxy)
-    galaxy, aion, gemma = (
-        galaxy[validation.cpu().numpy()],
-        aion[validation],
-        gemma[validation],
-    )
     saved = torch.load(artifact("alignment"), map_location=device())
-    model = AlignmentMap().to(device())
-    model.load_state_dict(saved["mlp"])
-    with torch.no_grad():
-        spaces = {
-            "gemma": gemma.cpu().numpy(),
-            "linear": apply_linear(saved["linear"], aion).cpu().numpy(),
-            "mlp": model.eval()(aion).cpu().numpy(),
+    spaces = {}
+    for modality in TEXT_SURVEYS:
+        galaxy, aion, gemma = pairs(modality)
+        validation = held_out(galaxy)
+        aion, gemma = aion[validation], gemma[validation]
+        model = AlignmentMap().to(device())
+        model.load_state_dict(saved[modality]["mlp"])
+        with torch.no_grad():
+            documents = {
+                "gemma": gemma,
+                "linear": apply_linear(saved[modality]["linear"], aion),
+                "mlp": model.eval()(aion),
+            }
+        held = galaxy[validation.cpu().numpy()]
+        spaces |= {
+            f"{modality} {name}": (held, rows.cpu().numpy())
+            for name, rows in documents.items()
         }
 
     columns = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", "redshift": "Z_HP"}
-    data = dataset().select_columns(
-        [f"{column}{PROVABGS}" for column in columns.values()]
-    )[galaxy.tolist()]
     values = {
-        name: np.asarray(data[f"{column}{PROVABGS}"], dtype=np.float64)
+        name: np.asarray(dataset().data.column(f"{column}{PROVABGS}"), dtype=np.float64)
         for name, column in columns.items()
     }
     with np.errstate(divide="ignore"):
@@ -81,21 +81,29 @@ def benchmark_text_search_quality() -> dict[str, Any]:
             / np.linalg.norm(rows - rows.mean(axis=0), axis=-1, keepdims=True)
         ),
     }
-    corpora = {
-        (space, centring): (transform(documents), transform(text))
-        for space, documents in spaces.items()
+    scored = {
+        (space, centring): (galaxy, transform(documents) @ transform(text).T)
+        for space, (galaxy, documents) in spaces.items()
         for centring, transform in centrings.items()
     }
+    for centring in centrings:
+        galaxy, combined = scored[("image mlp", centring)]
+        spectra, scores = scored[("spectrum mlp", centring)]
+        combined = combined.copy()
+        rows = np.searchsorted(galaxy, spectra)
+        combined[rows] = np.maximum(combined[rows], scores)
+        scored[("combined mlp", centring)] = (galaxy, combined)
 
     report = {}
     for index, (query, (column, low, high)) in enumerate(CUTS):
-        population = ~np.isnan(values[column])
-        relevant = ((values[column] > low) & (values[column] < high))[population]
-        report[query] = {space: {} for space in spaces}
-        for (space, centring), (documents, queries) in corpora.items():
-            ranked = documents[population] @ queries[index]
+        report[query] = {}
+        for (space, centring), (galaxy, scores) in scored.items():
+            value = values[column][galaxy]
+            population = ~np.isnan(value)
+            relevant = ((value > low) & (value < high))[population]
+            ranked = scores[population, index]
             order = np.argsort(-ranked)
-            report[query][space][centring] = {
+            report[query].setdefault(space, {})[centring] = {
                 "base_rate": round(float(relevant.mean()), 4),
                 "average_precision": round(
                     float(average_precision_score(relevant, ranked)), 4
@@ -107,7 +115,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
 
     return {
         "environment": environment(),
-        "galaxies": len(galaxy),
+        "galaxies": len(spaces["image mlp"][0]),
         "queries": report,
         "memory": memory(),
     }
