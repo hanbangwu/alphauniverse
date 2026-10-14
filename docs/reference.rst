@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Seven Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Eight Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ========================= ============================================= =======================================
 Job                       Reads                                         Writes
@@ -13,6 +13,8 @@ generate_embeddings       the dataset                                   encoded,
 generate_predictions      tokens                                        probabilities, probability_basis
 generate_token_grams      probabilities, probability_basis              token_gram_<mode>,
                                                                         token_gram_<mode>_anywhere
+generate_token_embeddings token_gram_<mode>,                            token_embedding_<mode>,
+                          token_gram_<mode>_anywhere                    token_embedding_<mode>_anywhere
 generate_projections      the dataset, encoded                          mean_points, full_points,
                                                                         parametric_umap
 generate_pairs            the dataset, encoded                          pairs
@@ -39,6 +41,8 @@ Artifacts
 ``probability_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``.
 
 ``token_gram_<mode>`` and ``token_gram_<mode>_anywhere`` are ``np.save`` files of a galaxies × galaxies ``float32`` matrix: one for each mode at the same place, and one for each image and spectrum mode at any position. Entry :math:`(q, g)` is the mode score :math:`T_m(g)` of :doc:`methods/similarity-search` with every slot of the mode selected on :math:`q` and every galaxy read as search reads the query galaxy, so a same-place matrix is symmetric up to rounding. The products run in TF32 with float32 accumulation. The app does not read them.
+
+``token_embedding_<mode>`` and ``token_embedding_<mode>_anywhere`` are ``np.savez`` files, one per Gram matrix :math:`K`. With :math:`K_c` the matrix less its row and column means, and :math:`s` and :math:`V` its top 1,024 singular values and right singular vectors: ``queries`` is :math:`K_c V s^{-1/2}` and ``galleries`` is :math:`V s^{1/2}`, galaxies × 1,024 ``float32`` each; ``offsets`` holds :math:`K`'s column means and ``singular_values`` all of :math:`K_c`'s, in ``float64``. ``queries[q] @ galleries.T + offsets`` ranks the galaxies as row :math:`q` of :math:`K` does, exactly at full rank.
 
 ``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet:
 

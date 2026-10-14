@@ -15,7 +15,7 @@ paths:
   | Code                                                                     | Pages                                                         |
   | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
   | `app/encode.py`, `app/predictions.py`, `app/config.py`                   | `concepts.rst`, `glossary.rst`, `reference.rst`               |
-  | `app/grams.py`                                                           | `reference.rst`                                               |
+  | `app/grams.py`, `app/embeddings.py`                                      | `reference.rst`                                               |
   | `app/parametric_umap.py`                                                 | `methods/map.rst`                                             |
   | `app/pql.py`                                                             | `methods/similarity-search.rst`, `methods/query-maps.rst`     |
   | `app/text_search.py`, `app/alignment.py`                                 | `methods/text-search.rst`                                     |
