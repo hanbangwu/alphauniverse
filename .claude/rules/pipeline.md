@@ -1,6 +1,7 @@
 ---
 paths:
   - "app/encode.py"
+  - "app/grams.py"
   - "app/parametric_umap.py"
   - "app/predictions.py"
   - "app/dataset.py"

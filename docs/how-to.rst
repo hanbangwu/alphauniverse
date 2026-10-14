@@ -31,6 +31,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
 
    uv run modal run modal_app.py::generate_embeddings
    uv run modal run modal_app.py::generate_predictions
+   uv run modal run modal_app.py::generate_token_grams
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
    uv run modal run modal_app.py::generate_alignment
