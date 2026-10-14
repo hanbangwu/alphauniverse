@@ -36,7 +36,7 @@ Each map is coloured on its own scale, from its lowest to its highest value; hov
 Search by text
 --------------
 
-Describe a galaxy in up to 500 characters. The site returns the 32 galaxies whose embeddings lie closest to the description, each with its cosine similarity; see :doc:`methods/text-search`.
+Describe a galaxy in up to 500 characters. The site returns the 32 image or spectrum matches that lie closest to the description, each with its galaxy, the modality it matched by and its cosine similarity, so a galaxy can appear twice; see :doc:`methods/text-search`.
 
 Download the embeddings
 -----------------------

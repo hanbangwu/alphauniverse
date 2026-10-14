@@ -46,13 +46,13 @@ Artifacts
    :no-index:
    :no-value:
 
-``pairs`` is Parquet, AION's mean embedding and EmbeddingGemma's image embedding per galaxy:
+``pairs`` is Parquet, one row per galaxy and modality: for ``image``, the mean of AION's Legacy Survey image embeddings and EmbeddingGemma's embedding of the colour image, for every galaxy; for ``spectrum``, the mean of AION's DESI spectrum embeddings and EmbeddingGemma's embedding of the spectrum plot, for every galaxy with a DESI spectrum. Each modality's rows are in galaxy order:
 
 .. autodata:: app.config.PAIRS
    :no-index:
    :no-value:
 
-``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text map's weights; ``alignment`` also holds the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.save`` of every galaxy's unit vector in EmbeddingGemma's space, ``float32``, galaxies × 768.
+``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text maps' weights; ``alignment`` holds, for each modality, the network and the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.savez`` of the image rows then the spectrum rows of ``pairs`` carried into EmbeddingGemma's space: ``vectors`` (``float32``, rows × 768, unit length), ``galaxy`` (``int32``) and ``modality`` (``image`` or ``spectrum``).
 
 HTTP API
 --------

@@ -29,7 +29,7 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
 Text search quality
 -------------------
 
-Can a sentence find the right galaxies? ``text_search_quality`` uses the 30% of galaxies held out of the text map's training, and six queries whose answers are PROVABGS cuts:
+Can a sentence find the right galaxies? ``text_search_quality`` uses the 30% of galaxies held out of the text maps' training, and six queries whose answers are PROVABGS cuts:
 
 ======================================================= ==============================
 Query                                                   Answer
@@ -42,7 +42,7 @@ A distant galaxy at redshift above 0.5                  :math:`z > 0.5`
 A nearby galaxy at redshift below 0.1                   :math:`z < 0.1`
 ======================================================= ==============================
 
-with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each query ranks the galaxies that have that PROVABGS property in three spaces: EmbeddingGemma's own image embeddings, and AION's embeddings carried into EmbeddingGemma's space by a linear map or by the network the site uses (MLP). Each is ranked raw and *centred*, with the mean document and mean query subtracted first.
+with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each query ranks the galaxies that have that PROVABGS property in three spaces per modality, image or spectrum: EmbeddingGemma's own embeddings, and AION's embeddings carried into EmbeddingGemma's space by a linear map or by the network the site uses (MLP). The spectrum spaces rank only galaxies with a DESI spectrum. *Combined MLP* ranks every galaxy by the higher of its image and spectrum rows' scores, as the site ranks them. Each is ranked raw and *centred*, with the mean document and mean query subtracted first.
 
 The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it; *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
 
