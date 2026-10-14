@@ -131,6 +131,41 @@ How much of exact against-data search do the template embeddings keep? ``templat
 
    show(template_embedding_quality())
 
+Retrieval from partial data
+---------------------------
+
+Does a galaxy seen with less of its data still find itself? ``retrieval_quality`` encodes sampled galaxies again from part of their data, predicts every mode from that encoding, and ranks every galaxy, with all of its data, against it: by the encoding's row of each :term:`Gram matrix` and :term:`template Gram`, exactly and through the stored :term:`token embeddings <token embedding>` and :term:`template embeddings <template embedding>` cut to their first :math:`k` components, and by the :term:`cosine similarity` of :term:`mean embeddings <mean embedding>`. Each set holds up to 512 galaxies and keeps:
+
+- all of a galaxy's data;
+- the Legacy Survey image and values alone, or HSC's alone, of a galaxy with both;
+- the DESI spectrum alone, or SDSS's alone, of a galaxy with both;
+- everything but the DESI spectrum and the redshift, of a galaxy with a DESI spectrum.
+
+For each mode and for the two full-object scores of ``token_embedding_quality``, it reports the share of galaxies that rank themselves first (R@1) and in their top 10 (R@10), and their median rank. A Gram matrix's row need not peak at its own galaxy, so the set with all the data is each score's ceiling.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import retrieval_quality
+
+   show(retrieval_quality())
+
+Property probes
+---------------
+
+How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate and redshift for the galaxies that have them, from two kinds of features: AION's mean embeddings, and each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbours, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import probe_quality
+
+   show(probe_quality())
+
 Search speed
 ------------
 

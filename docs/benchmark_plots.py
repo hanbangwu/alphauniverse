@@ -248,6 +248,67 @@ def template_embedding_quality():
     )
 
 
+def retrieval_quality():
+    found = report("retrieval_quality")
+    if found is None:
+        return missing()
+    ranks = [str(rank) for rank in found["ranks"]]
+    rows = []
+    for test, measured in found["tests"].items():
+        aion = measured["aion"]
+        rows.append({"set": test, "galaxies": measured["galaxies"], "score": "AION", "R@1": aion["r1"], "R@10": aion["r10"], "median rank": aion["median"]} | {f"R@10 at k = {rank}": "" for rank in ranks})
+        for role in ("token", "template"):
+            for name, exact in measured[role]["exact"].items():
+                stored = {f"R@10 at k = {rank}": measured[role][rank][name]["r10"] for rank in ranks}
+                rows.append({"set": test, "galaxies": measured["galaxies"], "score": f"{role} {name}", "R@1": exact["r1"], "R@10": exact["r10"], "median rank": exact["median"]} | stored)
+    full = [row for row in rows if row["score"] == "AION" or row["score"].endswith(("same_place", "any_position"))]
+    source = ColumnDataSource({"factor": [(row["set"], row["score"]) for row in full], "r1": [row["R@1"] for row in full], "r10": [row["R@10"] for row in full]})
+    chart = figure(
+        x_range=FactorRange(*source.data["factor"]),
+        y_range=(0, 1.05),
+        height=420,
+        title="Share of galaxies in their own top 10 by full-object scores",
+        tooltips=[("R@1", "@r1"), ("R@10", "@r10")],
+        **WIDTH,
+    )
+    chart.vbar(x="factor", top="r10", width=0.8, source=source)
+    chart.xaxis.major_label_orientation = 0.8
+    return column(
+        heading(found, f"ranked among {found['galaxies']:,} galaxies", found["device"]),
+        chart,
+        table(rows, list(rows[0]), height=600),
+        **WIDTH,
+    )
+
+
+def probe_quality():
+    found = report("probe_quality")
+    if found is None:
+        return missing()
+    rows = []
+    for target, measured in found["probes"].items():
+        features = {"AION": measured["aion"]} | {f"{role} {blocks}": probes for role in ("token", "template") for blocks, probes in measured[role].items()}
+        for name, probes in features.items():
+            rows.append({"target": target, "features": name, "galaxies": measured["galaxies"]} | {f"{probe} {metric}": value for probe, metrics in probes.items() for metric, value in metrics.items()})
+    source = ColumnDataSource({"factor": [(row["target"], row["features"]) for row in rows], "ridge": [row["ridge r2"] for row in rows], "knn": [row["knn r2"] for row in rows]})
+    chart = figure(
+        x_range=FactorRange(*source.data["factor"]),
+        height=420,
+        title=f"R² of ridge regression (bars) and of the {found['neighbours']} nearest neighbours (dots)",
+        tooltips=[("ridge", "@ridge"), ("neighbours", "@knn")],
+        **WIDTH,
+    )
+    chart.vbar(x="factor", top="ridge", width=0.8, source=source)
+    chart.scatter(x="factor", y="knn", size=8, color="black", source=source)
+    chart.xaxis.major_label_orientation = 0.8
+    return column(
+        heading(found, f"{found['rank']} components per mode", f"{found['folds']}-fold cross-validation", cpus(found)),
+        chart,
+        table(rows, list(rows[0])),
+        **WIDTH,
+    )
+
+
 def template_quality():
     found = report("template_quality")
     if found is None:
