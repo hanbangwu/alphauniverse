@@ -72,16 +72,22 @@ def test_same_place_scores_are_chi_square_differences_from_the_reference() -> No
 
 
 def slot_scores(
-    query: torch.Tensor, values: torch.Tensor, information: torch.Tensor
+    query: torch.Tensor,
+    reference: torch.Tensor,
+    values: torch.Tensor,
+    information: torch.Tensor,
 ) -> torch.Tensor:
-    query, values, information = (
+    query, reference, values, information = (
         observed_grams.slotted(part[None], MODE)[0]
-        for part in (query, values, information)
+        for part in (query, reference, values, information)
     )
-    scores = -0.5 * (
-        query**2 @ information.T
-        - 2 * query @ (information * values).T
-        + (information * values**2).sum(-1)
+    scores = (
+        query @ (information * values).T
+        - 0.5 * query**2 @ information.T
+        - (
+            (information * values * reference).sum(-1)
+            - 0.5 * (information * reference**2).sum(-1)
+        )
     )
     scores[:, information.sum(-1) == 0] = -torch.inf
     return scores
@@ -95,11 +101,12 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
     queries = random_data(rng, 3)[0].float()
     values, information = random_data(rng, 5)
     information[1].view(-1, CROP_PIXELS, CROP_PIXELS)[:, : CROP_PIXELS // 2] = 0
+    reference = queries.mean(dim=0)
     kept = torch.ones(N_IMAGE_TOKENS, dtype=torch.bool)
 
     found = observed_grams.anywhere(
         *observed_grams.data_features(
-            queries, information * values, information, MODE, kept
+            queries, reference, information * values, information, MODE, kept
         ),
         symmetric=False,
     )
@@ -107,7 +114,10 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
     for query in range(len(queries)):
         for gallery in range(len(values)):
             expected = slot_scores(
-                queries[query].double(), values[gallery], information[gallery]
+                queries[query].double(),
+                reference.double(),
+                values[gallery],
+                information[gallery],
             )
             np.testing.assert_allclose(
                 found[query, gallery], expected.amax(dim=1).sum(), rtol=1e-4
@@ -265,13 +275,12 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         anywhere = np.load(artifact(f"data_gram_{name}"))
         np.testing.assert_allclose(
             anywhere,
-            torch.from_numpy(references[f"{mode}_saturation"])
-            + observed_grams.anywhere(
+            observed_grams.anywhere(
                 *observed_grams.data_features(
-                    queries, weighted, information, mode, kept
+                    queries, reference, weighted, information, mode, kept
                 ),
                 symmetric=False,
-            ).double(),
+            ),
             rtol=1e-5,
             err_msg=name,
         )

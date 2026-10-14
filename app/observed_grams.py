@@ -112,24 +112,22 @@ def anywhere(left: torch.Tensor, right: torch.Tensor, symmetric: bool) -> torch.
 
 def data_features(
     queries: torch.Tensor,
+    reference: torch.Tensor,
     weighted: torch.Tensor,
     information: torch.Tensor,
     mode: str,
     kept: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     patches = slotted(queries, mode)[:, kept]
+    reference = slotted(reference[None], mode)[0, kept].double()
     weighted = slotted(weighted, mode)[:, kept]
     information = slotted(information, mode)[:, kept]
-    energies = 0.5 * torch.where(information > 0, weighted**2 / information, 0).sum(-1)
-    energies[information.sum(-1) == 0] = torch.inf
+    offsets = (weighted * reference - 0.5 * information * reference**2).sum(-1)
+    offsets[information.sum(-1) == 0] = torch.inf
     return (
         torch.cat((patches, patches**2, torch.ones_like(patches[..., :1])), dim=-1),
         torch.cat(
-            (
-                weighted.float(),
-                -0.5 * information.float(),
-                -energies[..., None].float(),
-            ),
+            (weighted.float(), -0.5 * information.float(), -offsets[..., None].float()),
             dim=-1,
         ),
     )
@@ -186,8 +184,8 @@ def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
     matrices[f"template_gram_{mode}"] = template_gram(scaled)
     if len(TOKEN_GRAMS[mode]) > 1:
         kept = slotted(depth[None], mode)[0].sum(-1) > 0
-        matrices[f"data_gram_{mode}_anywhere"] = references["saturation"] + anywhere(
-            *data_features(queries, weighted, information, mode, kept),
+        matrices[f"data_gram_{mode}_anywhere"] = anywhere(
+            *data_features(queries, reference, weighted, information, mode, kept),
             symmetric=False,
         )
         matrices[f"template_gram_{mode}_anywhere"] = anywhere(

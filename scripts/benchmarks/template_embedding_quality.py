@@ -116,11 +116,12 @@ def block(name: str, mode: str, references: dict) -> dict[str, Any]:
     )
     own = torch.full((len(measured),), -1, device=device())
     own[galleries] = torch.arange(len(galleries), device=device())
-    truths = {
-        "score": partial(score_rows, matrix=measured),
-        "share": partial(share_rows, matrix=measured, saturation=saturation),
-        "fit": partial(fit_rows, matrix=measured, saturation=saturation),
-    }
+    truths = {"score": partial(score_rows, matrix=measured)}
+    if name == mode:
+        truths |= {
+            "share": partial(share_rows, matrix=measured, saturation=saturation),
+            "fit": partial(fit_rows, matrix=measured, saturation=saturation),
+        }
     exact = {label: top(score, own) for label, score in truths.items()}
     exact["template"] = top(
         partial(template_rows, matrix=expected, galleries=galleries), own

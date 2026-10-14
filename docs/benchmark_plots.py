@@ -223,7 +223,8 @@ def template_embedding_quality():
     for truth, label in truths.items():
         chart = figure(x_axis_type="log", x_axis_label="k", y_range=(0, 1.05), height=360, title=f"Share of the top 10 by {label} found with the stored vectors, by k", **WIDTH)
         for (name, block), colour in zip(found["blocks"].items(), Category20_20):
-            chart.line(ranks, [block["stored"][str(rank)][truth]["top10"] for rank in ranks], legend_label=name, color=colour, line_width=2)
+            if truth in block["stored"][str(ranks[0])]:
+                chart.line(ranks, [block["stored"][str(rank)][truth]["top10"] for rank in ranks], legend_label=name, color=colour, line_width=2)
         chart.legend.location = "bottom_right"
         chart.legend.click_policy = "hide"
         charts.append(chart)
@@ -232,9 +233,9 @@ def template_embedding_quality():
         {
             "block": name,
             "galleries": block["galleries"],
-            **{f"own rank by {label}, median": block["own_rank"][truth]["p50"] for truth, label in exact.items()},
-            **{f"own data in top 10 by {label}": block["own_rank"][truth]["top10"] for truth, label in exact.items()},
-            **{f"template Gram's top 10 by {label}": block["template_gram"][truth]["top10"] for truth, label in exact.items()},
+            **{f"own rank by {label}, median": block["own_rank"].get(truth, {}).get("p50") for truth, label in exact.items()},
+            **{f"own data in top 10 by {label}": block["own_rank"].get(truth, {}).get("top10") for truth, label in exact.items()},
+            **{f"template Gram's top 10 by {label}": block["template_gram"].get(truth, {}).get("top10") for truth, label in exact.items()},
             f"energy at k = {last}": block["energy"][last],
         }
         for name, block in found["blocks"].items()
