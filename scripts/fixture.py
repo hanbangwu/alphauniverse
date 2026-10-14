@@ -23,6 +23,7 @@ from app.config import (
     SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
     TABLE_VALUE_SURVEYS,
+    TEXT_SURVEYS,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -231,10 +232,14 @@ def build(galaxies: int, seed: int = 0) -> Path:
         compression="zstd",
     )
 
-    vectors = rng.standard_normal((galaxies, GEMMA_DIM)).astype(np.float32)
-    np.save(
+    spectra = rows[[covered(TEXT_SURVEYS["spectrum"], galaxy) for galaxy in rows]]
+    vectors = rng.standard_normal((galaxies + len(spectra), GEMMA_DIM))
+    vectors = vectors.astype(np.float32)
+    np.savez(
         artifact("aion_gemma_space"),
-        vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
+        vectors=vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
+        galaxy=np.concatenate([rows, spectra]).astype(np.int32),
+        modality=np.repeat(["image", "spectrum"], [galaxies, len(spectra)]),
     )
 
     _predictions(rng, galaxies)

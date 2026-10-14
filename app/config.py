@@ -132,6 +132,8 @@ N_MORPHOLOGIES = 10
 
 GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
+TextModality = Literal["image", "spectrum"]
+TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
@@ -162,6 +164,7 @@ def store_writer(role: str) -> pq.ParquetWriter | pa.ipc.RecordBatchFileWriter:
 PAIRS = pa.schema(
     [
         pa.field("galaxy", pa.int32()),
+        pa.field("modality", pa.string()),
         pa.field("aion", pa.list_(pa.float32(), DIM)),
         pa.field("gemma", pa.list_(pa.float32(), GEMMA_DIM)),
     ]
@@ -204,7 +207,7 @@ ARTIFACTS: dict[str, str] = {
     "parametric_umap": "pt",
     "pairs": "parquet",
     "alignment": "pt",
-    "aion_gemma_space": "npy",
+    "aion_gemma_space": "npz",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for names in TOKEN_GRAMS.values() for name in names},
