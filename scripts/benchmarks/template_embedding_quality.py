@@ -31,13 +31,13 @@ TOP = (10, 100)
 BATCH = 1024
 
 
-def top(score: Callable, count: int, own: torch.Tensor) -> torch.Tensor:
+def top(score: Callable, own: torch.Tensor) -> torch.Tensor:
     found = []
-    for first in range(0, count, BATCH):
+    for first in range(0, len(own), BATCH):
         rows = slice(first, first + BATCH)
         scores = score(rows).clone()
         mine = own[rows]
-        listed = torch.nonzero(mine >= 0).squeeze(1)
+        listed = mine >= 0
         scores[listed, mine[listed]] = -torch.inf
         found.append(scores.topk(max(TOP), dim=1).indices)
     return torch.cat(found)
@@ -71,14 +71,20 @@ def own_ranks(score: Callable, own: torch.Tensor) -> dict[str, float]:
     }
 
 
-def measured_rows(rows: slice | torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
+def score_rows(rows: slice | torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     return matrix[rows]
 
 
-def normalised_rows(
+def share_rows(
     rows: slice | torch.Tensor, matrix: torch.Tensor, saturation: torch.Tensor
 ) -> torch.Tensor:
-    return (matrix[rows] / saturation).nan_to_num(nan=-torch.inf)
+    return matrix[rows] / saturation
+
+
+def fit_rows(
+    rows: slice | torch.Tensor, matrix: torch.Tensor, saturation: torch.Tensor
+) -> torch.Tensor:
+    return matrix[rows] - saturation
 
 
 def template_rows(
@@ -88,12 +94,13 @@ def template_rows(
 
 
 def stored_rows(
-    rows: slice | torch.Tensor, vectors: dict, galleries: torch.Tensor, rank: int
+    rows: slice | torch.Tensor,
+    queries: torch.Tensor,
+    galleries: torch.Tensor,
+    offsets: torch.Tensor,
+    rank: int,
 ) -> torch.Tensor:
-    return (
-        vectors["queries"][rows, :rank] @ vectors["galleries"][galleries, :rank].T
-        + vectors["offsets"][galleries]
-    )
+    return queries[rows, :rank] @ galleries[:, :rank].T + offsets
 
 
 def block(name: str, mode: str, references: dict) -> dict[str, Any]:
@@ -102,28 +109,34 @@ def block(name: str, mode: str, references: dict) -> dict[str, Any]:
     measured = embeddings.loaded(f"data_gram_{name}", torch.float32)
     expected = embeddings.loaded(f"template_gram_{name}", torch.float32)
     stored = np.load(artifact(f"template_embedding_{name}"))
-    vectors = {
-        part: torch.from_numpy(stored[part]).to(device())
-        for part in ("queries", "galleries", "offsets")
-    }
-    count = len(measured)
-    own = torch.full((count,), -1, dtype=torch.long, device=device())
+    queries = torch.from_numpy(stored["queries"]).to(device())
+    vectors, offsets = (
+        torch.from_numpy(stored[part]).to(device())[galleries]
+        for part in ("galleries", "offsets")
+    )
+    own = torch.full((len(measured),), -1, device=device())
     own[galleries] = torch.arange(len(galleries), device=device())
     truths = {
-        "measured": partial(measured_rows, matrix=measured),
-        "normalised": partial(normalised_rows, matrix=measured, saturation=saturation),
+        "score": partial(score_rows, matrix=measured),
+        "share": partial(share_rows, matrix=measured, saturation=saturation),
+        "fit": partial(fit_rows, matrix=measured, saturation=saturation),
     }
-    exact = {label: top(score, count, own) for label, score in truths.items()}
+    exact = {label: top(score, own) for label, score in truths.items()}
     exact["template"] = top(
-        partial(template_rows, matrix=expected, galleries=galleries), count, own
+        partial(template_rows, matrix=expected, galleries=galleries), own
     )
     energy = stored["singular_values"] ** 2
     energy = energy.cumsum() / energy.sum()
     agreements = {}
     for rank in RANKS:
         found = top(
-            partial(stored_rows, vectors=vectors, galleries=galleries, rank=rank),
-            count,
+            partial(
+                stored_rows,
+                queries=queries,
+                galleries=vectors,
+                offsets=offsets,
+                rank=rank,
+            ),
             own,
         )
         agreements[rank] = {

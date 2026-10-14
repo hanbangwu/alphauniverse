@@ -217,7 +217,8 @@ def template_embedding_quality():
     if found is None:
         return missing()
     ranks = found["ranks"]
-    truths = {"measured": "S", "normalised": "S / S_sat", "template": "the template Gram"}
+    exact = {"score": "S", "share": "S / S_sat", "fit": "S − S_sat"}
+    truths = exact | {"template": "the template Gram"}
     charts = []
     for truth, label in truths.items():
         chart = figure(x_axis_type="log", x_axis_label="k", y_range=(0, 1.05), height=360, title=f"Share of the top 10 by {label} found with the stored vectors, by k", **WIDTH)
@@ -231,10 +232,9 @@ def template_embedding_quality():
         {
             "block": name,
             "galleries": block["galleries"],
-            **{f"own rank by {label}, median": block["own_rank"][truth]["p50"] for truth, label in list(truths.items())[:2]},
-            **{f"own data in top 10 by {label}": block["own_rank"][truth]["top10"] for truth, label in list(truths.items())[:2]},
-            **{f"template Gram's top 10 by {label}": block["template_gram"][truth]["top10"] for truth, label in list(truths.items())[:2]},
-            **{f"top 10 by {label} at k = {last}": block["stored"][last][truth]["top10"] for truth, label in truths.items()},
+            **{f"own rank by {label}, median": block["own_rank"][truth]["p50"] for truth, label in exact.items()},
+            **{f"own data in top 10 by {label}": block["own_rank"][truth]["top10"] for truth, label in exact.items()},
+            **{f"template Gram's top 10 by {label}": block["template_gram"][truth]["top10"] for truth, label in exact.items()},
             f"energy at k = {last}": block["energy"][last],
         }
         for name, block in found["blocks"].items()
