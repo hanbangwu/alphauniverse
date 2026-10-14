@@ -103,6 +103,20 @@ Beside it are the same shares for positive-only :term:`classical MDS` of each ma
 
    show(token_embedding_quality())
 
+Templates
+---------
+
+How closely does AION's predicted observation match a galaxy's own data? ``template_quality`` compares every galaxy's :term:`template` in each mode it was observed in with its data by the reduced :math:`\chi^2`: images over the central 96 × 96 px with each pixel's inverse variance; spectra on their own wavelength grid with a free amplitude; catalogue values and redshift with the dataset's errors where it has them (HSC magnitudes, redshift) and otherwise the population's robust scatter, 1.4826 times the median absolute deviation. Beside the template it scores two references: the floor, the codec's decoding of the galaxy's own tokens, and the null, the mean template over all galaxies. *Recovered* is :math:`(\chi^2_\text{null} - \chi^2_\text{template}) / (\chi^2_\text{null} - \chi^2_\text{floor})`: 1 when the template fits as well as the galaxy's own tokens, 0 when it fits no better than the mean template. The normalised residuals :math:`(x - \mu)\sqrt{w}` are averaged by radius for images and by rest wavelength for spectra with a usable redshift.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import template_quality
+
+   show(template_quality())
+
 Search speed
 ------------
 

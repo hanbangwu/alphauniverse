@@ -212,6 +212,48 @@ def token_embedding_quality():
     )
 
 
+def template_quality():
+    found = report("template_quality")
+    if found is None:
+        return missing()
+    modes = found["modes"]
+    source = ColumnDataSource(
+        {
+            "mode": list(modes),
+            **{share: [measured["recovered"][share] for measured in modes.values()] for share in ("p5", "p50", "p95")},
+        }
+    )
+    recovered = figure(
+        x_range=list(modes),
+        y_range=(-0.1, 1.1),
+        height=300,
+        title="Share recovered, median and 5th to 95th percentile over galaxies",
+        **WIDTH,
+    )
+    recovered.vbar(x="mode", top="p50", width=0.8, source=source)
+    recovered.add_layout(Whisker(source=source, base="mode", lower="p5", upper="p95"))
+    recovered.xaxis.major_label_orientation = 0.8
+    charts = [recovered]
+    for key, label in (("radius", "radius (px)"), ("rest_wavelength", "rest wavelength (Å)")):
+        chart = figure(height=300, x_axis_label=label, y_axis_label="mean normalised residual", title=f"Residuals by {label.split(' (')[0]}", **WIDTH)
+        lines = [(mode, model) for mode, measured in modes.items() if key in measured for model in ("template", "floor")]
+        for (mode, model), colour in zip(lines, Category10_10):
+            profile = modes[mode][key]
+            chart.line(profile["centres"], profile[model]["mean"], legend_label=f"{mode} {model}", color=colour, line_width=2)
+        chart.legend.click_policy = "hide"
+        charts.append(chart)
+    rows = [
+        {
+            "mode": mode,
+            "galaxies": measured["galaxies"],
+            **{f"{model} χ²ν, median": measured["chi2"][model]["p50"] for model in ("template", "floor", "null")},
+            "recovered, median": measured["recovered"]["p50"],
+        }
+        for mode, measured in modes.items()
+    ]
+    return column(heading(found, found["device"]), *charts, table(rows, list(rows[0])), **WIDTH)
+
+
 def backend_performance():
     found = report("backend_performance")
     if found is None:

@@ -15,6 +15,7 @@ on:
           - text_search_quality
           - compression_quality
           - token_embedding_quality
+          - template_quality
       args:
         description: Arguments for the script, such as --runs 50; empty keeps its defaults
         type: string
