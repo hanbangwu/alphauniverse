@@ -19,8 +19,8 @@ from .config import (
     TextModality,
     artifact,
     device,
-    galaxy_count,
 )
+from .dataset import dataset
 
 BATCH = 1024
 EPOCHS = 50
@@ -66,7 +66,7 @@ def pairs(modality: TextModality) -> tuple[np.ndarray, torch.Tensor, torch.Tenso
 
 def held_out(galaxy: np.ndarray) -> torch.Tensor:
     _, validation = train_test_split(
-        np.arange(galaxy_count()), test_size=VALIDATION, random_state=SEED
+        np.arange(len(dataset())), test_size=VALIDATION, random_state=SEED
     )
     return torch.as_tensor(np.isin(galaxy, validation), device=device())
 

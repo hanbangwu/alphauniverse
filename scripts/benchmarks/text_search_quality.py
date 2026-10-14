@@ -41,7 +41,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
     from sklearn.metrics import average_precision_score
 
     from app.alignment import apply_linear, held_out, pairs, trained
-    from app.config import PROVABGS, TEXT_SURVEYS, artifact, device, galaxy_count
+    from app.config import PROVABGS, TEXT_SURVEYS, artifact, device
     from app.dataset import dataset
     from app.text_search import embed_queries
 
@@ -81,7 +81,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
     scored = {}
     for centring, transform in centrings.items():
         queries = transform(text)
-        combined = np.full((galaxy_count(), len(CUTS)), -np.inf)
+        combined = np.full((len(dataset()), len(CUTS)), -np.inf)
         for (modality, name), documents in spaces.items():
             scores = transform(documents) @ queries.T
             scored[(f"{modality} {name}", centring)] = (held[modality], scores)

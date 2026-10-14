@@ -16,7 +16,7 @@ generate_token_grams      probabilities, probability_basis              token_gr
 generate_projections      the dataset, encoded                          mean_points, full_points,
                                                                         parametric_umap
 generate_pairs            the dataset, encoded                          pairs_<modality>
-generate_alignment        pairs_<modality>, mean_points                 alignment
+generate_alignment        pairs_<modality>                              alignment
 generate_aion_gemma_space pairs_<modality>, alignment                   aion_gemma_space
 ========================= ============================================= =======================================
 
