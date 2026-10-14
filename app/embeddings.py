@@ -2,13 +2,21 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
+from . import pql, templates
+from .config import (
+    GRAM_NAMES,
+    MODES,
+    TOKEN_EMBEDDING_RANK,
+    TOKEN_GRAMS,
+    artifact,
+    device,
+)
 
 BATCH = 1024
 
 
-def loaded(name: str) -> torch.Tensor:
-    stored = np.load(artifact(f"token_gram_{name}"), mmap_mode="r")
+def loaded(role: str) -> torch.Tensor:
+    stored = np.load(artifact(role), mmap_mode="r")
     gram = torch.empty(stored.shape, dtype=torch.float64, device=device())
     for start in range(0, len(stored), BATCH):
         rows = slice(start, start + BATCH)
@@ -36,12 +44,40 @@ def embedding(gram: torch.Tensor) -> dict[str, torch.Tensor]:
     }
 
 
+def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> None:
+    singular_values = found.pop("singular_values")
+    np.savez(
+        artifact(role),
+        singular_values=singular_values.cpu().numpy(),
+        **{part: values.float().cpu().numpy() for part, values in found.items()},
+        **extra,
+    )
+
+
 def generate_token_embeddings() -> None:
     for name in tqdm(GRAM_NAMES, desc="token embeddings"):
-        found = embedding(loaded(name))
-        singular_values = found.pop("singular_values")
-        np.savez(
-            artifact(f"token_embedding_{name}"),
-            singular_values=singular_values.cpu().numpy(),
-            **{part: values.float().cpu().numpy() for part, values in found.items()},
-        )
+        saved(f"token_embedding_{name}", embedding(loaded(f"token_gram_{name}")))
+
+
+def predictive_widths() -> dict[str, np.ndarray]:
+    with np.load(artifact("observed_reference")) as references:
+        depths = {mode: references[f"{mode}_depth"] for mode in MODES}
+    count = pql.predictions().num_rows
+    found = {mode: np.empty(count, np.float32) for mode in MODES}
+    start = 0
+    for rows in tqdm(pql.predictions().to_batches(), desc="widths"):
+        for mode, values in templates.widths(rows, depths).items():
+            found[mode][start : start + rows.num_rows] = values
+        start += rows.num_rows
+    return found
+
+
+def generate_template_embeddings() -> None:
+    widths = predictive_widths()
+    for mode, names in TOKEN_GRAMS.items():
+        for name in tqdm(names, desc=mode):
+            saved(
+                f"template_embedding_{name}",
+                embedding(loaded(f"template_gram_{name}")),
+                widths=widths[mode],
+            )

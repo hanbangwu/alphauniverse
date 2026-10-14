@@ -95,7 +95,7 @@ def combined_rows(rows: slice, parts: list[Callable]):
 def measure() -> dict[str, Any]:
     grams, vectors, matrices = {}, {}, {}
     for name in tqdm(GRAM_NAMES, desc="matrices"):
-        gram = embeddings.loaded(name)
+        gram = embeddings.loaded(f"token_gram_{name}")
         symmetric = (gram + gram.T) / 2
         asymmetry = (gram - symmetric).square().sum() / (
             gram - gram.mean()
