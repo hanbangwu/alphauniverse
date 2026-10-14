@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal, get_args
 
 import numpy as np
 import pyarrow as pa
@@ -190,12 +190,10 @@ OBSERVATIONS = {
     REDSHIFT: "usable redshift",
 }
 
-TOKEN_GRAMS = (
-    *IMAGE_MODES,
-    *SPECTRUM_MODES,
-    *TABLE_MODES,
-    *(f"{mode}_anywhere" for mode in (*IMAGE_MODES, *SPECTRUM_MODES)),
-)
+TOKEN_GRAMS = {
+    mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+}
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",
@@ -209,7 +207,7 @@ ARTIFACTS: dict[str, str] = {
     "aion_gemma_space": "npy",
     "probabilities": "arrow",
     "probability_basis": "npz",
-    **{f"token_gram_{block}": "npy" for block in TOKEN_GRAMS},
+    **{f"token_gram_{name}": "npy" for names in TOKEN_GRAMS.values() for name in names},
 }
 
 PREDICTIONS = pa.schema(

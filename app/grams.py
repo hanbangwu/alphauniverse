@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from time import perf_counter
 from typing import NamedTuple
 
 import numpy as np
@@ -22,22 +21,14 @@ from .config import (
 ALIGNMENT = 32
 ROWS = 64 * N_IMAGE_TOKENS
 
-ImageTokens = Callable[
-    [pa.RecordBatch, str, slice], tuple[np.ndarray, np.ndarray, np.ndarray]
-]
-
 
 class Forms(NamedTuple):
-    rows: Callable[[slice], torch.Tensor]
+    dense: Callable[[slice], torch.Tensor]
     shift: float
     floor: float
 
 
-def blocks(mode: str) -> tuple[str, ...]:
-    return tuple(name for name in (mode, f"{mode}_anywhere") if name in TOKEN_GRAMS)
-
-
-def width(vocabulary: int) -> int:
+def padded(vocabulary: int) -> int:
     return vocabulary + -vocabulary % ALIGNMENT
 
 
@@ -59,19 +50,19 @@ def stacked(
     return stored
 
 
-def image_forms(survey: str, image_tokens: ImageTokens) -> Forms:
+def image_forms(survey: str) -> Forms:
     def parts(rows: pa.RecordBatch) -> tuple[np.ndarray, ...]:
-        codes, probabilities, spread = image_tokens(rows, survey, slice(None))
+        codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
         return codes.astype(np.int64), probabilities, spread
 
     codes, probabilities, spread = stacked(parts)
 
-    def rows(part: slice) -> torch.Tensor:
-        dense = spread.new_zeros((*spread[part].shape, width(IMAGE_VOCABULARY)))
-        dense[..., :IMAGE_VOCABULARY] = spread[part, :, None]
-        return dense.scatter_(-1, codes[part], probabilities[part])
+    def dense(part: slice) -> torch.Tensor:
+        tile = spread.new_zeros((*spread[part].shape, padded(IMAGE_VOCABULARY)))
+        tile[..., :IMAGE_VOCABULARY] = spread[part, :, None]
+        return tile.scatter_(-1, codes[part], probabilities[part])
 
-    return Forms(rows, 0.0, PROBABILITY_FLOOR)
+    return Forms(dense, 0.0, PROBABILITY_FLOOR)
 
 
 def spectrum_forms(survey: str) -> Forms:
@@ -91,16 +82,16 @@ def spectrum_forms(survey: str) -> Forms:
 def table_forms(mode: str) -> Forms:
     def parts(rows: pa.RecordBatch) -> tuple[np.ndarray]:
         values = pql.table_value_probabilities(rows, mode)
-        padding = width(values.shape[-1]) - values.shape[-1]
+        padding = padded(values.shape[-1]) - values.shape[-1]
         return (np.pad(values, ((0, 0), (0, 0), (0, padding))),)
 
     (values,) = stacked(parts)
     return Forms(lambda part: values[part], 0.0, PROBABILITY_FLOOR)
 
 
-def forms(mode: str, image_tokens: ImageTokens = pql.query_image_tokens) -> Forms:
+def forms(mode: str) -> Forms:
     if mode in IMAGE_MODES:
-        return image_forms(IMAGE_MODES[mode], image_tokens)
+        return image_forms(IMAGE_MODES[mode])
     if mode in SPECTRUM_MODES:
         return spectrum_forms(SPECTRUM_MODES[mode])
     return table_forms(mode)
@@ -131,37 +122,28 @@ def scores(
 
 def gram(mode: str, forms: Forms) -> dict[str, torch.Tensor]:
     count = pql.predictions().num_rows
-    size = max(1, ROWS // pql.WIDTHS[mode])
-    names = blocks(mode)
-    found = {name: torch.empty(count, count, device=device()) for name in names}
+    size = ROWS // pql.WIDTHS[mode]
+    found = {
+        name: torch.empty(count, count, device=device()) for name in TOKEN_GRAMS[mode]
+    }
     for first in tqdm(range(0, count, size), desc=mode):
         rows = slice(first, first + size)
-        left = forms.rows(rows)
+        left = forms.dense(rows)
         for second in range(first, count, size):
             columns = slice(second, second + size)
-            right = left if second == first else forms.rows(columns)
+            right = left if second == first else forms.dense(columns)
             same, forward, backward = scores(left, right, forms)
-            for name, direct, transposed in zip(
-                names, (same, forward), (same.T, backward.T)
+            for matrix, direct, transposed in zip(
+                found.values(), (same, forward), (same.T, backward.T)
             ):
-                found[name][rows, columns] = direct
+                matrix[rows, columns] = direct
                 if second > first:
-                    found[name][columns, rows] = transposed
+                    matrix[columns, rows] = transposed
     return found
 
 
 def generate_token_grams() -> None:
     torch.backends.cuda.matmul.fp32_precision = "tf32"
-    for mode in pql.MODES:
-        start = perf_counter()
-        stored = forms(mode)
-        loaded = perf_counter()
-        found = {
-            name: block.cpu().numpy() for name, block in gram(mode, stored).items()
-        }
-        print(
-            f"{mode}: forms {loaded - start:.1f} s, "
-            f"products {perf_counter() - loaded:.1f} s"
-        )
-        for name, block in found.items():
-            np.save(artifact(f"token_gram_{name}"), block)
+    for mode in TOKEN_GRAMS:
+        for name, matrix in gram(mode, forms(mode)).items():
+            np.save(artifact(f"token_gram_{name}"), matrix.cpu().numpy())

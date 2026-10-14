@@ -5,27 +5,28 @@ import numpy as np
 import pytest
 
 from app import grams, pql
-from app.config import N_IMAGE_TOKENS, TokenMode, artifact
+from app.config import N_IMAGE_TOKENS, TOKEN_GRAMS, TokenMode, artifact
 
 GALAXY = 3
 
 
 def test_a_row_with_search_s_representation_equals_search_with_every_slot_selected(
-    tree: Path,
+    tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     selected = {mode: np.arange(slots) for mode, slots in pql.WIDTHS.items()}
-    positional = {mode: selected[mode] for mode in get_args(TokenMode)}
+    positional = pql.positional_slots(selected, get_args(TokenMode))
+    aligned = pql.mode_totals(GALAXY, selected, {})
     anywhere = pql.mode_totals(GALAXY, selected, positional)
-    expected = pql.mode_totals(GALAXY, selected, {}) | {
-        f"{mode}_anywhere": anywhere[mode] for mode in positional
+    queries = {
+        mode: grams.forms(mode).dense(slice(GALAXY, GALAXY + 1)) for mode in TOKEN_GRAMS
     }
+    monkeypatch.setattr(pql, "query_image_tokens", pql.top_image_tokens)
 
-    for mode in pql.MODES:
-        query = grams.forms(mode).rows(slice(GALAXY, GALAXY + 1))
-        gallery = grams.forms(mode, pql.top_image_tokens)
-        found = grams.scores(query, gallery.rows(slice(None)), gallery)
-        for name, row in zip(grams.blocks(mode), found):
-            np.testing.assert_allclose(row[0], expected[name], rtol=1e-6, err_msg=name)
+    for mode, names in TOKEN_GRAMS.items():
+        gallery = grams.forms(mode)
+        found = grams.scores(queries[mode], gallery.dense(slice(None)), gallery)
+        for name, row, expected in zip(names, found, (aligned[mode], anywhere[mode])):
+            np.testing.assert_allclose(row[0], expected, rtol=1e-6, err_msg=name)
 
 
 def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
@@ -35,11 +36,10 @@ def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
 
     grams.generate_token_grams()
 
-    for mode in pql.MODES:
+    for mode, names in TOKEN_GRAMS.items():
         forms = grams.forms(mode)
-        everyone = forms.rows(slice(None))
-        found = grams.scores(everyone, everyone, forms)
-        for name, expected in zip(grams.blocks(mode), found):
+        everyone = forms.dense(slice(None))
+        for name, expected in zip(names, grams.scores(everyone, everyone, forms)):
             np.testing.assert_allclose(
                 np.load(artifact(f"token_gram_{name}")),
                 expected,
