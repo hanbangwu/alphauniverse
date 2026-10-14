@@ -204,6 +204,7 @@ def generate_observed_grams() -> None:
         references |= {
             f"{mode}_{part}": tensor.cpu().numpy() for part, tensor in values.items()
         }
+        del matrices
     np.savez(artifact("observed_reference"), **references)
 
 
