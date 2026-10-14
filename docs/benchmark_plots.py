@@ -225,13 +225,12 @@ def template_quality():
     )
     recovered = figure(
         x_range=list(modes),
-        y_range=(-0.1, 1.1),
         height=300,
         title="Share recovered, median and 5th to 95th percentile over galaxies",
         **WIDTH,
     )
     recovered.vbar(x="mode", top="p50", width=0.8, source=source)
-    recovered.add_layout(Whisker(source=source, base="mode", lower="p5", upper="p95"))
+    recovered.segment(x0="mode", y0="p5", x1="mode", y1="p95", color="black", source=source)
     recovered.xaxis.major_label_orientation = 0.8
     charts = [recovered]
     for key in ("radius", "rest_wavelength"):
