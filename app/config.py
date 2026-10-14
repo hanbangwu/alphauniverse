@@ -67,6 +67,10 @@ FLAG_SURVEYS: dict[str, str] = {
     "provabgs": f"LOG_MSTAR{PROVABGS}",
 }
 RGB_COLUMN = f"rgb{LS}"
+BANDS: dict[str, list[str]] = {
+    ANCHOR: ["DES-G", "DES-R", "DES-I", "DES-Z"],
+    "hsc": ["HSC-G", "HSC-R", "HSC-I", "HSC-Z", "HSC-Y"],
+}
 
 TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
     ANCHOR: tuple(
@@ -211,6 +215,7 @@ ARTIFACTS: dict[str, str] = {
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
     **{f"token_embedding_{name}": "npz" for name in GRAM_NAMES},
+    **{f"template_{mode}": "npy" for mode in TOKEN_GRAMS},
 }
 
 PREDICTIONS = pa.schema(

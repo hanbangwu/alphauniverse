@@ -45,6 +45,7 @@ from tqdm import tqdm
 
 from .config import (
     ANCHOR,
+    BANDS,
     CROP_PIXELS,
     FLAG_SURVEYS,
     REDSHIFT,
@@ -164,7 +165,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
             LegacySurveyImage.token_key: image(
                 LegacySurveyImage,
                 row[TOKEN_SURVEYS[ANCHOR]],
-                ["DES-G", "DES-R", "DES-I", "DES-Z"],
+                BANDS[ANCHOR],
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
@@ -177,7 +178,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
             HSCImage.token_key: image(
                 HSCImage,
                 row[TOKEN_SURVEYS["hsc"]],
-                ["HSC-G", "HSC-R", "HSC-I", "HSC-Z", "HSC-Y"],
+                BANDS["hsc"],
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
