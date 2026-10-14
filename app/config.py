@@ -133,19 +133,6 @@ N_MORPHOLOGIES = 10
 GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
 
-ARTIFACTS: dict[str, str] = {
-    "encoded": "arrow",
-    "codebook": "parquet",
-    "tokens": "arrow",
-    "mean_points": "parquet",
-    "full_points": "parquet",
-    "parametric_umap": "pt",
-    "pairs": "parquet",
-    "alignment": "pt",
-    "aion_gemma_space": "npy",
-    "probabilities": "arrow",
-    "probability_basis": "npz",
-}
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
 
@@ -201,6 +188,28 @@ OBSERVATIONS = {
     "desi": "DESI spectrum",
     "sdss": "SDSS spectrum",
     REDSHIFT: "usable redshift",
+}
+
+TOKEN_GRAMS = (
+    *IMAGE_MODES,
+    *SPECTRUM_MODES,
+    *TABLE_MODES,
+    *(f"{mode}_anywhere" for mode in (*IMAGE_MODES, *SPECTRUM_MODES)),
+)
+
+ARTIFACTS: dict[str, str] = {
+    "encoded": "arrow",
+    "codebook": "parquet",
+    "tokens": "arrow",
+    "mean_points": "parquet",
+    "full_points": "parquet",
+    "parametric_umap": "pt",
+    "pairs": "parquet",
+    "alignment": "pt",
+    "aion_gemma_space": "npy",
+    "probabilities": "arrow",
+    "probability_basis": "npz",
+    **{f"token_gram_{block}": "npy" for block in TOKEN_GRAMS},
 }
 
 PREDICTIONS = pa.schema(
