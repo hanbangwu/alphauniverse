@@ -145,8 +145,11 @@ def template_features(
     )
 
 
-def template_gram(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
-    left, right = left.double(), right.double()
+def template_gram(
+    left: torch.Tensor, right: torch.Tensor | None = None
+) -> torch.Tensor:
+    left = left.double()
+    right = left if right is None else right.double()
     return (
         left @ right.T
         - 0.5 * (left**2).sum(dim=1)[:, None]
@@ -154,11 +157,33 @@ def template_gram(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
     )
 
 
-def at_depth(templates: torch.Tensor, depth: torch.Tensor, mode: str) -> torch.Tensor:
-    scaled = templates * depth
+def at_depth(values: torch.Tensor, depth: torch.Tensor, mode: str) -> torch.Tensor:
+    scaled = values * depth
     if mode in SPECTRUM_MODES:
         scaled /= scaled.norm(dim=1, keepdim=True)
     return scaled
+
+
+def covered(depth: torch.Tensor, mode: str) -> torch.Tensor:
+    return slotted(depth[None], mode)[0].sum(-1) > 0
+
+
+def template_grams(
+    queries: torch.Tensor,
+    depth: torch.Tensor,
+    mode: str,
+    gallery: torch.Tensor | None = None,
+) -> dict[str, torch.Tensor]:
+    left = at_depth(queries, depth, mode)
+    right = None if gallery is None else at_depth(gallery, depth, mode)
+    found = {mode: template_gram(left, right)}
+    if len(TOKEN_GRAMS[mode]) > 1:
+        kept = covered(depth, mode)
+        features = template_features(left, mode, kept)
+        if right is not None:
+            features = features[0], template_features(right, mode, kept)[1]
+        found[f"{mode}_anywhere"] = anywhere(*features, symmetric=right is None)
+    return found
 
 
 def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
@@ -188,16 +213,16 @@ def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         references["amplitudes"] = amplitude
     depth = information.median(dim=0).values.sqrt().float()
     references["depth"] = depth
-    scaled = at_depth(queries, depth, mode)
-    matrices[f"template_gram_{mode}"] = template_gram(scaled, scaled)
+    matrices |= {
+        f"template_gram_{name}": matrix
+        for name, matrix in template_grams(queries, depth, mode).items()
+    }
     if len(TOKEN_GRAMS[mode]) > 1:
-        kept = slotted(depth[None], mode)[0].sum(-1) > 0
         matrices[f"data_gram_{mode}_anywhere"] = anywhere(
-            *data_features(queries, reference, weighted, information, mode, kept),
+            *data_features(
+                queries, reference, weighted, information, mode, covered(depth, mode)
+            ),
             symmetric=False,
-        )
-        matrices[f"template_gram_{mode}_anywhere"] = anywhere(
-            *template_features(scaled, mode, kept), symmetric=True
         )
     return matrices, references
 

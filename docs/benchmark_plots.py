@@ -253,15 +253,19 @@ def retrieval_quality():
     if found is None:
         return missing()
     ranks = [str(rank) for rank in found["ranks"]]
-    rows = []
+    rows, full = [], []
     for test, measured in found["tests"].items():
         aion = measured["aion"]
-        rows.append({"set": test, "galaxies": measured["galaxies"], "score": "AION", "R@1": aion["r1"], "R@10": aion["r10"], "median rank": aion["median"]} | {f"R@10 at k = {rank}": "" for rank in ranks})
+        row = {"set": test, "galaxies": measured["galaxies"], "score": "AION", "R@1": aion["r1"], "R@10": aion["r10"], "median rank": aion["median"]}
+        rows.append(row | {f"R@10 at k = {rank}": "" for rank in ranks})
+        full.append(row)
         for role in ("token", "template"):
-            for name, exact in measured[role]["exact"].items():
-                stored = {f"R@10 at k = {rank}": measured[role][rank][name]["r10"] for rank in ranks}
-                rows.append({"set": test, "galaxies": measured["galaxies"], "score": f"{role} {name}", "R@1": exact["r1"], "R@10": exact["r10"], "median rank": exact["median"]} | stored)
-    full = [row for row in rows if row["score"] == "AION" or row["score"].endswith(("same_place", "any_position"))]
+            for group in ("combined", "blocks"):
+                for name, exact in measured[role]["exact"][group].items():
+                    row = {"set": test, "galaxies": measured["galaxies"], "score": f"{role} {name}", "R@1": exact["r1"], "R@10": exact["r10"], "median rank": exact["median"]}
+                    rows.append(row | {f"R@10 at k = {rank}": measured[role][rank][group][name]["r10"] for rank in ranks})
+                    if group == "combined":
+                        full.append(row)
     source = ColumnDataSource({"factor": [(row["set"], row["score"]) for row in full], "r1": [row["R@1"] for row in full], "r10": [row["R@10"] for row in full]})
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),

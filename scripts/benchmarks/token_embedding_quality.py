@@ -19,7 +19,13 @@ from app.config import (
     artifact,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import environment, git, memory
+from scripts.benchmarks.common import (
+    COMBINED,
+    environment,
+    git,
+    memory,
+    standardised,
+)
 
 app = modal.App("alphauniverse-token-embedding-quality")
 image = build_image.add_local_python_source("modal_app")
@@ -28,10 +34,6 @@ REPORT = Path("docs/benchmarks/token_embedding_quality.json")
 RANKS = tuple(TOKEN_EMBEDDING_RANK // 2**halvings for halvings in range(7, -1, -1))
 TOP = (10, 100)
 BATCH = 1024
-COMBINED = {
-    "same_place": tuple(TOKEN_GRAMS),
-    "any_position": tuple(names[-1] for names in TOKEN_GRAMS.values()),
-}
 
 
 def top(score: Callable, count: int):
@@ -72,12 +74,6 @@ def stored_rows(rows: slice, vectors: dict, rank: int):
 
 def positive_rows(rows: slice, positions, diagonal):
     return positions[rows] @ positions.T - ((positions**2).sum(dim=1) - diagonal) / 2
-
-
-def standardised(scores):
-    return (scores - scores.mean(dim=1, keepdim=True)) / scores.std(
-        dim=1, correction=0, keepdim=True
-    )
 
 
 def combined_rows(rows: slice, parts: list[Callable]):

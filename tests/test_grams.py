@@ -60,7 +60,8 @@ def test_rows_of_other_queries_are_their_rows_against_every_galaxy(
 
     for mode, names in TOKEN_GRAMS.items():
         gallery = grams.forms(mode, pql.predictions())
-        found = grams.rows(mode, grams.forms(mode, table), len(chosen), gallery)
+        queries = grams.forms(mode, table)
+        found = grams.gram(mode, queries, gallery, symmetric=False)
         everyone = gallery.dense(slice(None))
         for name, expected in zip(names, grams.scores(everyone, everyone, gallery)):
             np.testing.assert_allclose(

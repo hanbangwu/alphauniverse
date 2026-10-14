@@ -26,6 +26,7 @@ class Forms(NamedTuple):
     dense: Callable[[slice], torch.Tensor]
     shift: float
     floor: float
+    count: int
 
 
 def padded(vocabulary: int) -> int:
@@ -61,7 +62,7 @@ def image_forms(survey: str, table: pa.Table) -> Forms:
         tile[..., :IMAGE_VOCABULARY] = spread[part, :, None]
         return tile.scatter_(-1, codes[part], probabilities[part])
 
-    return Forms(dense, 0.0, PROBABILITY_FLOOR)
+    return Forms(dense, 0.0, PROBABILITY_FLOOR, table.num_rows)
 
 
 def spectrum_forms(survey: str, table: pa.Table) -> Forms:
@@ -76,6 +77,7 @@ def spectrum_forms(survey: str, table: pa.Table) -> Forms:
         lambda part: coefficients[part],
         float(mean_square - projected_mean @ projected_mean),
         pql.SPECTRUM_TOKEN_FLOOR,
+        table.num_rows,
     )
 
 
@@ -86,7 +88,7 @@ def table_forms(mode: str, table: pa.Table) -> Forms:
         return (np.pad(values, ((0, 0), (0, 0), (0, padding))),)
 
     (values,) = stacked(table, parts)
-    return Forms(lambda part: values[part], 0.0, PROBABILITY_FLOOR)
+    return Forms(lambda part: values[part], 0.0, PROBABILITY_FLOOR, table.num_rows)
 
 
 def forms(mode: str, table: pa.Table) -> Forms:
@@ -120,50 +122,33 @@ def scores(
     )
 
 
-def gram(mode: str, forms: Forms) -> dict[str, torch.Tensor]:
-    count = pql.predictions().num_rows
+def gram(
+    mode: str, queries: Forms, gallery: Forms, symmetric: bool
+) -> dict[str, torch.Tensor]:
     size = ROWS // pql.WIDTHS[mode]
     found = {
-        name: torch.empty(count, count, device=device()) for name in TOKEN_GRAMS[mode]
+        name: torch.empty(queries.count, gallery.count, device=device())
+        for name in TOKEN_GRAMS[mode]
     }
-    for first in tqdm(range(0, count, size), desc=mode):
+    for first in tqdm(range(0, queries.count, size), desc=mode):
         rows = slice(first, first + size)
-        left = forms.dense(rows)
-        for second in range(first, count, size):
+        left = queries.dense(rows)
+        for second in range(first if symmetric else 0, gallery.count, size):
             columns = slice(second, second + size)
-            right = left if second == first else forms.dense(columns)
-            same, forward, backward = scores(left, right, forms)
+            right = left if symmetric and second == first else gallery.dense(columns)
+            same, forward, backward = scores(left, right, gallery)
             for matrix, direct, transposed in zip(
                 found.values(), (same, forward), (same.T, backward.T)
             ):
                 matrix[rows, columns] = direct
-                if second > first:
+                if symmetric and second > first:
                     matrix[columns, rows] = transposed
-    return found
-
-
-def rows(
-    mode: str, queries: Forms, count: int, gallery: Forms
-) -> dict[str, torch.Tensor]:
-    total = pql.predictions().num_rows
-    size = ROWS // pql.WIDTHS[mode]
-    found = {
-        name: torch.empty(count, total, device=device()) for name in TOKEN_GRAMS[mode]
-    }
-    for first in range(0, count, size):
-        part = slice(first, first + size)
-        left = queries.dense(part)
-        for second in range(0, total, size):
-            columns = slice(second, second + size)
-            for matrix, values in zip(
-                found.values(), scores(left, gallery.dense(columns), gallery)
-            ):
-                matrix[part, columns] = values
     return found
 
 
 def generate_token_grams() -> None:
     torch.backends.cuda.matmul.fp32_precision = "tf32"
     for mode in TOKEN_GRAMS:
-        for name, matrix in gram(mode, forms(mode, pql.predictions())).items():
+        everyone = forms(mode, pql.predictions())
+        for name, matrix in gram(mode, everyone, everyone, symmetric=True).items():
             np.save(artifact(f"token_gram_{name}"), matrix.cpu().numpy())

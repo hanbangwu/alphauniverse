@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+import torch
 from threadpoolctl import threadpool_info
 
 from app import pql
@@ -20,6 +21,7 @@ from app.config import (
     SPECTRUM_ORIGIN,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_WIDTH,
+    TOKEN_GRAMS,
     galaxy_count,
 )
 from app.dataset import dataset, spectrum
@@ -34,6 +36,10 @@ from modal_app import (
 IMAGE_TOKENS = 4
 SPECTRUM_TOKENS = 4
 TABLE_VALUES = 4
+COMBINED = {
+    "same_place": tuple(TOKEN_GRAMS),
+    "any_position": tuple(names[-1] for names in TOKEN_GRAMS.values()),
+}
 
 
 def elapsed(call: Callable[[], Any]) -> float:
@@ -65,6 +71,12 @@ def queries(count: int, image_token_count: int, matches: int) -> list[pql.Query]
         )
         for _ in range(count)
     ]
+
+
+def standardised(scores: torch.Tensor) -> torch.Tensor:
+    return (scores - scores.mean(dim=1, keepdim=True)) / scores.std(
+        dim=1, correction=0, keepdim=True
+    )
 
 
 def with_spectrum() -> np.ndarray:

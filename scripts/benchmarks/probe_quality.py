@@ -16,10 +16,12 @@ from app.config import (
     GRAM_NAMES,
     PROVABGS,
     REDSHIFT,
+    SEED,
     SPECTRUM_MODES,
     artifact,
+    galaxy_count,
 )
-from app.dataset import dataset
+from app.observations import column_values
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -30,9 +32,8 @@ REPORT = Path("docs/benchmarks/probe_quality.json")
 RANK = 256
 FOLDS = 5
 NEIGHBOURS = 10
-SEED = 0
 ALPHAS = np.logspace(-3, 4, 15)
-TARGETS = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", "redshift": "Z_HP"}
+TARGETS = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", REDSHIFT: "Z_HP"}
 BLOCKS = {
     "all": GRAM_NAMES,
     "without_spectra": tuple(
@@ -42,11 +43,9 @@ BLOCKS = {
 
 
 def targets() -> dict[str, np.ndarray]:
-    data = dataset().select_columns(
-        [f"{column}{PROVABGS}" for column in TARGETS.values()]
-    )
+    galaxies = np.arange(galaxy_count())
     values = {
-        name: np.asarray(data[f"{column}{PROVABGS}"], dtype=np.float64)
+        name: column_values(f"{column}{PROVABGS}", galaxies)
         for name, column in TARGETS.items()
     }
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -101,11 +100,7 @@ def measure() -> dict[str, Any]:
             report[target][role] = {
                 label: scores(
                     np.concatenate(
-                        [
-                            blocks[name][kept]
-                            for name in names
-                            if not (target == "redshift" and name == REDSHIFT)
-                        ],
+                        [blocks[name][kept] for name in names if name != target],
                         axis=1,
                     ),
                     column[kept],
