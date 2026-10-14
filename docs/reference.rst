@@ -4,13 +4,15 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Six Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Seven Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ========================= ============================================= =======================================
 Job                       Reads                                         Writes
 ========================= ============================================= =======================================
 generate_embeddings       the dataset                                   encoded, codebook, tokens
 generate_predictions      tokens                                        probabilities, probability_basis
+generate_token_grams      probabilities, probability_basis              token_gram_<mode>,
+                                                                        token_gram_<mode>_anywhere
 generate_projections      the dataset, encoded                          mean_points, full_points,
                                                                         parametric_umap
 generate_pairs            the dataset, encoded                          pairs
@@ -35,6 +37,8 @@ Artifacts
    :no-value:
 
 ``probability_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``.
+
+``token_gram_<mode>`` and ``token_gram_<mode>_anywhere`` are ``np.save`` files of a galaxies × galaxies ``float32`` matrix: one for each mode at the same place, and one for each image and spectrum mode at any position. Entry :math:`(q, g)` is the mode score :math:`T_m(g)` of :doc:`methods/similarity-search` with every slot of the mode selected on :math:`q` and every galaxy read as search reads the query galaxy, so a same-place matrix is symmetric up to rounding. The products run in TF32 with float32 accumulation. The app does not read them.
 
 ``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet:
 
@@ -62,6 +66,6 @@ The first Same place Population map (``/saliency``) on a galaxy builds its agree
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image``, ``/galaxy/{galaxy}/spectrum``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, and the frontend has no tests.
+Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image``, ``/galaxy/{galaxy}/spectrum``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, and the frontend has no tests.
 
 Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal.
