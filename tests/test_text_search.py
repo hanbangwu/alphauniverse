@@ -6,26 +6,46 @@ import pytest
 from app.text_search import TextQuery, aion_gemma_space, text_search
 
 
-def test_text_search_ranks_the_galaxy_nearest_the_query_first(
+def test_text_search_ranks_the_row_nearest_the_query_first(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    vectors = aion_gemma_space()
-    monkeypatch.setattr("app.text_search.embed_queries", lambda _: 2 * vectors[3:4])
+    space = aion_gemma_space()
+    monkeypatch.setattr(
+        "app.text_search.embed_queries", lambda _: 2 * space.vectors[3:4]
+    )
 
-    galaxies, scores = text_search(TextQuery(text="a galaxy", matches=5))
+    galaxies, modalities, scores = text_search(TextQuery(text="a galaxy", matches=5))
 
     assert len(galaxies) == 5
-    assert galaxies[0] == 3
+    assert (galaxies[0], modalities[0]) == (space.galaxy[3], space.modality[3])
     assert np.all(np.diff(scores) <= 0)
 
 
-def test_text_search_returns_every_galaxy_when_asked_for_more(
-    tree: Path, galaxies: int, monkeypatch: pytest.MonkeyPatch
+def test_text_search_returns_a_galaxy_once_per_matching_modality(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    space = aion_gemma_space()
+    spectrum = np.flatnonzero(space.modality == "spectrum")[0]
+    image = np.flatnonzero(
+        (space.modality == "image") & (space.galaxy == space.galaxy[spectrum])
+    )[0]
     monkeypatch.setattr(
-        "app.text_search.embed_queries", lambda _: aion_gemma_space()[:1]
+        "app.text_search.embed_queries",
+        lambda _: space.vectors[[image]] + space.vectors[[spectrum]],
     )
 
-    found, _ = text_search(TextQuery(text="a galaxy", matches=128))
+    galaxies, modalities, _ = text_search(TextQuery(text="a galaxy", matches=2))
 
-    assert sorted(found.tolist()) == list(range(galaxies))
+    assert galaxies.tolist() == [space.galaxy[spectrum]] * 2
+    assert sorted(modalities.tolist()) == ["image", "spectrum"]
+
+
+def test_text_search_returns_every_row_when_asked_for_more(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    space = aion_gemma_space()
+    monkeypatch.setattr("app.text_search.embed_queries", lambda _: space.vectors[:1])
+
+    found, _, _ = text_search(TextQuery(text="a galaxy", matches=128))
+
+    assert sorted(found.tolist()) == sorted(space.galaxy.tolist())

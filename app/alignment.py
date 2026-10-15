@@ -12,12 +12,15 @@ from .config import (
     GEMMA,
     GEMMA_DIM,
     SEED,
+    TEXT_SURVEYS,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
+    TextModality,
     artifact,
     device,
 )
+from .dataset import dataset
 
 BATCH = 1024
 EPOCHS = 50
@@ -38,8 +41,16 @@ class AlignmentMap(nn.Module):
         return F.normalize(self.layers(aion), dim=-1)
 
 
-def pairs() -> tuple[np.ndarray, torch.Tensor, torch.Tensor]:
-    table = pq.read_table(artifact("pairs"), columns=["galaxy", "aion", "gemma"])
+def trained(weights: dict) -> AlignmentMap:
+    model = AlignmentMap().to(device())
+    model.load_state_dict(weights)
+    return model.eval()
+
+
+def pairs(modality: TextModality) -> tuple[np.ndarray, torch.Tensor, torch.Tensor]:
+    table = pq.read_table(
+        artifact(f"pairs_{modality}"), columns=["galaxy", "aion", "gemma"]
+    )
     galaxy = np.asarray(table.column("galaxy"))
     aion, gemma = (
         torch.as_tensor(
@@ -54,7 +65,9 @@ def pairs() -> tuple[np.ndarray, torch.Tensor, torch.Tensor]:
 
 
 def held_out(galaxy: np.ndarray) -> torch.Tensor:
-    _, validation = train_test_split(galaxy, test_size=VALIDATION, random_state=SEED)
+    _, validation = train_test_split(
+        np.arange(len(dataset())), test_size=VALIDATION, random_state=SEED
+    )
     return torch.as_tensor(np.isin(galaxy, validation), device=device())
 
 
@@ -85,10 +98,10 @@ def metrics(predicted: torch.Tensor, target: torch.Tensor) -> dict[str, float]:
     }
 
 
-def generate_alignment() -> None:
+def align(modality: TextModality) -> dict[str, torch.Tensor | dict]:
     import wandb
 
-    galaxy, aion, gemma = pairs()
+    galaxy, aion, gemma = pairs(modality)
     validation = held_out(galaxy)
     linear = fit_linear(aion[~validation], gemma[~validation])
 
@@ -96,7 +109,7 @@ def generate_alignment() -> None:
         entity=WANDB_ENTITY,
         project=WANDB_PROJECT,
         job_type="train",
-        tags=["alignment"],
+        tags=["alignment", modality],
         group=DATASET_REVISION,
         mode=WANDB_MODE,
         config={
@@ -108,6 +121,7 @@ def generate_alignment() -> None:
             "validation": VALIDATION,
             "seed": SEED,
             "target": GEMMA,
+            "modality": modality,
         },
     ) as run:
         run.define_metric("epoch")
@@ -145,15 +159,27 @@ def generate_alignment() -> None:
                 | {f"validation/{name}": value for name, value in scores.items()}
             )
 
-    torch.save({"linear": linear, "mlp": model.state_dict()}, artifact("alignment"))
+    return {"linear": linear, "mlp": model.state_dict()}
+
+
+def generate_alignment() -> None:
+    torch.save(
+        {modality: align(modality) for modality in TEXT_SURVEYS}, artifact("alignment")
+    )
 
 
 def generate_aion_gemma_space() -> None:
-    _, aion, _ = pairs()
-    model = AlignmentMap().to(device())
-    model.load_state_dict(
-        torch.load(artifact("alignment"), map_location=device())["mlp"]
+    saved = torch.load(artifact("alignment"), map_location=device())
+    vectors, galaxies, modalities = [], [], []
+    for modality in TEXT_SURVEYS:
+        galaxy, aion, _ = pairs(modality)
+        with torch.no_grad():
+            vectors.append(trained(saved[modality]["mlp"])(aion).cpu().numpy())
+        galaxies.append(galaxy)
+        modalities.append(np.full(len(galaxy), modality))
+    np.savez(
+        artifact("aion_gemma_space"),
+        vectors=np.concatenate(vectors),
+        galaxy=np.concatenate(galaxies),
+        modality=np.concatenate(modalities),
     )
-    with torch.no_grad():
-        vectors = model.eval()(aion).cpu().numpy()
-    np.save(artifact("aion_gemma_space"), vectors)

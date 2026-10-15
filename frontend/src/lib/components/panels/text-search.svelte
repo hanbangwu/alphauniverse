@@ -33,12 +33,14 @@
   {#if results.isError}
     <p role="alert" class="text-sm text-destructive">{errorMessage(results.error)}</p>
   {:else if results.data}
-    {@const { galaxies, scores } = results.data}
+    {@const { galaxies, modalities, scores } = results.data}
     <ol
       class={['flex flex-col gap-1 transition-opacity', results.isPlaceholderData && 'opacity-50']}
     >
-      {#each galaxies as galaxy, index (galaxy)}
-        <li><TextSearchResult {galaxy} score={scores[index]} /></li>
+      {#each galaxies as galaxy, index (`${galaxy}-${modalities[index]}`)}
+        <li>
+          <TextSearchResult {galaxy} modality={modalities[index]} score={scores[index]} />
+        </li>
       {/each}
     </ol>
   {:else if results.isFetching}

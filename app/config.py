@@ -136,6 +136,8 @@ N_MORPHOLOGIES = 10
 
 GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
+TextModality = Literal["image", "spectrum"]
+TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
 Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens"]
@@ -215,9 +217,9 @@ ARTIFACTS: dict[str, str] = {
     "mean_points": "parquet",
     "full_points": "parquet",
     "parametric_umap": "pt",
-    "pairs": "parquet",
+    **{f"pairs_{modality}": "parquet" for modality in TEXT_SURVEYS},
     "alignment": "pt",
-    "aion_gemma_space": "npy",
+    "aion_gemma_space": "npz",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
