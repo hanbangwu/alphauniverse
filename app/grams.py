@@ -123,8 +123,11 @@ def scores(
 
 
 def gram(
-    mode: str, queries: Forms, gallery: Forms, symmetric: bool
+    mode: str, queries: Forms, gallery: Forms | None = None
 ) -> dict[str, torch.Tensor]:
+    symmetric = gallery is None
+    if symmetric:
+        gallery = queries
     size = ROWS // pql.WIDTHS[mode]
     found = {
         name: torch.empty(queries.count, gallery.count, device=device())
@@ -149,6 +152,5 @@ def gram(
 def generate_token_grams() -> None:
     torch.backends.cuda.matmul.fp32_precision = "tf32"
     for mode in TOKEN_GRAMS:
-        everyone = forms(mode, pql.predictions())
-        for name, matrix in gram(mode, everyone, everyone, symmetric=True).items():
+        for name, matrix in gram(mode, forms(mode, pql.predictions())).items():
             np.save(artifact(f"token_gram_{name}"), matrix.cpu().numpy())

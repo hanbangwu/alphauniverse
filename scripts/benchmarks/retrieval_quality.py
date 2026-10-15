@@ -91,7 +91,7 @@ def token_rows(tests: dict[str, pa.Table]) -> dict[str, dict[str, torch.Tensor]]
         gallery = grams.forms(mode, pql.predictions())
         for test, table in tests.items():
             queries = grams.forms(mode, table)
-            found[test] |= grams.gram(mode, queries, gallery, symmetric=False)
+            found[test] |= grams.gram(mode, queries, gallery)
     return found
 
 
@@ -134,7 +134,7 @@ def embedded(role: str) -> dict[str, dict[str, torch.Tensor]]:
 
 def ranks(scores: torch.Tensor, sources: torch.Tensor) -> torch.Tensor:
     own = scores.gather(1, sources[:, None])
-    return (scores > own).sum(dim=1) + 1
+    return (scores > own).sum(dim=1) + ((scores == own).sum(dim=1) + 1) / 2
 
 
 def recall(found: torch.Tensor) -> dict[str, float]:

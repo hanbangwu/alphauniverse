@@ -141,7 +141,7 @@ Does a galaxy seen with less of its data still find itself? ``retrieval_quality`
 - the DESI spectrum alone, or SDSS's alone, of a galaxy with both;
 - everything but the DESI spectrum and the redshift, of a galaxy with a DESI spectrum.
 
-For each mode and for the two full-object scores of ``token_embedding_quality``, it reports the share of galaxies that rank themselves first (R@1) and in their top 10 (R@10), and their median rank. A Gram matrix's row need not peak at its own galaxy, so the set with all the data is each score's ceiling.
+For each mode and for the two full-object scores of ``token_embedding_quality``, it reports the share of galaxies that rank themselves first (R@1) and in their top 10 (R@10), and their median rank, a galaxy tied with others taking their mean rank. A Gram matrix's row need not peak at its own galaxy, so the set with all the data is each score's ceiling.
 
 .. bokeh-plot::
    :source-position: none
@@ -155,7 +155,7 @@ For each mode and for the two full-object scores of ``token_embedding_quality``,
 Property probes
 ---------------
 
-How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate and redshift for the galaxies that have them, from two kinds of features: AION's mean embeddings, and each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbours, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode's vectors; AION's mean embedding keeps the redshift's token.
+How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate and redshift for the galaxies that have them, from two kinds of features: AION's mean embeddings, and each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbours, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode's vectors, but every feature comes from an encoding that read the galaxy's redshift where it has one, so it measures how much of that input the features keep.
 
 .. bokeh-plot::
    :source-position: none

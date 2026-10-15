@@ -30,9 +30,9 @@ image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/probe_quality.json")
 RANK = 256
-FOLDS = 5
 NEIGHBOURS = 10
 ALPHAS = np.logspace(-3, 4, 15)
+FOLDS = KFold(shuffle=True, random_state=SEED)
 TARGETS = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", REDSHIFT: "Z_HP"}
 BLOCKS = {
     "all": GRAM_NAMES,
@@ -54,19 +54,19 @@ def targets() -> dict[str, np.ndarray]:
 
 
 def scaled(role: str, name: str) -> np.ndarray:
-    galleries = np.load(artifact(f"{role}_{name}"))["galleries"][:, :RANK]
+    with np.load(artifact(f"{role}_{name}")) as stored:
+        galleries = stored["galleries"][:, :RANK]
     centred = galleries - galleries.mean(axis=0)
     return centred / np.sqrt((centred**2).sum(axis=1).mean())
 
 
 def scores(features: np.ndarray, values: np.ndarray) -> dict[str, dict[str, float]]:
-    folds = KFold(FOLDS, shuffle=True, random_state=SEED)
     found = {}
     for label, model in (
         ("ridge", RidgeCV(alphas=ALPHAS)),
         ("knn", KNeighborsRegressor(NEIGHBOURS)),
     ):
-        predicted = cross_val_predict(model, features, values, cv=folds)
+        predicted = cross_val_predict(model, features, values, cv=FOLDS)
         found[label] = {
             "r2": round(float(r2_score(values, predicted)), 4),
             "rms": round(float(root_mean_squared_error(values, predicted)), 4),
@@ -109,7 +109,7 @@ def measure() -> dict[str, Any]:
     return {
         "environment": environment(),
         "rank": RANK,
-        "folds": FOLDS,
+        "folds": FOLDS.n_splits,
         "neighbours": NEIGHBOURS,
         "probes": report,
         "memory": memory(),

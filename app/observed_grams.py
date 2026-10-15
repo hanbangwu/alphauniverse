@@ -150,11 +150,8 @@ def template_gram(
 ) -> torch.Tensor:
     left = left.double()
     right = left if right is None else right.double()
-    return (
-        left @ right.T
-        - 0.5 * (left**2).sum(dim=1)[:, None]
-        - 0.5 * (right**2).sum(dim=1)[None, :]
-    )
+    halves = [0.5 * (part**2).sum(dim=1) for part in (left, right)]
+    return left @ right.T - halves[0][:, None] - halves[1][None, :]
 
 
 def at_depth(values: torch.Tensor, depth: torch.Tensor, mode: str) -> torch.Tensor:
