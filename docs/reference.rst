@@ -72,4 +72,4 @@ Tests and CI
 
 Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image``, ``/galaxy/{galaxy}/spectrum``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, and the frontend has no tests.
 
-Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal.
+Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's default environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets.
