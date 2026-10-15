@@ -963,6 +963,17 @@
             "type": "array",
             "title": "Galaxies"
           },
+          "modalities": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "image",
+                "spectrum"
+              ]
+            },
+            "type": "array",
+            "title": "Modalities"
+          },
           "scores": {
             "items": {
               "type": "number"
@@ -974,6 +985,7 @@
         "type": "object",
         "required": [
           "galaxies",
+          "modalities",
           "scores"
         ],
         "title": "TextMatches"
