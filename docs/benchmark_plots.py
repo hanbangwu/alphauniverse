@@ -289,11 +289,19 @@ def probe_quality():
     found = report("probe_quality")
     if found is None:
         return missing()
-    rows = []
+    rows, curves = [], []
     for target, measured in found["probes"].items():
         features = {"AION": measured["aion"]} | {f"{role} {blocks}": probes for role in ("token", "template") for blocks, probes in measured[role].items()}
-        for name, probes in features.items():
-            rows.append({"target": target, "features": name, "galaxies": measured["galaxies"]} | {f"{probe} {metric}": value for probe, metrics in probes.items() for metric, value in metrics.items()})
+        curve = figure(x_axis_type="log", x_axis_label="galaxies fitted", y_axis_label="R²", height=300, title=f"{target}: ridge R² on a held-out fifth, mean of {found['draws']} draws", **WIDTH)
+        for (name, probes), colour in zip(features.items(), Category10_10):
+            row = {"target": target, "features": name, "galaxies": measured["galaxies"]}
+            for probe, metrics in probes.items():
+                row |= {f"{probe} r2": metrics["r2"], f"{probe} rms": metrics["rms"]} | {f"{probe} r2, {count} fitted": value for count, value in metrics["shots"].items()}
+            rows.append(row)
+            shots = probes["ridge"]["shots"]
+            curve.line([int(count) for count in shots], list(shots.values()), legend_label=name, color=colour, line_width=2)
+        curve.legend.location = "bottom_right"
+        curves.append(curve)
     source = ColumnDataSource({"factor": [(row["target"], row["features"]) for row in rows], "ridge": [row["ridge r2"] for row in rows], "knn": [row["knn r2"] for row in rows]})
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
@@ -308,6 +316,7 @@ def probe_quality():
     return column(
         heading(found, f"{found['rank']} components per mode", f"{found['folds']}-fold cross-validation", cpus(found)),
         chart,
+        *curves,
         table(rows, list(rows[0])),
         **WIDTH,
     )

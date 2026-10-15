@@ -33,6 +33,8 @@ RANK = 256
 NEIGHBOURS = 10
 ALPHAS = np.logspace(-3, 4, 15)
 FOLDS = KFold(shuffle=True, random_state=SEED)
+SHOTS = (32, 128, 512)
+DRAWS = 5
 TARGETS = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", REDSHIFT: "Z_HP"}
 BLOCKS = {
     "all": GRAM_NAMES,
@@ -60,7 +62,21 @@ def scaled(role: str, name: str) -> np.ndarray:
     return centred / np.sqrt((centred**2).sum(axis=1).mean())
 
 
-def scores(features: np.ndarray, values: np.ndarray) -> dict[str, dict[str, float]]:
+def shots(model: Any, features: np.ndarray, values: np.ndarray) -> dict[str, float]:
+    rng = np.random.default_rng(SEED)
+    test, pool = np.split(rng.permutation(len(values)), [len(values) // 5])
+    found = {}
+    for count in SHOTS:
+        fits = []
+        for _ in range(DRAWS):
+            train = rng.choice(pool, count, replace=False)
+            fitted = model.fit(features[train], values[train])
+            fits.append(r2_score(values[test], fitted.predict(features[test])))
+        found[str(count)] = round(float(np.mean(fits)), 4)
+    return found
+
+
+def scores(features: np.ndarray, values: np.ndarray) -> dict[str, dict[str, Any]]:
     found = {}
     for label, model in (
         ("ridge", RidgeCV(alphas=ALPHAS)),
@@ -70,6 +86,7 @@ def scores(features: np.ndarray, values: np.ndarray) -> dict[str, dict[str, floa
         found[label] = {
             "r2": round(float(r2_score(values, predicted)), 4),
             "rms": round(float(root_mean_squared_error(values, predicted)), 4),
+            "shots": shots(model, features, values),
         }
     return found
 
@@ -111,6 +128,7 @@ def measure() -> dict[str, Any]:
         "rank": RANK,
         "folds": FOLDS.n_splits,
         "neighbours": NEIGHBOURS,
+        "draws": DRAWS,
         "probes": report,
         "memory": memory(),
     }
