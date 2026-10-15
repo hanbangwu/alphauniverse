@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { TextMatches } from '$lib/api'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import { morphologyQuery } from '$lib/data/queries'
@@ -8,10 +9,11 @@
 
   interface Props {
     galaxy: number
+    modality: TextMatches['modalities'][number]
     score: number
   }
 
-  let { galaxy, score }: Props = $props()
+  let { galaxy, modality, score }: Props = $props()
 
   const app = getApp()
   const { view, mosaic } = app
@@ -32,7 +34,7 @@
   <div class="flex flex-col gap-1">
     <span class="text-sm font-medium">#{galaxy}</span>
     <span class="text-xs text-muted-foreground tabular-nums">
-      cos sim {score.toFixed(3)} &bull; {(morphology.data == null
+      {modality} &bull; cos sim {score.toFixed(3)} &bull; {(morphology.data == null
         ? null
         : MORPHOLOGIES[morphology.data]) ?? '-'}
     </span>

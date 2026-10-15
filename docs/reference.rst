@@ -27,9 +27,9 @@ generate_template_embeddings probabilities, probability_basis,      template_emb
                              observed_reference
 generate_projections         the dataset, encoded                   mean_points, full_points,
                                                                     parametric_umap
-generate_pairs               the dataset, encoded                   pairs
-generate_alignment           pairs                                  alignment
-generate_aion_gemma_space    pairs, alignment                       aion_gemma_space
+generate_pairs               the dataset, encoded                   pairs_<modality>
+generate_alignment           pairs_<modality>                       alignment
+generate_aion_gemma_space    pairs_<modality>, alignment            aion_gemma_space
 ============================ ====================================== ==================================
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
@@ -76,13 +76,13 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
    :no-index:
    :no-value:
 
-``pairs`` is Parquet, AION's mean embedding and EmbeddingGemma's image embedding per galaxy:
+``pairs_image`` and ``pairs_spectrum`` are Parquet, in galaxy order. ``pairs_image`` holds, for every galaxy, the mean of AION's Legacy Survey image embeddings and EmbeddingGemma's embedding of the colour image; ``pairs_spectrum`` holds, for every galaxy with a DESI spectrum, the mean of AION's DESI spectrum embeddings and EmbeddingGemma's embedding of the spectrum plot:
 
 .. autodata:: app.config.PAIRS
    :no-index:
    :no-value:
 
-``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text map's weights; ``alignment`` also holds the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.save`` of every galaxy's unit vector in EmbeddingGemma's space, ``float32``, galaxies × 768.
+``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text maps' weights; ``alignment`` holds, for each modality, the network and the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.savez`` of the rows of ``pairs_image`` then ``pairs_spectrum`` carried into EmbeddingGemma's space: ``vectors`` (``float32``, rows × 768, unit length), ``galaxy`` (``int32``) and ``modality`` (``image`` or ``spectrum``).
 
 HTTP API
 --------

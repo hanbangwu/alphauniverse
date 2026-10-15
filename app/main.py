@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
-from astropy.convolution import Gaussian1DKernel, convolve
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -42,12 +41,13 @@ from .config import (
     GalaxyIndex,
     Projection,
     SpectrumSurvey,
+    TextModality,
     TokenMode,
     artifact,
     galaxy_count,
     labels,
 )
-from .dataset import catalogue, image, redshift, spectrum, table
+from .dataset import catalogue, image, redshift, smoothed, spectrum, table
 from .search import FIRST_LS_TABLE_VALUE, table_value_tokens, tokens
 from .text_search import TextQuery, text_search
 
@@ -86,6 +86,7 @@ class TableRow(BaseModel):
 
 class TextMatches(BaseModel):
     galaxies: list[int]
+    modalities: list[TextModality]
     scores: list[float]
 
 
@@ -340,11 +341,7 @@ def get_spectrum(galaxy: GalaxyIndex) -> Response:
     table = spectrum(galaxy, SPECTRUM_SURVEY)
     if table is None:
         raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
-    flux = convolve(
-        table["flux"].to_numpy(),
-        Gaussian1DKernel(SPECTRUM_SMOOTHING_SIGMA),
-        preserve_nan=True,
-    )
+    flux = smoothed(table["flux"].to_numpy())
     return arrow(table.set_column(1, "flux", pa.array(flux, pa.float32())))
 
 
@@ -465,5 +462,9 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
 
 @app.get("/search/text")
 def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
-    galaxies, scores = text_search(query)
-    return TextMatches(galaxies=galaxies.tolist(), scores=scores.tolist())
+    galaxies, modalities, scores = text_search(query)
+    return TextMatches(
+        galaxies=galaxies.tolist(),
+        modalities=modalities.tolist(),
+        scores=scores.tolist(),
+    )

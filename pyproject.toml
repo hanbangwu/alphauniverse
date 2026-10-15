@@ -26,6 +26,7 @@ dev = [
   "threadpoolctl>=3.7.0"
 ]
 build = [
+  "matplotlib>=3.11.2",
   "polymathic-aion[torch]>=0.0.2",
   "scikit-learn>=1.9.1",
   "torchvision>=0.29.1",

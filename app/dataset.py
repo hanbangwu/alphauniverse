@@ -4,6 +4,7 @@ from io import BytesIO
 import numpy as np
 import PIL.Image
 import pyarrow as pa
+from astropy.convolution import Gaussian1DKernel, convolve
 from datasets import Dataset, Image, load_dataset
 
 from .config import (
@@ -15,6 +16,7 @@ from .config import (
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     RGB_COLUMN,
+    SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEYS,
     Catalogue,
     SpectrumSurvey,
@@ -49,6 +51,10 @@ def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
     kept = wavelength > 0
     flux = np.where(np.asarray(cell["mask"].values), np.nan, flux)
     return {"wavelength": wavelength[kept], "flux": flux[kept]}
+
+
+def smoothed(flux: np.ndarray) -> np.ndarray:
+    return convolve(flux, Gaussian1DKernel(SPECTRUM_SMOOTHING_SIGMA), preserve_nan=True)
 
 
 def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
