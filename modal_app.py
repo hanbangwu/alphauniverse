@@ -109,43 +109,12 @@ def generate_projections() -> None:
     timeout=6 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_pairs() -> None:
+def generate_gemma_space() -> None:
     from app.config import build_dir
-    from app.text_search import generate_pairs
+    from app.text_search import generate_gemma_space
 
     build_dir().mkdir(parents=True, exist_ok=True)
-    generate_pairs()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L4",
-    cpu=4,
-    memory=(32 * 1024, 64 * 1024),
-    timeout=3 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-    secrets=[modal.Secret.from_name("wandb-secret")],
-)
-def generate_alignment() -> None:
-    from app.alignment import generate_alignment
-
-    generate_alignment()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L4",
-    cpu=4,
-    memory=(32 * 1024, 64 * 1024),
-    timeout=1 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_aion_gemma_space() -> None:
-    from app.alignment import generate_aion_gemma_space
-
-    generate_aion_gemma_space()
+    generate_gemma_space()
     cache_volume.commit()
 
 

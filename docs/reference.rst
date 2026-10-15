@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Seven Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Five Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ========================= ============================================= =======================================
 Job                       Reads                                         Writes
@@ -15,9 +15,7 @@ generate_token_grams      probabilities, probability_basis              token_gr
                                                                         token_gram_<mode>_anywhere
 generate_projections      the dataset, encoded                          mean_points, full_points,
                                                                         parametric_umap
-generate_pairs            the dataset, encoded                          pairs_<modality>
-generate_alignment        pairs_<modality>                              alignment
-generate_aion_gemma_space pairs_<modality>, alignment                   aion_gemma_space
+generate_gemma_space      the dataset                                   gemma_space
 ========================= ============================================= =======================================
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
@@ -46,13 +44,7 @@ Artifacts
    :no-index:
    :no-value:
 
-``pairs_image`` and ``pairs_spectrum`` are Parquet, in galaxy order. ``pairs_image`` holds, for every galaxy, the mean of AION's Legacy Survey image embeddings and EmbeddingGemma's embedding of the colour image; ``pairs_spectrum`` holds, for every galaxy with a DESI spectrum, the mean of AION's DESI spectrum embeddings and EmbeddingGemma's embedding of the spectrum plot:
-
-.. autodata:: app.config.PAIRS
-   :no-index:
-   :no-value:
-
-``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text maps' weights; ``alignment`` holds, for each modality, the network and the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.savez`` of the rows of ``pairs_image`` then ``pairs_spectrum`` carried into EmbeddingGemma's space: ``vectors`` (``float32``, rows × 768, unit length), ``galaxy`` (``int32``) and ``modality`` (``image`` or ``spectrum``).
+``parametric_umap`` is a ``torch.save`` file of the projector's weights. ``gemma_space`` is an ``np.savez`` of EmbeddingGemma's embeddings of every colour image, then every DESI spectrum plot, in galaxy order: ``vectors`` (``float32``, rows × 768, unit length), ``galaxy`` (``int32``) and ``modality`` (``image`` or ``spectrum``).
 
 HTTP API
 --------
@@ -66,6 +58,6 @@ The first Same place Population map (``/saliency``) on a galaxy builds its agree
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image``, ``/galaxy/{galaxy}/spectrum``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, and the frontend has no tests.
+Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image``, ``/galaxy/{galaxy}/spectrum``, EmbeddingGemma and ``generate_gemma_space`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, and the frontend has no tests.
 
 Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's default environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets.

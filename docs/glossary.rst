@@ -22,9 +22,6 @@ Glossary
    foundation model
       A large network trained once on broad data and then used unchanged for many tasks.
 
-   held out
-      Left out of a network's training and used only to test it.
-
    mean embedding
       The average of a galaxy's encoded :term:`embeddings <embedding>`, one vector per galaxy.
 

@@ -33,9 +33,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_predictions
    uv run modal run modal_app.py::generate_token_grams
    uv run modal run modal_app.py::generate_projections
-   uv run modal run modal_app.py::generate_pairs
-   uv run modal run modal_app.py::generate_alignment
-   uv run modal run modal_app.py::generate_aion_gemma_space
+   uv run modal run modal_app.py::generate_gemma_space
 
 A failed job leaves its artifacts incomplete; rerun it.
 

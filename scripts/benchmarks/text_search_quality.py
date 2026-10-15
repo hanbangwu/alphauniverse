@@ -28,40 +28,27 @@ TOP = (10, 100)
 REPORT = Path("docs/benchmarks/text_search_quality.json")
 
 
+def centred(rows: np.ndarray) -> np.ndarray:
+    shifted = rows - rows.mean(axis=0)
+    return shifted / np.linalg.norm(shifted, axis=-1, keepdims=True)
+
+
 @app.function(
     image=image,
-    gpu="L4",
     cpu=16,
     memory=(16 * 1024, 64 * 1024),
     timeout=60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def benchmark_text_search_quality() -> dict[str, Any]:
-    import torch
     from sklearn.metrics import average_precision_score
 
-    from app.alignment import apply_linear, held_out, pairs, trained
-    from app.config import PROVABGS, TEXT_SURVEYS, artifact, device
+    from app.config import PROVABGS
     from app.dataset import dataset
-    from app.text_search import embed_queries
+    from app.text_search import DOCUMENTS, embed_queries, gemma_space
 
-    saved = torch.load(artifact("alignment"), map_location=device())
-    held, spaces = {}, {}
-    for modality in TEXT_SURVEYS:
-        galaxy, aion, gemma = pairs(modality)
-        validation = held_out(galaxy)
-        aion, gemma = aion[validation], gemma[validation]
-        held[modality] = galaxy[validation.cpu().numpy()]
-        with torch.no_grad():
-            documents = {
-                "gemma": gemma,
-                "linear": apply_linear(saved[modality]["linear"], aion),
-                "mlp": trained(saved[modality]["mlp"])(aion),
-            }
-        spaces |= {
-            (modality, name): rows.cpu().numpy() for name, rows in documents.items()
-        }
-
+    space = gemma_space()
+    everyone = np.unique(space.galaxy)
     columns = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", "redshift": "Z_HP"}
     values = {
         name: np.asarray(dataset().data.column(f"{column}{PROVABGS}"), dtype=np.float64)
@@ -71,35 +58,29 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         values["specific_sfr"] = np.log10(values.pop("sfr")) - values["mass"]
 
     text = embed_queries([query for query, _ in CUTS])
-    centrings = {
-        "raw": lambda rows: rows,
-        "centred": lambda rows: (
-            (rows - rows.mean(axis=0))
-            / np.linalg.norm(rows - rows.mean(axis=0), axis=-1, keepdims=True)
-        ),
-    }
+    centrings = {"raw": lambda rows: rows, "centred": centred}
     scored = {}
     for centring, transform in centrings.items():
         queries = transform(text)
         combined = np.full((len(dataset()), len(CUTS)), -np.inf)
-        for (modality, name), documents in spaces.items():
-            scores = transform(documents) @ queries.T
-            scored[(f"{modality} {name}", centring)] = (held[modality], scores)
-            if name == "mlp":
-                combined[held[modality]] = np.maximum(combined[held[modality]], scores)
-        everyone = np.unique(np.concatenate(list(held.values())))
-        scored[("combined mlp", centring)] = (everyone, combined[everyone])
+        for modality in DOCUMENTS:
+            rows = space.modality == modality
+            galaxy = space.galaxy[rows]
+            scores = transform(space.vectors[rows]) @ queries.T
+            scored[(modality, centring)] = (galaxy, scores)
+            combined[galaxy] = np.maximum(combined[galaxy], scores)
+        scored[("combined", centring)] = (everyone, combined[everyone])
 
     report = {}
     for index, (query, (column, low, high)) in enumerate(CUTS):
         report[query] = {}
-        for (space, centring), (galaxy, scores) in scored.items():
+        for (name, centring), (galaxy, scores) in scored.items():
             value = values[column][galaxy]
             population = ~np.isnan(value)
             relevant = ((value > low) & (value < high))[population]
             ranked = scores[population, index]
             order = np.argsort(-ranked)
-            report[query].setdefault(space, {})[centring] = {
+            report[query].setdefault(name, {})[centring] = {
                 "base_rate": round(float(relevant.mean()), 4),
                 "average_precision": round(
                     float(average_precision_score(relevant, ranked)), 4

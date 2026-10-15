@@ -31,7 +31,7 @@ The slots fall into seven :term:`modes <mode>`, one per kind of observation from
 Embeddings
 ----------
 
-AION's encoder reads all of a galaxy's observed tokens at once and returns a vector of 768 numbers for each. Because each token is read alongside all the others, its *encoded* embedding depends on the whole galaxy, not only on its own code. alphaUniverse stores these, and the *codebook* embeddings AION starts from, which depend only on the code. A galaxy's :term:`mean embedding`, the average of its encoded embeddings, is the single vector that the map uses; text search averages one survey's embeddings at a time.
+AION's encoder reads all of a galaxy's observed tokens at once and returns a vector of 768 numbers for each. Because each token is read alongside all the others, its *encoded* embedding depends on the whole galaxy, not only on its own code. alphaUniverse stores these, and the *codebook* embeddings AION starts from, which depend only on the code. A galaxy's :term:`mean embedding`, the average of its encoded embeddings, is the single vector that the map uses.
 
 Two embeddings are compared by the :term:`cosine similarity` of their directions: 1 when they point the same way, 0 when they are unrelated.
 

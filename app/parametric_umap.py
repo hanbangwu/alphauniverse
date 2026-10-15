@@ -182,10 +182,8 @@ def fit_parametric_umap(training: np.ndarray, validation: np.ndarray) -> Paramet
     return model.eval()
 
 
-def _stream(
-    surveys: tuple[str, ...] = STORE_COLUMNS,
-) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    for survey in surveys:
+def _stream() -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    for survey in STORE_COLUMNS:
         for stored in source("encoded").to_batches(
             columns=["galaxy", survey], batch_size=CHUNK
         ):

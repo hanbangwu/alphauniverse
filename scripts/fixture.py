@@ -19,11 +19,11 @@ from app.config import (
     PREDICTIONS,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
+    SPECTRUM_SURVEY,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
     TABLE_VALUE_SURVEYS,
-    TEXT_SURVEYS,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -45,7 +45,7 @@ from app.pql import (
     save_prediction_basis,
 )
 from app.search import source, tokens
-from app.text_search import aion_gemma_space
+from app.text_search import gemma_space
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_IMAGE_TOKENS + 12,
@@ -184,7 +184,7 @@ def forget() -> None:
         labels,
         source,
         tokens,
-        aion_gemma_space,
+        gemma_space,
         predictions,
         basis,
         observed,
@@ -232,17 +232,14 @@ def build(galaxies: int, seed: int = 0) -> Path:
         compression="zstd",
     )
 
-    held = {
-        modality: rows[[covered(survey, galaxy) for galaxy in rows]]
-        for modality, survey in TEXT_SURVEYS.items()
-    }
-    galaxy = np.concatenate(list(held.values())).astype(np.int32)
+    spectra = rows[[covered(SPECTRUM_SURVEY, galaxy) for galaxy in rows]]
+    galaxy = np.concatenate([rows, spectra]).astype(np.int32)
     vectors = rng.standard_normal((len(galaxy), GEMMA_DIM)).astype(np.float32)
     np.savez(
-        artifact("aion_gemma_space"),
+        artifact("gemma_space"),
         vectors=vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
         galaxy=galaxy,
-        modality=np.repeat(list(held), [len(members) for members in held.values()]),
+        modality=np.repeat(["image", "spectrum"], [len(rows), len(spectra)]),
     )
 
     _predictions(rng, galaxies)

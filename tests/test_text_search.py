@@ -3,13 +3,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app.text_search import TextQuery, aion_gemma_space, text_search
+from app.text_search import TextQuery, gemma_space, text_search
 
 
 def test_text_search_ranks_the_row_nearest_the_query_first(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    space = aion_gemma_space()
+    space = gemma_space()
     monkeypatch.setattr(
         "app.text_search.embed_queries", lambda _: 2 * space.vectors[3:4]
     )
@@ -24,7 +24,7 @@ def test_text_search_ranks_the_row_nearest_the_query_first(
 def test_text_search_returns_a_galaxy_once_per_matching_modality(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    space = aion_gemma_space()
+    space = gemma_space()
     spectrum = np.flatnonzero(space.modality == "spectrum")[0]
     image = np.flatnonzero(
         (space.modality == "image") & (space.galaxy == space.galaxy[spectrum])
@@ -43,7 +43,7 @@ def test_text_search_returns_a_galaxy_once_per_matching_modality(
 def test_text_search_returns_every_row_when_asked_for_more(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    space = aion_gemma_space()
+    space = gemma_space()
     monkeypatch.setattr("app.text_search.embed_queries", lambda _: space.vectors[:1])
 
     found, _, _ = text_search(TextQuery(text="a galaxy", matches=128))

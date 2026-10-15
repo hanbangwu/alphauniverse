@@ -119,7 +119,7 @@ def text_search_quality():
     names = [name for name in rows[0] if name != "centring"]
     names.insert(2, "centring")
     return column(
-        heading(found, f"{found['galaxies']:,} held-out galaxies", cpus(found)),
+        heading(found, f"{found['galaxies']:,} galaxies", cpus(found)),
         chart,
         table(rows, names, height=400),
         **WIDTH,

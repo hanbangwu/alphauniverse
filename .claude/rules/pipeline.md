@@ -7,7 +7,6 @@ paths:
   - "app/dataset.py"
   - "app/search.py"
   - "app/text_search.py"
-  - "app/alignment.py"
   - "modal_app.py"
   - "pyproject.toml"
   - "scripts/alphauniverse_cosmos.py"
