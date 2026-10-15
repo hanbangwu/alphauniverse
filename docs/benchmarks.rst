@@ -141,7 +141,7 @@ Does a galaxy seen with less of its data still find itself? ``retrieval_quality`
 - the DESI spectrum alone, or SDSS's alone, of a galaxy with both;
 - everything but the DESI spectrum and the redshift, of a galaxy with a DESI spectrum.
 
-For each mode and for the two full-object scores of ``token_embedding_quality``, it reports the share of galaxies that rank themselves first (R@1) and in their top 10 (R@10), and their median rank, a galaxy tied with others taking their mean rank. A Gram matrix's row need not peak at its own galaxy, so the set with all the data is each score's ceiling.
+For each mode and for the two full-object scores of ``token_embedding_quality``, it reports the share of galaxies that rank themselves first (R@1) and in their top 10 (R@10), and their median rank, a galaxy tied with others taking their mean rank. A Gram matrix's row need not peak at its own galaxy, so the set with all the data is each score's ceiling. It also ranks the other way, as a search from the galaxy with all its data would: the encoding takes its galaxy's place among the stored galaxies and is ranked by the galaxy's own row. This uses the exact rows only, since an encoding has no stored gallery vector.
 
 .. bokeh-plot::
    :source-position: none

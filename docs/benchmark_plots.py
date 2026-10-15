@@ -248,6 +248,10 @@ def template_embedding_quality():
     )
 
 
+def recalled(exact, reverse):
+    return {"R@1": exact["r1"], "R@10": exact["r10"], "median rank": exact["median"], "reverse R@1": reverse["r1"], "reverse R@10": reverse["r10"], "reverse median rank": reverse["median"]}
+
+
 def retrieval_quality():
     found = report("retrieval_quality")
     if found is None:
@@ -255,27 +259,27 @@ def retrieval_quality():
     ranks = [str(rank) for rank in found["ranks"]]
     rows, full = [], []
     for test, measured in found["tests"].items():
-        aion = measured["aion"]
-        row = {"set": test, "galaxies": measured["galaxies"], "score": "AION", "R@1": aion["r1"], "R@10": aion["r10"], "median rank": aion["median"]}
+        row = {"set": test, "galaxies": measured["galaxies"], "score": "AION"} | recalled(**measured["aion"])
         rows.append(row | {f"R@10 at k = {rank}": "" for rank in ranks})
         full.append(row)
         for role in ("token", "template"):
             for group in ("combined", "blocks"):
                 for name, exact in measured[role]["exact"][group].items():
-                    row = {"set": test, "galaxies": measured["galaxies"], "score": f"{role} {name}", "R@1": exact["r1"], "R@10": exact["r10"], "median rank": exact["median"]}
+                    row = {"set": test, "galaxies": measured["galaxies"], "score": f"{role} {name}"} | recalled(exact, measured[role]["reverse"][group][name])
                     rows.append(row | {f"R@10 at k = {rank}": measured[role][rank][group][name]["r10"] for rank in ranks})
                     if group == "combined":
                         full.append(row)
-    source = ColumnDataSource({"factor": [(row["set"], row["score"]) for row in full], "r1": [row["R@1"] for row in full], "r10": [row["R@10"] for row in full]})
+    source = ColumnDataSource({"factor": [(row["set"], row["score"]) for row in full], "r1": [row["R@1"] for row in full], "r10": [row["R@10"] for row in full], "reverse": [row["reverse R@10"] for row in full]})
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         y_range=(0, 1.05),
         height=420,
-        title="Share of galaxies in their own top 10 by full-object scores",
-        tooltips=[("R@1", "@r1"), ("R@10", "@r10")],
+        title="Share in the top 10 by full-object scores: each galaxy, ranked from its encoding (bars), and each encoding, ranked from its galaxy (dots)",
+        tooltips=[("R@1", "@r1"), ("R@10", "@r10"), ("reverse R@10", "@reverse")],
         **WIDTH,
     )
     chart.vbar(x="factor", top="r10", width=0.8, source=source)
+    chart.scatter(x="factor", y="reverse", size=8, color="black", source=source)
     chart.xaxis.major_label_orientation = 0.8
     return column(
         heading(found, f"ranked among {found['galaxies']:,} galaxies", found["device"]),

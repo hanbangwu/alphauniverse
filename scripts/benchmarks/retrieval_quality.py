@@ -80,18 +80,41 @@ def encoded(
     return pa.Table.from_batches([pql.prediction_batch(records)]), torch.stack(means)
 
 
-def token_rows(tests: dict[str, pa.Table]) -> dict[str, dict[str, torch.Tensor]]:
+def reverse_rows(
+    role: str, pairs: dict[str, torch.Tensor], galaxies: np.ndarray
+) -> dict[str, torch.Tensor]:
+    sources = torch.from_numpy(galaxies).to(device())
+    found = {}
+    for name, matrix in pairs.items():
+        stored = np.load(artifact(f"{role}_gram_{name}"), mmap_mode="r")
+        row = torch.from_numpy(stored[galaxies]).to(device())
+        row[torch.arange(len(galaxies), device=device()), sources] = matrix.diagonal()
+        found[name] = row
+    return found
+
+
+def token_rows(
+    tests: dict[str, pa.Table], galaxies: dict[str, np.ndarray]
+) -> dict[str, dict[str, dict[str, torch.Tensor]]]:
     torch.backends.cuda.matmul.fp32_precision = "tf32"
-    found = {test: {} for test in tests}
+    found = {test: {"exact": {}, "reverse": {}} for test in tests}
+    stored = {test: pql.predictions().take(galaxies[test]) for test in tests}
     for mode in TOKEN_GRAMS:
         gallery = grams.forms(mode, pql.predictions())
         for test, table in tests.items():
             queries = grams.forms(mode, table)
-            found[test] |= grams.gram(mode, queries, gallery)
+            found[test]["exact"] |= grams.gram(mode, queries, gallery)
+            found[test]["reverse"] |= reverse_rows(
+                "token",
+                grams.gram(mode, grams.forms(mode, stored[test]), queries),
+                galaxies[test],
+            )
     return found
 
 
-def template_rows(tests: dict[str, pa.Table]) -> dict[str, dict[str, torch.Tensor]]:
+def template_rows(
+    tests: dict[str, pa.Table], galaxies: dict[str, np.ndarray]
+) -> dict[str, dict[str, dict[str, torch.Tensor]]]:
     torch.backends.cuda.matmul.fp32_precision = "ieee"
     torch.backends.cudnn.conv.fp32_precision = "ieee"
     with np.load(artifact("observed_reference")) as references:
@@ -105,16 +128,32 @@ def template_rows(tests: dict[str, pa.Table]) -> dict[str, dict[str, torch.Tenso
         decoded[test] = {
             mode: np.concatenate([part[mode] for part in parts]) for mode in parts[0]
         }
-    found = {test: {} for test in tests}
+    found = {test: {"exact": {}, "reverse": {}} for test in tests}
     for mode in TOKEN_GRAMS:
         everyone = embeddings.loaded(f"template_{mode}", torch.float32).flatten(1)
         for test in tests:
             queries = torch.from_numpy(decoded[test][mode]).to(device()).flatten(1)
-            matrices = observed_grams.template_grams(
+            stored = everyone[torch.from_numpy(galaxies[test]).to(device())]
+            found[test]["exact"] |= template_scores(
                 queries, depths[mode], mode, everyone
             )
-            found[test] |= {name: matrix.float() for name, matrix in matrices.items()}
+            found[test]["reverse"] |= reverse_rows(
+                "template",
+                template_scores(stored, depths[mode], mode, queries),
+                galaxies[test],
+            )
     return found
+
+
+def template_scores(
+    left: torch.Tensor, depth: torch.Tensor, mode: str, right: torch.Tensor
+) -> dict[str, torch.Tensor]:
+    return {
+        name: matrix.float()
+        for name, matrix in observed_grams.template_grams(
+            left, depth, mode, right
+        ).items()
+    }
 
 
 def embedded(role: str) -> dict[str, dict[str, torch.Tensor]]:
@@ -143,15 +182,17 @@ def recall(found: torch.Tensor) -> dict[str, float]:
 
 def family(
     found: dict[str, dict[str, torch.Tensor]],
-    rows: dict[str, torch.Tensor],
+    rows: dict[str, dict[str, torch.Tensor]],
     sources: torch.Tensor,
 ) -> dict[str, Any]:
     vectors = {
-        name: embeddings.query_vectors(row, found[name]) for name, row in rows.items()
+        name: embeddings.query_vectors(row, found[name])
+        for name, row in rows["exact"].items()
     }
-    scored = {"exact": rows} | {
+    scored = rows | {
         rank: {
-            name: embeddings.scores(vectors[name], found[name], rank) for name in rows
+            name: embeddings.scores(vectors[name], found[name], rank)
+            for name in vectors
         }
         for rank in RANKS
     }
@@ -184,18 +225,28 @@ def measure() -> dict[str, Any]:
     tests, means = {}, {}
     for test, (_, kept) in TESTS.items():
         tests[test], means[test] = encoded(galaxies[test], kept)
-    rows = {"token": token_rows(tests), "template": template_rows(tests)}
+    rows = {
+        "token": token_rows(tests, galaxies),
+        "template": template_rows(tests, galaxies),
+    }
     stored = {role: embedded(f"{role}_embedding") for role in rows}
     gallery = parametric_umap.scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     aion = torch.nn.functional.normalize(torch.from_numpy(gallery).to(device()), dim=1)
     report = {}
     for test in tests:
         sources = torch.from_numpy(galaxies[test]).to(device())
-        cosines = torch.nn.functional.normalize(means[test], dim=1) @ aion.T
+        twins = torch.nn.functional.normalize(means[test], dim=1)
+        reverse = aion[sources] @ aion.T
+        reverse[torch.arange(len(sources), device=device()), sources] = (
+            aion[sources] * twins
+        ).sum(dim=1)
         report[test] = {
             "galaxies": len(galaxies[test]),
             "kept": TESTS[test][1],
-            "aion": recall(ranks(cosines, sources)),
+            "aion": {
+                "exact": recall(ranks(twins @ aion.T, sources)),
+                "reverse": recall(ranks(reverse, sources)),
+            },
         } | {role: family(stored[role], rows[role][test], sources) for role in rows}
     return {
         "environment": environment(),
