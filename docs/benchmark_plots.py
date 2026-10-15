@@ -318,7 +318,7 @@ def probe_quality():
     chart.scatter(x="factor", y="knn", size=8, color="black", source=source)
     chart.xaxis.major_label_orientation = 0.8
     return column(
-        heading(found, f"{found['rank']} components per mode", f"{found['folds']}-fold cross-validation", cpus(found)),
+        heading(found, f"{found['rank']} components per mode", f"joint: the first {found['joint']} principal components of all modes' components", f"{found['folds']}-fold cross-validation", cpus(found)),
         chart,
         *curves,
         table(rows, list(rows[0])),

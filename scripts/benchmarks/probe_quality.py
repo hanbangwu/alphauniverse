@@ -5,6 +5,7 @@ from typing import Any
 
 import modal
 import numpy as np
+from sklearn.decomposition import PCA
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
@@ -30,6 +31,7 @@ image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/probe_quality.json")
 RANK = 256
+JOINT = 768
 NEIGHBOURS = 10
 ALPHAS = np.logspace(-3, 4, 15)
 FOLDS = KFold(shuffle=True, random_state=SEED)
@@ -113,19 +115,23 @@ def measure() -> dict[str, Any]:
             "aion": scores(aion[kept], column[kept]),
         }
         for role, blocks in families.items():
-            report[target][role] = {
-                label: scores(
-                    np.concatenate(
-                        [blocks[name][kept] for name in names if name != target],
-                        axis=1,
-                    ),
-                    column[kept],
+            features = {
+                label: np.concatenate(
+                    [blocks[name] for name in names if name != target], axis=1
                 )
                 for label, names in BLOCKS.items()
+            }
+            features["joint"] = PCA(JOINT, random_state=SEED).fit_transform(
+                features["all"]
+            )
+            report[target][role] = {
+                label: scores(matrix[kept], column[kept])
+                for label, matrix in features.items()
             }
     return {
         "environment": environment(),
         "rank": RANK,
+        "joint": JOINT,
         "folds": FOLDS.n_splits,
         "neighbours": NEIGHBOURS,
         "draws": DRAWS,
