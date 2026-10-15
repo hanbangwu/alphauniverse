@@ -2,7 +2,14 @@ import json
 from pathlib import Path
 
 from bokeh.layouts import column
-from bokeh.models import ColumnDataSource, DataTable, Div, FactorRange, TableColumn, Whisker
+from bokeh.models import (
+    ColumnDataSource,
+    DataTable,
+    Div,
+    FactorRange,
+    TableColumn,
+    Whisker,
+)
 from bokeh.palettes import Category10_10, Category20_20
 from bokeh.plotting import figure
 
@@ -23,7 +30,13 @@ def heading(found, *details):
 def table(rows, names, height=None):
     source = ColumnDataSource({name: [row[name] for row in rows] for name in names})
     columns = [TableColumn(field=name, title=name) for name in names]
-    return DataTable(source=source, columns=columns, index_position=None, height=height or 30 + 26 * len(rows), **WIDTH)
+    return DataTable(
+        source=source,
+        columns=columns,
+        index_position=None,
+        height=height or 30 + 26 * len(rows),
+        **WIDTH,
+    )
 
 
 def missing():
@@ -43,7 +56,9 @@ def projection_quality():
         for neighbours, values in found["neighbours"].items()
         for metric, value in values.items()
     ]
-    source = ColumnDataSource({key: [row[key] for row in rows] for key in ("neighbours", "metric", "value")})
+    source = ColumnDataSource(
+        {key: [row[key] for row in rows] for key in ("neighbours", "metric", "value")}
+    )
     source.data["factor"] = list(zip(source.data["neighbours"], source.data["metric"]))
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
@@ -85,11 +100,22 @@ def text_search_quality():
         x_range=(0, 1),
         height=40 + 24 * len(raw),
         title="Average precision, raw (bars) against the base rate (ticks)",
-        tooltips=[("average precision", "@average_precision"), ("base rate", "@base_rate")],
+        tooltips=[
+            ("average precision", "@average_precision"),
+            ("base rate", "@base_rate"),
+        ],
         **WIDTH,
     )
     chart.hbar(y="factor", right="average_precision", height=0.8, source=source)
-    chart.scatter(x="base_rate", y="factor", marker="dash", angle=1.5708, size=18, color="black", source=source)
+    chart.scatter(
+        x="base_rate",
+        y="factor",
+        marker="dash",
+        angle=1.5708,
+        size=18,
+        color="black",
+        source=source,
+    )
     names = [name for name in rows[0] if name != "centring"]
     names.insert(2, "centring")
     return column(
@@ -116,11 +142,19 @@ def search_quality():
         y_range=FactorRange(*reversed(source.data["factor"])),
         height=40 + 26 * len(rows),
         title="Mean over queries (dot) with its interval (whisker)",
-        tooltips=[("mean", "@mean"), ("interval", "@low to @high"), ("queries", "@queries")],
+        tooltips=[
+            ("mean", "@mean"),
+            ("interval", "@low to @high"),
+            ("queries", "@queries"),
+        ],
         **WIDTH,
     )
     chart.scatter(x="mean", y="factor", size=8, source=source)
-    chart.add_layout(Whisker(source=source, base="factor", lower="low", upper="high", dimension="width"))
+    chart.add_layout(
+        Whisker(
+            source=source, base="factor", lower="low", upper="high", dimension="width"
+        )
+    )
     return column(
         heading(found, f"{found['sample']:,} sampled galaxies", cpus(found)),
         chart,
@@ -141,7 +175,9 @@ def compression_quality():
             "spearman median": round(figures["spearman_median"], 4),
             "spearman 5th percentile": round(figures["spearman_p5"], 4),
             "top 10 median": round(figures["top10_median"], 4),
-            "identity change": round(figures["identity_exact"] - figures["identity"], 4),
+            "identity change": round(
+                figures["identity_exact"] - figures["identity"], 4
+            ),
             "relevance change": None
             if figures["relevance"] is None
             else round(abs(figures["relevance"] - figures["relevance_exact"]), 4),
@@ -150,20 +186,28 @@ def compression_quality():
         for size, figures in measured["sizes"].items()
     ]
     source = ColumnDataSource({name: [row[name] for row in rows] for name in rows[0]})
-    source.data["factor"] = list(zip(source.data["mode"], source.data["selected slots"]))
+    source.data["factor"] = list(
+        zip(source.data["mode"], source.data["selected slots"])
+    )
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         y_range=(0, 1.05),
         height=320,
         title="Stored predictions: top-10 overlap with exact rankings, by mode and selection size",
-        tooltips=[("Spearman median", "@{spearman median}"), ("top 10 median", "@{top 10 median}")],
+        tooltips=[
+            ("Spearman median", "@{spearman median}"),
+            ("top 10 median", "@{top 10 median}"),
+        ],
         **WIDTH,
     )
     chart.vbar(x="factor", top="top 10 median", width=0.8, source=source)
     chart.xaxis.major_label_orientation = 1.2
     first = next(iter(found["modes"].values()))
     return column(
-        heading(found, f"{first['queries']} queries over {first['sample']:,} sampled galaxies per mode"),
+        heading(
+            found,
+            f"{first['queries']} queries over {first['sample']:,} sampled galaxies per mode",
+        ),
         chart,
         table(rows, list(rows[0])),
         **WIDTH,
@@ -187,7 +231,13 @@ def token_embedding_quality():
         **WIDTH,
     )
     for (name, curve), colour in zip(curves.items(), Category20_20):
-        chart.line(ranks, [curve[str(rank)]["top10"] for rank in ranks], legend_label=name, color=colour, line_width=2)
+        chart.line(
+            ranks,
+            [curve[str(rank)]["top10"] for rank in ranks],
+            legend_label=name,
+            color=colour,
+            line_width=2,
+        )
     chart.legend.location = "bottom_right"
     chart.legend.click_policy = "hide"
     last = str(ranks[-1])
@@ -205,7 +255,11 @@ def token_embedding_quality():
         for name, matrix in found["matrices"].items()
     ]
     return column(
-        heading(found, f"every one of {found['galaxies']:,} galaxies as a query", found["device"]),
+        heading(
+            found,
+            f"every one of {found['galaxies']:,} galaxies as a query",
+            found["device"],
+        ),
         chart,
         table(rows, list(rows[0])),
         **WIDTH,
@@ -221,10 +275,23 @@ def template_embedding_quality():
     truths = exact | {"template": "the template Gram"}
     charts = []
     for truth, label in truths.items():
-        chart = figure(x_axis_type="log", x_axis_label="k", y_range=(0, 1.05), height=360, title=f"Share of the top 10 by {label} found with the stored vectors, by k", **WIDTH)
+        chart = figure(
+            x_axis_type="log",
+            x_axis_label="k",
+            y_range=(0, 1.05),
+            height=360,
+            title=f"Share of the top 10 by {label} found with the stored vectors, by k",
+            **WIDTH,
+        )
         for (name, block), colour in zip(found["blocks"].items(), Category20_20):
             if truth in block["stored"][str(ranks[0])]:
-                chart.line(ranks, [block["stored"][str(rank)][truth]["top10"] for rank in ranks], legend_label=name, color=colour, line_width=2)
+                chart.line(
+                    ranks,
+                    [block["stored"][str(rank)][truth]["top10"] for rank in ranks],
+                    legend_label=name,
+                    color=colour,
+                    line_width=2,
+                )
         chart.legend.location = "bottom_right"
         chart.legend.click_policy = "hide"
         charts.append(chart)
@@ -233,15 +300,34 @@ def template_embedding_quality():
         {
             "block": name,
             "galleries": block["galleries"],
-            **{f"own rank by {label}, median": block["own_rank"].get(truth, {}).get("p50") for truth, label in exact.items()},
-            **{f"own data in top 10 by {label}": block["own_rank"].get(truth, {}).get("top10") for truth, label in exact.items()},
-            **{f"template Gram's top 10 by {label}": block["template_gram"].get(truth, {}).get("top10") for truth, label in exact.items()},
+            **{
+                f"own rank by {label}, median": block["own_rank"]
+                .get(truth, {})
+                .get("p50")
+                for truth, label in exact.items()
+            },
+            **{
+                f"own data in top 10 by {label}": block["own_rank"]
+                .get(truth, {})
+                .get("top10")
+                for truth, label in exact.items()
+            },
+            **{
+                f"template Gram's top 10 by {label}": block["template_gram"]
+                .get(truth, {})
+                .get("top10")
+                for truth, label in exact.items()
+            },
             f"energy at k = {last}": block["energy"][last],
         }
         for name, block in found["blocks"].items()
     ]
     return column(
-        heading(found, f"every one of {found['galaxies']:,} galaxies as a query", found["device"]),
+        heading(
+            found,
+            f"every one of {found['galaxies']:,} galaxies as a query",
+            found["device"],
+        ),
         *charts,
         table(rows, list(rows[0])),
         **WIDTH,
@@ -249,7 +335,14 @@ def template_embedding_quality():
 
 
 def recalled(exact, reverse):
-    return {"R@1": exact["r1"], "R@10": exact["r10"], "median rank": exact["median"], "reverse R@1": reverse["r1"], "reverse R@10": reverse["r10"], "reverse median rank": reverse["median"]}
+    return {
+        "R@1": exact["r1"],
+        "R@10": exact["r10"],
+        "median rank": exact["median"],
+        "reverse R@1": reverse["r1"],
+        "reverse R@10": reverse["r10"],
+        "reverse median rank": reverse["median"],
+    }
 
 
 def retrieval_quality():
@@ -259,17 +352,40 @@ def retrieval_quality():
     ranks = [str(rank) for rank in found["ranks"]]
     rows, full = [], []
     for test, measured in found["tests"].items():
-        row = {"set": test, "galaxies": measured["galaxies"], "score": "AION"} | recalled(**measured["aion"])
+        row = {
+            "set": test,
+            "galaxies": measured["galaxies"],
+            "score": "AION",
+        } | recalled(**measured["aion"])
         rows.append(row | {f"R@10 at k = {rank}": "" for rank in ranks})
         full.append(row)
         for role in ("token", "template"):
             for group in ("combined", "blocks"):
                 for name, exact in measured[role]["exact"][group].items():
-                    row = {"set": test, "galaxies": measured["galaxies"], "score": f"{role} {name}"} | recalled(exact, measured[role]["reverse"][group][name])
-                    rows.append(row | {f"R@10 at k = {rank}": measured[role][rank][group][name]["r10"] for rank in ranks})
+                    row = {
+                        "set": test,
+                        "galaxies": measured["galaxies"],
+                        "score": f"{role} {name}",
+                    } | recalled(exact, measured[role]["reverse"][group][name])
+                    rows.append(
+                        row
+                        | {
+                            f"R@10 at k = {rank}": measured[role][rank][group][name][
+                                "r10"
+                            ]
+                            for rank in ranks
+                        }
+                    )
                     if group == "combined":
                         full.append(row)
-    source = ColumnDataSource({"factor": [(row["set"], row["score"]) for row in full], "r1": [row["R@1"] for row in full], "r10": [row["R@10"] for row in full], "reverse": [row["reverse R@10"] for row in full]})
+    source = ColumnDataSource(
+        {
+            "factor": [(row["set"], row["score"]) for row in full],
+            "r1": [row["R@1"] for row in full],
+            "r10": [row["R@10"] for row in full],
+            "reverse": [row["reverse R@10"] for row in full],
+        }
+    )
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         y_range=(0, 1.05),
@@ -295,18 +411,47 @@ def probe_quality():
         return missing()
     rows, curves = [], []
     for target, measured in found["probes"].items():
-        features = {"AION": measured["aion"]} | {f"{role} {blocks}": probes for role in ("token", "template") for blocks, probes in measured[role].items()}
-        curve = figure(x_axis_type="log", x_axis_label="galaxies fitted", y_axis_label="R²", height=300, title=f"{target}: ridge R² on a held-out fifth, mean of {found['draws']} draws", **WIDTH)
+        features = {"AION": measured["aion"]} | {
+            f"{role} {blocks}": probes
+            for role in ("token", "template")
+            for blocks, probes in measured[role].items()
+        }
+        curve = figure(
+            x_axis_type="log",
+            x_axis_label="galaxies fitted",
+            y_axis_label="R²",
+            height=300,
+            title=f"{target}: ridge R² on a held-out fifth, mean of {found['draws']} draws",
+            **WIDTH,
+        )
         for (name, probes), colour in zip(features.items(), Category10_10):
             row = {"target": target, "features": name, "galaxies": measured["galaxies"]}
             for probe, metrics in probes.items():
-                row |= {f"{probe} r2": metrics["r2"], f"{probe} rms": metrics["rms"]} | {f"{probe} r2, {count} fitted": value for count, value in metrics["shots"].items()}
+                row |= {
+                    f"{probe} r2": metrics["r2"],
+                    f"{probe} rms": metrics["rms"],
+                } | {
+                    f"{probe} r2, {count} fitted": value
+                    for count, value in metrics["shots"].items()
+                }
             rows.append(row)
             shots = probes["ridge"]["shots"]
-            curve.line([int(count) for count in shots], list(shots.values()), legend_label=name, color=colour, line_width=2)
+            curve.line(
+                [int(count) for count in shots],
+                list(shots.values()),
+                legend_label=name,
+                color=colour,
+                line_width=2,
+            )
         curve.legend.location = "bottom_right"
         curves.append(curve)
-    source = ColumnDataSource({"factor": [(row["target"], row["features"]) for row in rows], "ridge": [row["ridge r2"] for row in rows], "knn": [row["knn r2"] for row in rows]})
+    source = ColumnDataSource(
+        {
+            "factor": [(row["target"], row["features"]) for row in rows],
+            "ridge": [row["ridge r2"] for row in rows],
+            "knn": [row["knn r2"] for row in rows],
+        }
+    )
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         height=420,
@@ -318,7 +463,13 @@ def probe_quality():
     chart.scatter(x="factor", y="knn", size=8, color="black", source=source)
     chart.xaxis.major_label_orientation = 0.8
     return column(
-        heading(found, f"{found['rank']} components per mode", f"joint: the first {found['joint']} principal components of all modes' components", f"{found['folds']}-fold cross-validation", cpus(found)),
+        heading(
+            found,
+            f"{found['rank']} components per mode",
+            f"joint: the first {found['joint']} principal components of all modes' components",
+            f"{found['folds']}-fold cross-validation",
+            cpus(found),
+        ),
         chart,
         *curves,
         table(rows, list(rows[0])),
@@ -334,7 +485,10 @@ def template_quality():
     source = ColumnDataSource(
         {
             "mode": list(modes),
-            **{share: [measured["recovered"][share] for measured in modes.values()] for share in ("p5", "p50", "p95")},
+            **{
+                share: [measured["recovered"][share] for measured in modes.values()]
+                for share in ("p5", "p50", "p95")
+            },
         }
     )
     recovered = figure(
@@ -344,31 +498,62 @@ def template_quality():
         **WIDTH,
     )
     recovered.vbar(x="mode", top="p50", width=0.8, source=source)
-    recovered.segment(x0="mode", y0="p5", x1="mode", y1="p95", color="black", source=source)
+    recovered.segment(
+        x0="mode", y0="p5", x1="mode", y1="p95", color="black", source=source
+    )
     recovered.xaxis.major_label_orientation = 0.8
     charts = [recovered]
     for key in ("radius", "rest_wavelength"):
-        chart = figure(height=300, x_axis_label=key.replace("_", " "), y_axis_label="mean normalised residual", title=f"Residuals by {key.replace('_', ' ')}", **WIDTH)
-        lines = [(mode, model) for mode, measured in modes.items() if key in measured for model in ("template", "floor")]
+        chart = figure(
+            height=300,
+            x_axis_label=key.replace("_", " "),
+            y_axis_label="mean normalised residual",
+            title=f"Residuals by {key.replace('_', ' ')}",
+            **WIDTH,
+        )
+        lines = [
+            (mode, model)
+            for mode, measured in modes.items()
+            if key in measured
+            for model in ("template", "floor")
+        ]
         for (mode, model), colour in zip(lines, Category10_10):
-            chart.line(modes[mode][key]["centres"], modes[mode][key][model], legend_label=f"{mode} {model}", color=colour, line_width=2)
+            chart.line(
+                modes[mode][key]["centres"],
+                modes[mode][key][model],
+                legend_label=f"{mode} {model}",
+                color=colour,
+                line_width=2,
+            )
         chart.legend.click_policy = "hide"
         charts.append(chart)
     rows = [
         {
             "mode": mode,
             "galaxies": measured["galaxies"],
-            **{f"{model} χ²ν, median": values["p50"] for model, values in measured["chi2"].items()},
+            **{
+                f"{model} χ²ν, median": values["p50"]
+                for model, values in measured["chi2"].items()
+            },
             "recovered, median": measured["recovered"]["p50"],
         }
         for mode, measured in modes.items()
     ]
     pulls = [
-        {"value": name, **{f"{model}, median |pull|": value for model, value in values.items()}}
+        {
+            "value": name,
+            **{f"{model}, median |pull|": value for model, value in values.items()},
+        }
         for measured in modes.values()
         for name, values in measured.get("median_absolute_pull", {}).items()
     ]
-    return column(heading(found, found["device"]), *charts, table(rows, list(rows[0])), table(pulls, list(pulls[0])), **WIDTH)
+    return column(
+        heading(found, found["device"]),
+        *charts,
+        table(rows, list(rows[0])),
+        table(pulls, list(pulls[0])),
+        **WIDTH,
+    )
 
 
 def backend_performance():
@@ -383,7 +568,9 @@ def backend_performance():
     ]
     source = ColumnDataSource(
         {
-            "factor": [(row["request"], kind) for row in rows for kind in ("cold", "warm p50")],
+            "factor": [
+                (row["request"], kind) for row in rows for kind in ("cold", "warm p50")
+            ],
             "ms": [value for row in rows for value in (row["cold_ms"], row["p50_ms"])],
         }
     )
@@ -399,7 +586,10 @@ def backend_performance():
     chart.hbar(y="factor", left=1, right="ms", height=0.8, source=source)
     server = found["server"]
     return column(
-        heading(found, f"server {server['cpu']} CPU, {server['memory_mb'][0]:,} MB requested"),
+        heading(
+            found,
+            f"server {server['cpu']} CPU, {server['memory_mb'][0]:,} MB requested",
+        ),
         chart,
         table(rows, ("request", "cold_ms", "p50_ms", "p95_ms", "runs")),
         **WIDTH,
@@ -418,7 +608,10 @@ def search_performance():
     stages = list(stages_by_round[0][2])
     source = ColumnDataSource(
         {"factor": [(name, position) for name, position, _ in stages_by_round]}
-        | {stage: [measured[stage]["p50_ms"] for _, _, measured in stages_by_round] for stage in stages}
+        | {
+            stage: [measured[stage]["p50_ms"] for _, _, measured in stages_by_round]
+            for stage in stages
+        }
     )
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
@@ -428,18 +621,39 @@ def search_performance():
         tooltips="$name: @$name ms",
         **WIDTH,
     )
-    chart.vbar_stack(stages, x="factor", width=0.8, color=Category10_10[: len(stages)], legend_label=stages, source=source)
+    chart.vbar_stack(
+        stages,
+        x="factor",
+        width=0.8,
+        color=Category10_10[: len(stages)],
+        legend_label=stages,
+        source=source,
+    )
     current = found["stages"]["rounds"]["current"][0]
     timings = (
-        {"agreement matrix build": current["matrices"]["agreements"], "Population map": current["matrices"]["saliency"]}
-        | {f"whole search, {matches.replace('=', ' ')}": figures for matches, figures in current["searches"].items()}
-        | {f"any-position {name.replace('_', ' ')}": figures for name, figures in current["anywhere"].items()}
+        {
+            "agreement matrix build": current["matrices"]["agreements"],
+            "Population map": current["matrices"]["saliency"],
+        }
+        | {
+            f"whole search, {matches.replace('=', ' ')}": figures
+            for matches, figures in current["searches"].items()
+        }
+        | {
+            f"any-position {name.replace('_', ' ')}": figures
+            for name, figures in current["anywhere"].items()
+        }
     )
-    versions = ", ".join(f"{name} <code>{commit[:7]}</code>" for name, commit in found["commits"].items())
+    versions = ", ".join(
+        f"{name} <code>{commit[:7]}</code>" for name, commit in found["commits"].items()
+    )
     return column(
         heading(found, f"versions: {versions}", cpus(found["stages"])),
         chart,
         Div(text="Current commit, from a running server:", **WIDTH),
-        table([{"timing": name} | figures for name, figures in timings.items()], ("timing", "p50_ms", "p95_ms", "runs")),
+        table(
+            [{"timing": name} | figures for name, figures in timings.items()],
+            ("timing", "p50_ms", "p95_ms", "runs"),
+        ),
         **WIDTH,
     )
