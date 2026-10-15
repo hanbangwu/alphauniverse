@@ -55,7 +55,7 @@ bun run lint                # prettier + eslint
 ## Modal
 
 - Nothing runs on Modal (`modal run`, `modal serve`, `modal deploy`) and no load or cold-start traffic goes to the deployed app unless a maintainer asks.
-- Deploys happen only through CI on `main`.
+- Deploys happen only through CI: `main` to the default environment, and any branch to the `dev` environment when the CI/CD workflow is run by hand. `--env dev` runs a job against the `dev` app and volume.
 
 ## Git
 

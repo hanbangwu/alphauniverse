@@ -2,7 +2,14 @@ import json
 from pathlib import Path
 
 from bokeh.layouts import column
-from bokeh.models import ColumnDataSource, DataTable, Div, FactorRange, TableColumn, Whisker
+from bokeh.models import (
+    ColumnDataSource,
+    DataTable,
+    Div,
+    FactorRange,
+    TableColumn,
+    Whisker,
+)
 from bokeh.palettes import Category10_10, Category20_20
 from bokeh.plotting import figure
 
@@ -23,7 +30,13 @@ def heading(found, *details):
 def table(rows, names, height=None):
     source = ColumnDataSource({name: [row[name] for row in rows] for name in names})
     columns = [TableColumn(field=name, title=name) for name in names]
-    return DataTable(source=source, columns=columns, index_position=None, height=height or 30 + 26 * len(rows), **WIDTH)
+    return DataTable(
+        source=source,
+        columns=columns,
+        index_position=None,
+        height=height or 30 + 26 * len(rows),
+        **WIDTH,
+    )
 
 
 def missing():
@@ -43,7 +56,9 @@ def projection_quality():
         for neighbours, values in found["neighbours"].items()
         for metric, value in values.items()
     ]
-    source = ColumnDataSource({key: [row[key] for row in rows] for key in ("neighbours", "metric", "value")})
+    source = ColumnDataSource(
+        {key: [row[key] for row in rows] for key in ("neighbours", "metric", "value")}
+    )
     source.data["factor"] = list(zip(source.data["neighbours"], source.data["metric"]))
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
@@ -85,11 +100,22 @@ def text_search_quality():
         x_range=(0, 1),
         height=40 + 24 * len(raw),
         title="Average precision, raw (bars) against the base rate (ticks)",
-        tooltips=[("average precision", "@average_precision"), ("base rate", "@base_rate")],
+        tooltips=[
+            ("average precision", "@average_precision"),
+            ("base rate", "@base_rate"),
+        ],
         **WIDTH,
     )
     chart.hbar(y="factor", right="average_precision", height=0.8, source=source)
-    chart.scatter(x="base_rate", y="factor", marker="dash", angle=1.5708, size=18, color="black", source=source)
+    chart.scatter(
+        x="base_rate",
+        y="factor",
+        marker="dash",
+        angle=1.5708,
+        size=18,
+        color="black",
+        source=source,
+    )
     names = [name for name in rows[0] if name != "centring"]
     names.insert(2, "centring")
     return column(
@@ -116,11 +142,19 @@ def search_quality():
         y_range=FactorRange(*reversed(source.data["factor"])),
         height=40 + 26 * len(rows),
         title="Mean over queries (dot) with its interval (whisker)",
-        tooltips=[("mean", "@mean"), ("interval", "@low to @high"), ("queries", "@queries")],
+        tooltips=[
+            ("mean", "@mean"),
+            ("interval", "@low to @high"),
+            ("queries", "@queries"),
+        ],
         **WIDTH,
     )
     chart.scatter(x="mean", y="factor", size=8, source=source)
-    chart.add_layout(Whisker(source=source, base="factor", lower="low", upper="high", dimension="width"))
+    chart.add_layout(
+        Whisker(
+            source=source, base="factor", lower="low", upper="high", dimension="width"
+        )
+    )
     return column(
         heading(found, f"{found['sample']:,} sampled galaxies", cpus(found)),
         chart,
@@ -141,7 +175,9 @@ def compression_quality():
             "spearman median": round(figures["spearman_median"], 4),
             "spearman 5th percentile": round(figures["spearman_p5"], 4),
             "top 10 median": round(figures["top10_median"], 4),
-            "identity change": round(figures["identity_exact"] - figures["identity"], 4),
+            "identity change": round(
+                figures["identity_exact"] - figures["identity"], 4
+            ),
             "relevance change": None
             if figures["relevance"] is None
             else round(abs(figures["relevance"] - figures["relevance_exact"]), 4),
@@ -150,20 +186,28 @@ def compression_quality():
         for size, figures in measured["sizes"].items()
     ]
     source = ColumnDataSource({name: [row[name] for row in rows] for name in rows[0]})
-    source.data["factor"] = list(zip(source.data["mode"], source.data["selected slots"]))
+    source.data["factor"] = list(
+        zip(source.data["mode"], source.data["selected slots"])
+    )
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         y_range=(0, 1.05),
         height=320,
         title="Stored predictions: top-10 overlap with exact rankings, by mode and selection size",
-        tooltips=[("Spearman median", "@{spearman median}"), ("top 10 median", "@{top 10 median}")],
+        tooltips=[
+            ("Spearman median", "@{spearman median}"),
+            ("top 10 median", "@{top 10 median}"),
+        ],
         **WIDTH,
     )
     chart.vbar(x="factor", top="top 10 median", width=0.8, source=source)
     chart.xaxis.major_label_orientation = 1.2
     first = next(iter(found["modes"].values()))
     return column(
-        heading(found, f"{first['queries']} queries over {first['sample']:,} sampled galaxies per mode"),
+        heading(
+            found,
+            f"{first['queries']} queries over {first['sample']:,} sampled galaxies per mode",
+        ),
         chart,
         table(rows, list(rows[0])),
         **WIDTH,
@@ -187,7 +231,13 @@ def token_embedding_quality():
         **WIDTH,
     )
     for (name, curve), colour in zip(curves.items(), Category20_20):
-        chart.line(ranks, [curve[str(rank)]["top10"] for rank in ranks], legend_label=name, color=colour, line_width=2)
+        chart.line(
+            ranks,
+            [curve[str(rank)]["top10"] for rank in ranks],
+            legend_label=name,
+            color=colour,
+            line_width=2,
+        )
     chart.legend.location = "bottom_right"
     chart.legend.click_policy = "hide"
     last = str(ranks[-1])
@@ -205,7 +255,11 @@ def token_embedding_quality():
         for name, matrix in found["matrices"].items()
     ]
     return column(
-        heading(found, f"every one of {found['galaxies']:,} galaxies as a query", found["device"]),
+        heading(
+            found,
+            f"every one of {found['galaxies']:,} galaxies as a query",
+            found["device"],
+        ),
         chart,
         table(rows, list(rows[0])),
         **WIDTH,
@@ -220,7 +274,10 @@ def template_quality():
     source = ColumnDataSource(
         {
             "mode": list(modes),
-            **{share: [measured["recovered"][share] for measured in modes.values()] for share in ("p5", "p50", "p95")},
+            **{
+                share: [measured["recovered"][share] for measured in modes.values()]
+                for share in ("p5", "p50", "p95")
+            },
         }
     )
     recovered = figure(
@@ -230,31 +287,62 @@ def template_quality():
         **WIDTH,
     )
     recovered.vbar(x="mode", top="p50", width=0.8, source=source)
-    recovered.segment(x0="mode", y0="p5", x1="mode", y1="p95", color="black", source=source)
+    recovered.segment(
+        x0="mode", y0="p5", x1="mode", y1="p95", color="black", source=source
+    )
     recovered.xaxis.major_label_orientation = 0.8
     charts = [recovered]
     for key in ("radius", "rest_wavelength"):
-        chart = figure(height=300, x_axis_label=key.replace("_", " "), y_axis_label="mean normalised residual", title=f"Residuals by {key.replace('_', ' ')}", **WIDTH)
-        lines = [(mode, model) for mode, measured in modes.items() if key in measured for model in ("template", "floor")]
+        chart = figure(
+            height=300,
+            x_axis_label=key.replace("_", " "),
+            y_axis_label="mean normalised residual",
+            title=f"Residuals by {key.replace('_', ' ')}",
+            **WIDTH,
+        )
+        lines = [
+            (mode, model)
+            for mode, measured in modes.items()
+            if key in measured
+            for model in ("template", "floor")
+        ]
         for (mode, model), colour in zip(lines, Category10_10):
-            chart.line(modes[mode][key]["centres"], modes[mode][key][model], legend_label=f"{mode} {model}", color=colour, line_width=2)
+            chart.line(
+                modes[mode][key]["centres"],
+                modes[mode][key][model],
+                legend_label=f"{mode} {model}",
+                color=colour,
+                line_width=2,
+            )
         chart.legend.click_policy = "hide"
         charts.append(chart)
     rows = [
         {
             "mode": mode,
             "galaxies": measured["galaxies"],
-            **{f"{model} χ²ν, median": values["p50"] for model, values in measured["chi2"].items()},
+            **{
+                f"{model} χ²ν, median": values["p50"]
+                for model, values in measured["chi2"].items()
+            },
             "recovered, median": measured["recovered"]["p50"],
         }
         for mode, measured in modes.items()
     ]
     pulls = [
-        {"value": name, **{f"{model}, median |pull|": value for model, value in values.items()}}
+        {
+            "value": name,
+            **{f"{model}, median |pull|": value for model, value in values.items()},
+        }
         for measured in modes.values()
         for name, values in measured.get("median_absolute_pull", {}).items()
     ]
-    return column(heading(found, found["device"]), *charts, table(rows, list(rows[0])), table(pulls, list(pulls[0])), **WIDTH)
+    return column(
+        heading(found, found["device"]),
+        *charts,
+        table(rows, list(rows[0])),
+        table(pulls, list(pulls[0])),
+        **WIDTH,
+    )
 
 
 def backend_performance():
@@ -269,7 +357,9 @@ def backend_performance():
     ]
     source = ColumnDataSource(
         {
-            "factor": [(row["request"], kind) for row in rows for kind in ("cold", "warm p50")],
+            "factor": [
+                (row["request"], kind) for row in rows for kind in ("cold", "warm p50")
+            ],
             "ms": [value for row in rows for value in (row["cold_ms"], row["p50_ms"])],
         }
     )
@@ -285,7 +375,10 @@ def backend_performance():
     chart.hbar(y="factor", left=1, right="ms", height=0.8, source=source)
     server = found["server"]
     return column(
-        heading(found, f"server {server['cpu']} CPU, {server['memory_mb'][0]:,} MB requested"),
+        heading(
+            found,
+            f"server {server['cpu']} CPU, {server['memory_mb'][0]:,} MB requested",
+        ),
         chart,
         table(rows, ("request", "cold_ms", "p50_ms", "p95_ms", "runs")),
         **WIDTH,
@@ -304,7 +397,10 @@ def search_performance():
     stages = list(stages_by_round[0][2])
     source = ColumnDataSource(
         {"factor": [(name, position) for name, position, _ in stages_by_round]}
-        | {stage: [measured[stage]["p50_ms"] for _, _, measured in stages_by_round] for stage in stages}
+        | {
+            stage: [measured[stage]["p50_ms"] for _, _, measured in stages_by_round]
+            for stage in stages
+        }
     )
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
@@ -314,18 +410,39 @@ def search_performance():
         tooltips="$name: @$name ms",
         **WIDTH,
     )
-    chart.vbar_stack(stages, x="factor", width=0.8, color=Category10_10[: len(stages)], legend_label=stages, source=source)
+    chart.vbar_stack(
+        stages,
+        x="factor",
+        width=0.8,
+        color=Category10_10[: len(stages)],
+        legend_label=stages,
+        source=source,
+    )
     current = found["stages"]["rounds"]["current"][0]
     timings = (
-        {"agreement matrix build": current["matrices"]["agreements"], "Population map": current["matrices"]["saliency"]}
-        | {f"whole search, {matches.replace('=', ' ')}": figures for matches, figures in current["searches"].items()}
-        | {f"any-position {name.replace('_', ' ')}": figures for name, figures in current["anywhere"].items()}
+        {
+            "agreement matrix build": current["matrices"]["agreements"],
+            "Population map": current["matrices"]["saliency"],
+        }
+        | {
+            f"whole search, {matches.replace('=', ' ')}": figures
+            for matches, figures in current["searches"].items()
+        }
+        | {
+            f"any-position {name.replace('_', ' ')}": figures
+            for name, figures in current["anywhere"].items()
+        }
     )
-    versions = ", ".join(f"{name} <code>{commit[:7]}</code>" for name, commit in found["commits"].items())
+    versions = ", ".join(
+        f"{name} <code>{commit[:7]}</code>" for name, commit in found["commits"].items()
+    )
     return column(
         heading(found, f"versions: {versions}", cpus(found["stages"])),
         chart,
         Div(text="Current commit, from a running server:", **WIDTH),
-        table([{"timing": name} | figures for name, figures in timings.items()], ("timing", "p50_ms", "p95_ms", "runs")),
+        table(
+            [{"timing": name} | figures for name, figures in timings.items()],
+            ("timing", "p50_ms", "p95_ms", "runs"),
+        ),
         **WIDTH,
     )
