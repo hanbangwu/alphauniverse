@@ -10,7 +10,6 @@ from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
 
-from app.alignment import pairs
 from app.config import (
     DATASET_REVISION,
     GRAM_NAMES,
@@ -22,6 +21,7 @@ from app.config import (
     galaxy_count,
 )
 from app.observations import column_values
+from app.parametric_umap import scan
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -87,8 +87,7 @@ def measure() -> dict[str, Any]:
         role: {name: scaled(f"{role}_embedding", name) for name in GRAM_NAMES}
         for role in ("token", "template")
     }
-    _, aion, _ = pairs()
-    aion = aion.cpu().numpy()
+    aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     report = {}
     for target, column in values.items():
         kept = np.isfinite(column)

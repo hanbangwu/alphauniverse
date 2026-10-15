@@ -10,11 +10,11 @@ import torch
 from tqdm import tqdm
 
 from app import (
-    alignment,
     embeddings,
     encode,
     grams,
     observed_grams,
+    parametric_umap,
     pql,
     predictions,
     templates,
@@ -29,6 +29,7 @@ from app.config import (
     TOKEN_GRAMS,
     artifact,
     device,
+    galaxy_count,
 )
 from app.search import tokens
 from modal_app import CACHE_PATH, build_image, cache_volume
@@ -189,8 +190,8 @@ def measure() -> dict[str, Any]:
         tests[test], means[test] = encoded(galaxies[test], kept)
     rows = {"token": token_rows(tests), "template": template_rows(tests)}
     stored = {role: embedded(f"{role}_embedding") for role in rows}
-    _, aion, _ = alignment.pairs()
-    aion = torch.nn.functional.normalize(aion, dim=1)
+    gallery = parametric_umap.scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
+    aion = torch.nn.functional.normalize(torch.from_numpy(gallery).to(device()), dim=1)
     report = {}
     for test in tests:
         sources = torch.from_numpy(galaxies[test]).to(device())
