@@ -43,6 +43,8 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
 
 A failed job leaves its artifacts incomplete; rerun it.
 
+These commands write to the volume production serves from. To build into the ``dev`` Modal environment instead, which has its own app, volume and secrets, add ``--env dev`` after ``modal run``.
+
 Update the API schema
 ---------------------
 
