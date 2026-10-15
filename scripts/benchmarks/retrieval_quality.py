@@ -23,7 +23,6 @@ from app.config import (
     DATASET_REVISION,
     GRAM_NAMES,
     SEED,
-    SPECTRUM_SURVEYS,
     STORE_COLUMNS,
     TOKEN_EMBEDDING_RANK,
     TOKEN_GRAMS,
@@ -69,18 +68,15 @@ def chosen(required: tuple[str, ...]) -> np.ndarray:
 def encoded(
     galaxies: np.ndarray, kept: tuple[str, ...]
 ) -> tuple[pa.Table, torch.Tensor]:
-    with np.load(artifact("probability_basis")) as stored:
-        fitted = {
-            survey: (stored[f"{survey}_mean"], stored[f"{survey}_directions"])
-            for survey in SPECTRUM_SURVEYS
-        }
     hidden = dict.fromkeys(column for column in STORE_COLUMNS if column not in kept)
     records, means = [], []
     for row in tqdm(tokens().take(galaxies).to_pylist(), desc="encode"):
         context, _, mask, _ = encode.context(predictions.inputs(row | hidden))
         means.append(context[0].float().mean(dim=0))
         predicted = predictions.decode(context, mask, predictions.TARGETS)
-        records.append(predictions.record(row["galaxy"], predicted, fitted))
+        records.append(
+            predictions.record(row["galaxy"], predicted, pql.prediction_basis())
+        )
     return pa.Table.from_batches([pql.prediction_batch(records)]), torch.stack(means)
 
 

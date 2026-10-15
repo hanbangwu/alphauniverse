@@ -73,14 +73,15 @@ def selections(galaxy: int, rng: np.random.Generator) -> dict[str, pql.Query]:
 def hidden(galaxies: np.ndarray) -> pa.RecordBatch:
     from app import encode, predictions
 
-    fitted = {survey: pql.basis()[survey][:2] for survey in SPECTRUM_SURVEYS}
     table = source("tokens").to_table(columns=["galaxy", *TOKEN_SURVEYS])
     records = []
     for row in table.take(galaxies).to_pylist():
         row |= dict.fromkeys((*SPECTRUM_SURVEYS, REDSHIFT))
         encoded, _, mask, _ = encode.context(predictions.inputs(row))
         predicted = predictions.decode(encoded, mask, predictions.TARGETS)
-        records.append(predictions.record(row["galaxy"], predicted, fitted))
+        records.append(
+            predictions.record(row["galaxy"], predicted, pql.prediction_basis())
+        )
     return pql.prediction_batch(records)
 
 
