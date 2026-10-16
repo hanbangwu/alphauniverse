@@ -187,7 +187,7 @@ Are a galaxy's nearest galaxies like it, and does one vector per galaxy show the
 Search speed
 ------------
 
-In a container built like the server, ``search_performance`` times the checked-out commit and, when its code differs, the stored report's fastest version, alternating them so neither always runs first. Every figure is from a running server: the median time of each stage of a search, building a galaxy's agreement matrix and the Population map from it on 4 galaxies, whole searches with 4 image cells at 32, 64 and 128 matches, and an any-position search over 4 image cells with its first and repeated Population map. For whole-mode search it times loading the token embeddings, then searches over all seven modes at 32 matches, at the same place and at any position: the ranking, the maps, the missing-data marks and the whole search.
+In a container built like the server, ``search_performance`` times the checked-out commit and, when its code differs, the stored report's fastest version, alternating them so neither always runs first. Every figure is from a running server: the median time of each stage of a search, building a galaxy's agreement matrix and the Population map from it on 4 galaxies, whole searches with 4 image cells at 32, 64 and 128 matches, and an any-position search over 4 image cells with its first and repeated Population map. For whole-mode search it times loading the 256-component copies of the token embeddings, then searches over all seven modes at 32 matches, at the same place and at any position: the ranking, the maps, the missing-data marks and the whole search.
 
 .. bokeh-plot::
    :source-position: none

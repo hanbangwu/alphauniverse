@@ -36,6 +36,7 @@ from app.config import (
     store_schema,
     store_writer,
 )
+from app.embeddings import generate_token_search
 from app.pql import (
     MATRICES,
     SAMPLES,
@@ -265,6 +266,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
     _predictions(rng, galaxies)
     _token_embeddings(rng, galaxies)
+    generate_token_search()
 
     forget()
     return target

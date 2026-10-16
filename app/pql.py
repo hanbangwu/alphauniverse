@@ -218,11 +218,11 @@ def basis() -> dict[str, tuple[np.ndarray, np.ndarray, np.float32, np.ndarray]]:
 
 @cache
 def stored(name: str) -> dict[str, torch.Tensor]:
-    with np.load(artifact(f"token_embedding_{name}")) as found:
+    with np.load(artifact(f"token_search_{name}")) as found:
         return {
-            part: torch.from_numpy(np.ascontiguousarray(found[part][:, :SEARCH_RANK]))
-            for part in ("queries", "galleries")
-        } | {"offsets": torch.from_numpy(found["offsets"])}
+            part: torch.from_numpy(found[part])
+            for part in ("queries", "galleries", "offsets")
+        }
 
 
 def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:

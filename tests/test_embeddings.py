@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from app import embeddings, grams
-from app.config import GRAM_NAMES, artifact
+from app.config import GRAM_NAMES, SEARCH_RANK, artifact
 
 GALAXIES = 40
 RANK = 5
@@ -44,6 +44,10 @@ def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centred_gra
         np.testing.assert_allclose(
             found["offsets"], gram.mean(axis=0), rtol=1e-5, err_msg=name
         )
+        with np.load(artifact(f"token_search_{name}")) as cut:
+            for part in ("queries", "galleries"):
+                np.testing.assert_array_equal(cut[part], found[part][:, :SEARCH_RANK])
+            np.testing.assert_array_equal(cut["offsets"], found["offsets"])
         np.testing.assert_array_equal(
             found["self_scores"], np.diagonal(gram), err_msg=name
         )

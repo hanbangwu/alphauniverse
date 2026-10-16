@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
+from .config import GRAM_NAMES, SEARCH_RANK, TOKEN_EMBEDDING_RANK, artifact, device
 
 BATCH = 1024
 
@@ -62,3 +62,15 @@ def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> Non
 def generate_token_embeddings() -> None:
     for name in tqdm(GRAM_NAMES, desc="token embeddings"):
         saved(f"token_embedding_{name}", embedding(loaded(f"token_gram_{name}")))
+    generate_token_search()
+
+
+def generate_token_search() -> None:
+    for name in GRAM_NAMES:
+        with np.load(artifact(f"token_embedding_{name}")) as found:
+            np.savez(
+                artifact(f"token_search_{name}"),
+                queries=found["queries"][:, :SEARCH_RANK],
+                galleries=found["galleries"][:, :SEARCH_RANK],
+                offsets=found["offsets"],
+            )
