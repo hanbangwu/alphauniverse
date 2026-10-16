@@ -49,7 +49,7 @@ from app.pql import (
     predictions,
     save_prediction_basis,
 )
-from app.search import source, tokens
+from app.search import source, templates, tokens
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
@@ -218,6 +218,7 @@ def forget() -> None:
         labels,
         source,
         tokens,
+        templates,
         aion_gemma_space,
         predictions,
         basis,

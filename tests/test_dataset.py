@@ -18,6 +18,7 @@ from app.config import (
     TABLE_VALUE_COLUMNS,
 )
 from app.dataset import (
+    colour,
     encode,
     image,
     redshift,
@@ -74,6 +75,20 @@ def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
             0,
             255,
         )
+
+
+def test_colour_maps_bands_by_letter_g_to_blue_and_z_to_red() -> None:
+    half = CROP_PIXELS // 2
+    flux = np.zeros((5, CROP_PIXELS, CROP_PIXELS), dtype=np.float32)
+    flux[0, :, half:] = 1
+    flux[3, :, :half] = 1
+    flux[4] = 1
+
+    with Image.open(BytesIO(colour(flux, ["z", "i", "r", "g", "y"]))) as png:
+        left, right = png.getpixel((0, 0)), png.getpixel((CROP_PIXELS - 1, 0))
+
+    assert left[2] > left[0]
+    assert right[0] > right[2]
 
 
 def test_samples_drop_padding_and_blank_masked_flux() -> None:

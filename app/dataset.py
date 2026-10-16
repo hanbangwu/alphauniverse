@@ -16,11 +16,22 @@ from .config import (
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     RGB_COLUMN,
+    SPECTRUM_GRID,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEYS,
     Catalogue,
     SpectrumSurvey,
 )
+
+RGB_SCALES = {"g": 6.0, "r": 3.4, "i": 3.0, "z": 2.2}
+RGB_WEIGHTS = {
+    "g": (0.0, 0.0, 0.75),
+    "r": (0.0, 0.5, 0.25),
+    "i": (0.25, 0.5, 0.0),
+    "z": (0.75, 0.0, 0.0),
+}
+RGB_SOFTENING = 0.03
+RGB_STRETCH = 20
 
 
 @cache
@@ -45,6 +56,22 @@ def image(galaxy: int) -> bytes:
     return encode(Image().decode_example(cell.as_py()))
 
 
+def colour(flux: np.ndarray, bands: list[str]) -> bytes:
+    mapped = [band for band in bands if band in RGB_SCALES]
+    scales = np.array([RGB_SCALES[band] for band in mapped])[:, None, None]
+    scaled = flux[[bands.index(band) for band in mapped]] * scales + RGB_SOFTENING
+    intensity = np.maximum(scaled, 0).mean(axis=0)
+    stretch = np.divide(
+        np.arcsinh(RGB_STRETCH * intensity) / np.sqrt(RGB_STRETCH),
+        intensity,
+        out=np.zeros_like(intensity),
+        where=intensity > 0,
+    )
+    weights = np.array([RGB_WEIGHTS[band] for band in mapped])
+    rgb = np.einsum("bhw,bc->hwc", np.clip(scaled * stretch, 0, 1), weights)
+    return encode(PIL.Image.fromarray((rgb * 255).astype(np.uint8)))
+
+
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
     wavelength = np.asarray(cell["lambda"].values, dtype=np.float32)
     flux = np.asarray(cell["flux"].values, dtype=np.float32)
@@ -62,6 +89,20 @@ def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
     if not cell.is_valid:
         return None
     return pa.table(samples(cell))
+
+
+def fitted(shape: np.ndarray, galaxy: int, survey: SpectrumSurvey) -> np.ndarray:
+    cell = dataset().data.column(SPECTRUM_SURVEYS[survey])[galaxy]
+    if not cell.is_valid:
+        return shape
+    wavelength, flux, ivar, mask = (
+        np.asarray(cell[field].values) for field in ("lambda", "flux", "ivar", "mask")
+    )
+    unmasked = (wavelength > 0) & ~mask
+    model = np.interp(wavelength[unmasked], SPECTRUM_GRID, shape)
+    weights = ivar[unmasked]
+    amplitude = (weights * flux[unmasked] * model).sum() / (weights * model**2).sum()
+    return amplitude * shape
 
 
 def catalogue(column: str) -> Catalogue | None:
