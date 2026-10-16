@@ -28,6 +28,7 @@
 
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
+  import { similarityQuery } from '$lib/data/queries'
   import { getApp } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
@@ -41,12 +42,19 @@
 
   const mean = createQuery(() => app.meanPoints)
   const full = createQuery(() => app.fullPoints)
+  const search = createQuery(() => similarityQuery(view.searched.value))
 
   const loaded = $derived((view.full ? full.data : mean.data) ?? null)
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
-  const highlighted = $derived(view.galaxy.value === null ? null : [view.galaxy.value])
+  const highlighted = $derived(
+    view.galaxy.value === null
+      ? null
+      : search.data && !search.isPlaceholderData && !view.full
+        ? Array.from(search.data.galaxies)
+        : [view.galaxy.value]
+  )
 </script>
 
 <div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
@@ -70,8 +78,9 @@
         customTooltip={Tooltip}
         onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
-          const galaxy = picked?.at(-1)?.identifier
-          view.select(galaxy === undefined ? null : Number(galaxy))
+          const galaxies = picked?.map((point) => Number(point.identifier)) ?? []
+          if (galaxies.length > 1 && highlighted?.includes(galaxies[galaxies.length - 1])) return
+          view.select(galaxies.at(-1) ?? null)
         }}
       />
     {/key}
