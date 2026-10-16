@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { SPECTRUM_SURVEY } from '$lib/data/spectra'
-  import { OBSERVATIONS } from '$lib/labels'
-  import { getMask } from '$lib/state/app.svelte'
+  import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
+  import { OBSERVATIONS, SURVEYS } from '$lib/labels'
+  import { getApp } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenMap from './image-token-map.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
@@ -16,33 +16,57 @@
   let { galaxy, index }: Props = $props()
 
   const similarity = getSimilarity()
-  const display = getMask()
-  const values = $derived(similarity.imageMapAt(index))
-  const predicted = $derived(similarity.predictedAt(index))
-  const elsewhere = $derived(
-    predicted.filter((column) => column !== SPECTRUM_SURVEY).map((column) => OBSERVATIONS[column])
-  )
+  const { view, mask: display } = getApp()
+
+  const score = $derived(similarity.scoreAt(index))
+  const predicted = $derived(similarity.predictedAt(index).map((column) => OBSERVATIONS[column]))
 </script>
 
 <div class="flex flex-col gap-5 pt-6">
-  <div class="flex flex-col gap-5 md:flex-row md:justify-center md:*:max-w-xs">
-    <GalaxyTile {galaxy} score={similarity.scoreAt(index)} />
-    <ImageTokenMap {values} selected={similarity.imageOutlinesAt(index)} />
-    <ImageTokenMask {values} domain={similarity.imageDomain} control={display.matches} />
-  </div>
-  {#if elsewhere.length}
+  {#if view.open.current.images}
+    <div class="grid max-w-5xl gap-5 md:grid-cols-3">
+      <GalaxyTile {galaxy} {score} />
+      {#each IMAGE_SURVEYS as survey (survey)}
+        {#if similarity.observes(survey, index)}
+          {@const mode = imageMode(survey)}
+          {@const values = similarity.mapAt(mode, index)}
+          <div class="flex flex-col gap-5">
+            <ImageTokenMap
+              {mode}
+              label={SURVEYS[survey].label}
+              {values}
+              selected={similarity.outlinesAt(mode, index)}
+            />
+            <ImageTokenMask
+              {values}
+              domain={similarity.domains?.[mode] ?? null}
+              control={display.matches}
+            />
+          </div>
+        {/if}
+      {/each}
+    </div>
+  {:else}
+    <span class="text-sm font-medium">#{galaxy}: {similarity.score(score)}</span>
+  {/if}
+  {#if predicted.length}
     <p class="text-xs text-muted-foreground">
-      No {elsewhere.join(', ')}: matched on AION's prediction
+      No {predicted.join(', ')}: matched on AION's prediction
     </p>
   {/if}
-  <SpectrumPanel
-    {galaxy}
-    map={similarity.spectrumMapAt(index)}
-    heat={similarity.spectrumHeat}
-    caption={similarity.score}
-    selected={similarity.spectrumOutlinesAt(index)}
-    absent={predicted.includes(SPECTRUM_SURVEY)
-      ? "No DESI spectrum: matched on AION's prediction"
-      : undefined}
-  />
+  {#if view.open.current.spectra}
+    {#each SPECTRUM_SURVEYS as survey (survey)}
+      {#if similarity.observes(survey, index)}
+        {@const mode = spectrumMode(survey)}
+        <SpectrumPanel
+          {galaxy}
+          {survey}
+          map={similarity.mapAt(mode, index)}
+          heat={similarity.heats?.[mode] ?? null}
+          caption={similarity.score}
+          selected={similarity.outlinesAt(mode, index)}
+        />
+      {/if}
+    {/each}
+  {/if}
 </div>

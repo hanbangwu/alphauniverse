@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { ImageSurvey } from '$lib/client'
   import type { RGB } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
@@ -12,6 +13,7 @@
     color: ((value: number) => RGB) | null
     opacity?: (picked: boolean) => number
     galaxy?: number
+    survey?: ImageSurvey
     title?: (value: number, index: number) => string
     describe?: string
     selected?: number[]
@@ -30,6 +32,7 @@
     color,
     opacity,
     galaxy,
+    survey,
     title,
     describe,
     selected,
@@ -72,7 +75,7 @@
           class="pointer-events-none absolute inset-0 mix-blend-screen transition-opacity duration-150 ease-in-out"
           style:opacity={imageOpacity}
         >
-          <GalaxyThumb {galaxy} />
+          <GalaxyThumb {galaxy} {survey} />
         </div>
       {/if}
     </PanelFrame>

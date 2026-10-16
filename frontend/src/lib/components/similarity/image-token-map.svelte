@@ -1,22 +1,25 @@
 <script lang="ts">
+  import type { CosineMode } from '$lib/client'
   import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   interface Props {
+    mode: CosineMode
+    label: string
     values: Float32Array
     selected: number[]
   }
 
-  let { values, selected }: Props = $props()
+  let { mode, label, values, selected }: Props = $props()
 
   const similarity = getSimilarity()
 </script>
 
 <ImageTokenPanel
-  label="Image Tokens"
+  {label}
   {values}
   grid={similarity.grid}
-  color={similarity.imageHeat}
+  color={similarity.heats?.[mode] ?? null}
   title={similarity.score}
   {selected}
 />

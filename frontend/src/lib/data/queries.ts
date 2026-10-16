@@ -12,6 +12,7 @@ import {
 } from '$lib/api'
 import type { CosineMode, ImageSurvey, Projection, SpectrumSurvey } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
+import { byMode } from './modes'
 import { matchMean } from './scores'
 import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
@@ -184,11 +185,17 @@ export function similarityQuery(request: SimilarityQuery | null) {
               request,
               galaxies: table.getChild('galaxy')!.toArray(),
               similarities: table.getChild('similarity')!.toArray(),
-              imageMaps: maps(table, 'ls_image'),
-              spectrumMaps: maps(table, 'desi_spectrum'),
-              imagePositions: positions(table, 'ls_image'),
-              spectrumPositions: positions(table, 'desi_spectrum'),
+              maps: byMode((mode) => maps(table, mode)),
+              positions: byMode((mode) => positions(table, mode)),
               tableValueMap: matchMean(maps(table, 'table_values'), table.numRows),
+              observed: Object.fromEntries(
+                table.schema.fields
+                  .filter((field) => field.name.startsWith('has_'))
+                  .map((field) => [
+                    field.name.slice('has_'.length),
+                    Array.from(table.getChild(field.name)!, Boolean)
+                  ])
+              ),
               predicted: Array.from(
                 table.getChild('predicted')!,
                 (row: Vector<Utf8>) => Array.from(row) as string[]
@@ -210,8 +217,7 @@ export function saliencyQuery(request: SaliencyQuery | null) {
             const { data } = await getSaliency({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
             return {
-              image: maps(table, 'ls_image'),
-              spectrum: maps(table, 'desi_spectrum'),
+              maps: byMode((mode) => maps(table, mode)),
               tableValues: maps(table, 'table_values')
             }
           },

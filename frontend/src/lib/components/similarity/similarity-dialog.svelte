@@ -31,12 +31,12 @@
     class="z-100 max-h-11/12 w-full overflow-y-auto sm:max-w-[90vw]"
   >
     <Dialog.Header>
-      <Dialog.Title>Search</Dialog.Title>
+      <Dialog.Title>Search from #{galaxy}</Dialog.Title>
     </Dialog.Header>
 
-    <SimilaritySelf />
-
     <SearchForm />
+
+    <SimilaritySelf />
 
     {#if similarity.searched}
       <Separator />

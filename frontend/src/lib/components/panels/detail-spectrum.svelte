@@ -1,34 +1,29 @@
 <script lang="ts">
+  import type { SpectrumSurvey } from '$lib/client'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
-  import { coverageQuery, spectrumQuery } from '$lib/data/queries'
-  import { SPECTRUM_SURVEY, hasSpectrum } from '$lib/data/spectra'
+  import { spectrumQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
     galaxy: number
+    survey: SpectrumSurvey
   }
 
-  let { galaxy }: Props = $props()
+  let { galaxy, survey }: Props = $props()
 
-  const coverage = createQuery(() => coverageQuery(galaxy))
-  const matched = $derived(coverage.data ? hasSpectrum(coverage.data) : false)
-  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, SPECTRUM_SURVEY))
+  const spectrum = createQuery(() => spectrumQuery(galaxy, survey))
 </script>
 
-<PanelFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">
-  {#if matched && spectrum.data}
+<PanelFrame busy={spectrum.isFetching} class="aspect-2/1 bg-card">
+  {#if spectrum.data}
     <SpectrumChart
       spectrum={spectrum.data}
-      label={`${SURVEYS[SPECTRUM_SURVEY].label} spectrum of galaxy ${galaxy}`}
+      label={`${SURVEYS[survey].label} spectrum of galaxy ${galaxy}`}
       class="absolute inset-0"
     />
-  {:else if coverage.data && !matched}
-    <p class="absolute inset-0 grid place-content-center text-xs text-muted-foreground">
-      No spectrum
-    </p>
   {/if}
 </PanelFrame>
 
