@@ -28,7 +28,9 @@ def heading(found, *details):
 
 
 def table(rows, names, height=None):
-    source = ColumnDataSource({name: [row[name] for row in rows] for name in names})
+    source = ColumnDataSource(
+        {name: [row.get(name, "") for row in rows] for name in names}
+    )
     columns = [TableColumn(field=name, title=name) for name in names]
     return DataTable(
         source=source,
@@ -409,19 +411,19 @@ def probe_quality():
     found = report("probe_quality")
     if found is None:
         return missing()
-    rows, curves = [], []
+    rows, curves, modes = [], [], []
     for target, measured in found["probes"].items():
         features = {"AION": measured["aion"]} | {
-            f"{role} {blocks}": probes
+            f"{role} {kind}": probes
             for role in ("token", "template")
-            for blocks, probes in measured[role].items()
+            for kind, probes in measured[role].items()
         }
         curve = figure(
             x_axis_type="log",
             x_axis_label="galaxies fitted",
             y_axis_label="R²",
             height=300,
-            title=f"{target}: ridge R² on a held-out fifth, mean of {found['draws']} draws",
+            title=f"{target}: ridge R² on a held-out fifth, mean and standard deviation of {found['draws']} draws",
             **WIDTH,
         )
         for (name, probes), colour in zip(features.items(), Category10_10):
@@ -431,25 +433,57 @@ def probe_quality():
                     f"{probe} r2": metrics["r2"],
                     f"{probe} rms": metrics["rms"],
                 } | {
-                    f"{probe} r2, {count} fitted": value
-                    for count, value in metrics["shots"].items()
+                    f"{probe} r2, {count} fitted": f"{shot['r2']} ± {shot['sd']}"
+                    for count, shot in metrics["shots"].items()
                 }
             rows.append(row)
             shots = probes["ridge"]["shots"]
+            spread = ColumnDataSource(
+                {
+                    "count": [int(count) for count in shots],
+                    "r2": [shot["r2"] for shot in shots.values()],
+                    "lower": [shot["r2"] - shot["sd"] for shot in shots.values()],
+                    "upper": [shot["r2"] + shot["sd"] for shot in shots.values()],
+                }
+            )
             curve.line(
-                [int(count) for count in shots],
-                list(shots.values()),
+                "count",
+                "r2",
+                source=spread,
                 legend_label=name,
                 color=colour,
                 line_width=2,
             )
+            curve.add_layout(
+                Whisker(
+                    base="count",
+                    lower="lower",
+                    upper="upper",
+                    source=spread,
+                    line_color=colour,
+                )
+            )
         curve.legend.location = "bottom_right"
         curves.append(curve)
+        modes.extend(
+            {
+                "target": target,
+                "features": role,
+                "mode": name,
+                "stacked weight": fitted["weight"],
+            }
+            | {
+                f"ridge r2, {count} fitted": f"{shot['r2']} ± {shot['sd']}"
+                for count, shot in fitted["shots"].items()
+            }
+            for role, fits in measured["modes"].items()
+            for name, fitted in fits.items()
+        )
     source = ColumnDataSource(
         {
             "factor": [(row["target"], row["features"]) for row in rows],
             "ridge": [row["ridge r2"] for row in rows],
-            "knn": [row["knn r2"] for row in rows],
+            "knn": [row.get("knn r2") for row in rows],
         }
     )
     chart = figure(
@@ -467,12 +501,14 @@ def probe_quality():
             found,
             f"{found['rank']} components per mode",
             f"joint: the first {found['joint']} principal components of all modes' components",
+            "stacked: ridge on each mode, weighted by a non-negative fit to their cross-validated predictions",
             f"{found['folds']}-fold cross-validation",
             cpus(found),
         ),
         chart,
         *curves,
         table(rows, list(rows[0])),
+        table(modes, list(modes[0]), height=600),
         **WIDTH,
     )
 

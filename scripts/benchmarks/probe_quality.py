@@ -5,11 +5,14 @@ from typing import Any
 
 import modal
 import numpy as np
+from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
-from sklearn.linear_model import RidgeCV
+from sklearn.ensemble import StackingRegressor
+from sklearn.linear_model import LinearRegression, RidgeCV
 from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import make_pipeline
 
 from app.config import (
     DATASET_REVISION,
@@ -35,8 +38,9 @@ JOINT = 768
 NEIGHBOURS = 10
 ALPHAS = np.logspace(-3, 4, 15)
 FOLDS = KFold(shuffle=True, random_state=SEED)
+PROBES = {"ridge": RidgeCV(alphas=ALPHAS), "knn": KNeighborsRegressor(NEIGHBOURS)}
 SHOTS = (32, 128, 512)
-DRAWS = 5
+DRAWS = 20
 TARGETS = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", REDSHIFT: "Z_HP"}
 BLOCKS = {
     "all": GRAM_NAMES,
@@ -64,26 +68,57 @@ def scaled(role: str, name: str) -> np.ndarray:
     return centred / np.sqrt((centred**2).sum(axis=1).mean())
 
 
-def shots(model: Any, features: np.ndarray, values: np.ndarray) -> dict[str, float]:
+def shots(
+    model: Any, features: np.ndarray, values: np.ndarray
+) -> dict[str, dict[str, float]]:
     rng = np.random.default_rng(SEED)
     test, pool = np.split(rng.permutation(len(values)), [len(values) // 5])
     found = {}
     for count in SHOTS:
-        fits = []
+        fits, alphas = [], []
         for _ in range(DRAWS):
             train = rng.choice(pool, count, replace=False)
             fitted = model.fit(features[train], values[train])
             fits.append(r2_score(values[test], fitted.predict(features[test])))
-        found[str(count)] = round(float(np.mean(fits)), 4)
+            if isinstance(fitted, RidgeCV):
+                alphas.append(fitted.alpha_)
+        found[str(count)] = {
+            "r2": round(float(np.mean(fits)), 4),
+            "sd": round(float(np.std(fits, ddof=1)), 4),
+        }
+        if alphas:
+            found[str(count)] |= {
+                "alpha": float(np.median(alphas)),
+                "alpha_at_edge": round(
+                    float(np.isin(alphas, ALPHAS[[0, -1]]).mean()), 4
+                ),
+            }
     return found
 
 
-def scores(features: np.ndarray, values: np.ndarray) -> dict[str, dict[str, Any]]:
+def stacked(widths: dict[str, int]) -> StackingRegressor:
+    edges = np.cumsum([0, *widths.values()])
+    return StackingRegressor(
+        [
+            (
+                name,
+                make_pipeline(
+                    ColumnTransformer([(name, "passthrough", np.arange(start, end))]),
+                    RidgeCV(alphas=ALPHAS),
+                ),
+            )
+            for name, start, end in zip(widths, edges[:-1], edges[1:], strict=True)
+        ],
+        final_estimator=LinearRegression(positive=True),
+        cv=FOLDS,
+    )
+
+
+def scores(
+    features: np.ndarray, values: np.ndarray, models: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
     found = {}
-    for label, model in (
-        ("ridge", RidgeCV(alphas=ALPHAS)),
-        ("knn", KNeighborsRegressor(NEIGHBOURS)),
-    ):
+    for label, model in models.items():
         predicted = cross_val_predict(model, features, values, cv=FOLDS)
         found[label] = {
             "r2": round(float(r2_score(values, predicted)), 4),
@@ -112,7 +147,8 @@ def measure() -> dict[str, Any]:
         kept = np.isfinite(column)
         report[target] = {
             "galaxies": int(kept.sum()),
-            "aion": scores(aion[kept], column[kept]),
+            "aion": scores(aion[kept], column[kept], PROBES),
+            "modes": {},
         }
         for role, blocks in families.items():
             features = {
@@ -125,8 +161,24 @@ def measure() -> dict[str, Any]:
                 features["all"]
             )
             report[target][role] = {
-                label: scores(matrix[kept], column[kept])
+                label: scores(matrix[kept], column[kept], PROBES)
                 for label, matrix in features.items()
+            }
+            widths = {
+                name: block.shape[1] for name, block in blocks.items() if name != target
+            }
+            report[target][role]["stacked"] = scores(
+                features["all"][kept], column[kept], {"ridge": stacked(widths)}
+            )
+            fitted = stacked(widths).fit(features["all"][kept], column[kept])
+            report[target]["modes"][role] = {
+                name: {
+                    "weight": round(float(weight), 4),
+                    "shots": shots(PROBES["ridge"], blocks[name][kept], column[kept]),
+                }
+                for name, weight in zip(
+                    widths, fitted.final_estimator_.coef_, strict=True
+                )
             }
     return {
         "environment": environment(),
