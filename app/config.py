@@ -38,10 +38,12 @@ GRID = 24
 N_IMAGE_TOKENS = GRID**2
 
 SPECTRUM_ORIGIN = 3500.0
+SPECTRUM_PIXEL = 0.8
+SPECTRUM_GRID = SPECTRUM_ORIGIN + SPECTRUM_PIXEL * np.arange(8704)
 SPECTRUM_SMOOTHING_SIGMA = 2
 SPECTRUM_SURVEY: SpectrumSurvey = "desi"
-SPECTRUM_TOKEN_WIDTH = 32 * 0.8
-N_SPECTRUM_TOKENS = 8704 // 32
+SPECTRUM_TOKEN_WIDTH = 32 * SPECTRUM_PIXEL
+N_SPECTRUM_TOKENS = len(SPECTRUM_GRID) // 32
 
 ANCHOR = "ls"
 LS = "-mmu_legacysurvey_dr10_south_21"
@@ -192,9 +194,10 @@ OBSERVATIONS = {
     REDSHIFT: "usable redshift",
 }
 
+MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
 TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
-    for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+    for mode in MODES
 }
 
 ARTIFACTS: dict[str, str] = {
@@ -210,6 +213,7 @@ ARTIFACTS: dict[str, str] = {
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for names in TOKEN_GRAMS.values() for name in names},
+    **{f"template_{mode}": "npy" for mode in MODES},
 }
 
 PREDICTIONS = pa.schema(
