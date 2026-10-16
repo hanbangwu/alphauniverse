@@ -74,7 +74,7 @@ def test_a_galaxy_s_own_row_gives_its_stored_query_vector() -> None:
     )
 
 
-def test_the_joint_embedding_is_the_principal_components_of_the_scaled_blocks(
+def test_the_joint_embedding_is_every_block_scaled_side_by_side(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rng = np.random.default_rng(3)
@@ -83,7 +83,6 @@ def test_the_joint_embedding_is_the_principal_components_of_the_scaled_blocks(
         for index, name in enumerate(GRAM_NAMES)
     }
     monkeypatch.setattr(embeddings, "galleries", blocks.__getitem__)
-    monkeypatch.setattr(embeddings, "DIM", 3)
 
     embeddings.generate_joint_embedding()
 
@@ -91,10 +90,6 @@ def test_the_joint_embedding_is_the_principal_components_of_the_scaled_blocks(
     for block in blocks.values():
         centred = block - block.mean(axis=0)
         scaled.append(centred / np.sqrt((centred**2).sum(axis=1).mean()))
-    joined = np.concatenate(scaled, axis=1)
-    left, values, _ = np.linalg.svd(joined - joined.mean(axis=0), full_matrices=False)
     np.testing.assert_allclose(
-        np.abs(np.load(artifact("joint_embedding"))),
-        np.abs(left[:, :3] * values[:3]),
-        atol=1e-9,
+        np.load(artifact("joint_embedding")), np.concatenate(scaled, axis=1)
     )

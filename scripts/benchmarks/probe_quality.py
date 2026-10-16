@@ -16,7 +16,6 @@ from sklearn.pipeline import make_pipeline
 from app import embeddings
 from app.config import (
     DATASET_REVISION,
-    DIM,
     GRAM_NAMES,
     PROVABGS,
     REDSHIFT,
@@ -39,12 +38,18 @@ NEIGHBOURS = 10
 PROBES = {"ridge": RidgeCV(alphas=ALPHAS), "knn": KNeighborsRegressor(NEIGHBOURS)}
 SHOTS = (32, 128, 512)
 DRAWS = 20
+WIDTHS = (1408, 704, 352)
 BLOCKS = {
     "all": GRAM_NAMES,
     "without_spectra": tuple(
         name for name in GRAM_NAMES if not name.startswith(tuple(SPECTRUM_MODES))
     ),
 }
+
+
+def principal(matrix: np.ndarray) -> np.ndarray:
+    left, values, _ = np.linalg.svd(matrix - matrix.mean(axis=0), full_matrices=False)
+    return left[:, : max(WIDTHS)] * values[: max(WIDTHS)]
 
 
 def targets() -> dict[str, np.ndarray]:
@@ -116,7 +121,7 @@ def scores(
     image=image,
     cpu=8,
     memory=(8 * 1024, 32 * 1024),
-    timeout=30 * 60,
+    timeout=45 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def measure() -> dict[str, Any]:
@@ -129,7 +134,7 @@ def measure() -> dict[str, Any]:
         for role in ("token", "template")
     }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
-    report = {}
+    report, reduced = {}, {}
     for target, column in values.items():
         kept = np.isfinite(column)
         report[target] = {
@@ -144,7 +149,12 @@ def measure() -> dict[str, Any]:
                 )
                 for label, names in BLOCKS.items()
             }
-            features["joint"] = embeddings.joint(features["all"])
+            excluded = (role, target in blocks)
+            if excluded not in reduced:
+                reduced[excluded] = principal(features["all"])
+            features |= {
+                f"pca_{width}": reduced[excluded][:, :width] for width in WIDTHS
+            }
             report[target][role] = {
                 label: scores(matrix[kept], column[kept], PROBES)
                 for label, matrix in features.items()
@@ -168,7 +178,7 @@ def measure() -> dict[str, Any]:
     return {
         "environment": environment(),
         "rank": SEARCH_RANK,
-        "joint": DIM,
+        "widths": WIDTHS,
         "folds": FOLDS.n_splits,
         "neighbours": NEIGHBOURS,
         "draws": DRAWS,

@@ -451,7 +451,7 @@ def probe_quality():
             title=f"{target}: ridge R² on a held-out fifth, mean and standard deviation of {found['draws']} draws",
             **WIDTH,
         )
-        for (name, probes), colour in zip(features.items(), Category10_10):
+        for (name, probes), colour in zip(features.items(), Category20_20):
             row = {"target": target, "features": name, "galaxies": measured["galaxies"]}
             for probe, metrics in probes.items():
                 row |= {
@@ -519,7 +519,7 @@ def probe_quality():
         heading(
             found,
             f"{found['rank']} components per mode",
-            f"joint: the first {found['joint']} principal components of all modes' components",
+            f"pca_n: the first n principal components of all modes' components, n = {', '.join(map(str, found['widths']))}",
             "stacked: ridge on each mode, weighted by a non-negative fit to their cross-validated predictions",
             f"{found['folds']}-fold cross-validation",
             cpus(found),
@@ -590,7 +590,7 @@ def neighbour_quality():
         heading(
             found,
             f"{found['rank']} components per mode",
-            f"joint: the first {found['joint']} principal components",
+            f"joint: all modes' components side by side; token_n: the token one's first n principal components, n = {', '.join(map(str, found['widths']))}",
             f"{found['physics']['galaxies']:,} PROVABGS galaxies for the physics",
             f"{geometry['queries']:,} queries for the geometry, where chance shares {geometry['random']}",
             cpus(found),

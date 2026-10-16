@@ -100,8 +100,8 @@ def generate_token_embeddings() -> None:
 
 @app.function(
     image=build_image,
-    cpu=8,
-    memory=(4 * 1024, 16 * 1024),
+    cpu=2,
+    memory=(2 * 1024, 8 * 1024),
     timeout=20 * 60,
     volumes={CACHE_PATH: cache_volume},
 )

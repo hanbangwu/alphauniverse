@@ -2,15 +2,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .config import (
-    DIM,
-    GRAM_NAMES,
-    SEARCH_RANK,
-    SEED,
-    TOKEN_EMBEDDING_RANK,
-    artifact,
-    device,
-)
+from .config import GRAM_NAMES, SEARCH_RANK, TOKEN_EMBEDDING_RANK, artifact, device
 
 BATCH = 1024
 
@@ -82,14 +74,11 @@ def scaled(block: np.ndarray) -> np.ndarray:
     return centred / np.sqrt((centred**2).sum(axis=1).mean())
 
 
-def joint(blocks: np.ndarray) -> np.ndarray:
-    from sklearn.decomposition import PCA
-
-    return PCA(DIM, random_state=SEED).fit_transform(blocks)
-
-
 def generate_joint_embedding() -> None:
-    blocks = np.concatenate(
-        [scaled(galleries(f"token_embedding_{name}")) for name in GRAM_NAMES], axis=1
+    np.save(
+        artifact("joint_embedding"),
+        np.concatenate(
+            [scaled(galleries(f"token_embedding_{name}")) for name in GRAM_NAMES],
+            axis=1,
+        ),
     )
-    np.save(artifact("joint_embedding"), joint(blocks))

@@ -14,7 +14,6 @@ from umap import UMAP
 from app import embeddings
 from app.config import (
     DATASET_REVISION,
-    DIM,
     GRAM_NAMES,
     REDSHIFT,
     SEARCH_RANK,
@@ -26,7 +25,7 @@ from app.parametric_umap import scan
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks import projection_quality
 from scripts.benchmarks.common import COMBINED, environment, git, memory, standardised
-from scripts.benchmarks.probe_quality import targets
+from scripts.benchmarks.probe_quality import WIDTHS, principal, targets
 
 app = modal.App("alphauniverse-neighbour-quality")
 image = build_image.add_local_python_source("modal_app")
@@ -61,7 +60,7 @@ def joint(blocks: dict[str, dict[str, torch.Tensor]]) -> torch.Tensor:
     scaled = [
         embeddings.scaled(block["galleries"].numpy()) for block in blocks.values()
     ]
-    return torch.from_numpy(embeddings.joint(np.concatenate(scaled, axis=1)))
+    return torch.from_numpy(np.concatenate(scaled, axis=1))
 
 
 def searched(
@@ -108,8 +107,9 @@ def physics(
         for combination, names in COMBINATIONS.items():
             scores = searched(subset, names, own)
             rankings[f"{role}_{combination}"] = top(scores, own, NEIGHBOURS).indices
-        found = joints[role][labelled]
-        rankings[f"{role}_joint"] = top(
+    for name, joint_vectors in joints.items():
+        found = joint_vectors[labelled]
+        rankings[f"{name}_joint"] = top(
             -torch.cdist(found, found), own, NEIGHBOURS
         ).indices
     unit = torch.nn.functional.normalize(
@@ -163,19 +163,25 @@ def geometry(
                     -torch.cdist(galleries[chosen], galleries), chosen, NEIGHBOURS
                 ).indices,
             )
-        nearest = top(
-            -torch.cdist(joints[role][chosen], joints[role]), chosen, NEIGHBOURS
-        ).indices
+        combined = {
+            combination: top(
+                sum(searches[name] for name in names), chosen, NEIGHBOURS
+            ).indices
+            for combination, names in COMBINED.items()
+        }
+        nearest = {
+            name: top(
+                -torch.cdist(joint_vectors[chosen], joint_vectors), chosen, NEIGHBOURS
+            ).indices
+            for name, joint_vectors in joints.items()
+            if name.startswith(role)
+        }
         found[role] = {
             "blocks": overlaps,
             "joint": {
-                combination: overlap(
-                    top(
-                        sum(searches[name] for name in names), chosen, NEIGHBOURS
-                    ).indices,
-                    nearest,
-                )
-                for combination, names in COMBINED.items()
+                f"{name} {combination}": overlap(indices, nearest[name])
+                for name in nearest
+                for combination, indices in combined.items()
             },
         }
     return {
@@ -229,10 +235,12 @@ def maps(
     stored = pq.read_table(artifact("mean_points"), columns=["x", "y"])
     projected = {
         "token_search": search_map(searches["token"], joints["token"].numpy()),
-        "token_joint": UMAP(random_state=SEED).fit_transform(joints["token"].numpy()),
-        "template_joint": UMAP(random_state=SEED).fit_transform(
-            joints["template"].numpy()
-        ),
+        **{
+            f"{name}_joint": UMAP(random_state=SEED).fit_transform(
+                joint_vectors.numpy()
+            )
+            for name, joint_vectors in joints.items()
+        },
         "site": np.column_stack([stored["x"].to_numpy(), stored["y"].to_numpy()]),
     }
     found = {}
@@ -258,15 +266,20 @@ def maps(
 )
 def measure() -> dict[str, Any]:
     families = {role: vectors(role) for role in ROLES}
+    token = np.load(artifact("joint_embedding"))
+    reduced = principal(token)
     joints = {
-        "token": torch.from_numpy(np.load(artifact("joint_embedding"))),
+        "token": torch.from_numpy(token),
         "template": joint(families["template"]),
+    } | {
+        f"token_{width}": torch.from_numpy(reduced[:, :width].copy())
+        for width in WIDTHS
     }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     return {
         "environment": environment(),
         "rank": SEARCH_RANK,
-        "joint": DIM,
+        "widths": WIDTHS,
         "neighbours": NEIGHBOURS,
         "preserved": projection_quality.NEIGHBOURS,
         "physics": physics(families, joints, aion),
