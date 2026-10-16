@@ -23,7 +23,7 @@ AION also reads the HSC image and the SDSS spectrum, but the site shows neither,
 Search by similarity
 --------------------
 
-Start a search from the selected galaxy and pick what to compare: cells of its image, windows of its spectrum, catalogue values, or any mix. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
+Start a search from the selected galaxy and pick what to compare: cells of its image, windows of its spectrum, catalogue values, or any mix. Click a cell or a window to select or deselect it, or drag across several: the drag selects every one it passes over, or deselects them if it starts on a selected one. On the spectrum, scroll to zoom and Shift-drag to pan. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
 
 - **Same place** or **Any position**, chosen separately for the image and the spectrum;
 - for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and a map of where it agrees with the query;
