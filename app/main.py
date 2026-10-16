@@ -485,8 +485,11 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     "mode's scores, at any position for a mode named in anywhere, are standardised "
     "over all galaxies, and a galaxy's score is their mean. The query galaxy comes "
     "first. A selected mode's contribution is its standardised score over the "
-    "number of modes, so the contributions sum to the score. The maps, has_ flags "
-    "and predicted are as /search's, with the maps at the same place.",
+    "number of modes, so the contributions sum to the score; an unselected mode's "
+    "is null. Each mode's map holds, at every slot, the galaxy's overlap with the "
+    "query galaxy at the same place over the query galaxy's highest probability "
+    "there. A flag per observation says whether the galaxy has it, and predicted "
+    "lists the selected modes' observations it lacks.",
 )
 def get_mode_search(query: Annotated[embeddings.ModeQuery, Query()]) -> Response:
     results = embeddings.mode_search(query)

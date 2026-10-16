@@ -61,3 +61,8 @@ By default a selected image cell is compared with the same cell of the other gal
    \log O_s^{\text{any}}(q, g) = \max_{s'} \log \sum_t p_{q,s}(t)\, p_{g,s'}(t).
 
 This is the maximum-similarity matching of ColBERT :cite:p:`khattab2020colbert`. It finds a feature wherever it sits, at the cost of the selection's layout: each selected slot finds its best match on its own, so two selected emission lines can match at two different redshifts. The match's map then shows, at each slot, the best fraction any selected slot reaches there, and outlines where each selected slot found its best match.
+
+Whole modes
+-----------
+
+With every slot of a mode selected, :math:`T_m` is close to a row of the mode's :term:`Gram matrix`, which reads the other galaxies' predictions as search reads the query's (:doc:`/reference`). A :term:`whole-mode search` ranks from the mode's :term:`token embedding` instead: :math:`q`'s query vector times every galaxy's gallery vector, both cut to their first 256 components, plus the offsets, gives that row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardised over all galaxies and averaged as above; the constant cancels. A match shows each mode's standardised score divided by :math:`M`, its contribution, so the contributions sum to the score, and the same-place map above at every slot.
