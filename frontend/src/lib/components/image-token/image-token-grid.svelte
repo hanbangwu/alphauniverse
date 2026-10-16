@@ -114,7 +114,8 @@
     if (!step || event.altKey || event.ctrlKey || event.metaKey) return
     event.preventDefault()
     if (cursor === null) {
-      point(0)
+      const middle = Math.floor(grid / 2)
+      point(middle * grid + middle)
       return
     }
     const [column, row] = cells[cursor]
