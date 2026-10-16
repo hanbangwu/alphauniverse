@@ -44,6 +44,8 @@
 
   const loaded = $derived((view.full ? full.data : mean.data) ?? null)
 
+  let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
+
   const highlighted = $derived(view.galaxy.value === null ? null : [view.galaxy.value])
 </script>
 
@@ -59,12 +61,14 @@
         categoryColors={app.swatches}
         identifier="galaxy"
         filter={mosaic.filter}
+        {tooltip}
         selection={highlighted}
         {width}
         {height}
         config={{ colorScheme: mode.current, autoLabelEnabled: false }}
         theme={{ statusBar: false }}
         customTooltip={Tooltip}
+        onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
           const galaxy = picked?.at(-1)?.identifier
           view.select(galaxy === undefined ? null : Number(galaxy))
