@@ -48,6 +48,7 @@
   const interactive = $derived(Boolean(ontoggle))
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
+  const chosen = $derived(new Set(selected))
 
   function cell(
     params: CustomSeriesRenderItemParams,
@@ -59,7 +60,7 @@
     return {
       type: 'rect',
       shape: { x, y, width, height },
-      style: { fill: `rgba(${r}, ${g}, ${b}, ${opacity(selected.includes(params.dataIndex))})` },
+      style: { fill: `rgba(${r}, ${g}, ${b}, ${opacity(chosen.has(params.dataIndex))})` },
       transition: 'style',
       emphasis: { style: { stroke: '#fff', lineWidth: 1 } }
     }

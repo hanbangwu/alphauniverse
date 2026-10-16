@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type RGB, SELECTED } from '$lib/color'
+  import { OUTLINE, type RGB } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
@@ -89,18 +89,21 @@
           <GalaxyThumb {galaxy} />
         </div>
       {/if}
-      {#if outline}
-        <svg
-          viewBox="0 0 {grid} {grid}"
-          class="pointer-events-none absolute inset-0 size-full"
-          fill="none"
-          stroke-linecap="square"
-          aria-hidden="true"
-        >
-          <path d={outline} stroke="black" stroke-width="4" vector-effect="non-scaling-stroke" />
-          <path d={outline} stroke={SELECTED} stroke-width="2" vector-effect="non-scaling-stroke" />
-        </svg>
-      {/if}
+      <svg
+        viewBox="0 0 {grid} {grid}"
+        class="pointer-events-none absolute inset-0 size-full"
+        stroke-linecap="square"
+        aria-hidden="true"
+      >
+        {#each OUTLINE as { color, width } (color)}
+          <path
+            d={outline}
+            stroke={color}
+            stroke-width={width}
+            vector-effect="non-scaling-stroke"
+          />
+        {/each}
+      </svg>
     </PanelFrame>
   </div>
 
