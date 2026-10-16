@@ -14,12 +14,14 @@ from app.config import (
     LS,
     REDSHIFT_COLUMNS,
     RGB_COLUMN,
+    SPECTRUM_GRID,
     SPECTRUM_SURVEYS,
     TABLE_VALUE_COLUMNS,
 )
 from app.dataset import (
     colour,
     encode,
+    fitted,
     image,
     redshift,
     samples,
@@ -109,6 +111,33 @@ def test_samples_drop_padding_and_blank_masked_flux() -> None:
 
 def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
     assert image(1) == encode(SOURCE)
+
+
+def test_fitted_amplitude_weights_unmasked_samples_by_inverse_variance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    shape = np.linspace(1.0, 2.0, len(SPECTRUM_GRID))
+    at = 2000
+    cell = {
+        "lambda": [0.0, SPECTRUM_GRID[at], SPECTRUM_GRID[at], 6000.0, 7000.0],
+        "flux": [1e6, 2 * shape[at], 6 * shape[at], 1e6, 1e6],
+        "ivar": [1.0, 3.0, 1.0, 0.0, 1.0],
+        "mask": [False, False, False, False, True],
+    }
+    rows = Dataset.from_dict(
+        {SPECTRUM_SURVEYS["desi"]: [cell]},
+        features=Features(
+            {
+                SPECTRUM_SURVEYS["desi"]: {
+                    name: Sequence(Value("bool" if name == "mask" else "float32"))
+                    for name in cell
+                }
+            }
+        ),
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+
+    np.testing.assert_allclose(fitted(shape, 0, "desi"), 3 * shape, rtol=1e-6)
 
 
 def test_unmatched_survey_has_no_spectrum(stored: None) -> None:
