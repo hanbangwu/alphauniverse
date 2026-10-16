@@ -1,4 +1,3 @@
-import type { CosineMode } from '$lib/client'
 import { byMode } from '$lib/data/modes'
 import { POINT_SETS, type PointSet } from '$lib/labels'
 import { Field } from './field.svelte'
@@ -29,10 +28,6 @@ export class ViewState {
 
   get table(): string {
     return this.full ? 'full_points' : 'mean_points'
-  }
-
-  get selections(): Record<CosineMode, number[]> {
-    return byMode((mode) => this.tokens[mode].value)
   }
 
   select(galaxy: number | null): void {

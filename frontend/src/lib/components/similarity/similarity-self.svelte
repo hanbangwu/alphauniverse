@@ -1,24 +1,27 @@
 <script lang="ts">
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
+  import Observed from '$lib/components/common/observed.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Switch } from '$lib/components/ui/switch'
-  import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
-  import { coverageQuery } from '$lib/data/queries'
-  import { SURVEYS } from '$lib/labels'
+  import {
+    IMAGE_MODES,
+    IMAGE_SURVEYS,
+    SPECTRUM_MODES,
+    SPECTRUM_SURVEYS,
+    spectrumMode
+  } from '$lib/data/modes'
   import { getApp } from '$lib/state/app.svelte'
   import type { Field } from '$lib/state/field.svelte'
   import type { IndexListField } from '$lib/state/fields.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
+  import MaskControls from './mask-controls.svelte'
   import QueryImage from './query-image.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
   import TablePanel from './table-panel.svelte'
-  import { createQuery } from '@tanstack/svelte-query'
 
   const similarity = getSimilarity()
-  const { view } = getApp()
-
-  const coverage = createQuery(() => coverageQuery(similarity.galaxy))
+  const { view, mask: display } = getApp()
 </script>
 
 {#snippet controls(fields: IndexListField[], anywhere?: Field<boolean>)}
@@ -31,63 +34,57 @@
   {/if}
   {#if anywhere}
     <label class="ml-auto flex items-center gap-2 text-xs">
-      <Switch
-        size="sm"
-        checked={anywhere.value}
-        onCheckedChange={(checked) => (anywhere.value = checked)}
-      />
+      <Switch size="sm" bind:checked={anywhere.value} />
       Any position
     </label>
   {/if}
-{/snippet}
-
-{#snippet absent(text: string)}
-  <p class="text-xs text-muted-foreground">{text}</p>
 {/snippet}
 
 <div class={['flex flex-col gap-6 transition-opacity', similarity.layerStale && 'opacity-50']}>
   <CollapsibleGroup title="Images" bind:open={view.open.current.images}>
     {#snippet actions()}
       {@render controls(
-        IMAGE_SURVEYS.map((survey) => view.tokens[imageMode(survey)]),
+        IMAGE_MODES.map((mode) => view.tokens[mode]),
         view.imageAnywhere
       )}
     {/snippet}
     <div class="grid max-w-5xl gap-5 md:grid-cols-3">
       <GalaxyTile galaxy={similarity.galaxy} />
       {#each IMAGE_SURVEYS as survey (survey)}
-        {#if coverage.data?.[survey]}
+        <Observed galaxy={similarity.galaxy} {survey} kind="image">
           <QueryImage {survey} />
-        {:else if coverage.data}
-          {@render absent(`No ${SURVEYS[survey].label} image`)}
-        {/if}
+        </Observed>
       {/each}
     </div>
+    {#if display.on.value && similarity.imageLayerDomain}
+      <div class="flex flex-col gap-1 md:max-w-xs">
+        <span class="text-xs text-muted-foreground">Query mask threshold</span>
+        <MaskControls domain={similarity.imageLayerDomain} control={display.query} />
+      </div>
+    {/if}
   </CollapsibleGroup>
 
   <CollapsibleGroup title="Spectra" bind:open={view.open.current.spectra}>
     {#snippet actions()}
       {@render controls(
-        SPECTRUM_SURVEYS.map((survey) => view.tokens[spectrumMode(survey)]),
+        SPECTRUM_MODES.map((mode) => view.tokens[mode]),
         view.spectrumAnywhere
       )}
     {/snippet}
     {#each SPECTRUM_SURVEYS as survey (survey)}
       {@const mode = spectrumMode(survey)}
-      {#if coverage.data?.[survey]}
+      <Observed galaxy={similarity.galaxy} {survey} kind="spectrum">
         <SpectrumPanel
           galaxy={similarity.galaxy}
           {survey}
-          map={similarity.layers[mode]}
-          heat={similarity.layerHeats[mode]}
+          map={similarity.layerOf(mode)?.values ?? null}
+          heat={similarity.layerOf(mode)?.heat ?? null}
           caption={similarity.layerCaption}
           selected={view.tokens[mode].value}
           ontoggle={(index) => view.tokens[mode].toggle(index)}
           error={similarity.layerError(mode)}
         />
-      {:else if coverage.data}
-        {@render absent(`No ${SURVEYS[survey].label} spectrum`)}
-      {/if}
+      </Observed>
     {/each}
   </CollapsibleGroup>
 

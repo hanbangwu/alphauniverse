@@ -46,7 +46,7 @@ from .config import (
     galaxy_count,
     labels,
 )
-from .dataset import catalogue, hsc_image, image, redshift, smoothed, spectrum, table
+from .dataset import catalogue, image, redshift, smoothed, spectrum, table
 from .search import FIRST_LS_TABLE_VALUE, table_value_tokens, tokens
 from .text_search import TextQuery, text_search
 
@@ -317,7 +317,7 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     "Survey's.",
 )
 def get_image(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
-    found = hsc_image(galaxy) if survey == "hsc" else image(galaxy)
+    found = image(galaxy, survey)
     if found is None:
         raise HTTPException(404, f"galaxy {galaxy} has no {survey} image")
     return Response(found, media_type="image/png")

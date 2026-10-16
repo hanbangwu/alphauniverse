@@ -1,11 +1,5 @@
 import type { CosineMode } from '$lib/client'
-import {
-  IMAGE_SURVEYS,
-  SPECTRUM_SURVEYS,
-  TOKEN_MODES,
-  imageMode,
-  spectrumMode
-} from '$lib/data/modes'
+import { IMAGE_MODES, SPECTRUM_MODES, TOKEN_MODES } from '$lib/data/modes'
 import type { SaliencyQuery, SimilarityQuery } from '$lib/data/similarity'
 import { Field } from './field.svelte'
 import { rangeOf } from './schema'
@@ -34,8 +28,8 @@ export class SearchState {
       ...tokens,
       table_values: tableValues,
       anywhere: [
-        ...(imageAnywhere ? IMAGE_SURVEYS.map(imageMode) : []),
-        ...(spectrumAnywhere ? SPECTRUM_SURVEYS.map(spectrumMode) : [])
+        ...(imageAnywhere ? IMAGE_MODES : []),
+        ...(spectrumAnywhere ? SPECTRUM_MODES : [])
       ].filter((mode) => tokens[mode].length)
     }
   }

@@ -20,7 +20,6 @@ from app.config import (
 )
 from app.dataset import (
     encode,
-    hsc_image,
     image,
     redshift,
     samples,
@@ -95,7 +94,7 @@ def test_samples_drop_padding_and_blank_masked_flux() -> None:
 
 
 def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
-    assert image(1) == encode(SOURCE)
+    assert image(1, "ls") == encode(SOURCE)
 
 
 def test_hsc_images_colour_each_filter_and_crop_the_centre(
@@ -109,8 +108,8 @@ def test_hsc_images_colour_each_filter_and_crop_the_centre(
     )
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
 
-    assert hsc_image(0) is None
-    with Image.open(BytesIO(hsc_image(1))) as png:
+    assert image(0, "hsc") is None
+    with Image.open(BytesIO(image(1, "hsc"))) as png:
         pixels = np.asarray(png.convert("RGB"))
     assert pixels.shape == (CROP_PIXELS, CROP_PIXELS, 3)
     assert (pixels[..., :1] > pixels[..., 1:]).all()

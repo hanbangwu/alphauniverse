@@ -1,10 +1,11 @@
 <script lang="ts">
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
+  import Observed from '$lib/components/common/observed.svelte'
   import SimilarityDialog from '$lib/components/similarity/similarity-dialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS } from '$lib/data/modes'
-  import { coverageQuery, morphologyQuery } from '$lib/data/queries'
+  import { morphologyQuery } from '$lib/data/queries'
   import { MORPHOLOGIES, SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import CoverageTable from './coverage-table.svelte'
@@ -19,7 +20,6 @@
   const morphology = createQuery(() =>
     morphologyQuery(mosaic, points.data ?? null, view.galaxy.value)
   )
-  const coverage = createQuery(() => coverageQuery(view.galaxy.value))
 </script>
 
 <div class="flex h-full flex-col bg-card">
@@ -49,27 +49,23 @@
 
       <CollapsibleGroup title="Images" bind:open={view.open.current.images}>
         {#each IMAGE_SURVEYS as survey (survey)}
-          <div class="flex flex-col gap-1">
-            <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
-            {#if coverage.data?.[survey]}
+          <Observed {galaxy} {survey} kind="image">
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
               <DetailImage {galaxy} {survey} />
-            {:else if coverage.data}
-              <p class="text-xs text-muted-foreground">No image</p>
-            {/if}
-          </div>
+            </div>
+          </Observed>
         {/each}
       </CollapsibleGroup>
 
       <CollapsibleGroup title="Spectra" bind:open={view.open.current.spectra}>
         {#each SPECTRUM_SURVEYS as survey (survey)}
-          <div class="flex flex-col gap-1">
-            <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
-            {#if coverage.data?.[survey]}
+          <Observed {galaxy} {survey} kind="spectrum">
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
               <DetailSpectrum {galaxy} {survey} />
-            {:else if coverage.data}
-              <p class="text-xs text-muted-foreground">No spectrum</p>
-            {/if}
-          </div>
+            </div>
+          </Observed>
         {/each}
       </CollapsibleGroup>
 

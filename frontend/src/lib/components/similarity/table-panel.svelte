@@ -48,14 +48,14 @@
   }
 </script>
 
-<div class="max-h-96 w-full overflow-y-auto rounded-lg border px-3">
+<div class="max-h-96 w-full overflow-y-auto rounded-lg border px-3 md:max-w-2xl">
   {#if table.isPending}
     <Spinner class="my-3 size-4 text-muted-foreground" />
   {:else if table.isError}
     <p role="alert" class="py-3 text-xs leading-relaxed text-destructive">
       {errorMessage(table.error)}
     </p>
-  {:else if table.data}
+  {:else}
     <Table.Root class="text-xs">
       <Table.Header>
         <Table.Row class="hover:bg-transparent">

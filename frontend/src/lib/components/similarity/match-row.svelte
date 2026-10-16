@@ -3,8 +3,8 @@
   import { OBSERVATIONS, SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
-  import ImageTokenMap from './image-token-map.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
+  import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
 
@@ -31,17 +31,15 @@
           {@const mode = imageMode(survey)}
           {@const values = similarity.mapAt(mode, index)}
           <div class="flex flex-col gap-5">
-            <ImageTokenMap
-              {mode}
+            <ImageTokenPanel
               label={SURVEYS[survey].label}
               {values}
+              grid={similarity.grid}
+              color={similarity.scales?.[mode].heat ?? null}
+              title={similarity.score}
               selected={similarity.outlinesAt(mode, index)}
             />
-            <ImageTokenMask
-              {values}
-              domain={similarity.domains?.[mode] ?? null}
-              control={display.matches}
-            />
+            <ImageTokenMask {values} domain={similarity.imageDomain} control={display.matches} />
           </div>
         {/if}
       {/each}
@@ -62,7 +60,7 @@
           {galaxy}
           {survey}
           map={similarity.mapAt(mode, index)}
-          heat={similarity.heats?.[mode] ?? null}
+          heat={similarity.scales?.[mode].heat ?? null}
           caption={similarity.score}
           selected={similarity.outlinesAt(mode, index)}
         />

@@ -8,7 +8,6 @@
   import { getApp } from '$lib/state/app.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
-  import MaskControls from './mask-controls.svelte'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -24,8 +23,7 @@
   const mode = $derived(imageMode(survey))
   const tokens = createQuery(() => tokensQuery(similarity.galaxy, survey))
   const palette = $derived(tokens.data ? tokenColors(tokens.data) : null)
-  const layer = $derived(similarity.layers[mode])
-  const domain = $derived(similarity.layerDomains[mode])
+  const layer = $derived(similarity.layerOf(mode))
   const error = $derived(tokens.isError ? errorMessage(tokens.error) : similarity.layerError(mode))
 
   let hovered = $state(false)
@@ -35,9 +33,9 @@
   <ImageTokenPanel
     label={SURVEYS[survey].label}
     describe={`Click a ${SURVEYS[survey].label} image token to query it`}
-    values={layer ?? tokens.data ?? null}
+    values={layer?.values ?? tokens.data ?? null}
     grid={similarity.grid}
-    color={layer ? similarity.layerHeats[mode] : palette}
+    color={layer?.heat ?? palette}
     opacity={layer ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
     galaxy={similarity.galaxy}
     {survey}
@@ -53,9 +51,11 @@
     {/if}
   </ImageTokenPanel>
 
-  {#if layer && domain}
-    <ImageTokenMask values={layer} {domain} control={display.query}>
-      <MaskControls {domain} control={display.query} />
-    </ImageTokenMask>
+  {#if layer}
+    <ImageTokenMask
+      values={layer.values}
+      domain={similarity.imageLayerDomain}
+      control={display.query}
+    />
   {/if}
 </div>

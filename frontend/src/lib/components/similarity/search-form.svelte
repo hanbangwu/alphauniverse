@@ -2,6 +2,7 @@
   import { Button } from '$lib/components/ui/button'
   import { Switch } from '$lib/components/ui/switch'
   import * as Tabs from '$lib/components/ui/tabs'
+  import { TOKEN_MODES } from '$lib/data/modes'
   import { getMask } from '$lib/state/app.svelte'
   import MatchCount from './match-count.svelte'
   import { getSimilarity } from './similarity.svelte'
@@ -9,7 +10,7 @@
   const similarity = getSimilarity()
   const display = getMask()
 
-  const mapped = $derived(Object.values(similarity.layers).some(Boolean))
+  const mapped = $derived(TOKEN_MODES.some((mode) => similarity.layerOf(mode)))
 </script>
 
 <form
@@ -27,18 +28,13 @@
   </Tabs.Root>
   <label class="flex items-center gap-2 text-sm font-medium">
     <Switch
-      checked={display.on.value}
+      bind:checked={display.on.value}
       disabled={!display.on.value && !mapped && !similarity.searched}
-      onCheckedChange={(checked) => (display.on.value = checked)}
     />
     Mask
   </label>
   <label class="flex items-center gap-2 text-sm font-medium">
-    <Switch
-      checked={display.invert.value}
-      disabled={!display.on.value}
-      onCheckedChange={(checked) => (display.invert.value = checked)}
-    />
+    <Switch bind:checked={display.invert.value} disabled={!display.on.value} />
     Invert
   </label>
   <div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2">

@@ -22,6 +22,8 @@
     {@render actions?.()}
   </div>
   <Collapsible.Content class="flex flex-col gap-5">
-    {@render children()}
+    {#if open}
+      {@render children()}
+    {/if}
   </Collapsible.Content>
 </Collapsible.Root>

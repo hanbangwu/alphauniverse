@@ -9,11 +9,10 @@
     values: ArrayLike<number>
     domain: Extent | null
     control: Threshold
-    action?: Snippet
     children?: Snippet
   }
 
-  let { values, domain, control, action, children }: Props = $props()
+  let { values, domain, control, children }: Props = $props()
 
   const similarity = getSimilarity()
   const bits = $derived(similarity.maskOf(values, domain, control))
@@ -26,7 +25,6 @@
     grid={similarity.grid}
     color={similarity.maskColor}
     title={similarity.maskTitle}
-    {action}
     {children}
   />
 {/if}

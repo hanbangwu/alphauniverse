@@ -1,6 +1,6 @@
 import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { byMode } from '$lib/data/modes'
+import { ANCHOR, IMAGE_MODES, byMode } from '$lib/data/modes'
 import { cosinesQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
 import type {
@@ -21,7 +21,51 @@ type Caption = (value: number, index: number) => string
 
 type Heat = (value: number) => RGB
 
+interface Scale {
+  domain: Extent
+  heat: Heat
+}
+
+interface Layered extends Scale {
+  values: Float32Array
+}
+
 export type Layer = 'galaxy' | 'population'
+
+function scale(values: ArrayLike<number>): Scale {
+  const domain = extent(values)
+  return { domain, heat: continuous(domain) }
+}
+
+class ModeLayer {
+  readonly #cosines: CreateQueryResult<Float32Array>
+  readonly #own: () => boolean
+  readonly current: Layered | null
+
+  constructor(
+    mode: CosineMode,
+    galaxy: number,
+    selected: () => number[],
+    own: () => boolean,
+    saliency: () => SaliencyResult | null
+  ) {
+    this.#own = own
+    this.#cosines = createQuery(() =>
+      cosinesQuery(own() && selected().length ? galaxy : null, mode)
+    )
+    this.current = $derived.by(() => {
+      const population = saliency()
+      const cosines = this.#cosines.data
+      const values = population ? population.maps[mode] : cosines ? best(cosines, selected()) : null
+      return values && { values, ...scale(values) }
+    })
+  }
+
+  get error(): string | null {
+    if (!this.#own()) return null
+    return this.#cosines.isError ? errorMessage(this.#cosines.error) : null
+  }
+}
 
 export class Similarity {
   readonly galaxy: number
@@ -29,7 +73,7 @@ export class Similarity {
 
   readonly #app: AppState = getApp()
   readonly #result: CreateQueryResult<SimilarityResult>
-  readonly #cosines: Record<CosineMode, CreateQueryResult<Float32Array>>
+  readonly #layers: Record<CosineMode, ModeLayer>
   readonly #saliency: CreateQueryResult<SaliencyResult>
   #submitted: SimilarityQuery | null = $state(null)
   readonly #selected: boolean
@@ -39,11 +83,8 @@ export class Similarity {
   readonly draft: SimilarityQuery | null
 
   readonly galaxies: Int32Array
-  readonly domains: Record<CosineMode, Extent> | null
-  readonly heats: Record<CosineMode, Heat> | null
-  readonly layers: Record<CosineMode, Float32Array | null>
-  readonly layerDomains: Record<CosineMode, Extent | null>
-  readonly layerHeats: Record<CosineMode, Heat | null>
+  readonly scales: Record<CosineMode, Scale> | null
+  readonly imageDomain: Extent | null
   readonly tableValueMap: Float32Array | null
   readonly tableValueHeat: Heat | null
 
@@ -52,7 +93,7 @@ export class Similarity {
     this.galaxy = galaxy
     this.grid = this.#app.meta.grid
 
-    const selections = $derived(view.selections)
+    const selections = $derived(byMode((mode) => view.tokens[mode].value))
     const selection = $derived(
       search.selection(
         galaxy,
@@ -66,41 +107,31 @@ export class Similarity {
     this.draft = $derived(search.request(selection))
     this.#result = createQuery(() => similarityQuery(this.#submitted))
     const own = $derived(this.layer === 'galaxy')
-    this.#cosines = byMode((mode) =>
-      createQuery(() => cosinesQuery(own && selections[mode].length ? galaxy : null, mode))
-    )
     this.#saliency = createQuery(() => saliencyQuery(own ? null : selection))
     const saliency = $derived(own || !selection ? null : (this.#saliency.data ?? null))
+    this.#layers = byMode(
+      (mode) =>
+        new ModeLayer(
+          mode,
+          galaxy,
+          () => view.tokens[mode].value,
+          () => own,
+          () => saliency
+        )
+    )
     const result = $derived(this.#result.data)
 
     this.galaxies = $derived(result?.galaxies ?? new Int32Array())
-    this.domains = $derived(
+    this.scales = $derived(
       result
         ? byMode((mode) => {
             const maps = result.maps[mode]
-            return extent(maps.subarray(maps.length / result.galaxies.length))
+            return scale(maps.subarray(maps.length / result.galaxies.length))
           })
         : null
     )
-    this.heats = $derived(this.domains && byMode((mode) => continuous(this.domains![mode])))
-    this.layers = $derived(
-      byMode((mode) => {
-        if (saliency) return saliency.maps[mode]
-        const cosines = this.#cosines[mode].data
-        return cosines ? best(cosines, selections[mode]) : null
-      })
-    )
-    this.layerDomains = $derived(
-      byMode((mode) => {
-        const layer = this.layers[mode]
-        return layer && extent(layer)
-      })
-    )
-    this.layerHeats = $derived(
-      byMode((mode) => {
-        const domain = this.layerDomains[mode]
-        return domain && continuous(domain)
-      })
+    this.imageDomain = $derived(
+      this.scales && extent(IMAGE_MODES.flatMap((mode) => this.scales![mode].domain))
     )
     this.tableValueMap = $derived(saliency ? saliency.tableValues : (result?.tableValueMap ?? null))
     this.tableValueHeat = $derived(
@@ -117,10 +148,17 @@ export class Similarity {
     return this.#saliency.isError ? errorMessage(this.#saliency.error) : null
   }
 
+  layerOf(mode: CosineMode): Layered | null {
+    return this.#layers[mode].current
+  }
+
+  get imageLayerDomain(): Extent | null {
+    const domains = IMAGE_MODES.flatMap((mode) => this.layerOf(mode)?.domain ?? [])
+    return domains.length ? extent(domains) : null
+  }
+
   layerError(mode: CosineMode): string | null {
-    if (this.layer !== 'galaxy') return null
-    const cosines = this.#cosines[mode]
-    return cosines.isError ? errorMessage(cosines.error) : null
+    return this.#layers[mode].error
   }
 
   anywhere(mode: CosineMode): boolean {
@@ -133,7 +171,7 @@ export class Similarity {
   }
 
   observes(survey: string, index: number): boolean {
-    return this.#result.data?.observed[survey]?.[index] ?? true
+    return survey === ANCHOR || (this.#result.data?.observed[survey]?.[index] ?? false)
   }
 
   get layerStale(): boolean {
