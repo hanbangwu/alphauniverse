@@ -39,7 +39,7 @@ build_image = (
     gpu="T4",
     cpu=(2, 4),
     memory=(8 * 1024, 32 * 1024),
-    timeout=1 * 60 * 60,
+    timeout=2 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
@@ -56,7 +56,7 @@ def generate_embeddings() -> None:
     gpu="T4",
     cpu=(8, 16),
     memory=(4 * 1024, 16 * 1024),
-    timeout=2 * 60 * 60,
+    timeout=4 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_predictions() -> None:
@@ -88,7 +88,7 @@ def generate_token_grams() -> None:
     gpu="L4",
     cpu=4,
     memory=(32 * 1024, 64 * 1024),
-    timeout=3 * 60 * 60,
+    timeout=6 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
