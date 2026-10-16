@@ -80,9 +80,8 @@
         onSelection={(picked: DataPoint[] | null) => {
           const galaxies = picked?.map((point) => Number(point.identifier)) ?? []
           const galaxy = galaxies.at(-1) ?? null
-          if (galaxies.length < 2 || !highlighted?.some((circled) => circled === galaxy)) {
-            view.select(galaxy)
-          }
+          const toggled = galaxies.length > 1 && highlighted?.some((circled) => circled === galaxy)
+          if (picked && !toggled) view.select(galaxy)
           highlighted = highlighted && [...highlighted]
         }}
       />
