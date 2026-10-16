@@ -14,6 +14,7 @@ from umap import UMAP
 from app import embeddings
 from app.config import (
     DATASET_REVISION,
+    DIM,
     GRAM_NAMES,
     REDSHIFT,
     SEARCH_RANK,
@@ -57,9 +58,10 @@ def vectors(role: str) -> dict[str, dict[str, torch.Tensor]]:
 
 
 def joint(blocks: dict[str, dict[str, torch.Tensor]]) -> torch.Tensor:
-    return torch.from_numpy(
-        embeddings.joint([block["galleries"].numpy() for block in blocks.values()])
-    )
+    scaled = [
+        embeddings.scaled(block["galleries"].numpy()) for block in blocks.values()
+    ]
+    return torch.from_numpy(embeddings.joint(np.concatenate(scaled, axis=1)))
 
 
 def searched(
@@ -261,7 +263,7 @@ def measure() -> dict[str, Any]:
     return {
         "environment": environment(),
         "rank": SEARCH_RANK,
-        "joint": embeddings.JOINT_RANK,
+        "joint": DIM,
         "neighbours": NEIGHBOURS,
         "preserved": projection_quality.NEIGHBOURS,
         "physics": physics(families, joints, aion),

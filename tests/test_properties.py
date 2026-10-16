@@ -73,15 +73,11 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
 
     table = pq.read_table(artifact("properties"))
     assert table.schema == PROPERTIES
-    found = {
-        name: table.column(name).to_numpy(zero_copy_only=False)
-        for name in PROPERTIES.names
-    }
+    found = {name: table.column(name).to_numpy() for name in PROPERTIES.names}
     np.testing.assert_array_equal(
         found[f"{REDSHIFT}_measured"], redshift.astype(np.float32)
     )
-    assert np.isnan(found["mass_measured"][~labelled]).all()
-    assert np.isfinite(found["mass_measured"][labelled]).all()
+    np.testing.assert_array_equal(np.isfinite(found["mass_measured"]), labelled)
     for label in (REDSHIFT, "mass", "sfr", "ssfr"):
         assert np.isfinite(found[f"{label}_predicted"]).all(), label
     expected = -2.5 * np.log10(green / np.abs(red))

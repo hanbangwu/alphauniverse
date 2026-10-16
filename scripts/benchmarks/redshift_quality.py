@@ -9,9 +9,15 @@ import torch
 from astropy.stats import mad_std
 from tqdm import tqdm
 
-from app import pql, predictions, templates
-from app.config import DATASET_REVISION, REDSHIFT, REDSHIFT_COLUMNS, STORE_COLUMNS
-from app.observations import measured_redshifts
+from app import predictions, templates
+from app.config import (
+    DATASET_REVISION,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    STORE_COLUMNS,
+    artifact,
+)
+from app.observations import measured_redshifts, observed
 from app.search import tokens
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
@@ -25,26 +31,19 @@ OUTLIER = 0.15
 TARGET = {predictions.REDSHIFT_KEY: predictions.TARGETS[predictions.REDSHIFT_KEY]}
 
 
-def stored(galaxies: np.ndarray) -> np.ndarray:
-    table = pql.predictions().select([REDSHIFT]).take(galaxies)
-    return np.concatenate(
-        [pql.table_value_probabilities(rows, REDSHIFT) for rows in table.to_batches()]
-    )
-
-
 def hidden(galaxies: np.ndarray) -> np.ndarray:
     blank = dict.fromkeys(column for column in STORE_COLUMNS if column not in KEPT)
     found = []
     for row in tqdm(tokens().take(galaxies).to_pylist(), desc="encode"):
         predicted = predictions.predictions(predictions.inputs(row | blank), TARGET)
         found.append(predictions.flushed(np.exp(predicted[predictions.REDSHIFT_KEY])))
-    return np.stack(found)
+    return templates.quantiles(np.stack(found), templates.bin_values(REDSHIFT), 0.5)[
+        :, 0
+    ]
 
 
-def scored(probabilities: np.ndarray, values: np.ndarray) -> dict[str, Any]:
-    bins = templates.bin_values(REDSHIFT)
-    median = templates.quantiles(probabilities, bins, 0.5)[:, 0]
-    offsets = (median - values) / (1 + values)
+def scored(medians: np.ndarray, values: np.ndarray) -> dict[str, Any]:
+    offsets = (medians - values) / (1 + values)
     return {
         "galaxies": len(values),
         "bias": round(float(np.median(offsets)), 4),
@@ -62,24 +61,25 @@ def scored(probabilities: np.ndarray, values: np.ndarray) -> dict[str, Any]:
     volumes={CACHE_PATH: cache_volume},
 )
 def measure() -> dict[str, Any]:
-    galaxies = np.flatnonzero(pql.observed(REDSHIFT))
+    galaxies = observed(REDSHIFT)
     values, surveys = measured_redshifts(galaxies)
     surveys = np.array(surveys)
-    inputs = {"stored": stored(galaxies), "hidden": hidden(galaxies)}
+    medians = {
+        "stored": np.load(artifact(f"template_{REDSHIFT}"), mmap_mode="r")[galaxies, 0],
+        "hidden": hidden(galaxies),
+    }
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name(),
         "kept": KEPT,
         "outlier": OUTLIER,
         "inputs": {
-            name: {"all": scored(probabilities, values)}
+            name: {"all": scored(found, values)}
             | {
-                survey: scored(
-                    probabilities[surveys == survey], values[surveys == survey]
-                )
+                survey: scored(found[surveys == survey], values[surveys == survey])
                 for survey in REDSHIFT_COLUMNS
             }
-            for name, probabilities in inputs.items()
+            for name, found in medians.items()
         },
         "memory": memory(),
     }

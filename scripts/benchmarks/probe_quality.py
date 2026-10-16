@@ -16,13 +16,13 @@ from sklearn.pipeline import make_pipeline
 from app import embeddings
 from app.config import (
     DATASET_REVISION,
+    DIM,
     GRAM_NAMES,
     PROVABGS,
     REDSHIFT,
     SEARCH_RANK,
     SEED,
     SPECTRUM_MODES,
-    artifact,
     galaxy_count,
 )
 from app.observations import column_values
@@ -50,11 +50,6 @@ BLOCKS = {
 def targets() -> dict[str, np.ndarray]:
     galaxies = np.arange(galaxy_count())
     return provabgs(galaxies) | {REDSHIFT: column_values(f"Z_HP{PROVABGS}", galaxies)}
-
-
-def galleries(role: str, name: str) -> np.ndarray:
-    with np.load(artifact(f"{role}_{name}")) as stored:
-        return stored["galleries"][:, :SEARCH_RANK]
 
 
 def shots(
@@ -128,7 +123,7 @@ def measure() -> dict[str, Any]:
     values = targets()
     families = {
         role: {
-            name: embeddings.scaled(galleries(f"{role}_embedding", name))
+            name: embeddings.scaled(embeddings.galleries(f"{role}_embedding_{name}"))
             for name in GRAM_NAMES
         }
         for role in ("token", "template")
@@ -149,9 +144,7 @@ def measure() -> dict[str, Any]:
                 )
                 for label, names in BLOCKS.items()
             }
-            features["joint"] = embeddings.joint(
-                [blocks[name] for name in GRAM_NAMES if name != target]
-            )
+            features["joint"] = embeddings.joint(features["all"])
             report[target][role] = {
                 label: scores(matrix[kept], column[kept], PROBES)
                 for label, matrix in features.items()
@@ -175,7 +168,7 @@ def measure() -> dict[str, Any]:
     return {
         "environment": environment(),
         "rank": SEARCH_RANK,
-        "joint": embeddings.JOINT_RANK,
+        "joint": DIM,
         "folds": FOLDS.n_splits,
         "neighbours": NEIGHBOURS,
         "draws": DRAWS,

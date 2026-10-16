@@ -2,18 +2,11 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from sklearn.linear_model import RidgeCV
+from sklearn.metrics import root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 
 from . import pql, templates
-from .config import (
-    LS,
-    PROPERTIES,
-    PROVABGS,
-    REDSHIFT,
-    SEED,
-    artifact,
-    galaxy_count,
-)
+from .config import LS, PROBED, PROPERTIES, PROVABGS, REDSHIFT, SEED, artifact
 from .observations import column_values, measured_redshifts
 
 ALPHAS = np.logspace(-3, 4, 15)
@@ -24,7 +17,7 @@ def provabgs(galaxies: np.ndarray) -> dict[str, np.ndarray]:
     mass = column_values(f"LOG_MSTAR{PROVABGS}", galaxies)
     with np.errstate(divide="ignore", invalid="ignore"):
         sfr = np.log10(column_values(f"AVG_SFR{PROVABGS}", galaxies))
-    return {"mass": mass, "sfr": sfr, "ssfr": sfr - mass}
+    return dict(zip(PROBED, (mass, sfr, sfr - mass)))
 
 
 def colours(galaxies: np.ndarray) -> np.ndarray:
@@ -34,32 +27,28 @@ def colours(galaxies: np.ndarray) -> np.ndarray:
 
 
 def predicted_redshifts() -> tuple[np.ndarray, np.ndarray]:
-    probabilities = np.concatenate(
-        [
-            pql.table_value_probabilities(rows, REDSHIFT)
-            for rows in pql.predictions().select([REDSHIFT]).to_batches()
-        ]
-    )
     bins = templates.bin_values(REDSHIFT)
-    median, lower, upper = (
-        templates.quantiles(probabilities, bins, share)[:, 0]
-        for share in (0.5, *templates.CENTRAL)
-    )
-    return median, (upper - lower) / 2
+    medians, widths = [], []
+    for rows in pql.predictions().select([REDSHIFT]).to_batches():
+        probabilities = pql.table_value_probabilities(rows, REDSHIFT)
+        medians.append(templates.quantiles(probabilities, bins, 0.5)[:, 0])
+        widths.append(templates.half_widths(probabilities, bins)[:, 0])
+    return np.concatenate(medians), np.concatenate(widths)
 
 
 def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]:
     known = np.isfinite(values)
+    labelled, targets = features[known], values[known]
     model = RidgeCV(alphas=ALPHAS)
-    held_out = cross_val_predict(model, features[known], values[known], cv=FOLDS)
-    predicted = model.fit(features[known], values[known]).predict(features)
+    held_out = cross_val_predict(model, labelled, targets, cv=FOLDS)
+    predicted = model.fit(labelled, targets).predict(features)
     predicted[known] = held_out
-    return predicted, float(np.sqrt(np.mean((held_out - values[known]) ** 2)))
+    return predicted, root_mean_squared_error(targets, held_out)
 
 
 def generate_properties() -> None:
-    galaxies = np.arange(galaxy_count())
     features = np.load(artifact("joint_embedding"))
+    galaxies = np.arange(len(features))
     predicted, width = predicted_redshifts()
     columns = {
         f"{REDSHIFT}_measured": measured_redshifts(galaxies)[0],
@@ -75,10 +64,8 @@ def generate_properties() -> None:
             f"{label}_width": np.full(len(galaxies), width),
         }
     arrays = {
-        name: pa.array(values.astype(np.float32), mask=~np.isfinite(values))
+        name: pa.array(values, mask=~np.isfinite(values))
         for name, values in columns.items()
     }
-    table = pa.table({"galaxy": galaxies.astype(np.int32)} | arrays)
-    pq.write_table(
-        table.select(PROPERTIES.names).cast(PROPERTIES), artifact("properties")
-    )
+    table = pa.table({"galaxy": galaxies} | arrays, schema=PROPERTIES)
+    pq.write_table(table, artifact("properties"))

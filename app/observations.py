@@ -53,9 +53,9 @@ def measured_redshifts(galaxies: np.ndarray) -> tuple[np.ndarray, list[str | Non
     surveys = [redshift(row) for row in rows]
     values = [
         np.nan if survey is None else row[REDSHIFT_COLUMNS[survey][0]]
-        for row, survey in zip(rows, surveys, strict=True)
+        for row, survey in zip(rows, surveys)
     ]
-    return np.array(values, dtype=np.float64), surveys
+    return np.array(values), surveys
 
 
 def pixels(field: pa.ListArray, galaxies: int, bands: int) -> np.ndarray:

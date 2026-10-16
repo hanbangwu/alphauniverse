@@ -75,20 +75,26 @@ def test_a_galaxy_s_own_row_gives_its_stored_query_vector() -> None:
 
 
 def test_the_joint_embedding_is_the_principal_components_of_the_scaled_blocks(
-    monkeypatch: pytest.MonkeyPatch,
+    tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(embeddings, "JOINT_RANK", 3)
     rng = np.random.default_rng(3)
-    blocks = [rng.normal(size=(GALAXIES, 4)), 50 * rng.normal(size=(GALAXIES, 6))]
+    blocks = {
+        f"token_embedding_{name}": (index + 1) * rng.normal(size=(GALAXIES, 4))
+        for index, name in enumerate(GRAM_NAMES)
+    }
+    monkeypatch.setattr(embeddings, "galleries", blocks.__getitem__)
+    monkeypatch.setattr(embeddings, "DIM", 3)
 
-    found = embeddings.joint(blocks)
+    embeddings.generate_joint_embedding()
 
     scaled = []
-    for block in blocks:
+    for block in blocks.values():
         centred = block - block.mean(axis=0)
         scaled.append(centred / np.sqrt((centred**2).sum(axis=1).mean()))
     joined = np.concatenate(scaled, axis=1)
     left, values, _ = np.linalg.svd(joined - joined.mean(axis=0), full_matrices=False)
     np.testing.assert_allclose(
-        np.abs(found), np.abs(left[:, :3] * values[:3]), atol=1e-9
+        np.abs(np.load(artifact("joint_embedding"))),
+        np.abs(left[:, :3] * values[:3]),
+        atol=1e-9,
     )
