@@ -9,12 +9,12 @@ from datetime import UTC, datetime
 from functools import partial
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import numpy as np
 
-from app import pql
-from app.config import DATASET_REVISION
+from app import embeddings, pql
+from app.config import DATASET_REVISION, GRAM_NAMES, MODES, SEARCH_RANK, TokenMode
 from modal_app import (
     CACHE_PATH,
     SERVING_CPU,
@@ -47,6 +47,8 @@ STAGES = [
     "maps",
     "predicted",
 ]
+MODE_STAGES = ["ranking", "maps", "predicted"]
+LAYOUTS = {"same_place": frozenset(), "any_position": frozenset(get_args(TokenMode))}
 MATCHES = (32, 64, 128)
 SAMPLES = 4
 SOURCES = ["app", "scripts", "modal_app.py"]
@@ -115,6 +117,51 @@ def anywhere_times(runs: int) -> dict[str, Any]:
     }
 
 
+def mode_stage_times(query: pql.ModeQuery) -> dict[str, float]:
+    marks = [time.perf_counter()]
+    totals = {}
+    for mode in MODES:
+        found = pql.stored(f"{mode}_anywhere" if mode in query.anywhere else mode)
+        matched = embeddings.scores(
+            found["queries"][[query.galaxy]], found, SEARCH_RANK
+        )
+        totals[mode] = matched[0].double().numpy()
+    scored = sum(pql.contributions(totals).values())
+    galaxies = pql.ranked(scored, query.galaxy, query.matches)
+    marks.append(time.perf_counter())
+    forms = pql.galaxy_forms(query.galaxy)
+    pql.maps(forms, pql.slot_peaks(forms), pql.gathered(galaxies))
+    marks.append(time.perf_counter())
+    pql.predicted(totals, galaxies)
+    marks.append(time.perf_counter())
+    return {
+        name: (stop - start) * 1000
+        for name, (start, stop) in zip(MODE_STAGES, pairwise(marks), strict=True)
+    }
+
+
+def mode_times(runs: int) -> dict[str, Any]:
+    timed = {
+        "load": summary([elapsed(lambda: [pql.stored(name) for name in GRAM_NAMES])])
+    }
+    galaxies = [query.galaxy for query in queries(runs + 1, IMAGE_TOKENS, MATCHES[0])]
+    for layout, anywhere in LAYOUTS.items():
+        batch = [
+            pql.ModeQuery(
+                galaxy=galaxy, modes=MODES, anywhere=anywhere, matches=MATCHES[0]
+            )
+            for galaxy in galaxies
+        ]
+        pql.mode_search(batch[0])
+        samples = [mode_stage_times(query) for query in batch[1:]]
+        for name in MODE_STAGES:
+            timed[f"{layout}_{name}"] = summary([sample[name] for sample in samples])
+        timed[f"{layout}_search"] = summary(
+            [elapsed(partial(pql.mode_search, query)) for query in batch[1:]]
+        )
+    return timed
+
+
 @app.function(image=image)
 def stages(runs: int, matches: int = MATCHES[0]) -> dict[str, Any]:
     batch = queries(runs + 1, IMAGE_TOKENS, matches)
@@ -142,6 +189,7 @@ def stages(runs: int, matches: int = MATCHES[0]) -> dict[str, Any]:
             f"matches={asked}": whole_searches(runs, asked) for asked in MATCHES
         },
         "anywhere": anywhere_times(runs),
+        "modes": mode_times(runs),
         "memory": memory(),
     }
 
