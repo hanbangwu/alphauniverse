@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RGB } from '$lib/color'
+  import { OUTLINE, type RGB } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
@@ -40,6 +40,20 @@
     action,
     children
   }: Props = $props()
+
+  const outline = $derived.by(() => {
+    const chosen = new Set(selected)
+    const edges: string[] = []
+    for (const index of chosen) {
+      const column = index % grid
+      const row = Math.floor(index / grid)
+      if (!chosen.has(index - grid)) edges.push(`M${column} ${row}h1`)
+      if (!chosen.has(index + grid)) edges.push(`M${column} ${row + 1}h1`)
+      if (column === 0 || !chosen.has(index - 1)) edges.push(`M${column} ${row}v1`)
+      if (column === grid - 1 || !chosen.has(index + 1)) edges.push(`M${column + 1} ${row}v1`)
+    }
+    return edges.join('')
+  })
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
@@ -75,6 +89,16 @@
           <GalaxyThumb {galaxy} />
         </div>
       {/if}
+      <svg
+        viewBox="0 0 {grid} {grid}"
+        class="pointer-events-none absolute inset-0 size-full"
+        stroke-linecap="square"
+        aria-hidden="true"
+      >
+        {#each OUTLINE as { stroke, width } (stroke)}
+          <path d={outline} {stroke} stroke-width={width} vector-effect="non-scaling-stroke" />
+        {/each}
+      </svg>
     </PanelFrame>
   </div>
 

@@ -20,7 +20,7 @@
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED, chartInk } from '$lib/color'
+  import { OUTLINE, type RGB, chartInk } from '$lib/color'
   import { TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
@@ -61,7 +61,7 @@
   let painted = $state.raw<number[]>([])
   let adding = false
   let pointer: number | null = null
-  let last = 0
+  let previous = 0
   let visible: number[] = []
 
   const points = $derived(
@@ -70,23 +70,35 @@
 
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
-    const chosen = new Set(selected)
-    return Array.from(values, (value, index): Areas[number] => {
+    const chosen = new Set(selected).symmetricDifference(new Set(painted))
+    const cells = Array.from(values, (value, index): Areas[number] => {
       const [low, high] = spectrumTokenOf(meta, index)
       const [r, g, b] = color(value)
-      const picked = chosen.has(index) !== painted.includes(index)
       return [
         {
           xAxis: low,
-          itemStyle: {
-            color: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
-            borderColor: SELECTED,
-            borderWidth: picked ? 1 : 0
-          }
+          itemStyle: { color: `rgba(${r}, ${g}, ${b}, ${opacity(chosen.has(index))})` }
         },
         { xAxis: high }
       ]
     })
+    const runs: [number, number][] = []
+    for (const index of [...chosen].sort((a, b) => a - b)) {
+      const run = runs.at(-1)
+      if (run && index === run[1] + 1) run[1] = index
+      else runs.push([index, index])
+    }
+    const outlines = runs.flatMap(([first, last]) =>
+      OUTLINE.map(({ stroke, width }, layer): Areas[number] => [
+        {
+          xAxis: spectrumTokenOf(meta, first)[0],
+          itemStyle: { color: 'transparent', borderColor: stroke, borderWidth: width },
+          z2: layer + 1
+        },
+        { xAxis: spectrumTokenOf(meta, last)[1] }
+      ])
+    )
+    return [...cells, ...outlines]
   })
 
   function describe(params: TooltipComponentFormatterCallbackParams): string {
@@ -181,9 +193,9 @@
     }[]
     visible = [startValue, endValue]
     pointer = event.pointerId
-    last = windowAt(event)
-    adding = !selected.includes(last)
-    paint(last)
+    previous = windowAt(event)
+    adding = !selected.includes(previous)
+    paint(previous)
   }
 
   function move(event: PointerEvent): void {
@@ -193,10 +205,10 @@
       return
     }
     const index = windowAt(event)
-    for (let between = Math.min(last, index); between <= Math.max(last, index); between++) {
+    for (let between = Math.min(previous, index); between <= Math.max(previous, index); between++) {
       paint(between)
     }
-    last = index
+    previous = index
   }
 
   function end(event: PointerEvent): void {
