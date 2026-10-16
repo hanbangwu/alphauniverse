@@ -49,9 +49,10 @@
   const interactive = $derived(Boolean(ontoggle))
 
   let instance: ECharts
-  let painted = $state<number[]>([])
+  let painted = $state.raw<number[]>([])
   let adding = false
-  let last: number[] | null = null
+  let pointer: number | null = null
+  let last: number[] = []
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
 
@@ -102,15 +103,18 @@
   function paint([column, row]: number[]): void {
     const index = row * grid + column
     if (Math.min(column, row) < 0 || Math.max(column, row) >= grid) return
-    if (selected.includes(index) !== adding && !painted.includes(index)) painted.push(index)
+    if (selected.includes(index) !== adding && !painted.includes(index)) {
+      painted = [...painted, index]
+    }
   }
 
   function start(event: PointerEvent): void {
-    if (last) {
-      end(event)
+    if (pointer !== null) {
+      drop()
       return
     }
     if (event.button !== 0) return
+    pointer = event.pointerId
     last = position(event)
     const [column, row] = last.map(Math.floor)
     adding = !selected.includes(row * grid + column)
@@ -118,9 +122,9 @@
   }
 
   function move(event: PointerEvent): void {
-    if (!last) return
+    if (event.pointerId !== pointer) return
     if (!event.buttons) {
-      end(event)
+      drop()
       return
     }
     const from = last
@@ -131,11 +135,15 @@
     }
   }
 
-  function end({ type }: PointerEvent): void {
-    if (!last) return
-    if (type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+  function end(event: PointerEvent): void {
+    if (event.pointerId !== pointer) return
+    if (event.type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+    drop()
+  }
+
+  function drop(): void {
     painted = []
-    last = null
+    pointer = null
   }
 </script>
 

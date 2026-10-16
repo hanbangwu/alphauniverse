@@ -58,9 +58,11 @@
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
   let instance: ECharts
-  let painted = $state<number[]>([])
+  let painted = $state.raw<number[]>([])
   let adding = false
-  let last: number | null = null
+  let pointer: number | null = null
+  let last = 0
+  let visible: number[] = []
 
   const points = $derived(
     Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
@@ -155,34 +157,39 @@
   })
 
   function windowAt(event: PointerEvent): number {
-    const [{ startValue, endValue }] = instance.getOption().dataZoom as {
-      startValue: number
-      endValue: number
-    }[]
     const [wavelength] = instance.convertFromPixel('grid', pixel(instance, event))
-    return spectrumTokenAt(meta, Math.min(Math.max(wavelength, startValue), endValue))
+    const [low, high] = visible
+    return spectrumTokenAt(meta, Math.min(Math.max(wavelength, low), high))
   }
 
   function paint(index: number): void {
-    if (selected.includes(index) !== adding && !painted.includes(index)) painted.push(index)
+    if (selected.includes(index) !== adding && !painted.includes(index)) {
+      painted = [...painted, index]
+    }
   }
 
   function start(event: PointerEvent): void {
-    if (last !== null) {
-      end(event)
+    if (pointer !== null) {
+      drop()
       return
     }
     if (event.button !== 0 || event.shiftKey) return
     if (!instance.containPixel('grid', pixel(instance, event))) return
+    const [{ startValue, endValue }] = instance.getOption().dataZoom as {
+      startValue: number
+      endValue: number
+    }[]
+    visible = [startValue, endValue]
+    pointer = event.pointerId
     last = windowAt(event)
     adding = !selected.includes(last)
     paint(last)
   }
 
   function move(event: PointerEvent): void {
-    if (last === null) return
+    if (event.pointerId !== pointer) return
     if (!event.buttons) {
-      end(event)
+      drop()
       return
     }
     const index = windowAt(event)
@@ -192,11 +199,15 @@
     last = index
   }
 
-  function end({ type }: PointerEvent): void {
-    if (last === null) return
-    if (type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+  function end(event: PointerEvent): void {
+    if (event.pointerId !== pointer) return
+    if (event.type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+    drop()
+  }
+
+  function drop(): void {
     painted = []
-    last = null
+    pointer = null
   }
 </script>
 
