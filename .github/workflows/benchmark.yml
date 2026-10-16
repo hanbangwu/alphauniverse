@@ -19,6 +19,7 @@ on:
           - template_embedding_quality
           - retrieval_quality
           - probe_quality
+          - neighbour_quality
       args:
         description: Arguments for the script, such as --runs 50; empty keeps its defaults
         type: string

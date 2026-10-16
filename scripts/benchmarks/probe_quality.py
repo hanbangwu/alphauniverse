@@ -61,9 +61,12 @@ def targets() -> dict[str, np.ndarray]:
     return values
 
 
-def scaled(role: str, name: str) -> np.ndarray:
+def galleries(role: str, name: str) -> np.ndarray:
     with np.load(artifact(f"{role}_{name}")) as stored:
-        galleries = stored["galleries"][:, :RANK]
+        return stored["galleries"][:, :RANK]
+
+
+def scaled(galleries: np.ndarray) -> np.ndarray:
     centred = galleries - galleries.mean(axis=0)
     return centred / np.sqrt((centred**2).sum(axis=1).mean())
 
@@ -88,7 +91,7 @@ def shots(
         }
         if alphas:
             found[str(count)] |= {
-                "alpha": float(np.median(alphas)),
+                "alpha": float(np.quantile(alphas, 0.5, method="lower")),
                 "alpha_at_edge": round(
                     float(np.isin(alphas, ALPHAS[[0, -1]]).mean()), 4
                 ),
@@ -138,7 +141,9 @@ def scores(
 def measure() -> dict[str, Any]:
     values = targets()
     families = {
-        role: {name: scaled(f"{role}_embedding", name) for name in GRAM_NAMES}
+        role: {
+            name: scaled(galleries(f"{role}_embedding", name)) for name in GRAM_NAMES
+        }
         for role in ("token", "template")
     }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]

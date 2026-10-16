@@ -54,11 +54,11 @@ def vectors(role: str) -> dict[str, dict[str, torch.Tensor]]:
     return found
 
 
-def joint(role: str) -> torch.Tensor:
-    blocks = np.concatenate(
-        [scaled(f"{role}_embedding", name) for name in GRAM_NAMES], 1
+def joint(blocks: dict[str, dict[str, torch.Tensor]]) -> torch.Tensor:
+    found = np.concatenate(
+        [scaled(block["galleries"].numpy()) for block in blocks.values()], 1
     )
-    return torch.from_numpy(PCA(JOINT, random_state=SEED).fit_transform(blocks))
+    return torch.from_numpy(PCA(JOINT, random_state=SEED).fit_transform(found))
 
 
 def searched(
@@ -255,7 +255,7 @@ def maps(
 )
 def measure() -> dict[str, Any]:
     families = {role: vectors(role) for role in ROLES}
-    joints = {role: joint(role) for role in ROLES}
+    joints = {role: joint(blocks) for role, blocks in families.items()}
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     return {
         "environment": environment(),

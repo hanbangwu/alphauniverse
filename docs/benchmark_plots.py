@@ -28,9 +28,7 @@ def heading(found, *details):
 
 
 def table(rows, names, height=None):
-    source = ColumnDataSource(
-        {name: [row.get(name, "") for row in rows] for name in names}
-    )
+    source = ColumnDataSource({name: [row[name] for row in rows] for name in names})
     columns = [TableColumn(field=name, title=name) for name in names]
     return DataTable(
         source=source,
@@ -407,6 +405,17 @@ def retrieval_quality():
     )
 
 
+def drawn(probe, shots):
+    found = {}
+    for count, shot in shots.items():
+        found[f"{probe} r2, {count} fitted"] = f"{shot['r2']} ± {shot['sd']}"
+        if "alpha" in shot:
+            found[f"{probe} α, {count} fitted"] = (
+                f"{shot['alpha']:.3g}, {shot['alpha_at_edge']:.0%} at an end"
+            )
+    return found
+
+
 def probe_quality():
     found = report("probe_quality")
     if found is None:
@@ -432,10 +441,7 @@ def probe_quality():
                 row |= {
                     f"{probe} r2": metrics["r2"],
                     f"{probe} rms": metrics["rms"],
-                } | {
-                    f"{probe} r2, {count} fitted": f"{shot['r2']} ± {shot['sd']}"
-                    for count, shot in metrics["shots"].items()
-                }
+                } | drawn(probe, metrics["shots"])
             rows.append(row)
             shots = probes["ridge"]["shots"]
             spread = ColumnDataSource(
@@ -470,12 +476,9 @@ def probe_quality():
                 "target": target,
                 "features": role,
                 "mode": name,
-                "stacked weight": fitted["weight"],
+                "stacked weight, all galaxies": fitted["weight"],
             }
-            | {
-                f"ridge r2, {count} fitted": f"{shot['r2']} ± {shot['sd']}"
-                for count, shot in fitted["shots"].items()
-            }
+            | drawn("ridge", fitted["shots"])
             for role, fits in measured["modes"].items()
             for name, fitted in fits.items()
         )
@@ -507,7 +510,10 @@ def probe_quality():
         ),
         chart,
         *curves,
-        table(rows, list(rows[0])),
+        table(
+            [{name: row.get(name, "") for name in rows[0]} for row in rows],
+            list(rows[0]),
+        ),
         table(modes, list(modes[0]), height=600),
         **WIDTH,
     )
@@ -531,7 +537,11 @@ def neighbour_quality():
     ]
     geometry = found["geometry"]
     agreement = [
-        {"features": f"{role} {kind}", "search": name, "share of its top 10": value}
+        {
+            "features": f"{role} {kind}",
+            "search": name,
+            f"share of its top {found['neighbours']}": value,
+        }
         for role in ("token", "template")
         for kind in ("blocks", "joint")
         for name, value in geometry[role][kind].items()
@@ -543,11 +553,18 @@ def neighbour_quality():
         for search, kept in searches.items()
     ]
     source = ColumnDataSource({key: [row[key] for row in shares] for key in shares[0]})
+    kept = [
+        {"map": map_name, "search": search}
+        | {f"{count} nearest kept": row[count] for count in counts}
+        for row in shares
+        for map_name, search in [row["factor"]]
+    ]
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         y_range=(0, 1.05),
         height=380,
         title=f"Share of each galaxy's {counts[0]} (bars) and {counts[1]} (dots) nearest by each search that a map keeps nearest",
+        tooltips=[(f"{count} nearest", f"@{{{count}}}") for count in counts],
         **WIDTH,
     )
     chart.vbar(x="factor", top=counts[0], width=0.8, source=source)
@@ -563,6 +580,7 @@ def neighbour_quality():
             cpus(found),
         ),
         chart,
+        table(kept, list(kept[0])),
         table(rankings, list(rankings[0])),
         table(agreement, list(agreement[0]), height=600),
         **WIDTH,

@@ -49,6 +49,9 @@ Glossary
    held out
       Left out of a network's training and used only to test it.
 
+   joint embedding
+      One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`template embeddings <template embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes and cut to their first 768 principal components, as many as a :term:`mean embedding` has.
+
    mean embedding
       The average of a galaxy's encoded :term:`embeddings <embedding>`, one vector per galaxy.
 
