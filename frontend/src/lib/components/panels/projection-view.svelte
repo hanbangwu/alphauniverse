@@ -48,7 +48,7 @@
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
-  const highlighted = $derived(
+  let highlighted = $derived(
     view.galaxy.value === null
       ? null
       : search.data && !search.isPlaceholderData && !view.full
@@ -79,8 +79,11 @@
         onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
           const galaxies = picked?.map((point) => Number(point.identifier)) ?? []
-          if (galaxies.length > 1 && highlighted?.includes(galaxies[galaxies.length - 1])) return
-          view.select(galaxies.at(-1) ?? null)
+          const galaxy = galaxies.at(-1) ?? null
+          if (galaxies.length < 2 || !highlighted?.some((circled) => circled === galaxy)) {
+            view.select(galaxy)
+          }
+          highlighted = highlighted && [...highlighted]
         }}
       />
     {/key}
