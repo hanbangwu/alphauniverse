@@ -131,17 +131,19 @@ def image(
 
 def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
     fields = {
-        "flux": ("flux", torch.float32),
-        "ivar": ("ivar", torch.float32),
-        "wavelength": ("lambda", torch.float32),
-        "mask": ("mask", torch.bool),
+        "flux": ("flux", torch.float32, 0.0),
+        "ivar": ("ivar", torch.float32, 0.0),
+        "wavelength": ("lambda", torch.float32, 99999.0),
+        "mask": ("mask", torch.bool, True),
     }
     kept = np.asarray(row["lambda"]) > 0
     samples = {
         argument: torch.as_tensor(
-            np.asarray(row[field])[kept][None], dtype=dtype, device=device()
+            np.append(np.asarray(row[field])[kept], value)[None],
+            dtype=dtype,
+            device=device(),
         )
-        for argument, (field, dtype) in fields.items()
+        for argument, (field, dtype, value) in fields.items()
     }
     return codec().encode(modality(**samples))[modality.token_key].reshape(1, -1)
 

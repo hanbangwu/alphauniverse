@@ -82,17 +82,34 @@ def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
     } == TOKENS
 
 
-def test_spectrum_padding_does_not_change_its_tokens() -> None:
-    padded = spectrum(np.random.default_rng(1), 3800, 200)
-    unpadded = {field: values[:3800] for field, values in padded.items()}
+@pytest.mark.parametrize(
+    ("modality", "samples", "dataset_pads", "length"),
+    [("DESISpectrum", 7781, 0, 7808), ("SDSSSpectrum", 3800, 200, 4800)],
+)
+def test_spectra_tokenize_as_aion_main_pads_them(
+    modality: str, samples: int, dataset_pads: int, length: int
+) -> None:
+    survey = getattr(encode_module, modality)
+    row = spectrum(np.random.default_rng(2), samples, dataset_pads)
+    padded = {
+        argument: torch.nn.functional.pad(
+            torch.as_tensor(row[field][:samples], dtype=dtype)[None],
+            (0, length - samples),
+            value=value,
+        )
+        for argument, field, dtype, value in (
+            ("flux", "flux", torch.float32, 0.0),
+            ("ivar", "ivar", torch.float32, 0.0),
+            ("wavelength", "lambda", torch.float32, 99999.0),
+            ("mask", "mask", torch.bool, True),
+        )
+    }
 
     with torch.inference_mode():
-        first, second = (
-            encode_module.spectrum(encode_module.SDSSSpectrum, row)
-            for row in (padded, unpadded)
-        )
+        found = encode_module.spectrum(survey, row)
+        expected = encode_module.codec().encode(survey(**padded))[survey.token_key]
 
-    assert torch.equal(first, second)
+    assert torch.equal(found, expected)
 
 
 def test_each_survey_lands_in_its_own_cell_images_first() -> None:
