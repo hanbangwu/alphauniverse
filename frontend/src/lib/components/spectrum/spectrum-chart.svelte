@@ -22,7 +22,7 @@
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED, chartInk } from '$lib/color'
+  import { OUTLINE, type RGB, chartInk } from '$lib/color'
   import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
@@ -72,22 +72,34 @@
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
     const chosen = new Set(selected)
-    return Array.from(values, (value, index): Areas[number] => {
+    const cells = Array.from(values, (value, index): Areas[number] => {
       const [low, high] = spectrumTokenOf(meta, index)
       const [r, g, b] = color(value)
-      const picked = chosen.has(index)
       return [
         {
           xAxis: low,
-          itemStyle: {
-            color: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
-            borderColor: SELECTED,
-            borderWidth: picked ? 1 : 0
-          }
+          itemStyle: { color: `rgba(${r}, ${g}, ${b}, ${opacity(chosen.has(index))})` }
         },
         { xAxis: high }
       ]
     })
+    const runs: [number, number][] = []
+    for (const index of [...chosen].sort((a, b) => a - b)) {
+      const run = runs.at(-1)
+      if (run && index === run[1] + 1) run[1] = index
+      else runs.push([index, index])
+    }
+    const outlines = runs.flatMap(([first, last]) =>
+      OUTLINE.map(({ stroke, width }, layer): Areas[number] => [
+        {
+          xAxis: spectrumTokenOf(meta, first)[0],
+          itemStyle: { color: 'transparent', borderColor: stroke, borderWidth: width },
+          z2: layer + 1
+        },
+        { xAxis: spectrumTokenOf(meta, last)[1] }
+      ])
+    )
+    return [...cells, ...outlines]
   })
 
   function describe(params: TooltipComponentFormatterCallbackParams): string {

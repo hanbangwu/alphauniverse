@@ -21,7 +21,7 @@
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED } from '$lib/color'
+  import type { RGB } from '$lib/color'
   import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
@@ -60,6 +60,7 @@
   let cursor = $state<number | null>(null)
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
+  const chosen = $derived(new Set(selected))
 
   function cell(
     params: CustomSeriesRenderItemParams,
@@ -68,19 +69,18 @@
     const [x, y] = api.coord([api.value(0), api.value(1)])
     const [width, height] = api.size!([1, 1]) as number[]
     const [r, g, b] = color(values[params.dataIndex])
-    const picked = selected.includes(params.dataIndex)
     const pointed = params.dataIndex === cursor
     return {
       type: 'rect',
       shape: { x, y, width, height },
       style: {
-        fill: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
-        stroke: picked ? SELECTED : pointed ? HOVER.stroke : undefined,
-        lineWidth: picked ? 2 : HOVER.lineWidth
+        fill: `rgba(${r}, ${g}, ${b}, ${opacity(chosen.has(params.dataIndex))})`,
+        stroke: pointed ? HOVER.stroke : undefined,
+        lineWidth: HOVER.lineWidth
       },
-      z2: picked || pointed ? 1 : 0,
+      z2: pointed ? 1 : 0,
       transition: 'style',
-      emphasis: { style: picked ? {} : HOVER }
+      emphasis: { style: HOVER }
     }
   }
 
