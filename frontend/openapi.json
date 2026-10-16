@@ -80,7 +80,8 @@
               "enum": [
                 "encoded",
                 "codebook",
-                "tokens"
+                "tokens",
+                "properties"
               ],
               "type": "string",
               "title": "Role"
