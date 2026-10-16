@@ -32,6 +32,7 @@
     spectrum: Spectrum
     values?: ArrayLike<number>
     color?: (value: number) => RGB
+    mask?: ArrayLike<number> | null
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
@@ -44,6 +45,7 @@
     spectrum,
     values,
     color,
+    mask,
     opacity = () => 1,
     title,
     selected = [],
@@ -72,7 +74,7 @@
         {
           xAxis: low,
           itemStyle: {
-            color: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
+            color: `rgba(${r}, ${g}, ${b}, ${mask?.[index] === 0 ? 0 : opacity(picked)})`,
             borderColor: SELECTED,
             borderWidth: picked ? 1 : 0
           }

@@ -19,6 +19,6 @@ export class Threshold {
 export class MaskState {
   readonly on = new Field(false)
   readonly invert = new Field(false)
-  readonly query = new Threshold()
-  readonly matches = new Threshold()
+  readonly images = { query: new Threshold(), matches: new Threshold() }
+  readonly spectra = { query: new Threshold(), matches: new Threshold() }
 }

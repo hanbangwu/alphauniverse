@@ -16,11 +16,12 @@
     selected?: number[]
     ontoggle?: (index: number) => void
     heat: ((value: number) => RGB) | null
+    mask?: ArrayLike<number> | null
     caption: (value: number, index: number) => string
     error?: string | null
   }
 
-  let { galaxy, survey, map, selected, ontoggle, heat, caption, error }: Props = $props()
+  let { galaxy, survey, map, selected, ontoggle, heat, mask, caption, error }: Props = $props()
 
   const similarity = getSimilarity()
 
@@ -45,6 +46,7 @@
         spectrum={spectrum.data}
         values={cells}
         color={palette}
+        {mask}
         opacity={map ? undefined : tokenAlpha}
         title={map ? caption : similarity.caption}
         {selected}

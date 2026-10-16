@@ -63,10 +63,11 @@
       {/each}
     </div>
     {#if display.on.value && similarity.imageLayerDomain}
-      <div class="flex flex-col gap-1 md:max-w-xs">
-        <span class="text-xs text-muted-foreground">Query mask threshold</span>
-        <MaskControls domain={similarity.imageLayerDomain} control={display.query} />
-      </div>
+      <MaskControls
+        label="Mask threshold"
+        domain={similarity.imageLayerDomain}
+        control={display.images.query}
+      />
     {/if}
   </CollapsibleGroup>
 
@@ -80,12 +81,15 @@
     {/snippet}
     {#each SPECTRUM_SURVEYS as survey (survey)}
       {@const mode = spectrumMode(survey)}
+      {@const layer = similarity.layerOf(mode)}
       <Observed galaxy={similarity.galaxy} {survey} kind="spectrum">
         <SpectrumPanel
           galaxy={similarity.galaxy}
           {survey}
-          map={similarity.layerOf(mode)?.values ?? null}
-          heat={similarity.layerOf(mode)?.heat ?? null}
+          map={layer?.values ?? null}
+          heat={layer?.heat ?? null}
+          mask={layer &&
+            similarity.maskOf(layer.values, similarity.spectrumLayerDomain, display.spectra.query)}
           caption={similarity.layerCaption}
           selected={view.tokens[mode].value}
           ontoggle={(index) => view.tokens[mode].toggle(index)}
@@ -93,6 +97,13 @@
         />
       </Observed>
     {/each}
+    {#if display.on.value && similarity.spectrumLayerDomain}
+      <MaskControls
+        label="Mask threshold"
+        domain={similarity.spectrumLayerDomain}
+        control={display.spectra.query}
+      />
+    {/if}
   </CollapsibleGroup>
 
   <CollapsibleGroup title="Catalogue" bind:open={view.open.current.catalogue}>

@@ -39,7 +39,11 @@
               title={similarity.score}
               selected={similarity.outlinesAt(mode, index)}
             />
-            <ImageTokenMask {values} domain={similarity.imageDomain} control={display.matches} />
+            <ImageTokenMask
+              {values}
+              domain={similarity.imageDomain}
+              control={display.images.matches}
+            />
           </div>
         {/if}
       {/each}
@@ -56,10 +60,12 @@
     {#each SPECTRUM_SURVEYS as survey (survey)}
       {#if similarity.observes(survey, index)}
         {@const mode = spectrumMode(survey)}
+        {@const values = similarity.mapAt(mode, index)}
         <SpectrumPanel
           {galaxy}
           {survey}
-          map={similarity.mapAt(mode, index)}
+          map={values}
+          mask={similarity.maskOf(values, similarity.spectrumDomain, display.spectra.matches)}
           heat={similarity.scales?.[mode]?.heat ?? null}
           caption={similarity.score}
           selected={similarity.outlinesAt(mode, index)}

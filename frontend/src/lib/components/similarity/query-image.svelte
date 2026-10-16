@@ -55,7 +55,7 @@
     <ImageTokenMask
       values={layer.values}
       domain={similarity.imageLayerDomain}
-      control={display.query}
+      control={display.images.query}
     />
   {/if}
 </div>

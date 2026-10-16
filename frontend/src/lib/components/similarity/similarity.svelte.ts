@@ -1,7 +1,7 @@
 import type { Galaxy } from '$lib/api'
 import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { ANCHOR, IMAGE_MODES, IMAGE_SURVEYS, byMode, imageMode, surveyOf } from '$lib/data/modes'
+import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, surveyOf } from '$lib/data/modes'
 import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
 import type {
@@ -91,6 +91,7 @@ export class Similarity {
   readonly galaxies: Int32Array
   readonly scales: Record<CosineMode, Scale | null> | null
   readonly imageDomain: Extent | null
+  readonly spectrumDomain: Extent | null
   readonly tableValueMap: Float32Array | null
   readonly tableValueHeat: Heat | null
 
@@ -144,6 +145,7 @@ export class Similarity {
         : null
     )
     this.imageDomain = $derived(union(IMAGE_MODES.map((mode) => this.scales?.[mode]?.domain)))
+    this.spectrumDomain = $derived(union(SPECTRUM_MODES.map((mode) => this.scales?.[mode]?.domain)))
     this.tableValueMap = $derived(saliency ? saliency.tableValues : (result?.tableValueMap ?? null))
     this.tableValueHeat = $derived(
       this.tableValueMap ? continuous(extent(this.tableValueMap)) : null
@@ -164,11 +166,19 @@ export class Similarity {
   }
 
   get imageLayerDomain(): Extent | null {
+    return this.#layerDomain(IMAGE_MODES)
+  }
+
+  get spectrumLayerDomain(): Extent | null {
+    return this.#layerDomain(SPECTRUM_MODES)
+  }
+
+  #layerDomain(modes: readonly CosineMode[]): Extent | null {
     const coverage = this.#coverage.data
     return union(
-      IMAGE_SURVEYS.filter((survey) => survey === ANCHOR || coverage?.[survey]).map(
-        (survey) => this.layerOf(imageMode(survey))?.domain
-      )
+      modes
+        .filter((mode) => surveyOf(mode) === ANCHOR || coverage?.[surveyOf(mode)])
+        .map((mode) => this.layerOf(mode)?.domain)
     )
   }
 
