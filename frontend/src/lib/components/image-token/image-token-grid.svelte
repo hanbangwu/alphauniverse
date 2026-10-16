@@ -123,11 +123,19 @@
       drop()
       return
     }
-    const from = last
-    const to = (last = position(event))
-    const steps = Math.ceil(Math.max(...from.map((value, axis) => Math.abs(to[axis] - value))))
-    for (let step = 1; step <= steps; step++) {
-      paint(from.map((value, axis) => Math.floor(value + ((to[axis] - value) * step) / steps)))
+    const [fromX, fromY] = last
+    const [toX, toY] = (last = position(event))
+    let [column, row] = [Math.floor(fromX), Math.floor(fromY)]
+    const [endColumn, endRow] = [Math.floor(toX), Math.floor(toY)]
+    while (column !== endColumn || row !== endRow) {
+      const across = (column + Number(toX > fromX) - fromX) / (toX - fromX)
+      const down = (row + Number(toY > fromY) - fromY) / (toY - fromY)
+      if (row === endRow || (column !== endColumn && across < down)) {
+        column += Math.sign(toX - fromX)
+      } else {
+        row += Math.sign(toY - fromY)
+      }
+      paint([column, row])
     }
   }
 
