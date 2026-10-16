@@ -36,6 +36,8 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_templates
    uv run modal run modal_app.py::generate_observed_grams
    uv run modal run modal_app.py::generate_template_embeddings
+   uv run modal run modal_app.py::generate_joint_embedding
+   uv run modal run modal_app.py::generate_properties
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
    uv run modal run modal_app.py::generate_alignment
@@ -95,6 +97,7 @@ Run a benchmark
    uv run --group build modal run -m scripts.benchmarks.template_quality
    uv run modal run -m scripts.benchmarks.template_embedding_quality
    uv run --group build modal run -m scripts.benchmarks.retrieval_quality
+   uv run --group build modal run -m scripts.benchmarks.redshift_quality
    uv run --group build modal run -m scripts.benchmarks.probe_quality
    uv run --group build modal run -m scripts.benchmarks.neighbour_quality
 

@@ -8,6 +8,7 @@ paths:
   - "app/templates.py"
   - "app/observations.py"
   - "app/observed_grams.py"
+  - "app/properties.py"
   - "app/dataset.py"
   - "app/search.py"
   - "app/text_search.py"

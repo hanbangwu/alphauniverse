@@ -416,6 +416,22 @@ def drawn(probe, shots):
     return found
 
 
+def redshift_quality():
+    found = report("redshift_quality")
+    if found is None:
+        return missing()
+    rows = [
+        {"input": name, "survey": survey} | figures
+        for name, surveys in found["inputs"].items()
+        for survey, figures in surveys.items()
+    ]
+    return column(
+        heading(found, found["device"]),
+        table(rows, ("input", "survey", "galaxies", "bias", "nmad", "outlier_rate")),
+        **WIDTH,
+    )
+
+
 def probe_quality():
     found = report("probe_quality")
     if found is None:
