@@ -311,6 +311,10 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
             "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}
         }
     },
+    description="The central 96 by 96 px of the galaxy's image in one survey: the "
+    "dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i "
+    "and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy "
+    "Survey's.",
 )
 def get_image(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     found = hsc_image(galaxy) if survey == "hsc" else image(galaxy)

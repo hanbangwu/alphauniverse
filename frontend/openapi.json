@@ -199,6 +199,7 @@
     "/galaxy/{galaxy}/image/{survey}": {
       "get": {
         "summary": "Get Image",
+        "description": "The central 96 by 96 px of the galaxy's image in one survey: the dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy Survey's.",
         "operationId": "get_image",
         "parameters": [
           {

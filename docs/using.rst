@@ -11,22 +11,20 @@ The map shows every galaxy, or every token, placed by :doc:`methods/map`. Switch
 Look at a galaxy
 ----------------
 
-A selected galaxy shows:
+A selected galaxy shows, in groups that can each be collapsed:
 
-- its Legacy Survey colour image, the central 96 × 96 px;
-- its DESI spectrum, smoothed for display with a Gaussian of σ = 2 pixels; search uses AION's predictions, never the smoothed flux;
+- its Legacy Survey and HSC images, the central 96 × 96 px of each: the Legacy Survey colour image, and the HSC image coloured from its *g r i z* flux by the mapping that made the Legacy Survey's;
+- its DESI and SDSS spectra, smoothed for display with a Gaussian of σ = 2 pixels; search uses AION's predictions, never the smoothed flux;
 - its catalogue values, with Galaxy Zoo 10, PROVABGS and the redshift; the 26 values AION reads can be selected for search;
 - which surveys it is matched in.
-
-AION also reads the HSC image and the SDSS spectrum, but the site shows neither, and a galaxy with only an SDSS spectrum shows none.
 
 Search by similarity
 --------------------
 
-Start a search from the selected galaxy and pick what to compare: cells of its image, windows of its spectrum, catalogue values, or any mix. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
+Start a search from the selected galaxy and pick what to compare: cells of its Legacy Survey or HSC image, windows of its DESI or SDSS spectrum, catalogue values, or any mix. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
 
-- **Same place** or **Any position**, chosen separately for the image and the spectrum;
-- for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and a map of where it agrees with the query;
+- **Any position**, set separately for the images and the spectra; otherwise each selected cell or window is compared at the same place;
+- for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and for each image and spectrum it has, a map of where it agrees with the query;
 - **Mask**, which adds a panel marking the image cells at or above a threshold, by default the middle of the panel's range; **Invert** marks those below.
 
 Before or after a search, the **This galaxy** and **Population** maps shade the query galaxy's own slots by how they relate to the selection; see :doc:`methods/query-maps`.
