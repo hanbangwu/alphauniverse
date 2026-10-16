@@ -14,7 +14,7 @@
 
 <script lang="ts">
   import type { RGB } from '$lib/color'
-  import { TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
+  import { TAP_RADIUS, TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
@@ -54,6 +54,7 @@
   let adding: boolean
   let pointer: number | null = null
   let last: number[]
+  let press: number[]
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
   const chosen = $derived(new Set(selected).symmetricDifference(new Set(painted)))
@@ -109,8 +110,9 @@
     }
     if (event.button !== 0) return
     pointer = event.pointerId
+    press = [event.clientX, event.clientY]
     last = position(event)
-    const [column, row] = last.map(Math.floor)
+    const [column, row] = last.map((value) => Math.min(Math.floor(value), grid - 1))
     adding = !selected.includes(row * grid + column)
     paint([column, row])
   }
@@ -121,6 +123,9 @@
       drop()
       return
     }
+    const [pressX, pressY] = press
+    const near = Math.hypot(event.clientX - pressX, event.clientY - pressY) <= TAP_RADIUS
+    if (event.pointerType !== 'mouse' && near) return
     const [fromX, fromY] = last
     last = position(event)
     const [toX, toY] = last

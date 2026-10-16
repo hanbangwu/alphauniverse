@@ -17,13 +17,11 @@
     LineSeriesOption | GridComponentOption | TooltipComponentOption | DataZoomComponentOption
   >
   type Areas = NonNullable<MarkAreaComponentOption['data']>
-
-  const TAP_RADIUS = 10
 </script>
 
 <script lang="ts">
   import { OUTLINE, type RGB, chartInk } from '$lib/color'
-  import { TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
+  import { TAP_RADIUS, TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
@@ -207,7 +205,7 @@
       drop()
       return
     }
-    if (event.pointerType === 'touch') {
+    if (event.pointerType !== 'mouse') {
       if (Math.hypot(event.clientX - press[0], event.clientY - press[1]) > TAP_RADIUS) drop()
       return
     }
