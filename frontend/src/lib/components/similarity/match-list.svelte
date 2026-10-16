@@ -1,13 +1,13 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
   import { IMAGE_MODES, SPECTRUM_MODES } from '$lib/data/modes'
-  import { getMask } from '$lib/state/app.svelte'
+  import { getApp } from '$lib/state/app.svelte'
   import MaskControls from './mask-controls.svelte'
   import MatchRow from './match-row.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   const similarity = getSimilarity()
-  const display = getMask()
+  const { view, mask: display } = getApp()
 
   const images = $derived(IMAGE_MODES.some((mode) => similarity.anywhere(mode)))
   const spectra = $derived(SPECTRUM_MODES.some((mode) => similarity.anywhere(mode)))
@@ -26,7 +26,7 @@
     <Spinner class="size-6" />
   </div>
 {:else}
-  {#if display.on.value && similarity.imageDomain}
+  {#if display.on.value && view.open.current.images && similarity.imageDomain}
     <div class="flex flex-col gap-1 md:max-w-xs">
       <span class="text-xs text-muted-foreground">Match mask threshold</span>
       <MaskControls domain={similarity.imageDomain} control={display.matches} />

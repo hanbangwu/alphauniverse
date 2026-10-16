@@ -11,12 +11,12 @@ The map shows every galaxy, or every token, placed by :doc:`methods/map`. Switch
 Look at a galaxy
 ----------------
 
-A selected galaxy shows, in groups that can each be collapsed:
+A selected galaxy shows which surveys it is matched in and, in groups that can each be collapsed:
 
 - its Legacy Survey and HSC images, the central 96 × 96 px of each: the Legacy Survey colour image, and the HSC image coloured from its *g r i z* flux by the mapping that made the Legacy Survey's;
-- its DESI and SDSS spectra, smoothed for display with a Gaussian of σ = 2 pixels; search uses AION's predictions, never the smoothed flux;
-- its catalogue values, with Galaxy Zoo 10, PROVABGS and the redshift; the 26 values AION reads can be selected for search;
-- which surveys it is matched in.
+- its DESI and SDSS spectra, smoothed for display with a Gaussian of σ = 2 pixels; search uses AION's predictions, never the smoothed flux.
+
+The search shows the same groups and a third, its catalogue values, with Galaxy Zoo 10, PROVABGS and the redshift; the 26 values AION reads can be selected for search. A group stays open or collapsed for every galaxy, in both views.
 
 Search by similarity
 --------------------
@@ -25,7 +25,7 @@ Start a search from the selected galaxy and pick what to compare: cells of its L
 
 - **Any position**, set separately for the images and the spectra; otherwise each selected cell or window is compared at the same place;
 - for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and for each image and spectrum it has, a map of where it agrees with the query;
-- **Mask**, which adds a panel marking the image cells at or above a threshold, by default the middle of the panel's range; **Invert** marks those below.
+- **Mask**, which adds a panel marking the image cells at or above a threshold, one for the query's images and one for the matches', each by default the middle of the range of the maps it applies to; **Invert** marks those below.
 
 Before or after a search, the **This galaxy** and **Population** maps shade the query galaxy's own slots by how they relate to the selection; see :doc:`methods/query-maps`.
 

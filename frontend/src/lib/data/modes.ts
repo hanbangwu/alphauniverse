@@ -6,6 +6,7 @@ export const SPECTRUM_SURVEYS: readonly SpectrumSurvey[] = ['desi', 'sdss']
 
 export const imageMode = (survey: ImageSurvey) => `${survey}_image` as const
 export const spectrumMode = (survey: SpectrumSurvey) => `${survey}_spectrum` as const
+export const surveyOf = (mode: CosineMode) => mode.split('_')[0]
 
 export const IMAGE_MODES = IMAGE_SURVEYS.map(imageMode)
 export const SPECTRUM_MODES = SPECTRUM_SURVEYS.map(spectrumMode)

@@ -2,7 +2,7 @@
   import { Button } from '$lib/components/ui/button'
   import { Switch } from '$lib/components/ui/switch'
   import * as Tabs from '$lib/components/ui/tabs'
-  import { TOKEN_MODES } from '$lib/data/modes'
+  import { IMAGE_MODES } from '$lib/data/modes'
   import { getMask } from '$lib/state/app.svelte'
   import MatchCount from './match-count.svelte'
   import { getSimilarity } from './similarity.svelte'
@@ -10,7 +10,7 @@
   const similarity = getSimilarity()
   const display = getMask()
 
-  const mapped = $derived(TOKEN_MODES.some((mode) => similarity.layerOf(mode)))
+  const mapped = $derived(IMAGE_MODES.some((mode) => similarity.layerOf(mode)))
 </script>
 
 <form

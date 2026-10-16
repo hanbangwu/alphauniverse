@@ -97,12 +97,13 @@ def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
     assert image(1, "ls") == encode(SOURCE)
 
 
-def test_hsc_images_colour_each_filter_and_crop_the_centre(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(("band", "channel"), [("g", 2), ("r", 1), ("i", 1), ("z", 0)])
+def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
+    monkeypatch: pytest.MonkeyPatch, band: str, channel: int
 ) -> None:
-    flux = np.zeros((5, CROP_PIXELS + 8, CROP_PIXELS + 8), dtype=np.float32)
-    flux[3] = 1.0
     bands = ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]
+    flux = np.zeros((len(bands), CROP_PIXELS + 8, CROP_PIXELS + 8), dtype=np.float32)
+    flux[bands.index(f"hsc-{band}"), 4, 5] = 100.0
     rows = Dataset.from_dict(
         {TOKEN_SURVEYS["hsc"]: [None, {"band": bands, "flux": flux.tolist()}]}
     )
@@ -112,7 +113,9 @@ def test_hsc_images_colour_each_filter_and_crop_the_centre(
     with Image.open(BytesIO(image(1, "hsc"))) as png:
         pixels = np.asarray(png.convert("RGB"))
     assert pixels.shape == (CROP_PIXELS, CROP_PIXELS, 3)
-    assert (pixels[..., :1] > pixels[..., 1:]).all()
+    brightest = np.unravel_index(pixels.sum(axis=2).argmax(), pixels.shape[:2])
+    assert brightest == (0, 1)
+    assert pixels[0, 1].argmax() == channel
 
 
 def test_unmatched_survey_has_no_spectrum(stored: None) -> None:

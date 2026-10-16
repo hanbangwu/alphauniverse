@@ -35,7 +35,7 @@
               label={SURVEYS[survey].label}
               {values}
               grid={similarity.grid}
-              color={similarity.scales?.[mode].heat ?? null}
+              color={similarity.scales?.[mode]?.heat ?? null}
               title={similarity.score}
               selected={similarity.outlinesAt(mode, index)}
             />
@@ -60,7 +60,7 @@
           {galaxy}
           {survey}
           map={similarity.mapAt(mode, index)}
-          heat={similarity.scales?.[mode].heat ?? null}
+          heat={similarity.scales?.[mode]?.heat ?? null}
           caption={similarity.score}
           selected={similarity.outlinesAt(mode, index)}
         />

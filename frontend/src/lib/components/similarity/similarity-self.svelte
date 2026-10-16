@@ -24,17 +24,22 @@
   const { view, mask: display } = getApp()
 </script>
 
-{#snippet controls(fields: IndexListField[], anywhere?: Field<boolean>)}
+{#snippet controls(noun: string, fields: IndexListField[], anywhere?: Field<boolean>)}
   {@const count = fields.reduce((total, field) => total + field.value.length, 0)}
   {#if count}
     <span class="text-xs text-muted-foreground">{count} selected</span>
-    <Button variant="ghost" size="xs" onclick={() => fields.forEach((field) => field.reset())}>
+    <Button
+      variant="ghost"
+      size="xs"
+      aria-label="Clear {noun} selection"
+      onclick={() => fields.forEach((field) => field.reset())}
+    >
       Clear
     </Button>
   {/if}
   {#if anywhere}
     <label class="ml-auto flex items-center gap-2 text-xs">
-      <Switch size="sm" bind:checked={anywhere.value} />
+      <Switch size="sm" aria-label="Any position for {noun} tokens" bind:checked={anywhere.value} />
       Any position
     </label>
   {/if}
@@ -44,6 +49,7 @@
   <CollapsibleGroup title="Images" bind:open={view.open.current.images}>
     {#snippet actions()}
       {@render controls(
+        'image',
         IMAGE_MODES.map((mode) => view.tokens[mode]),
         view.imageAnywhere
       )}
@@ -67,6 +73,7 @@
   <CollapsibleGroup title="Spectra" bind:open={view.open.current.spectra}>
     {#snippet actions()}
       {@render controls(
+        'spectrum',
         SPECTRUM_MODES.map((mode) => view.tokens[mode]),
         view.spectrumAnywhere
       )}
@@ -90,7 +97,7 @@
 
   <CollapsibleGroup title="Catalogue" bind:open={view.open.current.catalogue}>
     {#snippet actions()}
-      {@render controls([view.tableValues])}
+      {@render controls('catalogue', [view.tableValues])}
     {/snippet}
     <TablePanel
       galaxy={similarity.galaxy}

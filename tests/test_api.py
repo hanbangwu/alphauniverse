@@ -95,7 +95,7 @@ def test_image_tokens_are_that_galaxys_stored_image_token_ids(
     client: TestClient, survey: str
 ) -> None:
     column = _stored("tokens").column(survey)
-    galaxy = column.is_valid().to_pylist().index(True)
+    galaxy = int(np.flatnonzero(column.is_valid())[-1])
     cell = column[galaxy]
 
     response = client.get(f"/galaxy/{galaxy}/image/{survey}/tokens")
@@ -148,7 +148,7 @@ def test_spectrum_tokens_drop_the_normalisation_token(
     client: TestClient, survey: str
 ) -> None:
     column = _stored("tokens").column(survey)
-    galaxy = column.is_valid().to_pylist().index(True)
+    galaxy = int(np.flatnonzero(column.is_valid())[-1])
     cell = column[galaxy]
 
     response = client.get(f"/galaxy/{galaxy}/spectrum/{survey}/tokens")

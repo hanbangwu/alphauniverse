@@ -1,7 +1,8 @@
+import type { Galaxy } from '$lib/api'
 import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { ANCHOR, IMAGE_MODES, byMode } from '$lib/data/modes'
-import { cosinesQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
+import { ANCHOR, IMAGE_MODES, IMAGE_SURVEYS, byMode, imageMode, surveyOf } from '$lib/data/modes'
+import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
 import type {
   Extent,
@@ -32,9 +33,13 @@ interface Layered extends Scale {
 
 export type Layer = 'galaxy' | 'population'
 
-function scale(values: ArrayLike<number>): Scale {
-  const domain = extent(values)
+function scale(domain: Extent): Scale {
   return { domain, heat: continuous(domain) }
+}
+
+function union(domains: (Extent | undefined)[]): Extent | null {
+  const ends = domains.flatMap((domain) => domain ?? [])
+  return ends.length ? extent(ends) : null
 }
 
 class ModeLayer {
@@ -57,7 +62,7 @@ class ModeLayer {
       const population = saliency()
       const cosines = this.#cosines.data
       const values = population ? population.maps[mode] : cosines ? best(cosines, selected()) : null
-      return values && { values, ...scale(values) }
+      return values && { values, ...scale(extent(values)) }
     })
   }
 
@@ -73,6 +78,7 @@ export class Similarity {
 
   readonly #app: AppState = getApp()
   readonly #result: CreateQueryResult<SimilarityResult>
+  readonly #coverage: CreateQueryResult<Galaxy>
   readonly #layers: Record<CosineMode, ModeLayer>
   readonly #saliency: CreateQueryResult<SaliencyResult>
   #submitted: SimilarityQuery | null = $state(null)
@@ -83,7 +89,7 @@ export class Similarity {
   readonly draft: SimilarityQuery | null
 
   readonly galaxies: Int32Array
-  readonly scales: Record<CosineMode, Scale> | null
+  readonly scales: Record<CosineMode, Scale | null> | null
   readonly imageDomain: Extent | null
   readonly tableValueMap: Float32Array | null
   readonly tableValueHeat: Heat | null
@@ -106,6 +112,7 @@ export class Similarity {
     this.#selected = $derived(selection !== null)
     this.draft = $derived(search.request(selection))
     this.#result = createQuery(() => similarityQuery(this.#submitted))
+    this.#coverage = createQuery(() => coverageQuery(galaxy))
     const own = $derived(this.layer === 'galaxy')
     this.#saliency = createQuery(() => saliencyQuery(own ? null : selection))
     const saliency = $derived(own || !selection ? null : (this.#saliency.data ?? null))
@@ -126,13 +133,17 @@ export class Similarity {
       result
         ? byMode((mode) => {
             const maps = result.maps[mode]
-            return scale(maps.subarray(maps.length / result.galaxies.length))
+            const width = maps.length / result.galaxies.length
+            const domain = union(
+              this.matches
+                .filter(({ index }) => this.observes(surveyOf(mode), index))
+                .map(({ index }) => extent(row(maps, index, width)))
+            )
+            return domain && scale(domain)
           })
         : null
     )
-    this.imageDomain = $derived(
-      this.scales && extent(IMAGE_MODES.flatMap((mode) => this.scales![mode].domain))
-    )
+    this.imageDomain = $derived(union(IMAGE_MODES.map((mode) => this.scales?.[mode]?.domain)))
     this.tableValueMap = $derived(saliency ? saliency.tableValues : (result?.tableValueMap ?? null))
     this.tableValueHeat = $derived(
       this.tableValueMap ? continuous(extent(this.tableValueMap)) : null
@@ -153,8 +164,12 @@ export class Similarity {
   }
 
   get imageLayerDomain(): Extent | null {
-    const domains = IMAGE_MODES.flatMap((mode) => this.layerOf(mode)?.domain ?? [])
-    return domains.length ? extent(domains) : null
+    const coverage = this.#coverage.data
+    return union(
+      IMAGE_SURVEYS.filter((survey) => survey === ANCHOR || coverage?.[survey]).map(
+        (survey) => this.layerOf(imageMode(survey))?.domain
+      )
+    )
   }
 
   layerError(mode: CosineMode): string | null {
