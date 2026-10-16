@@ -1,4 +1,5 @@
 <script module lang="ts">
+  import { SELECTED } from '$lib/color'
   import { LineChart, type LineSeriesOption } from 'echarts/charts'
   import {
     DataZoomInsideComponent,
@@ -17,10 +18,15 @@
     LineSeriesOption | GridComponentOption | TooltipComponentOption | DataZoomComponentOption
   >
   type Areas = NonNullable<MarkAreaComponentOption['data']>
+
+  const OUTLINE = [
+    { color: 'transparent', borderColor: 'black', borderWidth: 4 },
+    { color: 'transparent', borderColor: SELECTED, borderWidth: 2 }
+  ]
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED, chartInk } from '$lib/color'
+  import { type RGB, chartInk } from '$lib/color'
   import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
@@ -64,22 +70,30 @@
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
     const chosen = new Set(selected)
-    return Array.from(values, (value, index): Areas[number] => {
+    const cells = Array.from(values, (value, index): Areas[number] => {
       const [low, high] = spectrumTokenOf(meta, index)
       const [r, g, b] = color(value)
-      const picked = chosen.has(index)
       return [
         {
           xAxis: low,
-          itemStyle: {
-            color: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
-            borderColor: SELECTED,
-            borderWidth: picked ? 1 : 0
-          }
+          itemStyle: { color: `rgba(${r}, ${g}, ${b}, ${opacity(chosen.has(index))})` }
         },
         { xAxis: high }
       ]
     })
+    const runs: [number, number][] = []
+    for (const index of [...chosen].sort((a, b) => a - b)) {
+      const last = runs.at(-1)
+      if (last && index === last[1] + 1) last[1] = index
+      else runs.push([index, index])
+    }
+    const outlines = runs.flatMap(([first, last]) =>
+      OUTLINE.map((itemStyle): Areas[number] => [
+        { xAxis: spectrumTokenOf(meta, first)[0], itemStyle },
+        { xAxis: spectrumTokenOf(meta, last)[1] }
+      ])
+    )
+    return [...cells, ...outlines]
   })
 
   function describe(params: TooltipComponentFormatterCallbackParams): string {
