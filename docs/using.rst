@@ -29,7 +29,7 @@ Start a search from the selected galaxy and pick what to compare: cells of its i
 - for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and a map of where it agrees with the query;
 - **Mask**, which adds a panel marking the image cells at or above a threshold, by default the middle of the panel's range; **Invert** marks those below.
 
-Click a match's image to search from it: it becomes the selected galaxy, with an empty selection. After a search, the **Mean** map circles the query galaxy and its matches until another galaxy is selected or another search runs; **Full** circles only the selected galaxy's tokens.
+Click a match's image to search from it: it becomes the selected galaxy, with an empty selection. After a search, the **Mean** map circles the query galaxy and the matches the morphology filter shows, until another galaxy is selected or another search runs; **Full** circles only the selected galaxy's tokens.
 
 Before or after a search, the **This galaxy** and **Population** maps shade the query galaxy's own slots by how they relate to the selection; see :doc:`methods/query-maps`.
 
