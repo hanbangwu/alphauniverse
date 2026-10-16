@@ -25,7 +25,7 @@ Start a search from the selected galaxy and pick what to compare: cells of its L
 
 - **Any position**, set separately for the images and the spectra; otherwise each selected cell or window is compared at the same place;
 - for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and for each image and spectrum it has, a map of where it agrees with the query;
-- **Mask**, which adds a panel marking the image cells at or above a threshold, one for the query's images and one for the matches', each by default the middle of the range of the maps it applies to; **Invert** marks those below.
+- **Mask**, which marks what scores at or above a threshold: a panel under each image marks its cells, and spectrum windows and catalogue values below it lose their colour. Images and spectra each have a threshold for the query and one for the matches, and the catalogue one for the query, each by default the middle of the range of the maps it applies to; **Invert** marks what scores below.
 
 Before or after a search, the **This galaxy** and **Population** maps shade the query galaxy's own slots by how they relate to the selection; see :doc:`methods/query-maps`.
 
