@@ -9,7 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import LinearRegression, RidgeCV
 from sklearn.metrics import r2_score, root_mean_squared_error
-from sklearn.model_selection import KFold, cross_val_predict
+from sklearn.model_selection import cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import make_pipeline
 
@@ -27,6 +27,7 @@ from app.config import (
 )
 from app.observations import column_values
 from app.parametric_umap import scan
+from app.properties import ALPHAS, FOLDS, provabgs
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -35,12 +36,9 @@ image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/probe_quality.json")
 NEIGHBOURS = 10
-ALPHAS = np.logspace(-3, 4, 15)
-FOLDS = KFold(shuffle=True, random_state=SEED)
 PROBES = {"ridge": RidgeCV(alphas=ALPHAS), "knn": KNeighborsRegressor(NEIGHBOURS)}
 SHOTS = (32, 128, 512)
 DRAWS = 20
-TARGETS = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", REDSHIFT: "Z_HP"}
 BLOCKS = {
     "all": GRAM_NAMES,
     "without_spectra": tuple(
@@ -51,13 +49,7 @@ BLOCKS = {
 
 def targets() -> dict[str, np.ndarray]:
     galaxies = np.arange(galaxy_count())
-    values = {
-        name: column_values(f"{column}{PROVABGS}", galaxies)
-        for name, column in TARGETS.items()
-    }
-    with np.errstate(divide="ignore", invalid="ignore"):
-        values["sfr"] = np.log10(values["sfr"])
-    return values
+    return provabgs(galaxies) | {REDSHIFT: column_values(f"Z_HP{PROVABGS}", galaxies)}
 
 
 def galleries(role: str, name: str) -> np.ndarray:
