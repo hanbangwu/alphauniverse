@@ -76,10 +76,7 @@ def stage_times(query: pql.Query) -> dict[str, float]:
     marks.append(time.perf_counter())
     pql.similarity(pql.fractions(pql.selected_peaks(peaks, selected), totals))
     marks.append(time.perf_counter())
-    order = np.argsort(-scored, kind="stable")
-    galaxies = np.concatenate(
-        ([query.galaxy], order[order != query.galaxy][: query.matches])
-    )
+    galaxies = pql.ranked(scored, query.galaxy, query.matches)
     marks.append(time.perf_counter())
     pql.maps(forms, peaks, pql.gathered(galaxies))
     marks.append(time.perf_counter())

@@ -37,6 +37,8 @@ A plain sum over modes would let the mode with the most selected slots set the r
    \text{score}(g) = \frac{1}{M} \sum_{m=1}^{M}
    \frac{T_m(g) - \langle T_m \rangle}{\sigma(T_m)}.
 
+With one mode the score is :math:`T_m(g)` itself, which ranks the same.
+
 The similarity
 --------------
 
@@ -65,4 +67,4 @@ This is the maximum-similarity matching of ColBERT :cite:p:`khattab2020colbert`.
 Whole modes
 -----------
 
-With every slot of a mode selected, :math:`T_m` is close to a row of the mode's :term:`Gram matrix`, which reads the other galaxies' predictions as search reads the query's (:doc:`/reference`). A :term:`whole-mode search` (``app.pql.mode_search``) ranks from the mode's :term:`token embedding` instead: :math:`q`'s query vector times every galaxy's gallery vector, both cut to their first 256 components, plus the offsets, gives that row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardised over all galaxies and averaged as above; the constant cancels. A match shows each mode's standardised score divided by :math:`M`, its contribution, so the contributions sum to the score, and the same-place map above at every slot.
+With every slot of a mode selected, :math:`T_m` is close to a row of the mode's :term:`Gram matrix`, which reads the other galaxies' predictions as search reads the query's (:doc:`/reference`). A :term:`whole-mode search` (``app.pql.mode_search``) ranks from the mode's :term:`token embedding` instead: :math:`q`'s query vector times every galaxy's gallery vector, both cut to their first 256 components, plus the offsets, gives that row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardised over all galaxies, one mode's too, and averaged as above; the constant cancels. A match shows each mode's standardised score divided by :math:`M`, its contribution, so the contributions sum to the score, and the same-place map above at every slot.

@@ -11,6 +11,7 @@ from app.config import (
     ANCHOR,
     DIM,
     GEMMA_DIM,
+    GRAM_NAMES,
     IMAGE_VOCABULARY,
     KEPT,
     N_IMAGE_TOKENS,
@@ -24,6 +25,7 @@ from app.config import (
     STORE_COLUMNS,
     TABLE_VALUE_SURVEYS,
     TEXT_SURVEYS,
+    TOKEN_EMBEDDING_RANK,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -34,8 +36,6 @@ from app.config import (
     store_schema,
     store_writer,
 )
-from app.embeddings import generate_token_embeddings
-from app.grams import generate_token_grams
 from app.pql import (
     MATRICES,
     SAMPLES,
@@ -182,6 +182,18 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
 
+def _token_embeddings(rng: np.random.Generator, galaxies: int) -> None:
+    for name in GRAM_NAMES:
+        np.savez(
+            artifact(f"token_embedding_{name}"),
+            queries=rng.standard_normal((galaxies, TOKEN_EMBEDDING_RANK), np.float32),
+            galleries=rng.standard_normal((galaxies, TOKEN_EMBEDDING_RANK), np.float32),
+            offsets=rng.standard_normal(galaxies, np.float32),
+            self_scores=rng.standard_normal(galaxies, np.float32),
+            singular_values=np.sort(rng.random(galaxies))[::-1],
+        )
+
+
 def forget() -> None:
     for cached in (
         galaxy_count,
@@ -252,10 +264,9 @@ def build(galaxies: int, seed: int = 0) -> Path:
     )
 
     _predictions(rng, galaxies)
+    _token_embeddings(rng, galaxies)
 
     forget()
-    generate_token_grams()
-    generate_token_embeddings()
     return target
 
 

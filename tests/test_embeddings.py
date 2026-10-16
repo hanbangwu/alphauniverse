@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from app import embeddings
+from app import embeddings, grams
 from app.config import GRAM_NAMES, artifact
 
 GALAXIES = 40
@@ -14,8 +14,10 @@ RANK = 5
 def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centred_gram(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
     monkeypatch.setattr(embeddings, "TOKEN_EMBEDDING_RANK", RANK)
 
+    grams.generate_token_grams()
     embeddings.generate_token_embeddings()
 
     for name in GRAM_NAMES:

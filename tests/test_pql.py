@@ -7,7 +7,7 @@ import pyarrow as pa
 import pytest
 from pydantic import ValidationError
 
-from app import pql
+from app import embeddings, pql
 from app.config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
@@ -15,6 +15,7 @@ from app.config import (
     N_SPECTRUM_TOKENS,
     OBSERVATIONS,
     REDSHIFT,
+    SEARCH_RANK,
     SPECTRUM_MODES,
     SPECTRUM_TOKEN_RANK,
     TABLE_MODES,
@@ -518,7 +519,7 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
     standardised = []
     for name in ("ls_image", "desi_spectrum_anywhere", REDSHIFT):
         stored = pql.stored(name)
-        row = stored["galleries"] @ stored["queries"][1] + stored["offsets"]
+        row = embeddings.scores(stored["queries"][[1]], stored, SEARCH_RANK)[0]
         row = row.double().numpy()
         standardised.append((row - row.mean()) / row.std())
     expected = np.mean(standardised, axis=0)

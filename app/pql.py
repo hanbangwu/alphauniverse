@@ -1,6 +1,6 @@
 import math
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from functools import cache, partial
 from itertools import accumulate
@@ -13,6 +13,7 @@ import pyarrow.compute as pc
 import torch
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from . import embeddings
 from .config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
@@ -34,7 +35,7 @@ from .config import (
     TOP_CODES,
     VOCABULARY,
     GalaxyIndex,
-    Mode,
+    ModeName,
     TokenMode,
     artifact,
 )
@@ -131,7 +132,7 @@ class Query(Selection):
 
 class ModeQuery(BaseModel):
     galaxy: GalaxyIndex
-    modes: Annotated[frozenset[Mode], Field(min_length=1)]
+    modes: Annotated[frozenset[ModeName], Field(min_length=1)]
     anywhere: frozenset[TokenMode] = frozenset()
     matches: Matches = 32
 
@@ -706,8 +707,8 @@ def similarity(shares: dict[str, np.ndarray]) -> np.ndarray:
     return np.exp(weighted / sum(weights.values()))
 
 
-def predicted(selected: dict[str, np.ndarray], galaxies: np.ndarray) -> list[list[str]]:
-    needed = {OBSERVED_IN[mode] for mode in selected.keys() & OBSERVED_IN.keys()}
+def predicted(modes: Iterable[str], galaxies: np.ndarray) -> list[list[str]]:
+    needed = {OBSERVED_IN[mode] for mode in modes if mode in OBSERVED_IN}
     return [
         [
             column
@@ -749,20 +750,22 @@ def search(query: Query) -> Results:
 
 
 def mode_search(query: ModeQuery) -> ModeResults:
-    rows = {}
+    totals = {}
     for mode in MODES:
         if mode in query.modes:
             found = stored(f"{mode}_anywhere" if mode in query.anywhere else mode)
-            row = found["galleries"] @ found["queries"][query.galaxy] + found["offsets"]
-            rows[mode] = row.double().numpy()
-    shares = contributions(rows)
-    scored = sum(shares.values())
+            matched = embeddings.scores(
+                found["queries"][[query.galaxy]], found, SEARCH_RANK
+            )
+            totals[mode] = matched[0].double().numpy()
+    contributed = contributions(totals)
+    scored = sum(contributed.values())
     galaxies = ranked(scored, query.galaxy, query.matches)
     forms = galaxy_forms(query.galaxy)
     return ModeResults(
         galaxies,
         scored[galaxies],
-        {mode: values[galaxies] for mode, values in shares.items()},
-        predicted(shares, galaxies),
+        {mode: values[galaxies] for mode, values in contributed.items()},
+        predicted(totals, galaxies),
         maps(forms, slot_peaks(forms), gathered(galaxies)),
     )
