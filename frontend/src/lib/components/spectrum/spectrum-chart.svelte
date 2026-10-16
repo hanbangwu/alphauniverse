@@ -25,7 +25,7 @@
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
-  import type { ECharts, ElementEvent } from 'echarts/core'
+  import type { ECharts } from 'echarts/core'
   import { mode } from 'mode-watcher'
 
   interface Props {
@@ -57,6 +57,11 @@
   const interactive = $derived(Boolean(ontoggle))
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
+  let instance: ECharts
+  let painted = $state<number[]>([])
+  let adding = false
+  let last: number | null = null
+
   const points = $derived(
     Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
   )
@@ -67,7 +72,7 @@
     return Array.from(values, (value, index): Areas[number] => {
       const [low, high] = spectrumTokenOf(meta, index)
       const [r, g, b] = color(value)
-      const picked = chosen.has(index)
+      const picked = chosen.has(index) !== painted.includes(index)
       return [
         {
           xAxis: low,
@@ -127,7 +132,16 @@
           axisPointer: { lineStyle: { color: ink.muted } }
         }
       : undefined,
-    dataZoom: [{ type: 'inside' }],
+    dataZoom: [
+      interactive
+        ? {
+            type: 'inside',
+            moveOnMouseMove: 'shift',
+            cursorGrab: 'pointer',
+            cursorGrabbing: 'pointer'
+          }
+        : { type: 'inside' }
+    ],
     series: [
       {
         type: 'line',
@@ -140,22 +154,65 @@
     ]
   })
 
-  function pick(instance: ECharts, event: ElementEvent): void {
-    if (!values) return
-    const point = [event.offsetX, event.offsetY]
-    if (!instance.containPixel('grid', point)) return
-    const index = spectrumTokenAt(meta, instance.convertFromPixel('grid', point)[0])
-    if (index < 0 || index >= values.length) return
-    ontoggle?.(index)
+  function pixel({ clientX, clientY }: PointerEvent): number[] {
+    const { left, top } = instance.getDom().getBoundingClientRect()
+    return [clientX - left, clientY - top]
+  }
+
+  function windowAt(event: PointerEvent): number {
+    const [{ startValue, endValue }] = instance.getOption().dataZoom as {
+      startValue: number
+      endValue: number
+    }[]
+    const [wavelength] = instance.convertFromPixel('grid', pixel(event))
+    return spectrumTokenAt(meta, Math.min(Math.max(wavelength, startValue), endValue))
+  }
+
+  function paint(index: number): void {
+    if (selected.includes(index) !== adding && !painted.includes(index)) painted.push(index)
+  }
+
+  function start(event: PointerEvent): void {
+    if (last !== null) {
+      end(event)
+      return
+    }
+    if (event.button !== 0 || event.shiftKey || !instance.containPixel('grid', pixel(event))) return
+    last = windowAt(event)
+    adding = !selected.includes(last)
+    paint(last)
+  }
+
+  function move(event: PointerEvent): void {
+    if (last === null) return
+    if (!event.buttons) {
+      end(event)
+      return
+    }
+    const index = windowAt(event)
+    for (let between = Math.min(last, index); between <= Math.max(last, index); between++) {
+      paint(between)
+    }
+    last = index
+  }
+
+  function end({ type }: PointerEvent): void {
+    if (last === null) return
+    if (type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+    painted = []
+    last = null
   }
 </script>
+
+<svelte:window onpointermove={move} onpointerup={end} onpointercancel={end} />
 
 <svelte:element
   this={interactive ? 'button' : 'div'}
   {@attach chart(
     () => option,
-    (instance) => instance.getZr().on('click', (event) => pick(instance, event))
+    (created) => (instance = created)
   )}
+  onpointerdown={interactive ? start : undefined}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}
