@@ -45,6 +45,17 @@ A failed job leaves its artifacts incomplete; rerun it.
 
 These commands write to the volume production serves from. To build into the ``dev`` Modal environment instead, which has its own app, volume and secrets, add ``--env dev`` after ``modal run``.
 
+Preview a branch
+----------------
+
+Run the CI/CD workflow by hand on the branch to deploy it to the ``dev`` app:
+
+.. code-block:: sh
+
+   gh workflow run ci-cd.yml --ref <branch>
+
+The branch's Vercel preview then calls that app.
+
 Update the API schema
 ---------------------
 
