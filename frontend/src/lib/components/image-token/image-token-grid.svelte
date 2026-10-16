@@ -10,16 +10,25 @@
   use([CustomChart, GridComponent])
 
   type Option = ComposeOption<CustomSeriesOption | GridComponentOption | TooltipComponentOption>
+
+  const HOVER = { stroke: '#fff', lineWidth: 1 }
+  const STEPS: Record<string, [number, number]> = {
+    ArrowLeft: [-1, 0],
+    ArrowRight: [1, 0],
+    ArrowUp: [0, -1],
+    ArrowDown: [0, 1]
+  }
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED } from '$lib/color'
+  import type { RGB } from '$lib/color'
   import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
     CustomSeriesRenderItemReturn
   } from 'echarts'
+  import type { ECharts } from 'echarts/core'
 
   interface Props {
     values: ArrayLike<number>
@@ -47,7 +56,11 @@
 
   const interactive = $derived(Boolean(ontoggle))
 
+  let instance: ECharts
+  let cursor = $state<number | null>(null)
+
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
+  const chosen = $derived(new Set(selected))
 
   function cell(
     params: CustomSeriesRenderItemParams,
@@ -56,18 +69,18 @@
     const [x, y] = api.coord([api.value(0), api.value(1)])
     const [width, height] = api.size!([1, 1]) as number[]
     const [r, g, b] = color(values[params.dataIndex])
-    const picked = selected.includes(params.dataIndex)
+    const pointed = params.dataIndex === cursor
     return {
       type: 'rect',
       shape: { x, y, width, height },
       style: {
-        fill: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
-        stroke: picked ? SELECTED : undefined,
-        lineWidth: 2
+        fill: `rgba(${r}, ${g}, ${b}, ${opacity(chosen.has(params.dataIndex))})`,
+        stroke: pointed ? HOVER.stroke : undefined,
+        lineWidth: HOVER.lineWidth
       },
-      z2: picked ? 1 : 0,
+      z2: pointed ? 1 : 0,
       transition: 'style',
-      emphasis: { style: picked ? {} : { stroke: '#fff', lineWidth: 1 } }
+      emphasis: { style: HOVER }
     }
   }
 
@@ -88,14 +101,48 @@
       : undefined,
     series: [{ type: 'custom', data: cells, renderItem: cell }]
   })
+
+  function point(index: number | null): void {
+    cursor = index
+    instance.dispatchAction(
+      index === null ? { type: 'hideTip' } : { type: 'showTip', seriesIndex: 0, dataIndex: index }
+    )
+  }
+
+  function move(event: KeyboardEvent): void {
+    const step = STEPS[event.key]
+    if (!step || event.altKey || event.ctrlKey || event.metaKey) return
+    event.preventDefault()
+    if (cursor === null) {
+      const middle = Math.floor(grid / 2)
+      point(middle * grid + middle)
+      return
+    }
+    const [column, row] = cells[cursor]
+    const clamp = (value: number) => Math.min(Math.max(value, 0), grid - 1)
+    point(clamp(row + step[1]) * grid + clamp(column + step[0]))
+  }
+
+  function activate(event: MouseEvent): void {
+    if (event.detail === 0 && cursor !== null) ontoggle?.(cursor)
+  }
 </script>
 
 <svelte:element
   this={interactive ? 'button' : 'div'}
   {@attach chart(
     () => option,
-    (instance) => instance.on('click', ({ dataIndex }) => ontoggle?.(dataIndex))
+    (created) => {
+      instance = created
+      created.on('click', ({ dataIndex }) => {
+        cursor = null
+        ontoggle?.(dataIndex)
+      })
+    }
   )}
+  onkeydown={move}
+  onclick={activate}
+  onblur={() => point(null)}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}
