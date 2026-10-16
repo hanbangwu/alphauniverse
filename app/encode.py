@@ -59,7 +59,6 @@ from .config import (
 from .dataset import dataset, redshift
 
 BATCH = 128
-SPECTRUM_LENGTHS = {DESISpectrum: 7808, SDSSSpectrum: 4800}
 
 LS_TABLE_VALUES = tuple(
     zip(
@@ -137,14 +136,11 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
         "mask": ("mask", torch.bool, True),
     }
     kept = np.asarray(row["lambda"]) > 0
-    padding = (0, SPECTRUM_LENGTHS[modality] - kept.sum())
     samples = {
-        argument: torch.nn.functional.pad(
-            torch.as_tensor(
-                np.asarray(row[field])[kept][None], dtype=dtype, device=device()
-            ),
-            padding,
-            value=value,
+        argument: torch.as_tensor(
+            np.append(np.asarray(row[field])[kept], value)[None],
+            dtype=dtype,
+            device=device(),
         )
         for argument, (field, dtype, value) in fields.items()
     }
