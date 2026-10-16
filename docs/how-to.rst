@@ -96,6 +96,7 @@ Run a benchmark
    uv run modal run -m scripts.benchmarks.template_embedding_quality
    uv run --group build modal run -m scripts.benchmarks.retrieval_quality
    uv run --group build modal run -m scripts.benchmarks.probe_quality
+   uv run --group build modal run -m scripts.benchmarks.neighbour_quality
 
 Each writes its report to ``docs/benchmarks/<script>.json``.
 

@@ -513,6 +513,62 @@ def probe_quality():
     )
 
 
+def neighbour_quality():
+    found = report("neighbour_quality")
+    if found is None:
+        return missing()
+    rankings = [
+        {"ranking": name}
+        | {
+            f"{target} |Δ|, median": values["median"]
+            for target, values in entry.items()
+        }
+        | {
+            f"{target}, beats random": values["beats_random"]
+            for target, values in entry.items()
+        }
+        for name, entry in found["physics"]["rankings"].items()
+    ]
+    geometry = found["geometry"]
+    agreement = [
+        {"features": f"{role} {kind}", "search": name, "share of its top 10": value}
+        for role in ("token", "template")
+        for kind in ("blocks", "joint")
+        for name, value in geometry[role][kind].items()
+    ]
+    counts = [str(count) for count in found["preserved"]]
+    shares = [
+        {"factor": (name, search)} | kept
+        for name, searches in found["maps"].items()
+        for search, kept in searches.items()
+    ]
+    source = ColumnDataSource({key: [row[key] for row in shares] for key in shares[0]})
+    chart = figure(
+        x_range=FactorRange(*source.data["factor"]),
+        y_range=(0, 1.05),
+        height=380,
+        title=f"Share of each galaxy's {counts[0]} (bars) and {counts[1]} (dots) nearest by each search that a map keeps nearest",
+        **WIDTH,
+    )
+    chart.vbar(x="factor", top=counts[0], width=0.8, source=source)
+    chart.scatter(x="factor", y=counts[1], size=8, color="black", source=source)
+    chart.xaxis.major_label_orientation = 0.8
+    return column(
+        heading(
+            found,
+            f"{found['rank']} components per mode",
+            f"joint: the first {found['joint']} principal components",
+            f"{found['physics']['galaxies']:,} PROVABGS galaxies for the physics",
+            f"{geometry['queries']:,} queries for the geometry, where chance shares {geometry['random']}",
+            cpus(found),
+        ),
+        chart,
+        table(rankings, list(rankings[0])),
+        table(agreement, list(agreement[0]), height=600),
+        **WIDTH,
+    )
+
+
 def template_quality():
     found = report("template_quality")
     if found is None:

@@ -166,6 +166,24 @@ How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` pre
 
    show(probe_quality())
 
+Neighbourhoods
+--------------
+
+Are a galaxy's nearest galaxies like it, and does one vector per galaxy show them? ``neighbour_quality`` asks three things of the stored :term:`token embeddings <token embedding>` and :term:`template embeddings <template embedding>`, cut to their first 256 components, of their joint embeddings, the first 768 principal components as in the probes, and of AION's :term:`mean embeddings <mean embedding>`:
+
+* how far in :term:`PROVABGS` stellar mass, star formation rate and redshift a galaxy's 10 nearest are, against 10 at random: the galaxies with all three are both the queries and the gallery, ranked by full-object search at the same place, at any position and at the same place without the redshift mode, by the joint embedding's Euclidean distance and by the :term:`cosine similarity` of mean embeddings;
+* how much of each mode's search top 10 the Euclidean top 10 of its gallery vectors keeps, and of full-object search the joint embedding's, for 2,000 queries against every galaxy;
+* how much of each galaxy's 15 and 100 nearest, by full-object search at the same place in either space or by the cosine of mean embeddings, a map keeps nearest: a UMAP map built from the token search's own 15 nearest, UMAP maps of the joint embeddings, and the site's :term:`parametric UMAP` map of mean embeddings.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import neighbour_quality
+
+   show(neighbour_quality())
+
 Search speed
 ------------
 

@@ -31,6 +31,7 @@ uv run --group build modal run -m scripts.benchmarks.template_quality  # measure
 uv run modal run -m scripts.benchmarks.template_embedding_quality  # measure template embeddings against data on Modal
 uv run --group build modal run -m scripts.benchmarks.retrieval_quality  # measure retrieval from partial data on Modal
 uv run --group build modal run -m scripts.benchmarks.probe_quality  # measure PROVABGS probes on the stored vectors on Modal
+uv run --group build modal run -m scripts.benchmarks.neighbour_quality  # measure the stored vectors' neighbourhoods and maps on Modal
 uv run python -m scripts.openapi                            # regenerate frontend/openapi.json
 ```
 
