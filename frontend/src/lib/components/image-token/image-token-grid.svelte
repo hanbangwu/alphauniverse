@@ -13,7 +13,7 @@
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED } from '$lib/color'
+  import type { RGB } from '$lib/color'
   import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
@@ -56,18 +56,12 @@
     const [x, y] = api.coord([api.value(0), api.value(1)])
     const [width, height] = api.size!([1, 1]) as number[]
     const [r, g, b] = color(values[params.dataIndex])
-    const picked = selected.includes(params.dataIndex)
     return {
       type: 'rect',
       shape: { x, y, width, height },
-      style: {
-        fill: `rgba(${r}, ${g}, ${b}, ${opacity(picked)})`,
-        stroke: picked ? SELECTED : undefined,
-        lineWidth: 2
-      },
-      z2: picked ? 1 : 0,
+      style: { fill: `rgba(${r}, ${g}, ${b}, ${opacity(selected.includes(params.dataIndex))})` },
       transition: 'style',
-      emphasis: { style: picked ? {} : { stroke: '#fff', lineWidth: 1 } }
+      emphasis: { style: { stroke: '#fff', lineWidth: 1 } }
     }
   }
 
