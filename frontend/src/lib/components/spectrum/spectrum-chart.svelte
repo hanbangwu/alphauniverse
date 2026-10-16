@@ -17,6 +17,8 @@
     LineSeriesOption | GridComponentOption | TooltipComponentOption | DataZoomComponentOption
   >
   type Areas = NonNullable<MarkAreaComponentOption['data']>
+
+  const TAP_RADIUS = 10
 </script>
 
 <script lang="ts">
@@ -63,6 +65,7 @@
   let pointer: number | null = null
   let previous = 0
   let visible: number[] = []
+  let press: number[] = []
 
   const points = $derived(
     Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
@@ -146,16 +149,7 @@
           axisPointer: { lineStyle: { color: ink.muted } }
         }
       : undefined,
-    dataZoom: [
-      interactive
-        ? {
-            type: 'inside',
-            moveOnMouseMove: 'shift',
-            cursorGrab: 'pointer',
-            cursorGrabbing: 'pointer'
-          }
-        : { type: 'inside' }
-    ],
+    dataZoom: [{ type: 'inside', cursorGrab: interactive ? 'pointer' : 'default' }],
     series: [
       {
         type: 'line',
@@ -180,12 +174,22 @@
     }
   }
 
+  function intercept(event: PointerEvent): void {
+    if (event.shiftKey) return
+    if (event.pointerType !== 'touch') event.stopPropagation()
+    if (interactive) start(event)
+  }
+
+  function block(event: MouseEvent): void {
+    if (!event.shiftKey) event.stopPropagation()
+  }
+
   function start(event: PointerEvent): void {
     if (pointer !== null) {
       drop()
       return
     }
-    if (event.button !== 0 || event.shiftKey) return
+    if (event.button !== 0) return
     if (!instance.containPixel('grid', pixel(instance, event))) return
     const [{ startValue, endValue }] = instance.getOption().dataZoom as {
       startValue: number
@@ -193,6 +197,7 @@
     }[]
     visible = [startValue, endValue]
     pointer = event.pointerId
+    press = [event.clientX, event.clientY]
     previous = windowAt(event)
     adding = !selected.includes(previous)
     paint(previous)
@@ -202,6 +207,10 @@
     if (event.pointerId !== pointer) return
     if (!event.buttons) {
       drop()
+      return
+    }
+    if (event.pointerType === 'touch') {
+      if (Math.hypot(event.clientX - press[0], event.clientY - press[1]) > TAP_RADIUS) drop()
       return
     }
     const index = windowAt(event)
@@ -231,7 +240,8 @@
     () => option,
     (created) => (instance = created)
   )}
-  onpointerdown={interactive ? start : undefined}
+  onpointerdowncapture={intercept}
+  onmousedowncapture={block}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}
