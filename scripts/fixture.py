@@ -302,7 +302,7 @@ def main() -> None:
     total = sum(path.stat().st_size for path in target.iterdir())
     print(f"{arguments.galaxies} galaxies -> {target} ({total / 1e6:.1f} MB)")
     for path in sorted(target.iterdir()):
-        print(f"  {path.name:26} {path.stat().st_size / 1e6:8.2f} MB")
+        print(f"  {path.name:24} {path.stat().st_size / 1e6:8.2f} MB")
 
 
 if __name__ == "__main__":
