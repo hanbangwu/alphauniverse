@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from . import embeddings, pql
+from . import pql
 from .config import (
     ANCHOR,
     DATASET_AUTHOR,
@@ -30,6 +30,7 @@ from .config import (
     REDSHIFT_LIMIT,
     REDSHIFT_TABLE_VALUE,
     SALIENCY_SAMPLE,
+    SEARCH_RANK,
     SPECTRUM_MODES,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
@@ -141,7 +142,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for column in OBSERVATIONS:
         pql.observed(column)
     for name in GRAM_NAMES:
-        embeddings.stored(name)
+        pql.stored(name)
     yield
 
 
@@ -393,19 +394,27 @@ def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Arr
     )
 
 
-def observation_arrays(
-    galaxies: np.ndarray, predicted: list[list[str]]
-) -> tuple[list[pa.Field], list[pa.Array]]:
+def search_response(
+    fields: list[pa.Field],
+    columns: list[pa.Array],
+    galaxies: np.ndarray,
+    predicted: list[list[str]],
+) -> Response:
     observations = pa.list_(pa.field("item", pa.string(), nullable=False))
-    return (
-        [
+    fields = [
+        *fields,
+        *(
             pa.field(f"has_{column}", pa.bool_(), nullable=False)
             for column in OBSERVATIONS
-        ]
-        + [pa.field("predicted", observations, nullable=False)],
-        [pa.array(pql.observed(column)[galaxies]) for column in OBSERVATIONS]
-        + [pa.array(predicted, observations)],
-    )
+        ),
+        pa.field("predicted", observations, nullable=False),
+    ]
+    columns = [
+        *columns,
+        *(pa.array(pql.observed(column)[galaxies]) for column in OBSERVATIONS),
+        pa.array(predicted, observations),
+    ]
+    return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
 
 
 @app.get(
@@ -470,10 +479,7 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
             if positions is None
             else pa.array(positions.tolist(), places)
         )
-    flag_fields, flag_columns = observation_arrays(results.galaxies, results.predicted)
-    return arrow(
-        pa.record_batch(columns + flag_columns, schema=pa.schema(fields + flag_fields))
-    )
+    return search_response(fields, columns, results.galaxies, results.predicted)
 
 
 @app.get(
@@ -481,7 +487,7 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
     description="Ranks every galaxy against the query galaxy over whole modes, from "
-    f"the stored token embeddings cut to {embeddings.SEARCH_RANK} components: each "
+    f"the stored token embeddings cut to {SEARCH_RANK} components: each "
     "mode's scores, at any position for a mode named in anywhere, are standardised "
     "over all galaxies, and a galaxy's score is their mean. The query galaxy comes "
     "first. A selected mode's contribution is its standardised score over the "
@@ -491,32 +497,22 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     "there. A flag per observation says whether the galaxy has it, and predicted "
     "lists the selected modes' observations it lacks.",
 )
-def get_mode_search(query: Annotated[embeddings.ModeQuery, Query()]) -> Response:
-    results = embeddings.mode_search(query)
+def get_mode_search(query: Annotated[pql.ModeQuery, Query()]) -> Response:
+    results = pql.mode_search(query)
     count = len(results.galaxies)
     fields = [
         pa.field("galaxy", pa.int32(), nullable=False),
         pa.field("score", pa.float32(), nullable=False),
     ]
-    columns = [
-        pa.array(results.galaxies, pa.int32()),
-        pa.array(results.scores, pa.float32()),
-    ]
+    columns = [pa.array(results.galaxies), pa.array(results.scores)]
     map_fields, map_columns = map_arrays(results.maps)
     fields += map_fields
     columns += map_columns
     for mode in MODES:
         fields.append(pa.field(f"{mode}_contribution", pa.float32()))
         values = results.contributions.get(mode)
-        columns.append(
-            pa.nulls(count, pa.float32())
-            if values is None
-            else pa.array(values, pa.float32())
-        )
-    flag_fields, flag_columns = observation_arrays(results.galaxies, results.predicted)
-    return arrow(
-        pa.record_batch(columns + flag_columns, schema=pa.schema(fields + flag_fields))
-    )
+        columns.append(pa.nulls(count) if values is None else pa.array(values))
+    return search_response(fields, columns, results.galaxies, results.predicted)
 
 
 @app.get("/search/text")

@@ -1,6 +1,6 @@
 import math
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Iterable, Iterator
+from collections.abc import Callable, Hashable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from functools import cache, partial
 from itertools import accumulate
@@ -26,6 +26,7 @@ from .config import (
     PREDICTIONS,
     PROBABILITY_FLOOR,
     SALIENCY_SAMPLE,
+    SEARCH_RANK,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
@@ -33,6 +34,7 @@ from .config import (
     TOP_CODES,
     VOCABULARY,
     GalaxyIndex,
+    Mode,
     TokenMode,
     artifact,
 )
@@ -86,6 +88,9 @@ def observed(column: str) -> np.ndarray:
     return pc.is_valid(tokens().column(column)).to_numpy()
 
 
+Matches = Annotated[int, Field(ge=1, le=128)]
+
+
 class Selection(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -121,7 +126,22 @@ class Selection(BaseModel):
 
 
 class Query(Selection):
-    matches: Annotated[int, Field(ge=1, le=128)] = 32
+    matches: Matches = 32
+
+
+class ModeQuery(BaseModel):
+    galaxy: GalaxyIndex
+    modes: Annotated[frozenset[Mode], Field(min_length=1)]
+    anywhere: frozenset[TokenMode] = frozenset()
+    matches: Matches = 32
+
+    @model_validator(mode="after")
+    def searches_anywhere_only_in_selected_modes(self) -> Self:
+        if missing := self.anywhere - self.modes:
+            raise ValueError(
+                f"any position names unselected {', '.join(sorted(missing))}"
+            )
+        return self
 
 
 class Results(NamedTuple):
@@ -133,6 +153,14 @@ class Results(NamedTuple):
     predicted: list[list[str]]
     maps: dict[str, np.ndarray]
     positions: dict[str, np.ndarray]
+
+
+class ModeResults(NamedTuple):
+    galaxies: np.ndarray
+    scores: np.ndarray
+    contributions: dict[str, np.ndarray]
+    predicted: list[list[str]]
+    maps: dict[str, np.ndarray]
 
 
 class Agreements(NamedTuple):
@@ -185,6 +213,15 @@ def basis() -> dict[str, tuple[np.ndarray, np.ndarray, np.float32, np.ndarray]]:
         mean, directions = (part.astype(np.float32) for part in pair)
         fitted[survey] = (mean, directions, mean @ mean, directions @ mean)
     return fitted
+
+
+@cache
+def stored(name: str) -> dict[str, torch.Tensor]:
+    with np.load(artifact(f"token_embedding_{name}")) as found:
+        return {
+            part: torch.from_numpy(np.ascontiguousarray(found[part][:, :SEARCH_RANK]))
+            for part in ("queries", "galleries")
+        } | {"offsets": torch.from_numpy(found["offsets"])}
 
 
 def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:
@@ -488,13 +525,17 @@ def selected_forms(
     return selected, query_forms(row(query.galaxy), selected)
 
 
+def contributions(totals: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return {
+        mode: (values - values.mean()) / values.std() / len(totals)
+        for mode, values in totals.items()
+    }
+
+
 def combine(totals: dict[str, np.ndarray]) -> np.ndarray:
     if len(totals) == 1:
         return next(iter(totals.values()))
-    return np.mean(
-        [(values - values.mean()) / values.std() for values in totals.values()],
-        axis=0,
-    )
+    return sum(contributions(totals).values())
 
 
 def cosines(galaxy: int, mode: str) -> np.ndarray:
@@ -665,8 +706,8 @@ def similarity(shares: dict[str, np.ndarray]) -> np.ndarray:
     return np.exp(weighted / sum(weights.values()))
 
 
-def predicted(modes: Iterable[str], galaxies: np.ndarray) -> list[list[str]]:
-    needed = {OBSERVED_IN[mode] for mode in modes if mode in OBSERVED_IN}
+def predicted(selected: dict[str, np.ndarray], galaxies: np.ndarray) -> list[list[str]]:
+    needed = {OBSERVED_IN[mode] for mode in selected.keys() & OBSERVED_IN.keys()}
     return [
         [
             column
@@ -677,6 +718,11 @@ def predicted(modes: Iterable[str], galaxies: np.ndarray) -> list[list[str]]:
     ]
 
 
+def ranked(scored: np.ndarray, galaxy: int, matches: int) -> np.ndarray:
+    order = np.argsort(-scored, kind="stable")
+    return np.concatenate(([galaxy], order[order != galaxy][:matches]))
+
+
 def search(query: Query) -> Results:
     selected = selection(query)
     positional = positional_slots(selected, query.anywhere)
@@ -685,10 +731,7 @@ def search(query: Query) -> Results:
     totals = mode_totals(query.galaxy, selected, positional)
     scored = combine(totals)
     shares = fractions(selected_peaks(peaks, selected), totals)
-    order = np.argsort(-scored, kind="stable")
-    galaxies = np.concatenate(
-        ([query.galaxy], order[order != query.galaxy][: query.matches])
-    )
+    galaxies = ranked(scored, query.galaxy, query.matches)
     rows = gathered(galaxies)
     shown, positions = basket_maps(
         query.galaxy, rows, positional, selected_peaks(peaks, positional)
@@ -702,4 +745,24 @@ def search(query: Query) -> Results:
         predicted(selected, galaxies),
         maps(forms, peaks, rows) | shown,
         positions,
+    )
+
+
+def mode_search(query: ModeQuery) -> ModeResults:
+    rows = {}
+    for mode in MODES:
+        if mode in query.modes:
+            found = stored(f"{mode}_anywhere" if mode in query.anywhere else mode)
+            row = found["galleries"] @ found["queries"][query.galaxy] + found["offsets"]
+            rows[mode] = row.double().numpy()
+    shares = contributions(rows)
+    scored = sum(shares.values())
+    galaxies = ranked(scored, query.galaxy, query.matches)
+    forms = galaxy_forms(query.galaxy)
+    return ModeResults(
+        galaxies,
+        scored[galaxies],
+        {mode: values[galaxies] for mode, values in shares.items()},
+        predicted(shares, galaxies),
+        maps(forms, slot_peaks(forms), gathered(galaxies)),
     )

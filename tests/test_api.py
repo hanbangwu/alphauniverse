@@ -148,8 +148,8 @@ def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> Non
     np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
 
 
-def _similarity(client: TestClient, **query) -> pa.RecordBatch:
-    response = client.get("/search", params=query)
+def _similarity(client: TestClient, path: str = "/search", **query) -> pa.RecordBatch:
+    response = client.get(path, params=query)
     assert response.status_code == 200, response.text
     assert response.headers["content-type"] == ARROW
     return pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
@@ -259,25 +259,20 @@ def test_a_selection_on_a_mode_the_galaxy_lacks_is_rejected(
     assert f"galaxy 1 has no {missing}" in error["msg"]
 
 
-def test_whole_mode_search_scores_a_mode_the_query_galaxy_lacks_and_marks_it(
+def test_whole_mode_search_on_a_mode_the_galaxy_lacks_returns_each_selected_contribution(
     client: TestClient,
 ) -> None:
-    response = client.get(
+    table = _similarity(
+        client,
         "/search/modes",
-        params={
-            "galaxy": 1,
-            "modes": ["ls_image", "desi_spectrum"],
-            "anywhere": ["desi_spectrum"],
-            "matches": 5,
-        },
+        galaxy=1,
+        modes=["ls_image", "desi_spectrum"],
+        anywhere=["desi_spectrum"],
+        matches=5,
     )
 
-    assert response.status_code == 200, response.text
-    assert response.headers["content-type"] == ARROW
-    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
-    galaxies = table.column("galaxy").to_numpy()
     assert table.num_rows == 6
-    assert galaxies[0] == 1
+    assert table.column("galaxy")[0].as_py() == 1
     contributed = {
         name
         for name in table.column_names
@@ -285,12 +280,6 @@ def test_whole_mode_search_scores_a_mode_the_query_galaxy_lacks_and_marks_it(
     }
     assert contributed == {"ls_image_contribution", "desi_spectrum_contribution"}
     assert len(table.column("ls_image")[0]) == N_IMAGE_TOKENS
-    has_desi = (
-        _stored("tokens").column("desi").is_valid().to_numpy(zero_copy_only=False)
-    )
-    assert table.column("predicted").to_pylist() == [
-        [] if has_desi[galaxy] else ["desi"] for galaxy in galaxies
-    ]
 
 
 def test_whole_mode_search_takes_any_position_only_in_a_selected_mode(

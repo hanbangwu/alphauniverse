@@ -1,52 +1,10 @@
-from functools import cache
-from typing import Annotated, NamedTuple, Self, get_args
-
 import numpy as np
 import torch
-from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tqdm import tqdm
 
-from . import pql
-from .config import (
-    GRAM_NAMES,
-    MODES,
-    TOKEN_EMBEDDING_RANK,
-    GalaxyIndex,
-    Mode,
-    TokenMode,
-    artifact,
-    device,
-)
+from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
 
 BATCH = 1024
-SEARCH_RANK = 256
-
-
-class ModeQuery(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    galaxy: GalaxyIndex
-    modes: Annotated[tuple[Mode, ...], Field(min_length=1, max_length=len(MODES))]
-    anywhere: Annotated[
-        tuple[TokenMode, ...], Field(max_length=len(get_args(TokenMode)))
-    ] = ()
-    matches: Annotated[int, Field(ge=1, le=128)] = 32
-
-    @model_validator(mode="after")
-    def searches_anywhere_only_in_selected_modes(self) -> Self:
-        if missing := set(self.anywhere) - set(self.modes):
-            raise ValueError(
-                f"any position names unselected {', '.join(sorted(missing))}"
-            )
-        return self
-
-
-class ModeResults(NamedTuple):
-    galaxies: np.ndarray
-    scores: np.ndarray
-    contributions: dict[str, np.ndarray]
-    predicted: list[list[str]]
-    maps: dict[str, np.ndarray]
 
 
 def loaded(role: str, dtype: torch.dtype = torch.float64) -> torch.Tensor:
@@ -89,39 +47,6 @@ def scores(
     queries: torch.Tensor, found: dict[str, torch.Tensor], rank: int
 ) -> torch.Tensor:
     return queries[:, :rank] @ found["galleries"][:, :rank].T + found["offsets"]
-
-
-@cache
-def stored(name: str) -> dict[str, torch.Tensor]:
-    with np.load(artifact(f"token_embedding_{name}")) as found:
-        return {
-            part: torch.from_numpy(np.ascontiguousarray(found[part][:, :SEARCH_RANK]))
-            for part in ("queries", "galleries")
-        } | {"offsets": torch.from_numpy(found["offsets"])}
-
-
-def mode_search(query: ModeQuery) -> ModeResults:
-    modes = tuple(dict.fromkeys(query.modes))
-    contributions = {}
-    for mode in modes:
-        found = stored(f"{mode}_anywhere" if mode in query.anywhere else mode)
-        row = scores(found["queries"][[query.galaxy]], found, SEARCH_RANK)[0].double()
-        contributions[mode] = (
-            (row - row.mean()) / row.std(correction=0)
-        ).numpy() / len(modes)
-    scored = sum(contributions.values())
-    order = np.argsort(-scored, kind="stable")
-    galaxies = np.concatenate(
-        ([query.galaxy], order[order != query.galaxy][: query.matches])
-    )
-    forms = pql.galaxy_forms(query.galaxy)
-    return ModeResults(
-        galaxies,
-        scored[galaxies],
-        {mode: values[galaxies] for mode, values in contributions.items()},
-        pql.predicted(modes, galaxies),
-        pql.maps(forms, pql.slot_peaks(forms), pql.gathered(galaxies)),
-    )
 
 
 def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> None:

@@ -735,6 +735,7 @@
             "required": true,
             "schema": {
               "type": "array",
+              "uniqueItems": true,
               "items": {
                 "enum": [
                   "ls_image",
@@ -748,7 +749,6 @@
                 "type": "string"
               },
               "minItems": 1,
-              "maxItems": 7,
               "title": "Modes"
             }
           },
@@ -758,6 +758,7 @@
             "required": false,
             "schema": {
               "type": "array",
+              "uniqueItems": true,
               "items": {
                 "enum": [
                   "ls_image",
@@ -767,7 +768,6 @@
                 ],
                 "type": "string"
               },
-              "maxItems": 4,
               "default": [],
               "title": "Anywhere"
             }

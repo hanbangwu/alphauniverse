@@ -210,6 +210,7 @@ TOKEN_GRAMS = {
 }
 GRAM_NAMES = tuple(name for names in TOKEN_GRAMS.values() for name in names)
 TOKEN_EMBEDDING_RANK = 1024
+SEARCH_RANK = 256
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",

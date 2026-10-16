@@ -34,7 +34,7 @@ from app.config import (
     store_schema,
     store_writer,
 )
-from app.embeddings import generate_token_embeddings, stored
+from app.embeddings import generate_token_embeddings
 from app.grams import generate_token_grams
 from app.pql import (
     MATRICES,
@@ -46,6 +46,7 @@ from app.pql import (
     prediction_batch,
     predictions,
     save_prediction_basis,
+    stored,
 )
 from app.search import source, tokens
 from app.text_search import aion_gemma_space
