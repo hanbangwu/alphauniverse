@@ -18,7 +18,15 @@ A selected galaxy shows:
 - its catalogue values, with Galaxy Zoo 10, PROVABGS and the redshift; the 26 values AION reads can be selected for search;
 - which surveys it is matched in.
 
-AION also reads the HSC image and the SDSS spectrum, but the site shows neither, and a galaxy with only an SDSS spectrum shows none.
+AION also reads the HSC image and the SDSS spectrum, but the site shows neither, so a galaxy with only an SDSS spectrum shows no observed spectrum.
+
+**AION predictions**, a switch beside the galaxy and in the search, shows the galaxy's :term:`templates <template>`, observed or not:
+
+- AION's Legacy Survey image in place of the observed one, coloured the same way and marked AION;
+- AION's DESI spectrum over the observed one, scaled to its flux; without a DESI spectrum, AION's alone, normalised, since AION does not predict a spectrum's overall flux;
+- in the search, the median of AION's predicted distribution beside each of the 25 catalogue values it reads, and beside the redshift when the galaxy has one AION reads.
+
+A template is what AION expects from the galaxy's tokens, not a measurement: where the galaxy has an observation, AION reads it before predicting; where it lacks one, the prediction comes from its other observations.
 
 Search by similarity
 --------------------
