@@ -3,8 +3,13 @@ Benchmarks
 
 Every benchmark runs on Modal against the artifacts the live site serves, and writes a report to ``docs/benchmarks/<script>.json``. The charts and tables below are drawn from those reports when the documentation is built, so each shows exactly one run, named by its commit and date, and a newly committed report updates its section. Figures compare only within one run, never across runs or machines. :doc:`how-to` explains how to run them.
 
+A standing benchmark measures what ships, in its shipped configuration, and reruns when the code it measures changes. A study answers one design question, and reruns only when that question reopens.
+
+Standing benchmarks
+-------------------
+
 Projection quality
-------------------
+~~~~~~~~~~~~~~~~~~
 
 How faithfully does the map keep neighbours? ``projection_quality`` takes 10,000 embeddings held out of the projector's training, projects them, and compares each embedding's :math:`k` nearest neighbours by cosine distance in 768 dimensions, :math:`N_k(i)`, with its :math:`k` nearest on the map, :math:`\hat N_k(i)`, for :math:`k = 15` and :math:`100`:
 
@@ -27,7 +32,7 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
    show(projection_quality())
 
 Text search quality
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Can a sentence find the right galaxies? ``text_search_quality`` uses the 30% of galaxies held out of the text maps' training, and six queries whose answers are PROVABGS cuts:
 
@@ -56,7 +61,7 @@ The *base rate* is the fraction of galaxies that satisfy the cut, the score of a
    show(text_search_quality())
 
 Similarity search quality
--------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Does similarity search find galaxies that are physically alike? ``search_quality`` samples galaxies with a spectrum and a redshift, searches from each with four kinds of selection (16 consecutive spectrum tokens, every observed spectrum token, four Legacy Survey catalogue values, four HSC catalogue values) and reports, as a mean over queries with a 95% bootstrap interval:
 
@@ -74,7 +79,7 @@ Does similarity search find galaxies that are physically alike? ``search_quality
    show(search_quality())
 
 Prediction storage
-------------------
+~~~~~~~~~~~~~~~~~~
 
 How much does compressing AION's predictions change search results? ``compression_quality`` predicts a sample of galaxies exactly, stores them as the site does (:doc:`reference` describes the current format), and scores the same queries of several sizes on both. For each mode and selection size it reports the stored bytes per galaxy and, over queries, the median and 5th-percentile Spearman correlation with the exact ranking, the median overlap of the top 10, and the identity and redshift checks of ``search_quality`` under both. The figures show the format stored at the report's commit.
 
@@ -88,7 +93,7 @@ How much does compressing AION's predictions change search results? ``compressio
    show(compression_quality())
 
 Search speed
-------------
+~~~~~~~~~~~~
 
 In a container built like the server, ``search_performance`` times the checked-out commit and, when its code differs, the stored report's fastest version, alternating them so neither always runs first. Every figure is from a running server: the median time of each stage of a search, building a galaxy's agreement matrix and the Population map from it on 4 galaxies, whole searches with 4 image cells at 32, 64 and 128 matches, and an any-position search over 4 image cells with its first and repeated Population map.
 
@@ -102,7 +107,7 @@ In a container built like the server, ``search_performance`` times the checked-o
    show(search_performance())
 
 Request speed
--------------
+~~~~~~~~~~~~~
 
 ``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``/meta``, a similarity search, a text search, a galaxy's image, its spectrum and its catalogue table, it times the first request of each kind to a freshly started server (cold, paying for what that request loads first) and then 30 more to the running server (warm).
 
