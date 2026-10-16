@@ -121,7 +121,7 @@ def test_spectra_reach_the_codec_padded_as_aion_pads_them() -> None:
             encode_module.DESISpectrum.token_key
         ]
 
-    assert torch.equal(found, expected.reshape(1, -1))
+    assert torch.equal(found, expected)
 
 
 def test_each_survey_lands_in_its_own_cell_images_first() -> None:

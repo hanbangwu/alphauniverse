@@ -137,7 +137,7 @@ def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
         "mask": ("mask", torch.bool, True),
     }
     kept = np.asarray(row["lambda"]) > 0
-    padding = (0, SPECTRUM_LENGTHS[modality] - int(kept.sum()))
+    padding = (0, SPECTRUM_LENGTHS[modality] - kept.sum())
     samples = {
         argument: torch.nn.functional.pad(
             torch.as_tensor(
