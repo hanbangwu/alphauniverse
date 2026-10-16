@@ -1,35 +1,49 @@
 <script lang="ts">
-  import type { GetImageData } from '$lib/api'
+  import type { GetImageData, GetImageTemplateData } from '$lib/api'
   import { client } from '$lib/client'
   import { Spinner } from '$lib/components/ui/spinner'
 
   interface Props {
     galaxy: number
+    predicted?: boolean
   }
 
-  let { galaxy }: Props = $props()
+  let { galaxy, predicted = false }: Props = $props()
 
-  let loaded = $state<number | null>(null)
-  let failed = $state<number | null>(null)
+  let loaded = $state<string | null>(null)
+  let failed = $state<string | null>(null)
 
   const src = $derived(
-    client.buildUrl<GetImageData>({ url: '/galaxy/{galaxy}/image', path: { galaxy } })
+    predicted
+      ? client.buildUrl<GetImageTemplateData>({
+          url: '/galaxy/{galaxy}/image/template',
+          path: { galaxy }
+        })
+      : client.buildUrl<GetImageData>({ url: '/galaxy/{galaxy}/image', path: { galaxy } })
   )
 </script>
 
-{#if failed !== galaxy}
+{#if failed !== src}
   <img
     {src}
-    alt="Legacy Survey image of galaxy {galaxy}"
+    alt={`${predicted ? "AION's predicted " : ''}Legacy Survey image of galaxy ${galaxy}`}
     loading="lazy"
-    onload={() => (loaded = galaxy)}
-    onerror={() => (failed = galaxy)}
+    onload={() => (loaded = src)}
+    onerror={() => (failed = src)}
     class="absolute inset-0 size-full object-fill"
     style:image-rendering="pixelated"
   />
 {/if}
 
-{#if failed !== galaxy && loaded !== galaxy}
+{#if predicted}
+  <span
+    class="pointer-events-none absolute top-1.5 left-1.5 rounded-sm bg-black/60 px-1 text-[10px] font-medium text-white"
+  >
+    AION
+  </span>
+{/if}
+
+{#if failed !== src && loaded !== src}
   <div class="absolute inset-0 grid place-content-center">
     <Spinner class="size-6" />
   </div>

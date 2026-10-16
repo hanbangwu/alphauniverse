@@ -12,6 +12,7 @@ export class ViewState {
   readonly imageAnywhere = new Field(false)
   readonly spectrumAnywhere = new Field(false)
   readonly explorer = new Field(false)
+  readonly predictions = new Field(false)
 
   constructor() {
     this.pointSet = new EnumField(POINT_SETS)

@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Dialog from '$lib/components/ui/dialog'
   import { Separator } from '$lib/components/ui/separator/index.js'
+  import { Switch } from '$lib/components/ui/switch'
   import { getApp } from '$lib/state/app.svelte'
   import MatchList from './match-list.svelte'
   import SearchForm from './search-form.svelte'
@@ -30,8 +31,12 @@
     }}
     class="z-100 max-h-11/12 w-full overflow-y-auto sm:max-w-[90vw]"
   >
-    <Dialog.Header>
+    <Dialog.Header class="flex-row items-center gap-6">
       <Dialog.Title>Search</Dialog.Title>
+      <label class="flex items-center gap-2 text-sm font-medium">
+        <Switch bind:checked={view.predictions.value} />
+        AION predictions
+      </label>
     </Dialog.Header>
 
     <SimilaritySelf />

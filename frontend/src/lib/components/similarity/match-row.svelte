@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SPECTRUM_SURVEY } from '$lib/data/spectra'
   import { OBSERVATIONS } from '$lib/labels'
-  import { getMask } from '$lib/state/app.svelte'
+  import { getMask, getView } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenMap from './image-token-map.svelte'
   import ImageTokenMask from './image-token-mask.svelte'
@@ -17,10 +17,13 @@
 
   const similarity = getSimilarity()
   const display = getMask()
+  const view = getView()
   const values = $derived(similarity.imageMapAt(index))
   const predicted = $derived(similarity.predictedAt(index))
   const elsewhere = $derived(
-    predicted.filter((column) => column !== SPECTRUM_SURVEY).map((column) => OBSERVATIONS[column])
+    predicted
+      .filter((column) => view.predictions.value || column !== SPECTRUM_SURVEY)
+      .map((column) => OBSERVATIONS[column])
   )
 </script>
 

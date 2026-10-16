@@ -3,6 +3,7 @@
   import SimilarityDialog from '$lib/components/similarity/similarity-dialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
+  import { Switch } from '$lib/components/ui/switch'
   import { morphologyQuery } from '$lib/data/queries'
   import { MORPHOLOGIES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
@@ -37,6 +38,11 @@
       {:else}
         <DetailImage {galaxy} />
       {/if}
+
+      <label class="flex items-center gap-2 text-sm font-medium">
+        <Switch bind:checked={view.predictions.value} />
+        AION predictions
+      </label>
 
       <Button variant="secondary" size="sm" onclick={() => (view.explorer.value = true)}>
         Search

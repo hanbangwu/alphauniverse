@@ -3,6 +3,7 @@
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
+  import { getView } from '$lib/state/app.svelte'
   import type { Snippet } from 'svelte'
 
   interface Props {
@@ -40,6 +41,8 @@
     action,
     children
   }: Props = $props()
+
+  const view = getView()
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
@@ -72,7 +75,7 @@
           class="pointer-events-none absolute inset-0 mix-blend-screen transition-opacity duration-150 ease-in-out"
           style:opacity={imageOpacity}
         >
-          <GalaxyThumb {galaxy} />
+          <GalaxyThumb {galaxy} predicted={view.predictions.value} />
         </div>
       {/if}
     </PanelFrame>

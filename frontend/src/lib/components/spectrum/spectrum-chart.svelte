@@ -20,18 +20,20 @@
 </script>
 
 <script lang="ts">
-  import { type RGB, SELECTED, chartInk } from '$lib/color'
+  import { PREDICTED, type RGB, SELECTED, chartInk } from '$lib/color'
   import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
+  import { must } from '$lib/invariant'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
   import type { ECharts, ElementEvent } from 'echarts/core'
   import { mode } from 'mode-watcher'
 
   interface Props {
-    spectrum: Spectrum
-    values?: ArrayLike<number>
-    color?: (value: number) => RGB
+    spectrum: Spectrum | null
+    prediction?: Spectrum | null
+    values?: ArrayLike<number> | null
+    color?: ((value: number) => RGB) | null
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
@@ -42,6 +44,7 @@
 
   let {
     spectrum,
+    prediction = null,
     values,
     color,
     opacity = () => 1,
@@ -57,9 +60,15 @@
   const interactive = $derived(Boolean(ontoggle))
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
-  const points = $derived(
-    Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
-  )
+  function line(drawn: Spectrum | null): number[][] {
+    return drawn
+      ? Array.from(drawn.wavelength, (wavelength, index) => [wavelength, drawn.flux[index]])
+      : []
+  }
+
+  const points = $derived(line(spectrum))
+  const predicted = $derived(line(prediction))
+  const extent = $derived(must(spectrum ?? prediction, 'a spectrum or a prediction').wavelength)
 
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
@@ -101,8 +110,8 @@
     grid: { left: 8, right: 12, top: 8, bottom: 8 },
     xAxis: {
       type: 'value',
-      min: 'dataMin',
-      max: 'dataMax',
+      min: Math.floor(extent[0]),
+      max: Math.ceil(extent[extent.length - 1]),
       name: 'Wavelength (Å)',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
@@ -113,7 +122,7 @@
     yAxis: {
       type: 'value',
       scale: true,
-      name: 'Flux (10^-17 erg/s/cm^2/Å)',
+      name: spectrum ? 'Flux (10^-17 erg/s/cm^2/Å)' : 'Normalised flux',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
       axisLabel: { color: ink.muted },
@@ -136,6 +145,13 @@
         lineStyle: { width: 1, color: ink.text },
         emphasis: { disabled: true },
         markArea: { silent: true, data: areas }
+      },
+      {
+        type: 'line',
+        data: predicted,
+        showSymbol: false,
+        lineStyle: { width: 1, color: PREDICTED },
+        emphasis: { disabled: true }
       }
     ]
   })
@@ -161,3 +177,12 @@
   role={interactive ? undefined : 'img'}
   aria-label={label}
 ></svelte:element>
+
+{#if prediction}
+  <span
+    class="pointer-events-none absolute top-1.5 right-3 flex items-center gap-1 rounded-sm bg-card/80 px-1 text-[10px] text-muted-foreground"
+  >
+    <span class="h-0.5 w-3" style:background-color={PREDICTED}></span>
+    {spectrum ? 'AION' : 'AION prediction, normalised'}
+  </span>
+{/if}

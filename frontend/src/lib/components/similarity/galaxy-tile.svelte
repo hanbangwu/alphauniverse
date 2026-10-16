@@ -1,6 +1,7 @@
 <script lang="ts">
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
+  import { getView } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   interface Props {
@@ -11,6 +12,7 @@
   let { galaxy, score }: Props = $props()
 
   const similarity = getSimilarity()
+  const view = getView()
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
@@ -18,6 +20,6 @@
     #{galaxy}{score === undefined ? '' : `: ${similarity.score(score)}`}
   </span>
   <PanelFrame>
-    <GalaxyThumb {galaxy} />
+    <GalaxyThumb {galaxy} predicted={view.predictions.value} />
   </PanelFrame>
 </div>

@@ -6,6 +6,7 @@ import {
   getSaliency,
   getSearch,
   getSpectrum,
+  getSpectrumTemplate,
   getSpectrumTokens,
   getTable,
   getTextSearch
@@ -14,6 +15,7 @@ import type { CosineMode, Projection } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { matchMean } from './scores'
 import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
+import type { Spectrum } from './spectra'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
 import {
@@ -78,6 +80,16 @@ export function tableQuery(galaxy: number | null) {
   })
 }
 
+async function spectrumOf(data: Blob): Promise<Spectrum> {
+  const table = tableFromIPC<{ wavelength: Float32; flux: Float32 }>(
+    new Uint8Array(await data.arrayBuffer())
+  )
+  return {
+    wavelength: table.getChild('wavelength')!.toArray(),
+    flux: table.getChild('flux')!.toArray()
+  }
+}
+
 export function spectrumQuery(galaxy: number | null) {
   return queryOptions({
     queryKey: ['spectrum', galaxy] as const,
@@ -86,13 +98,21 @@ export function spectrumQuery(galaxy: number | null) {
         ? skipToken
         : async () => {
             const { data } = await getSpectrum({ path: { galaxy }, throwOnError: true })
-            const table = tableFromIPC<{ wavelength: Float32; flux: Float32 }>(
-              new Uint8Array(await data.arrayBuffer())
-            )
-            return {
-              wavelength: table.getChild('wavelength')!.toArray(),
-              flux: table.getChild('flux')!.toArray()
-            }
+            return spectrumOf(data)
+          },
+    ...FOREVER
+  })
+}
+
+export function spectrumTemplateQuery(galaxy: number | null) {
+  return queryOptions({
+    queryKey: ['spectrum', galaxy, 'template'] as const,
+    queryFn:
+      galaxy === null
+        ? skipToken
+        : async () => {
+            const { data } = await getSpectrumTemplate({ path: { galaxy }, throwOnError: true })
+            return spectrumOf(data)
           },
     ...FOREVER
   })
