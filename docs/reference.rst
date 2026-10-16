@@ -20,7 +20,7 @@ generate_alignment        pairs_<modality>                              alignmen
 generate_aion_gemma_space pairs_<modality>, alignment                   aion_gemma_space
 ========================= ============================================= =======================================
 
-Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
+Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. Spectra reach the codec padded as AION's reference pipeline pads them: to 7,808 samples for DESI and 4,800 for SDSS, with wavelength 99,999, zero flux and inverse variance, and the mask set. AION 0.0.2 does not pad them itself. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
 
 Artifacts
 ---------

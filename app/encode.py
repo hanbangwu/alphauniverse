@@ -59,6 +59,7 @@ from .config import (
 from .dataset import dataset, redshift
 
 BATCH = 128
+SPECTRUM_LENGTHS = {DESISpectrum: 7808, SDSSSpectrum: 4800}
 
 LS_TABLE_VALUES = tuple(
     zip(
@@ -130,17 +131,22 @@ def image(
 
 def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
     fields = {
-        "flux": ("flux", torch.float32),
-        "ivar": ("ivar", torch.float32),
-        "wavelength": ("lambda", torch.float32),
-        "mask": ("mask", torch.bool),
+        "flux": ("flux", torch.float32, 0.0),
+        "ivar": ("ivar", torch.float32, 0.0),
+        "wavelength": ("lambda", torch.float32, 99999.0),
+        "mask": ("mask", torch.bool, True),
     }
     kept = np.asarray(row["lambda"]) > 0
+    padding = (0, SPECTRUM_LENGTHS[modality] - int(kept.sum()))
     samples = {
-        argument: torch.as_tensor(
-            np.asarray(row[field])[kept][None], dtype=dtype, device=device()
+        argument: torch.nn.functional.pad(
+            torch.as_tensor(
+                np.asarray(row[field])[kept][None], dtype=dtype, device=device()
+            ),
+            padding,
+            value=value,
         )
-        for argument, (field, dtype) in fields.items()
+        for argument, (field, dtype, value) in fields.items()
     }
     return codec().encode(modality(**samples))[modality.token_key].reshape(1, -1)
 

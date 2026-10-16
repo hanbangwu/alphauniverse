@@ -95,6 +95,35 @@ def test_spectrum_padding_does_not_change_its_tokens() -> None:
     assert torch.equal(first, second)
 
 
+def test_spectra_reach_the_codec_padded_as_aion_pads_them() -> None:
+    row = spectrum(np.random.default_rng(2), 7781, 0)
+    pad = 7808 - 7781
+    padded = encode_module.DESISpectrum(
+        flux=torch.nn.functional.pad(
+            torch.as_tensor(row["flux"], dtype=torch.float32)[None], (0, pad)
+        ),
+        ivar=torch.nn.functional.pad(
+            torch.as_tensor(row["ivar"], dtype=torch.float32)[None], (0, pad)
+        ),
+        wavelength=torch.nn.functional.pad(
+            torch.as_tensor(row["lambda"], dtype=torch.float32)[None],
+            (0, pad),
+            value=99999.0,
+        ),
+        mask=torch.nn.functional.pad(
+            torch.as_tensor(row["mask"])[None], (0, pad), value=True
+        ),
+    )
+
+    with torch.inference_mode():
+        found = encode_module.spectrum(encode_module.DESISpectrum, row)
+        expected = encode_module.codec().encode(padded)[
+            encode_module.DESISpectrum.token_key
+        ]
+
+    assert torch.equal(found, expected.reshape(1, -1))
+
+
 def test_each_survey_lands_in_its_own_cell_images_first() -> None:
     groups = encode_module.tokenize(galaxy(0, hsc=True, desi=True, sdss=True))
     _, _, modality_mask = encode_module.encode(groups)
