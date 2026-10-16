@@ -20,6 +20,7 @@
     CustomSeriesRenderItemParams,
     CustomSeriesRenderItemReturn
   } from 'echarts'
+  import type { ECharts } from 'echarts/core'
 
   interface Props {
     values: ArrayLike<number>
@@ -47,6 +48,11 @@
 
   const interactive = $derived(Boolean(ontoggle))
 
+  let instance: ECharts
+  let painted = $state<number[]>([])
+  let adding = false
+  let last: number[] | null = null
+
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
 
   function cell(
@@ -56,7 +62,7 @@
     const [x, y] = api.coord([api.value(0), api.value(1)])
     const [width, height] = api.size!([1, 1]) as number[]
     const [r, g, b] = color(values[params.dataIndex])
-    const picked = selected.includes(params.dataIndex)
+    const picked = selected.includes(params.dataIndex) !== painted.includes(params.dataIndex)
     return {
       type: 'rect',
       shape: { x, y, width, height },
@@ -88,14 +94,61 @@
       : undefined,
     series: [{ type: 'custom', data: cells, renderItem: cell }]
   })
+
+  function position({ clientX, clientY }: PointerEvent): number[] {
+    const { left, top } = instance.getDom().getBoundingClientRect()
+    return instance.convertFromPixel('grid', [clientX - left, clientY - top])
+  }
+
+  function paint([column, row]: number[]): void {
+    const index = row * grid + column
+    if (Math.min(column, row) < 0 || Math.max(column, row) >= grid) return
+    if (selected.includes(index) !== adding && !painted.includes(index)) painted.push(index)
+  }
+
+  function start(event: PointerEvent): void {
+    if (last) {
+      end(event)
+      return
+    }
+    if (event.button !== 0) return
+    last = position(event)
+    const [column, row] = last.map(Math.floor)
+    adding = !selected.includes(row * grid + column)
+    paint([column, row])
+  }
+
+  function move(event: PointerEvent): void {
+    if (!last) return
+    if (!event.buttons) {
+      end(event)
+      return
+    }
+    const from = last
+    const to = (last = position(event))
+    const steps = Math.ceil(Math.max(...from.map((value, axis) => Math.abs(to[axis] - value))))
+    for (let step = 1; step <= steps; step++) {
+      paint(from.map((value, axis) => Math.floor(value + ((to[axis] - value) * step) / steps)))
+    }
+  }
+
+  function end({ type }: PointerEvent): void {
+    if (!last) return
+    if (type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+    painted = []
+    last = null
+  }
 </script>
+
+<svelte:window onpointermove={move} onpointerup={end} onpointercancel={end} />
 
 <svelte:element
   this={interactive ? 'button' : 'div'}
   {@attach chart(
     () => option,
-    (instance) => instance.on('click', ({ dataIndex }) => ontoggle?.(dataIndex))
+    (created) => (instance = created)
   )}
+  onpointerdown={interactive ? start : undefined}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}
