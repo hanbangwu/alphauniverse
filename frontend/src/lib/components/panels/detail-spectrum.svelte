@@ -15,7 +15,7 @@
 
   const coverage = createQuery(() => coverageQuery(galaxy))
   const matched = $derived(coverage.data ? hasSpectrum(coverage.data) : false)
-  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
+  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, SPECTRUM_SURVEY))
 </script>
 
 <PanelFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">

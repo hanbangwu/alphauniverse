@@ -3,7 +3,7 @@
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery, spectrumTokensQuery } from '$lib/data/queries'
-  import { hasSpectrum } from '$lib/data/spectra'
+  import { SPECTRUM_SURVEY, hasSpectrum } from '$lib/data/spectra'
   import { errorMessage } from '$lib/errors'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
@@ -24,8 +24,10 @@
 
   const coverage = createQuery(() => coverageQuery(galaxy))
   const matched = $derived(coverage.data ? hasSpectrum(coverage.data) : false)
-  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
-  const tokens = createQuery(() => spectrumTokensQuery(matched && !map ? galaxy : null))
+  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, SPECTRUM_SURVEY))
+  const tokens = createQuery(() =>
+    spectrumTokensQuery(matched && !map ? galaxy : null, SPECTRUM_SURVEY)
+  )
 
   const cells = $derived(map ?? tokens.data ?? null)
   const palette = $derived(map ? heat : tokens.data ? tokenColors(tokens.data) : null)

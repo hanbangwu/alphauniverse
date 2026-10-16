@@ -16,9 +16,11 @@ from app.config import (
     RGB_COLUMN,
     SPECTRUM_SURVEYS,
     TABLE_VALUE_COLUMNS,
+    TOKEN_SURVEYS,
 )
 from app.dataset import (
     encode,
+    hsc_image,
     image,
     redshift,
     samples,
@@ -94,6 +96,24 @@ def test_samples_drop_padding_and_blank_masked_flux() -> None:
 
 def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
     assert image(1) == encode(SOURCE)
+
+
+def test_hsc_images_colour_each_filter_and_crop_the_centre(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flux = np.zeros((5, CROP_PIXELS + 8, CROP_PIXELS + 8), dtype=np.float32)
+    flux[3] = 1.0
+    bands = ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]
+    rows = Dataset.from_dict(
+        {TOKEN_SURVEYS["hsc"]: [None, {"band": bands, "flux": flux.tolist()}]}
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+
+    assert hsc_image(0) is None
+    with Image.open(BytesIO(hsc_image(1))) as png:
+        pixels = np.asarray(png.convert("RGB"))
+    assert pixels.shape == (CROP_PIXELS, CROP_PIXELS, 3)
+    assert (pixels[..., :1] > pixels[..., 1:]).all()
 
 
 def test_unmatched_survey_has_no_spectrum(stored: None) -> None:

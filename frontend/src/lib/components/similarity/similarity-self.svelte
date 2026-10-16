@@ -17,7 +17,7 @@
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
 
-  const tokens = createQuery(() => tokensQuery(similarity.galaxy))
+  const tokens = createQuery(() => tokensQuery(similarity.galaxy, 'ls'))
   const palette = $derived(tokens.data ? tokenColors(tokens.data) : null)
 
   let hovered = $state(false)

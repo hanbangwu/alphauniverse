@@ -10,8 +10,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from app.config import DATASET_REVISION, N_IMAGE_TOKENS
-from app.main import SPECTRUM_SURVEY
+from app.config import ANCHOR, DATASET_REVISION, N_IMAGE_TOKENS, SPECTRUM_SURVEY
 from modal_app import app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
@@ -66,8 +65,10 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 matches=MATCHES,
             ),
             "text search": lambda: get("/search/text", text=next(texts)),
-            "image": lambda: get(f"/galaxy/{galaxy()}/image"),
-            "spectrum": lambda: get(f"/galaxy/{rng.choice(holders)}/spectrum"),
+            "image": lambda: get(f"/galaxy/{galaxy()}/image/{ANCHOR}"),
+            "spectrum": lambda: get(
+                f"/galaxy/{rng.choice(holders)}/spectrum/{SPECTRUM_SURVEY}"
+            ),
             "table": lambda: get(f"/galaxy/{galaxy()}/table"),
         }
         cold |= {

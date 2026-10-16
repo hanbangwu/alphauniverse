@@ -53,6 +53,7 @@ PROVABGS = "-mmu_desi_provabgs"
 
 
 SpectrumSurvey = Literal["desi", "sdss"]
+ImageSurvey = Literal["ls", "hsc"]
 SPECTRUM_SURVEYS: dict[SpectrumSurvey, str] = {
     "desi": f"spectrum{DESI}",
     "sdss": f"spectrum{SDSS}",

@@ -196,7 +196,7 @@
         }
       }
     },
-    "/galaxy/{galaxy}/image": {
+    "/galaxy/{galaxy}/image/{survey}": {
       "get": {
         "summary": "Get Image",
         "operationId": "get_image",
@@ -209,6 +209,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -237,7 +250,7 @@
         }
       }
     },
-    "/galaxy/{galaxy}/image/tokens": {
+    "/galaxy/{galaxy}/image/{survey}/tokens": {
       "get": {
         "summary": "Get Image Tokens",
         "operationId": "get_image_tokens",
@@ -250,6 +263,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -278,7 +304,7 @@
         }
       }
     },
-    "/galaxy/{galaxy}/spectrum": {
+    "/galaxy/{galaxy}/spectrum/{survey}": {
       "get": {
         "summary": "Get Spectrum",
         "description": "The galaxy's spectrum for display, its flux smoothed with a Gaussian of sigma 2 pixels; masked pixels stay NaN.",
@@ -292,6 +318,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -320,7 +359,7 @@
         }
       }
     },
-    "/galaxy/{galaxy}/spectrum/tokens": {
+    "/galaxy/{galaxy}/spectrum/{survey}/tokens": {
       "get": {
         "summary": "Get Spectrum Tokens",
         "operationId": "get_spectrum_tokens",
@@ -333,6 +372,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],

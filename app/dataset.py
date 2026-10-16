@@ -18,9 +18,21 @@ from .config import (
     RGB_COLUMN,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEYS,
+    TOKEN_SURVEYS,
     Catalogue,
     SpectrumSurvey,
 )
+
+RGB_SCALES = {"g": 6.0, "r": 3.4, "i": 3.0, "z": 2.2}
+RGB_WEIGHTS = {
+    "g": (0.0, 0.0, 0.75),
+    "r": (0.0, 0.5, 0.25),
+    "i": (0.25, 0.5, 0.0),
+    "z": (0.75, 0.0, 0.0),
+}
+RGB_SOFTENING = 0.03
+RGB_STRETCH = 20
+HSC_TO_NANOMAGGIES = 10 ** (-0.4 * (27.0 - 22.5))
 
 
 @cache
@@ -43,6 +55,32 @@ def encode(image: PIL.Image.Image) -> bytes:
 def image(galaxy: int) -> bytes:
     cell = dataset().data.column(RGB_COLUMN)[galaxy]
     return encode(Image().decode_example(cell.as_py()))
+
+
+def colour(flux: np.ndarray, bands: list[str]) -> bytes:
+    mapped = [band for band in bands if band in RGB_SCALES]
+    scales = np.array([RGB_SCALES[band] for band in mapped])[:, None, None]
+    scaled = flux[[bands.index(band) for band in mapped]] * scales + RGB_SOFTENING
+    intensity = np.maximum(scaled, 0).mean(axis=0)
+    stretch = np.divide(
+        np.arcsinh(RGB_STRETCH * intensity) / np.sqrt(RGB_STRETCH),
+        intensity,
+        out=np.zeros_like(intensity),
+        where=intensity > 0,
+    )
+    weights = np.array([RGB_WEIGHTS[band] for band in mapped])
+    rgb = np.einsum("bhw,bc->hwc", np.clip(scaled * stretch, 0, 1), weights)
+    return encode(PIL.Image.fromarray((rgb * 255).astype(np.uint8)))
+
+
+def hsc_image(galaxy: int) -> bytes | None:
+    cell = dataset().data.column(TOKEN_SURVEYS["hsc"])[galaxy]
+    if not cell.is_valid:
+        return None
+    bands = [band.partition("-")[2] for band in cell["band"].as_py()]
+    rows = cell["flux"].values.flatten()
+    flux = rows.flatten().to_numpy().reshape(len(bands), len(rows) // len(bands), -1)
+    return colour(flux * HSC_TO_NANOMAGGIES, bands)
 
 
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
