@@ -57,7 +57,7 @@
   let press: number[]
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
-  const chosen = $derived(new Set(selected).symmetricDifference(new Set(painted)))
+  const chosen = $derived(new Set(selected))
 
   function cell(
     params: CustomSeriesRenderItemParams,
@@ -100,7 +100,7 @@
   function paint([column, row]: number[]): void {
     const index = row * grid + column
     if (Math.min(column, row) < 0 || Math.max(column, row) >= grid) return
-    if (chosen.has(index) !== adding) painted = [...painted, index]
+    if (chosen.has(index) !== adding && !painted.includes(index)) painted = [...painted, index]
   }
 
   function start(event: PointerEvent): void {
