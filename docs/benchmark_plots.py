@@ -476,11 +476,11 @@ def probe_quality():
                 "target": target,
                 "features": role,
                 "mode": name,
-                "stacked weight, all galaxies": fitted["weight"],
+                "stacked weight, all galaxies": entry["weight"],
             }
-            | drawn("ridge", fitted["shots"])
+            | drawn("ridge", entry["shots"])
             for role, fits in measured["modes"].items()
-            for name, fitted in fits.items()
+            for name, entry in fits.items()
         )
     source = ColumnDataSource(
         {
@@ -587,6 +587,17 @@ def neighbour_quality():
     )
 
 
+def fitted(measured):
+    return {
+        "galaxies": measured["galaxies"],
+        **{
+            f"{model} χ²ν, median": values["p50"]
+            for model, values in measured["chi2"].items()
+        },
+        "recovered, median": measured["recovered"]["p50"],
+    }
+
+
 def template_quality():
     found = report("template_quality")
     if found is None:
@@ -637,18 +648,7 @@ def template_quality():
             )
         chart.legend.click_policy = "hide"
         charts.append(chart)
-    rows = [
-        {
-            "mode": mode,
-            "galaxies": measured["galaxies"],
-            **{
-                f"{model} χ²ν, median": values["p50"]
-                for model, values in measured["chi2"].items()
-            },
-            "recovered, median": measured["recovered"]["p50"],
-        }
-        for mode, measured in modes.items()
-    ]
+    rows = [{"mode": mode} | fitted(measured) for mode, measured in modes.items()]
     pulls = [
         {
             "value": name,
@@ -657,11 +657,18 @@ def template_quality():
         for measured in modes.values()
         for name, values in measured.get("median_absolute_pull", {}).items()
     ]
+    quartiles = [
+        {"mode": mode, "S/N per pixel": " to ".join(map(str, quartile["snr"]))}
+        | fitted(quartile)
+        for mode, measured in modes.items()
+        for quartile in measured.get("by_snr", [])
+    ]
     return column(
         heading(found, found["device"]),
         *charts,
         table(rows, list(rows[0])),
         table(pulls, list(pulls[0])),
+        table(quartiles, list(quartiles[0])),
         **WIDTH,
     )
 
