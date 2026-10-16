@@ -41,6 +41,7 @@ BATCH = 256
 RADII = np.arange(0, CROP_PIXELS // 2 + 4, 4)
 REST = np.arange(2000, 10600, 100)
 PERCENTILES = (5, 50, 95)
+QUARTILES = 4
 MODELS = ("template", "floor", "null")
 SURVEYS = {mode.name: mode.survey for mode in predictions.MODES}
 MAGNITUDE_ERRORS = {
@@ -148,6 +149,16 @@ def summary(chi2: dict[str, np.ndarray]) -> dict[str, Any]:
     }
 
 
+def by_snr(chi2: dict[str, np.ndarray], snr: np.ndarray) -> list[dict[str, Any]]:
+    edges = np.quantile(snr[np.isfinite(snr)], np.linspace(0, 1, QUARTILES + 1))
+    quartile = np.digitize(snr, edges[1:-1])
+    return [
+        {"snr": [round(float(edge), 3) for edge in edges[index : index + 2]]}
+        | summary({model: values[quartile == index] for model, values in chi2.items()})
+        for index in range(QUARTILES)
+    ]
+
+
 def image_quality(mode: str, survey: str) -> dict[str, Any]:
     codec = templates.decoder(mode)
     stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
@@ -200,6 +211,7 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
     galaxies = observed(mode)
     profile = Profile(REST)
     chi2 = {model: np.full(len(galaxies), np.nan) for model in MODELS}
+    snr = np.full(len(galaxies), np.nan)
     for start in tqdm(range(0, len(galaxies), BATCH), desc=mode):
         part = galaxies[start : start + BATCH]
         spectra = taken(dataset().data.column(TOKEN_SURVEYS[survey]), part)
@@ -220,6 +232,7 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
             wavelength, flux, ivar = wavelength[valid], flux[valid], ivar[valid]
             if len(flux) < 2:
                 continue
+            snr[start + row] = np.median(flux * np.sqrt(ivar))
             residuals = {}
             for model, values in models.items():
                 shape = np.interp(wavelength, grid, values[row])
@@ -232,7 +245,10 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
                 profile.add(
                     wavelength / (1 + measured[value]), np.ones(len(flux)), residuals
                 )
-    return summary(chi2) | {"rest_wavelength": profile.report()}
+    return summary(chi2) | {
+        "rest_wavelength": profile.report(),
+        "by_snr": by_snr(chi2, snr),
+    }
 
 
 def table_data(mode: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
