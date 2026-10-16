@@ -93,6 +93,7 @@ export class Similarity {
   readonly imageDomain: Extent | null
   readonly spectrumDomain: Extent | null
   readonly tableValueMap: Float32Array | null
+  readonly tableValueDomain: Extent | null
   readonly tableValueHeat: Heat | null
 
   constructor(galaxy: number) {
@@ -147,9 +148,8 @@ export class Similarity {
     this.imageDomain = $derived(union(IMAGE_MODES.map((mode) => this.scales?.[mode]?.domain)))
     this.spectrumDomain = $derived(union(SPECTRUM_MODES.map((mode) => this.scales?.[mode]?.domain)))
     this.tableValueMap = $derived(saliency ? saliency.tableValues : (result?.tableValueMap ?? null))
-    this.tableValueHeat = $derived(
-      this.tableValueMap ? continuous(extent(this.tableValueMap)) : null
-    )
+    this.tableValueDomain = $derived(this.tableValueMap && extent(this.tableValueMap))
+    this.tableValueHeat = $derived(this.tableValueDomain && continuous(this.tableValueDomain))
   }
 
   get error(): string | null {

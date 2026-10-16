@@ -115,5 +115,12 @@
       selected={view.tableValues.value}
       ontoggle={(index) => view.tableValues.toggle(index)}
     />
+    {#if display.on.value && similarity.tableValueDomain}
+      <MaskControls
+        label="Mask threshold"
+        domain={similarity.tableValueDomain}
+        control={display.table}
+      />
+    {/if}
   </CollapsibleGroup>
 </div>

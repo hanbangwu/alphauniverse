@@ -6,6 +6,7 @@
   import { tableQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { SECTIONS } from '$lib/labels'
+  import { getMask } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -18,9 +19,14 @@
   let { galaxy, selected, ontoggle }: Props = $props()
 
   const similarity = getSimilarity()
+  const display = getMask()
   const table = createQuery(() => tableQuery(galaxy))
 
   const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.section)])
+  const mask = $derived(
+    similarity.tableValueMap &&
+      similarity.maskOf(similarity.tableValueMap, similarity.tableValueDomain, display.table)
+  )
   const palette = $derived(
     tokenColors((table.data ?? []).flatMap((row) => (row.token === null ? [] : [row.token])))
   )
@@ -36,7 +42,7 @@
     const heat = similarity.tableValueHeat
     const style =
       heat && !Number.isNaN(score)
-        ? paint(heat(score), 1)
+        ? paint(heat(score), mask?.[row.table_value] === 0 ? 0 : 1)
         : paint(palette(row.token), tokenAlpha(picked))
     return picked ? `${style}; outline: 1px solid ${SELECTED}; outline-offset: -1px` : style
   }
