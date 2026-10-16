@@ -68,7 +68,9 @@
 
   const points = $derived(line(spectrum))
   const predicted = $derived(line(prediction))
-  const extent = $derived(must(spectrum ?? prediction, 'a spectrum or a prediction').wavelength)
+  const wavelengths = $derived(
+    must(spectrum ?? prediction, 'a spectrum or a prediction').wavelength
+  )
 
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
@@ -110,8 +112,8 @@
     grid: { left: 8, right: 12, top: 8, bottom: 8 },
     xAxis: {
       type: 'value',
-      min: Math.floor(extent[0]),
-      max: Math.ceil(extent[extent.length - 1]),
+      min: Math.floor(wavelengths[0]),
+      max: Math.ceil(wavelengths[wavelengths.length - 1]),
       name: 'Wavelength (Å)',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
