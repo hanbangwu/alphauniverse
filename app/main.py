@@ -485,8 +485,8 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     "mode's scores, at any position for a mode named in anywhere, are standardised "
     "over all galaxies, and a galaxy's score is their mean. The query galaxy comes "
     "first. A selected mode's contribution is its standardised score over the "
-    "number of modes, so the contributions sum to the score. The has_ flags and "
-    "predicted are as /search's.",
+    "number of modes, so the contributions sum to the score. The maps, has_ flags "
+    "and predicted are as /search's, with the maps at the same place.",
 )
 def get_mode_search(query: Annotated[embeddings.ModeQuery, Query()]) -> Response:
     results = embeddings.mode_search(query)
@@ -499,6 +499,9 @@ def get_mode_search(query: Annotated[embeddings.ModeQuery, Query()]) -> Response
         pa.array(results.galaxies, pa.int32()),
         pa.array(results.scores, pa.float32()),
     ]
+    map_fields, map_columns = map_arrays(results.maps)
+    fields += map_fields
+    columns += map_columns
     for mode in MODES:
         fields.append(pa.field(f"{mode}_contribution", pa.float32()))
         values = results.contributions.get(mode)

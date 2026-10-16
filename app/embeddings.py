@@ -46,6 +46,7 @@ class ModeResults(NamedTuple):
     scores: np.ndarray
     contributions: dict[str, np.ndarray]
     predicted: list[list[str]]
+    maps: dict[str, np.ndarray]
 
 
 def loaded(role: str, dtype: torch.dtype = torch.float64) -> torch.Tensor:
@@ -113,11 +114,13 @@ def mode_search(query: ModeQuery) -> ModeResults:
     galaxies = np.concatenate(
         ([query.galaxy], order[order != query.galaxy][: query.matches])
     )
+    forms = pql.galaxy_forms(query.galaxy)
     return ModeResults(
         galaxies,
         scored[galaxies],
         {mode: values[galaxies] for mode, values in contributions.items()},
         pql.predicted(modes, galaxies),
+        pql.maps(forms, pql.slot_peaks(forms), pql.gathered(galaxies)),
     )
 
 

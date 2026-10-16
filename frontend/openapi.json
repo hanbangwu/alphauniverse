@@ -716,7 +716,7 @@
     "/search/modes": {
       "get": {
         "summary": "Get Mode Search",
-        "description": "Ranks every galaxy against the query galaxy over whole modes, from the stored token embeddings cut to 256 components: each mode's scores, at any position for a mode named in anywhere, are standardised over all galaxies, and a galaxy's score is their mean. The query galaxy comes first. A selected mode's contribution is its standardised score over the number of modes, so the contributions sum to the score. The has_ flags and predicted are as /search's.",
+        "description": "Ranks every galaxy against the query galaxy over whole modes, from the stored token embeddings cut to 256 components: each mode's scores, at any position for a mode named in anywhere, are standardised over all galaxies, and a galaxy's score is their mean. The query galaxy comes first. A selected mode's contribution is its standardised score over the number of modes, so the contributions sum to the score. The maps, has_ flags and predicted are as /search's, with the maps at the same place.",
         "operationId": "get_mode_search",
         "parameters": [
           {

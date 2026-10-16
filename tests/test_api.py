@@ -284,6 +284,7 @@ def test_whole_mode_search_scores_a_mode_the_query_galaxy_lacks_and_marks_it(
         if name.endswith("_contribution") and table.column(name).null_count == 0
     }
     assert contributed == {"ls_image_contribution", "desi_spectrum_contribution"}
+    assert len(table.column("ls_image")[0]) == N_IMAGE_TOKENS
     has_desi = (
         _stored("tokens").column("desi").is_valid().to_numpy(zero_copy_only=False)
     )
