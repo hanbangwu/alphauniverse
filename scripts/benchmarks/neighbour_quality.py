@@ -7,7 +7,6 @@ import modal
 import numpy as np
 import pyarrow.parquet as pq
 import torch
-from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 from umap import UMAP
@@ -17,6 +16,7 @@ from app.config import (
     DATASET_REVISION,
     GRAM_NAMES,
     REDSHIFT,
+    SEARCH_RANK,
     SEED,
     artifact,
     galaxy_count,
@@ -25,7 +25,7 @@ from app.parametric_umap import scan
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks import projection_quality
 from scripts.benchmarks.common import COMBINED, environment, git, memory, standardised
-from scripts.benchmarks.probe_quality import JOINT, RANK, scaled, targets
+from scripts.benchmarks.probe_quality import targets
 
 app = modal.App("alphauniverse-neighbour-quality")
 image = build_image.add_local_python_source("modal_app")
@@ -48,17 +48,18 @@ def vectors(role: str) -> dict[str, dict[str, torch.Tensor]]:
     for name in GRAM_NAMES:
         with np.load(artifact(f"{role}_embedding_{name}")) as stored:
             found[name] = {
-                part: torch.from_numpy(np.ascontiguousarray(stored[part][:, :RANK]))
+                part: torch.from_numpy(
+                    np.ascontiguousarray(stored[part][:, :SEARCH_RANK])
+                )
                 for part in ("queries", "galleries")
             } | {"offsets": torch.from_numpy(stored["offsets"])}
     return found
 
 
 def joint(blocks: dict[str, dict[str, torch.Tensor]]) -> torch.Tensor:
-    found = np.concatenate(
-        [scaled(block["galleries"].numpy()) for block in blocks.values()], 1
+    return torch.from_numpy(
+        embeddings.joint([block["galleries"].numpy() for block in blocks.values()])
     )
-    return torch.from_numpy(PCA(JOINT, random_state=SEED).fit_transform(found))
 
 
 def searched(
@@ -69,7 +70,7 @@ def searched(
     return sum(
         standardised(
             embeddings.scores(
-                blocks[name]["queries"][queries], blocks[name], RANK
+                blocks[name]["queries"][queries], blocks[name], SEARCH_RANK
             ).double()
         )
         for name in names
@@ -259,8 +260,8 @@ def measure() -> dict[str, Any]:
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     return {
         "environment": environment(),
-        "rank": RANK,
-        "joint": JOINT,
+        "rank": SEARCH_RANK,
+        "joint": embeddings.JOINT_RANK,
         "neighbours": NEIGHBOURS,
         "preserved": projection_quality.NEIGHBOURS,
         "physics": physics(families, joints, aion),

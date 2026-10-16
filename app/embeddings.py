@@ -1,10 +1,19 @@
 import numpy as np
 import torch
+from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
+from .config import (
+    GRAM_NAMES,
+    SEARCH_RANK,
+    SEED,
+    TOKEN_EMBEDDING_RANK,
+    artifact,
+    device,
+)
 
 BATCH = 1024
+JOINT_RANK = 768
 
 
 def loaded(role: str, dtype: torch.dtype = torch.float64) -> torch.Tensor:
@@ -62,3 +71,22 @@ def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> Non
 def generate_token_embeddings() -> None:
     for name in tqdm(GRAM_NAMES, desc="token embeddings"):
         saved(f"token_embedding_{name}", embedding(loaded(f"token_gram_{name}")))
+
+
+def scaled(galleries: np.ndarray) -> np.ndarray:
+    centred = galleries - galleries.mean(axis=0)
+    return centred / np.sqrt((centred**2).sum(axis=1).mean())
+
+
+def joint(blocks: list[np.ndarray]) -> np.ndarray:
+    return PCA(JOINT_RANK, random_state=SEED).fit_transform(
+        np.concatenate([scaled(block) for block in blocks], axis=1)
+    )
+
+
+def generate_joint_embedding() -> None:
+    blocks = []
+    for name in GRAM_NAMES:
+        with np.load(artifact(f"token_embedding_{name}")) as found:
+            blocks.append(found["galleries"][:, :SEARCH_RANK].copy())
+    np.save(artifact("joint_embedding"), joint(blocks).astype(np.float32))

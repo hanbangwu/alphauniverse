@@ -72,3 +72,23 @@ def test_a_galaxy_s_own_row_gives_its_stored_query_vector() -> None:
         found["queries"][chosen],
         atol=1e-9,
     )
+
+
+def test_the_joint_embedding_is_the_principal_components_of_the_scaled_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(embeddings, "JOINT_RANK", 3)
+    rng = np.random.default_rng(3)
+    blocks = [rng.normal(size=(GALAXIES, 4)), 50 * rng.normal(size=(GALAXIES, 6))]
+
+    found = embeddings.joint(blocks)
+
+    scaled = []
+    for block in blocks:
+        centred = block - block.mean(axis=0)
+        scaled.append(centred / np.sqrt((centred**2).sum(axis=1).mean()))
+    joined = np.concatenate(scaled, axis=1)
+    left, values, _ = np.linalg.svd(joined - joined.mean(axis=0), full_matrices=False)
+    np.testing.assert_allclose(
+        np.abs(found), np.abs(left[:, :3] * values[:3]), atol=1e-9
+    )

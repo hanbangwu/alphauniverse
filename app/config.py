@@ -209,6 +209,7 @@ TOKEN_GRAMS = {
 }
 GRAM_NAMES = tuple(name for names in TOKEN_GRAMS.values() for name in names)
 TOKEN_EMBEDDING_RANK = 1024
+SEARCH_RANK = 256
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",
@@ -229,6 +230,7 @@ ARTIFACTS: dict[str, str] = {
     **{f"template_gram_{name}": "npy" for name in GRAM_NAMES},
     "observed_reference": "npz",
     **{f"template_embedding_{name}": "npz" for name in GRAM_NAMES},
+    "joint_embedding": "npy",
 }
 
 PREDICTIONS = pa.schema(

@@ -6,7 +6,6 @@ from typing import Any
 import modal
 import numpy as np
 from sklearn.compose import ColumnTransformer
-from sklearn.decomposition import PCA
 from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import LinearRegression, RidgeCV
 from sklearn.metrics import r2_score, root_mean_squared_error
@@ -14,11 +13,13 @@ from sklearn.model_selection import KFold, cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import make_pipeline
 
+from app import embeddings
 from app.config import (
     DATASET_REVISION,
     GRAM_NAMES,
     PROVABGS,
     REDSHIFT,
+    SEARCH_RANK,
     SEED,
     SPECTRUM_MODES,
     artifact,
@@ -33,8 +34,6 @@ app = modal.App("alphauniverse-probe-quality")
 image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/probe_quality.json")
-RANK = 256
-JOINT = 768
 NEIGHBOURS = 10
 ALPHAS = np.logspace(-3, 4, 15)
 FOLDS = KFold(shuffle=True, random_state=SEED)
@@ -63,12 +62,7 @@ def targets() -> dict[str, np.ndarray]:
 
 def galleries(role: str, name: str) -> np.ndarray:
     with np.load(artifact(f"{role}_{name}")) as stored:
-        return stored["galleries"][:, :RANK]
-
-
-def scaled(galleries: np.ndarray) -> np.ndarray:
-    centred = galleries - galleries.mean(axis=0)
-    return centred / np.sqrt((centred**2).sum(axis=1).mean())
+        return stored["galleries"][:, :SEARCH_RANK]
 
 
 def shots(
@@ -142,7 +136,8 @@ def measure() -> dict[str, Any]:
     values = targets()
     families = {
         role: {
-            name: scaled(galleries(f"{role}_embedding", name)) for name in GRAM_NAMES
+            name: embeddings.scaled(galleries(f"{role}_embedding", name))
+            for name in GRAM_NAMES
         }
         for role in ("token", "template")
     }
@@ -162,8 +157,8 @@ def measure() -> dict[str, Any]:
                 )
                 for label, names in BLOCKS.items()
             }
-            features["joint"] = PCA(JOINT, random_state=SEED).fit_transform(
-                features["all"]
+            features["joint"] = embeddings.joint(
+                [blocks[name] for name in GRAM_NAMES if name != target]
             )
             report[target][role] = {
                 label: scores(matrix[kept], column[kept], PROBES)
@@ -187,8 +182,8 @@ def measure() -> dict[str, Any]:
             }
     return {
         "environment": environment(),
-        "rank": RANK,
-        "joint": JOINT,
+        "rank": SEARCH_RANK,
+        "joint": embeddings.JOINT_RANK,
         "folds": FOLDS.n_splits,
         "neighbours": NEIGHBOURS,
         "draws": DRAWS,
