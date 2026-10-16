@@ -43,6 +43,12 @@ Glossary
    PROVABGS
       A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the text search benchmark.
 
+   standing benchmark
+      A benchmark that measures what the site ships, in its shipped configuration, and reruns when the code or artifacts it measures change. See :doc:`benchmarks`.
+
+   study
+      A benchmark that answers one design question, and reruns only when that question reopens. See :doc:`benchmarks`.
+
    slot
       A position a :term:`token` can occupy: one image cell, one spectral window, one catalogue value or the redshift. A galaxy has 1,722.
 

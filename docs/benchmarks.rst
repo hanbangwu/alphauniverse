@@ -3,7 +3,7 @@ Benchmarks
 
 Every benchmark runs on Modal against the artifacts the live site serves, and writes a report to ``docs/benchmarks/<script>.json``. The charts and tables below are drawn from those reports when the documentation is built, so each shows exactly one run, named by its commit and date, and a newly committed report updates its section. Figures compare only within one run, never across runs or machines. :doc:`how-to` explains how to run them.
 
-A standing benchmark measures what ships, in its shipped configuration, and reruns when the code it measures changes. A study answers one design question, and reruns only when that question reopens.
+Each benchmark is a :term:`standing benchmark` or a :term:`study`.
 
 Standing benchmarks
 -------------------
