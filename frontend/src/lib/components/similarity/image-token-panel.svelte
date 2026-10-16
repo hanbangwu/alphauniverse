@@ -11,6 +11,7 @@
     values: ArrayLike<number> | null
     grid: number
     color: ((value: number) => RGB) | null
+    mask?: ArrayLike<number> | null
     opacity?: (picked: boolean) => number
     galaxy?: number
     survey?: ImageSurvey
@@ -29,6 +30,7 @@
     values,
     grid,
     color,
+    mask,
     opacity,
     galaxy,
     survey,
@@ -57,6 +59,7 @@
           {values}
           {grid}
           {color}
+          {mask}
           {opacity}
           {title}
           {selected}

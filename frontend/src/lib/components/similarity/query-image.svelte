@@ -6,7 +6,6 @@
   import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
-  import ImageTokenMask from './image-token-mask.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
@@ -36,6 +35,8 @@
     values={layer?.values ?? tokens.data ?? null}
     grid={similarity.grid}
     color={layer?.heat ?? palette}
+    mask={layer &&
+      similarity.maskOf(layer.values, similarity.imageLayerDomain, display.images.query)}
     opacity={layer ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
     galaxy={similarity.galaxy}
     {survey}
@@ -50,12 +51,4 @@
       <p role="alert" class="text-xs leading-relaxed text-destructive">{error}</p>
     {/if}
   </ImageTokenPanel>
-
-  {#if layer}
-    <ImageTokenMask
-      values={layer.values}
-      domain={similarity.imageLayerDomain}
-      control={display.images.query}
-    />
-  {/if}
 </div>

@@ -235,10 +235,6 @@ export class Similarity {
 
   readonly caption: Caption = (value) => `token ${value}`
 
-  readonly maskColor = (value: number): RGB => (value ? [255, 255, 255] : [0, 0, 0])
-
-  readonly maskTitle: Caption = (value) => (value ? 'masked' : 'unmasked')
-
   predictedAt(index: number): string[] {
     return this.#result.data?.predicted[index] ?? []
   }

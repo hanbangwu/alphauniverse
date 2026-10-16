@@ -3,7 +3,6 @@
   import { OBSERVATIONS, SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
-  import ImageTokenMask from './image-token-mask.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
@@ -36,13 +35,9 @@
               {values}
               grid={similarity.grid}
               color={similarity.scales?.[mode]?.heat ?? null}
+              mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
               title={similarity.score}
               selected={similarity.outlinesAt(mode, index)}
-            />
-            <ImageTokenMask
-              {values}
-              domain={similarity.imageDomain}
-              control={display.images.matches}
             />
           </div>
         {/if}
