@@ -103,7 +103,7 @@ def generate_token_embeddings() -> None:
     gpu="L4",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
-    timeout=12 * 60,
+    timeout=20 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_templates() -> None:
