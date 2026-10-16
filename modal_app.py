@@ -8,12 +8,12 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
 CACHE_PATH = "/cache"
-WANDB_MODE = "offline"
 SERVING_CPU = 8
-SERVING_MEMORY = (8 * 1024, 32 * 1024)
+SERVING_MEMORY = (4 * 1024, 32 * 1024)
 SERVING_MAX_INPUTS = 16
 SERVING_MAX_CONTAINERS = 1
 SERVING_SCALEDOWN_WINDOW = 5 * 60
+SERVING_ENVIRONMENT = {"OPENBLAS_NUM_THREADS": "1"}
 
 app = modal.App("alphauniverse")
 
@@ -23,7 +23,6 @@ environment = {
     "ALPHAUNIVERSE_CACHE": CACHE_PATH,
     "HF_HOME": CACHE_PATH,
     "WANDB_DIR": CACHE_PATH,
-    "WANDB_MODE": WANDB_MODE,
 }
 
 
@@ -37,10 +36,10 @@ build_image = (
 
 @app.function(
     image=build_image,
-    gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=3 * 60 * 60,
+    gpu="T4",
+    cpu=(2, 4),
+    memory=(8 * 1024, 32 * 1024),
+    timeout=1 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
@@ -49,15 +48,49 @@ def generate_embeddings() -> None:
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_embeddings()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="T4",
+    cpu=(8, 16),
+    memory=(4 * 1024, 16 * 1024),
+    timeout=2 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_predictions() -> None:
+    from app.config import build_dir
+    from app.predictions import generate_predictions
+
+    build_dir().mkdir(parents=True, exist_ok=True)
+    generate_predictions()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="H100!",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=4 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_token_grams() -> None:
+    from app.grams import generate_token_grams
+
+    generate_token_grams()
+    cache_volume.commit()
 
 
 @app.function(
     image=build_image,
     gpu="L4",
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
+    cpu=4,
+    memory=(32 * 1024, 64 * 1024),
     timeout=3 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
+    secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def generate_projections() -> None:
     from app.config import build_dir
@@ -65,21 +98,55 @@ def generate_projections() -> None:
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_projections()
+    cache_volume.commit()
 
 
 @app.function(
     image=build_image,
-    cpu=16,
-    memory=(32 * 1024, 128 * 1024),
-    timeout=3 * 60 * 60,
+    gpu="L4",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=6 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_index() -> None:
+def generate_pairs() -> None:
     from app.config import build_dir
-    from app.search import generate_index
+    from app.text_search import generate_pairs
 
     build_dir().mkdir(parents=True, exist_ok=True)
-    generate_index()
+    generate_pairs()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=4,
+    memory=(32 * 1024, 64 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+    secrets=[modal.Secret.from_name("wandb-secret")],
+)
+def generate_alignment() -> None:
+    from app.alignment import generate_alignment
+
+    generate_alignment()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=4,
+    memory=(32 * 1024, 64 * 1024),
+    timeout=1 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_aion_gemma_space() -> None:
+    from app.alignment import generate_aion_gemma_space
+
+    generate_aion_gemma_space()
+    cache_volume.commit()
 
 
 serving_image = (
@@ -92,6 +159,7 @@ serving_image = (
 
 @app.function(
     image=serving_image,
+    env=SERVING_ENVIRONMENT,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
     timeout=10 * 60,

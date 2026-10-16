@@ -1,19 +1,21 @@
 import { DETAIL_VIEWS, type DetailView, POINT_SETS, type PointSet } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField } from './fields.svelte'
-import { optionsOver } from './schema'
 
 export class ViewState {
   readonly pointSet: EnumField<PointSet>
   readonly galaxy = new Field<number | null>(null)
   readonly detail: EnumField<DetailView>
-  readonly patches = new IndexListField()
-  readonly spans = new IndexListField()
+  readonly imageTokens = new IndexListField()
+  readonly spectrumTokens = new IndexListField()
+  readonly tableValues = new IndexListField()
+  readonly imageAnywhere = new Field(false)
+  readonly spectrumAnywhere = new Field(false)
   readonly explorer = new Field(false)
 
   constructor() {
-    this.pointSet = new EnumField(optionsOver(POINT_SETS), POINT_SETS)
-    this.detail = new EnumField(optionsOver(DETAIL_VIEWS), DETAIL_VIEWS)
+    this.pointSet = new EnumField(POINT_SETS)
+    this.detail = new EnumField(DETAIL_VIEWS)
   }
 
   get full(): boolean {
@@ -26,8 +28,9 @@ export class ViewState {
 
   select(galaxy: number | null): void {
     if (galaxy !== this.galaxy.value) {
-      this.patches.reset()
-      this.spans.reset()
+      this.imageTokens.reset()
+      this.spectrumTokens.reset()
+      this.tableValues.reset()
     }
     this.galaxy.value = galaxy
   }

@@ -13,7 +13,6 @@ export default defineConfig({
       name: '@hey-api/client-fetch',
       baseUrl: false,
       runtimeConfigPath: './src/lib/hey-api.ts'
-    },
-    { name: 'zod', definitions: false, responses: false }
+    }
   ]
 })

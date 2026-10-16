@@ -4,17 +4,21 @@ from io import BytesIO
 import numpy as np
 import PIL.Image
 import pyarrow as pa
+from astropy.convolution import Gaussian1DKernel, convolve
 from datasets import Dataset, Image, load_dataset
 
 from .config import (
+    CATALOGUES,
     CROP_PIXELS,
     DATASET_AUTHOR,
     DATASET_NAME,
     DATASET_REVISION,
-    FLAG_SURVEYS,
-    N_MORPHOLOGIES,
+    REDSHIFT_COLUMNS,
+    REDSHIFT_LIMIT,
     RGB_COLUMN,
+    SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEYS,
+    Catalogue,
     SpectrumSurvey,
 )
 
@@ -49,6 +53,10 @@ def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
     return {"wavelength": wavelength[kept], "flux": flux[kept]}
 
 
+def smoothed(flux: np.ndarray) -> np.ndarray:
+    return convolve(flux, Gaussian1DKernel(SPECTRUM_SMOOTHING_SIGMA), preserve_nan=True)
+
+
 def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
     cell = dataset().data.column(SPECTRUM_SURVEYS[survey])[galaxy]
     if not cell.is_valid:
@@ -56,9 +64,42 @@ def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
     return pa.table(samples(cell))
 
 
+def catalogue(column: str) -> Catalogue | None:
+    _, separator, suffix = column.partition("-")
+    return CATALOGUES.get(separator + suffix)
+
+
 @cache
-def labels() -> list[int]:
-    category = dataset().data.column(FLAG_SURVEYS["gz10"])
-    return np.bincount(
-        np.asarray(category.fill_null(N_MORPHOLOGIES)), minlength=N_MORPHOLOGIES + 1
-    ).tolist()
+def table_columns() -> tuple[str, ...]:
+    return tuple(
+        field.name
+        for field in dataset().data.schema
+        if (
+            pa.types.is_integer(field.type)
+            or pa.types.is_floating(field.type)
+            or pa.types.is_boolean(field.type)
+        )
+        and catalogue(field.name) is not None
+    )
+
+
+def table(galaxy: int) -> dict[str, float | int | bool | None]:
+    return {
+        column: dataset().data.column(column)[galaxy].as_py()
+        for column in table_columns()
+    }
+
+
+def usable(redshift: float | None, warning: bool | None) -> bool:
+    return redshift is not None and not warning and redshift <= REDSHIFT_LIMIT
+
+
+def redshift(row: dict) -> SpectrumSurvey | None:
+    return next(
+        (
+            survey
+            for survey, (value, _, warning) in REDSHIFT_COLUMNS.items()
+            if usable(row[value], row[warning])
+        ),
+        None,
+    )

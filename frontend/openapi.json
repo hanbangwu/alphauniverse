@@ -152,6 +152,50 @@
         }
       }
     },
+    "/galaxy/{galaxy}/table": {
+      "get": {
+        "summary": "Get Table",
+        "operationId": "get_table",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TableRow"
+                  },
+                  "title": "Response Get Table"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/galaxy/{galaxy}/image": {
       "get": {
         "summary": "Get Image",
@@ -237,6 +281,7 @@
     "/galaxy/{galaxy}/spectrum": {
       "get": {
         "summary": "Get Spectrum",
+        "description": "The galaxy's spectrum for display, its flux smoothed with a Gaussian of sigma 2 pixels; masked pixels stay NaN.",
         "operationId": "get_spectrum",
         "parameters": [
           {
@@ -316,6 +361,205 @@
         }
       }
     },
+    "/galaxy/{galaxy}/cosines/{mode}": {
+      "get": {
+        "summary": "Get Cosines",
+        "description": "The cosine between AION's predicted distributions at every pair of the galaxy's slots of one image or spectrum mode: n by n float32, row-major, n the mode's slot count.",
+        "operationId": "get_cosines",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls_image",
+                "hsc_image",
+                "desi_spectrum",
+                "sdss_spectrum"
+              ],
+              "type": "string",
+              "title": "Mode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saliency": {
+      "get": {
+        "summary": "Get Saliency",
+        "description": "For the query galaxy, at every slot of every mode, the partial correlation over every other galaxy between its score on the selection and its agreement with the query galaxy at that slot, controlling for its mean agreement outside the selection. With anywhere, the correlation runs over 512 other galaxies drawn at random with the query galaxy as the seed, and a mode named in anywhere takes, at each slot, the best agreement at any slot of that mode. One row, one list column per map.",
+        "operationId": "get_saliency",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "ls_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Ls Image"
+            }
+          },
+          {
+            "name": "hsc_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Hsc Image"
+            }
+          },
+          {
+            "name": "desi_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Desi Spectrum"
+            }
+          },
+          {
+            "name": "sdss_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Sdss Spectrum"
+            }
+          },
+          {
+            "name": "table_values",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 26
+              },
+              "maxItems": 26,
+              "default": [],
+              "title": "Table Values"
+            }
+          },
+          {
+            "name": "anywhere",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum"
+                ],
+                "type": "string"
+              },
+              "maxItems": 4,
+              "default": [],
+              "title": "Anywhere"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search": {
       "get": {
         "summary": "Get Search",
@@ -332,7 +576,7 @@
             }
           },
           {
-            "name": "p",
+            "name": "ls_image",
             "in": "query",
             "required": false,
             "schema": {
@@ -344,11 +588,27 @@
               },
               "maxItems": 576,
               "default": [],
-              "title": "P"
+              "title": "Ls Image"
             }
           },
           {
-            "name": "s",
+            "name": "hsc_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Hsc Image"
+            }
+          },
+          {
+            "name": "desi_spectrum",
             "in": "query",
             "required": false,
             "schema": {
@@ -360,7 +620,59 @@
               },
               "maxItems": 272,
               "default": [],
-              "title": "S"
+              "title": "Desi Spectrum"
+            }
+          },
+          {
+            "name": "sdss_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Sdss Spectrum"
+            }
+          },
+          {
+            "name": "table_values",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 26
+              },
+              "maxItems": 26,
+              "default": [],
+              "title": "Table Values"
+            }
+          },
+          {
+            "name": "anywhere",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum"
+                ],
+                "type": "string"
+              },
+              "maxItems": 4,
+              "default": [],
+              "title": "Anywhere"
             }
           },
           {
@@ -384,6 +696,59 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/text": {
+      "get": {
+        "summary": "Get Text Search",
+        "operationId": "get_text_search",
+        "parameters": [
+          {
+            "name": "text",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "title": "Text"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextMatches"
                 }
               }
             }
@@ -500,6 +865,130 @@
           "morphologies"
         ],
         "title": "Meta"
+      },
+      "TableRow": {
+        "properties": {
+          "section": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ls",
+                  "hsc",
+                  "desi",
+                  "sdss",
+                  "gz10",
+                  "provabgs"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "redshift"
+              }
+            ],
+            "title": "Section"
+          },
+          "column": {
+            "type": "string",
+            "title": "Column"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "table_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Value"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "excluded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section",
+          "column",
+          "value",
+          "table_value",
+          "token",
+          "excluded"
+        ],
+        "title": "TableRow"
+      },
+      "TextMatches": {
+        "properties": {
+          "galaxies": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Galaxies"
+          },
+          "modalities": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "image",
+                "spectrum"
+              ]
+            },
+            "type": "array",
+            "title": "Modalities"
+          },
+          "scores": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Scores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "galaxies",
+          "modalities",
+          "scores"
+        ],
+        "title": "TextMatches"
       },
       "ValidationError": {
         "properties": {

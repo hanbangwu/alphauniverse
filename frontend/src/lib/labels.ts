@@ -1,4 +1,4 @@
-import type { Galaxy } from '$lib/api'
+import type { Galaxy, TableRow } from '$lib/api'
 
 export interface Label {
   label: string
@@ -8,7 +8,14 @@ export type Labels<T extends string> = Record<T, Label>
 
 export type Choice<T extends string> = Label & { value: T }
 
-export const SIMILARITY = { short: 'cos sim' } as const
+export const SIMILARITY = { short: 'similarity' } as const
+
+export const OBSERVATIONS: Record<string, string> = {
+  hsc: 'HSC match',
+  desi: 'DESI spectrum',
+  sdss: 'SDSS spectrum',
+  redshift: 'redshift'
+}
 
 export const SURVEYS: Labels<keyof Galaxy> = {
   ls: { label: 'Legacy Survey DR10' },
@@ -17,6 +24,11 @@ export const SURVEYS: Labels<keyof Galaxy> = {
   sdss: { label: 'SDSS' },
   gz10: { label: 'Galaxy Zoo 10' },
   provabgs: { label: 'PROVABGS' }
+}
+
+export const SECTIONS: Labels<TableRow['section']> = {
+  redshift: { label: 'Redshift' },
+  ...SURVEYS
 }
 
 export const POINT_SETS = {

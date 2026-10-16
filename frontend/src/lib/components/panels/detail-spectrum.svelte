@@ -1,8 +1,9 @@
 <script lang="ts">
-  import PatchFrame from '$lib/components/common/patch-frame.svelte'
+  import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { coverageQuery, spectrumQuery } from '$lib/data/queries'
   import { SPECTRUM_SURVEY, hasSpectrum } from '$lib/data/spectra'
+  import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -17,7 +18,7 @@
   const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
 </script>
 
-<PatchFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">
+<PanelFrame busy={coverage.isPending || spectrum.isFetching} class="bg-card">
   {#if matched && spectrum.data}
     <SpectrumChart
       spectrum={spectrum.data}
@@ -29,10 +30,10 @@
       No spectrum
     </p>
   {/if}
-</PatchFrame>
+</PanelFrame>
 
 {#if spectrum.isError}
   <p class="text-xs leading-relaxed text-destructive">
-    {'detail' in spectrum.error ? spectrum.error.detail : spectrum.error.message}
+    {errorMessage(spectrum.error)}
   </p>
 {/if}

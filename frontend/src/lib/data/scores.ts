@@ -18,6 +18,28 @@ export function mask(values: ArrayLike<number>, threshold: number, invert: boole
   return out
 }
 
-export function row(values: Float32Array, index: number, patches: number): Float32Array {
-  return values.subarray(index * patches, (index + 1) * patches)
+export function row(values: Float32Array, index: number, width: number): Float32Array {
+  return values.subarray(index * width, (index + 1) * width)
+}
+
+export function best(table: Float32Array, rows: number[]): Float32Array {
+  const width = Math.sqrt(table.length)
+  const out = new Float32Array(width).fill(-Infinity)
+  for (const index of rows) {
+    for (let column = 0; column < width; column++) {
+      out[column] = Math.max(out[column], table[index * width + column])
+    }
+  }
+  return out
+}
+
+export function matchMean(values: Float32Array, rows: number): Float32Array {
+  const width = values.length / rows
+  const mean = new Float32Array(width)
+  for (let index = 1; index < rows; index++) {
+    for (let slot = 0; slot < width; slot++) {
+      mean[slot] += values[index * width + slot] / (rows - 1)
+    }
+  }
+  return mean
 }

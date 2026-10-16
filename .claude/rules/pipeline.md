@@ -1,11 +1,13 @@
 ---
 paths:
   - "app/encode.py"
+  - "app/grams.py"
   - "app/parametric_umap.py"
+  - "app/predictions.py"
   - "app/dataset.py"
   - "app/search.py"
-  - "app/images.py"
-  - "app/spectra.py"
+  - "app/text_search.py"
+  - "app/alignment.py"
   - "modal_app.py"
   - "pyproject.toml"
   - "scripts/alphauniverse_cosmos.py"
@@ -14,4 +16,5 @@ paths:
 # Pipeline
 
 - A pull request that changes what a `generate_*` job writes names the jobs that must be rerun, in order, before the change can deploy.
-- A change to an artifact's schema updates its schema in `docs/pipeline.md` and `scripts/fixture.py` together.
+- A change to an artifact's schema updates `scripts/fixture.py` and the artifact's prose in `docs/reference.rst` together.
+- Code that reads an artifact larger than one batch reads it in batches into preallocated arrays, and never holds a second copy of it.

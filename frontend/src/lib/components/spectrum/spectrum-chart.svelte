@@ -24,7 +24,7 @@
 <script lang="ts">
   import { type RGB, SELECTED, chartInk } from '$lib/color'
   import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
-  import { type Spectrum, spanAt, spanOf } from '$lib/data/spectra'
+  import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
   import type { ECharts, ElementEvent } from 'echarts/core'
@@ -73,7 +73,7 @@
     if (!values || !color) return []
     const chosen = new Set(selected)
     return Array.from(values, (value, index): Areas[number] => {
-      const [low, high] = spanOf(meta, index)
+      const [low, high] = spectrumTokenOf(meta, index)
       const [r, g, b] = color(value)
       const picked = chosen.has(index)
       return [
@@ -95,7 +95,7 @@
       number,
       number
     ]
-    const index = spanAt(meta, wavelength)
+    const index = spectrumTokenAt(meta, wavelength)
     const value = values?.[index]
     return [
       `${wavelength.toFixed(1)} Å`,
@@ -152,7 +152,7 @@
     if (!values) return
     const position = [event.offsetX, event.offsetY]
     if (!instance.containPixel('grid', position)) return
-    const index = spanAt(meta, instance.convertFromPixel('grid', position)[0])
+    const index = spectrumTokenAt(meta, instance.convertFromPixel('grid', position)[0])
     if (index < 0 || index >= values.length) return
     cursor = null
     ontoggle?.(index)
@@ -172,7 +172,7 @@
       instance.dispatchAction({ type: 'showTip', x: -1, y: -1 })
       return
     }
-    const [low, high] = spanOf(meta, index)
+    const [low, high] = spectrumTokenOf(meta, index)
     const left = Math.max(low, first)
     const right = Math.min(high, last)
     const y = instance.getHeight() / 2
@@ -194,10 +194,12 @@
     event.preventDefault()
     if (cursor === null) {
       const [from, to] = shown()
-      point(spanAt(meta, (from + to) / 2))
+      point(spectrumTokenAt(meta, (from + to) / 2))
       return
     }
-    point(Math.min(Math.max(cursor + step, spanAt(meta, first)), spanAt(meta, last)))
+    point(
+      Math.min(Math.max(cursor + step, spectrumTokenAt(meta, first)), spectrumTokenAt(meta, last))
+    )
   }
 
   function activate(event: MouseEvent): void {

@@ -1,0 +1,79 @@
+{
+  "commit": "791445d",
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-10-12T05:28:17+00:00",
+  "server": {
+    "cpu": 8,
+    "memory_mb": [
+      8192,
+      32768
+    ],
+    "max_inputs": 16,
+    "max_containers": 1,
+    "scaledown_window_s": 300
+  },
+  "requests": {
+    "environment": {
+      "cpu": {
+        "vendor_id": "AuthenticAMD",
+        "cpu family": "25",
+        "model": "1",
+        "model name": "unknown"
+      },
+      "cpu_count": 17,
+      "omp_num_threads": "1",
+      "thread_pools": [
+        {
+          "user_api": "blas",
+          "internal_api": "openblas",
+          "num_threads": 1,
+          "prefix": "libscipy_openblas",
+          "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+          "version": "0.3.34.106.0",
+          "threading_layer": "pthreads",
+          "architecture": "Haswell"
+        }
+      ]
+    },
+    "cold_ms": {
+      "meta": 52609.864,
+      "search": 2057.704,
+      "text search": 39906.17,
+      "image": 9035.276,
+      "spectrum": 371.514,
+      "table": 339.84
+    },
+    "warm": {
+      "meta": {
+        "runs": 30,
+        "p50_ms": 334.862,
+        "p95_ms": 341.74
+      },
+      "search": {
+        "runs": 30,
+        "p50_ms": 451.078,
+        "p95_ms": 684.886
+      },
+      "text search": {
+        "runs": 30,
+        "p50_ms": 481.759,
+        "p95_ms": 612.387
+      },
+      "image": {
+        "runs": 30,
+        "p50_ms": 347.745,
+        "p95_ms": 362.22
+      },
+      "spectrum": {
+        "runs": 30,
+        "p50_ms": 344.345,
+        "p95_ms": 363.229
+      },
+      "table": {
+        "runs": 30,
+        "p50_ms": 343.957,
+        "p95_ms": 358.334
+      }
+    }
+  }
+}

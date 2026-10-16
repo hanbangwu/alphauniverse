@@ -1,0 +1,617 @@
+{
+  "commit": "fabde74",
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-10-12T04:47:14+00:00",
+  "modes": {
+    "ls_image": {
+      "galaxies": 17369,
+      "sample": 1024,
+      "queries": 200,
+      "bytes_per_galaxy": 149760.0,
+      "sizes": {
+        "1": {
+          "spearman_median": 0.9999977350234985,
+          "spearman_p5": 0.9972689747810364,
+          "top10_median": 1.0,
+          "identity": 0.0,
+          "identity_exact": 0.0,
+          "relevance": 0.15746763348579407,
+          "relevance_exact": 0.15746763348579407
+        },
+        "16": {
+          "spearman_median": 0.9999465346336365,
+          "spearman_p5": 0.9852083921432495,
+          "top10_median": 1.0,
+          "identity": 0.044999998062849045,
+          "identity_exact": 0.044999998062849045,
+          "relevance": 0.1305789053440094,
+          "relevance_exact": 0.13345596194267273
+        },
+        "64": {
+          "spearman_median": 0.9994417428970337,
+          "spearman_p5": 0.990248441696167,
+          "top10_median": 1.0,
+          "identity": 0.04999999701976776,
+          "identity_exact": 0.054999999701976776,
+          "relevance": 0.0732995942234993,
+          "relevance_exact": 0.0784805566072464
+        },
+        "all": {
+          "spearman_median": 0.9976672530174255,
+          "spearman_p5": 0.9913905262947083,
+          "top10_median": 1.0,
+          "identity": 0.03500000014901161,
+          "identity_exact": 0.03500000014901161,
+          "relevance": 0.049091652035713196,
+          "relevance_exact": 0.05028333514928818
+        },
+        "16 anywhere": {
+          "spearman_median": 1.0,
+          "spearman_p5": 0.9980973601341248,
+          "top10_median": 1.0,
+          "identity": 0.0,
+          "identity_exact": 0.0,
+          "relevance": 0.15083372592926025,
+          "relevance_exact": 0.15083372592926025
+        }
+      },
+      "environment": {
+        "cpu": {
+          "vendor_id": "GenuineIntel",
+          "cpu family": "6",
+          "model": "85",
+          "model name": "unknown"
+        },
+        "cpu_count": 32,
+        "omp_num_threads": "16",
+        "thread_pools": [
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+            "version": "0.3.34.106.0",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "openmp",
+            "internal_api": "openmp",
+            "num_threads": 16,
+            "prefix": "libgomp",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+            "version": null
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+            "version": "0.3.31.dev",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          }
+        ]
+      },
+      "device": "cuda",
+      "memory": {
+        "peak_rss_mib": 36040.9,
+        "arrow_peak_mib": 43.7,
+        "resident_files_mib": 26400.7,
+        "resident_anonymous_mib": 7621.1
+      }
+    },
+    "hsc_image": {
+      "galaxies": 17369,
+      "sample": 1024,
+      "queries": 200,
+      "bytes_per_galaxy": 149760.0,
+      "sizes": {
+        "1": {
+          "spearman_median": 0.999966561794281,
+          "spearman_p5": 0.9830583930015564,
+          "top10_median": 1.0,
+          "identity": 0.014999999664723873,
+          "identity_exact": 0.014999999664723873,
+          "relevance": 0.1086721122264862,
+          "relevance_exact": 0.1086721122264862
+        },
+        "16": {
+          "spearman_median": 0.9999423623085022,
+          "spearman_p5": 0.9906780123710632,
+          "top10_median": 1.0,
+          "identity": 0.11999999731779099,
+          "identity_exact": 0.11999999731779099,
+          "relevance": 0.08525180071592331,
+          "relevance_exact": 0.08525180071592331
+        },
+        "64": {
+          "spearman_median": 0.999461829662323,
+          "spearman_p5": 0.9910780787467957,
+          "top10_median": 1.0,
+          "identity": 0.3149999976158142,
+          "identity_exact": 0.3149999976158142,
+          "relevance": 0.05870223790407181,
+          "relevance_exact": 0.05870223790407181
+        },
+        "all": {
+          "spearman_median": 0.9989156126976013,
+          "spearman_p5": 0.9944077134132385,
+          "top10_median": 1.0,
+          "identity": 0.6299999952316284,
+          "identity_exact": 0.6200000047683716,
+          "relevance": 0.04473871737718582,
+          "relevance_exact": 0.04237079247832298
+        },
+        "16 anywhere": {
+          "spearman_median": 1.0,
+          "spearman_p5": 0.9994044303894043,
+          "top10_median": 1.0,
+          "identity": 0.0,
+          "identity_exact": 0.0,
+          "relevance": 0.07208729535341263,
+          "relevance_exact": 0.07208729535341263
+        }
+      },
+      "environment": {
+        "cpu": {
+          "vendor_id": "GenuineIntel",
+          "cpu family": "6",
+          "model": "85",
+          "model name": "unknown"
+        },
+        "cpu_count": 32,
+        "omp_num_threads": "16",
+        "thread_pools": [
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+            "version": "0.3.31.dev",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+            "version": "0.3.34.106.0",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "openmp",
+            "internal_api": "openmp",
+            "num_threads": 16,
+            "prefix": "libgomp",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+            "version": null
+          }
+        ]
+      },
+      "device": "cuda",
+      "memory": {
+        "peak_rss_mib": 36063.2,
+        "arrow_peak_mib": 43.7,
+        "resident_files_mib": 26400.7,
+        "resident_anonymous_mib": 7643.7
+      }
+    },
+    "desi_spectrum": {
+      "galaxies": 17369,
+      "sample": 1024,
+      "queries": 200,
+      "bytes_per_galaxy": 71808.0,
+      "sizes": {
+        "1": {
+          "spearman_median": 0.9998199343681335,
+          "spearman_p5": 0.9967092871665955,
+          "top10_median": 1.0,
+          "identity": 0.04999999701976776,
+          "identity_exact": 0.07499999552965164,
+          "relevance": 0.05657004192471504,
+          "relevance_exact": 0.05657004192471504
+        },
+        "16": {
+          "spearman_median": 0.9999148845672607,
+          "spearman_p5": 0.9978446960449219,
+          "top10_median": 1.0,
+          "identity": 0.1899999976158142,
+          "identity_exact": 0.19499999284744263,
+          "relevance": 0.02439866028726101,
+          "relevance_exact": 0.02439866028726101
+        },
+        "all": {
+          "spearman_median": 0.9999644160270691,
+          "spearman_p5": 0.9997999668121338,
+          "top10_median": 1.0,
+          "identity": 0.3499999940395355,
+          "identity_exact": 0.35499998927116394,
+          "relevance": 0.006101423874497414,
+          "relevance_exact": 0.006101423874497414
+        },
+        "16 anywhere": {
+          "spearman_median": 0.9985908269882202,
+          "spearman_p5": 0.9921357035636902,
+          "top10_median": 0.9000000357627869,
+          "identity": 0.009999999776482582,
+          "identity_exact": 0.019999999552965164,
+          "relevance": 0.0926065742969513,
+          "relevance_exact": 0.08997630327939987
+        }
+      },
+      "environment": {
+        "cpu": {
+          "vendor_id": "AuthenticAMD",
+          "cpu family": "25",
+          "model": "1",
+          "model name": "unknown"
+        },
+        "cpu_count": 21,
+        "omp_num_threads": "16",
+        "thread_pools": [
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+            "version": "0.3.31.dev",
+            "threading_layer": "pthreads",
+            "architecture": "Haswell"
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+            "version": "0.3.34.106.0",
+            "threading_layer": "pthreads",
+            "architecture": "Haswell"
+          },
+          {
+            "user_api": "openmp",
+            "internal_api": "openmp",
+            "num_threads": 16,
+            "prefix": "libgomp",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+            "version": null
+          }
+        ]
+      },
+      "device": "cuda",
+      "memory": {
+        "peak_rss_mib": 30181.4,
+        "arrow_peak_mib": 43.7,
+        "resident_files_mib": 26416.7,
+        "resident_anonymous_mib": 3208.8
+      }
+    },
+    "sdss_spectrum": {
+      "galaxies": 17369,
+      "sample": 1024,
+      "queries": 200,
+      "bytes_per_galaxy": 71808.0,
+      "sizes": {
+        "1": {
+          "spearman_median": 0.9987625479698181,
+          "spearman_p5": 0.9874650835990906,
+          "top10_median": 0.9000000357627869,
+          "identity": 0.0949999988079071,
+          "identity_exact": 0.11499999463558197,
+          "relevance": 0.02825479954481125,
+          "relevance_exact": 0.02419155277311802
+        },
+        "16": {
+          "spearman_median": 0.9984144568443298,
+          "spearman_p5": 0.985521137714386,
+          "top10_median": 1.0,
+          "identity": 0.39499998092651367,
+          "identity_exact": 0.3999999761581421,
+          "relevance": 0.005018479190766811,
+          "relevance_exact": 0.0043421462178230286
+        },
+        "all": {
+          "spearman_median": 0.9995074272155762,
+          "spearman_p5": 0.9967851042747498,
+          "top10_median": 1.0,
+          "identity": 0.4949999749660492,
+          "identity_exact": 0.4899999797344208,
+          "relevance": 0.0017725088400766253,
+          "relevance_exact": 0.0017725088400766253
+        },
+        "16 anywhere": {
+          "spearman_median": 0.9995468258857727,
+          "spearman_p5": 0.9977458119392395,
+          "top10_median": 0.9000000357627869,
+          "identity": 0.004999999888241291,
+          "identity_exact": 0.009999999776482582,
+          "relevance": 0.03642797842621803,
+          "relevance_exact": 0.034994352608919144
+        }
+      },
+      "environment": {
+        "cpu": {
+          "vendor_id": "GenuineIntel",
+          "cpu family": "6",
+          "model": "85",
+          "model name": "unknown"
+        },
+        "cpu_count": 32,
+        "omp_num_threads": "16",
+        "thread_pools": [
+          {
+            "user_api": "openmp",
+            "internal_api": "openmp",
+            "num_threads": 16,
+            "prefix": "libgomp",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+            "version": null
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+            "version": "0.3.34.106.0",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+            "version": "0.3.31.dev",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          }
+        ]
+      },
+      "device": "cuda",
+      "memory": {
+        "peak_rss_mib": 30320.1,
+        "arrow_peak_mib": 43.7,
+        "resident_files_mib": 26416.7,
+        "resident_anonymous_mib": 3299.9
+      }
+    },
+    "ls_table": {
+      "galaxies": 17369,
+      "sample": 1024,
+      "queries": 200,
+      "bytes_per_galaxy": 24576.0,
+      "sizes": {
+        "1": {
+          "spearman_median": 0.999998927116394,
+          "spearman_p5": 0.9999852180480957,
+          "top10_median": 1.0,
+          "identity": 0.009999999776482582,
+          "identity_exact": 0.009999999776482582,
+          "relevance": 0.08470848947763443,
+          "relevance_exact": 0.08470848947763443
+        },
+        "4": {
+          "spearman_median": 0.9999993443489075,
+          "spearman_p5": 0.9999985694885254,
+          "top10_median": 1.0,
+          "identity": 0.38499999046325684,
+          "identity_exact": 0.38499999046325684,
+          "relevance": 0.06614136695861816,
+          "relevance_exact": 0.06614136695861816
+        },
+        "all": {
+          "spearman_median": 0.9999996423721313,
+          "spearman_p5": 0.9999987483024597,
+          "top10_median": 1.0,
+          "identity": 0.8799999952316284,
+          "identity_exact": 0.8799999952316284,
+          "relevance": 0.05217669904232025,
+          "relevance_exact": 0.05217669904232025
+        }
+      },
+      "environment": {
+        "cpu": {
+          "vendor_id": "GenuineIntel",
+          "cpu family": "6",
+          "model": "85",
+          "model name": "unknown"
+        },
+        "cpu_count": 32,
+        "omp_num_threads": "16",
+        "thread_pools": [
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+            "version": "0.3.34.106.0",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "openmp",
+            "internal_api": "openmp",
+            "num_threads": 16,
+            "prefix": "libgomp",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+            "version": null
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+            "version": "0.3.31.dev",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          }
+        ]
+      },
+      "device": "cuda",
+      "memory": {
+        "peak_rss_mib": 28279.0,
+        "arrow_peak_mib": 43.7,
+        "resident_files_mib": 26416.7,
+        "resident_anonymous_mib": 1862.3
+      }
+    },
+    "hsc_table": {
+      "galaxies": 17369,
+      "sample": 1024,
+      "queries": 200,
+      "bytes_per_galaxy": 26624.0,
+      "sizes": {
+        "1": {
+          "spearman_median": 0.9999987483024597,
+          "spearman_p5": 0.9999964237213135,
+          "top10_median": 1.0,
+          "identity": 0.03500000014901161,
+          "identity_exact": 0.03500000014901161,
+          "relevance": 0.09194297343492508,
+          "relevance_exact": 0.09194297343492508
+        },
+        "4": {
+          "spearman_median": 0.9999991059303284,
+          "spearman_p5": 0.9999985694885254,
+          "top10_median": 1.0,
+          "identity": 0.8100000023841858,
+          "identity_exact": 0.8100000023841858,
+          "relevance": 0.09858023375272751,
+          "relevance_exact": 0.09858023375272751
+        },
+        "all": {
+          "spearman_median": 0.999999463558197,
+          "spearman_p5": 0.9999991655349731,
+          "top10_median": 1.0,
+          "identity": 0.9549999833106995,
+          "identity_exact": 0.9549999833106995,
+          "relevance": 0.10070968419313431,
+          "relevance_exact": 0.10070968419313431
+        }
+      },
+      "environment": {
+        "cpu": {
+          "vendor_id": "GenuineIntel",
+          "cpu family": "6",
+          "model": "85",
+          "model name": "unknown"
+        },
+        "cpu_count": 32,
+        "omp_num_threads": "16",
+        "thread_pools": [
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+            "version": "0.3.34.106.0",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+            "version": "0.3.31.dev",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "openmp",
+            "internal_api": "openmp",
+            "num_threads": 16,
+            "prefix": "libgomp",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+            "version": null
+          }
+        ]
+      },
+      "device": "cuda",
+      "memory": {
+        "peak_rss_mib": 28176.8,
+        "arrow_peak_mib": 43.7,
+        "resident_files_mib": 26400.7,
+        "resident_anonymous_mib": 1776.1
+      }
+    },
+    "redshift": {
+      "galaxies": 17369,
+      "sample": 1024,
+      "queries": 200,
+      "bytes_per_galaxy": 2050.0,
+      "sizes": {
+        "1": {
+          "spearman_median": 0.9999985694885254,
+          "spearman_p5": 0.9999974966049194,
+          "top10_median": 1.0,
+          "identity": 0.3199999928474426,
+          "identity_exact": 0.3199999928474426,
+          "relevance": 0.0015796206425875425,
+          "relevance_exact": 0.0015796206425875425
+        }
+      },
+      "environment": {
+        "cpu": {
+          "vendor_id": "GenuineIntel",
+          "cpu family": "6",
+          "model": "85",
+          "model name": "unknown"
+        },
+        "cpu_count": 32,
+        "omp_num_threads": "16",
+        "thread_pools": [
+          {
+            "user_api": "openmp",
+            "internal_api": "openmp",
+            "num_threads": 16,
+            "prefix": "libgomp",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+            "version": null
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+            "version": "0.3.31.dev",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          },
+          {
+            "user_api": "blas",
+            "internal_api": "openblas",
+            "num_threads": 16,
+            "prefix": "libscipy_openblas",
+            "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+            "version": "0.3.34.106.0",
+            "threading_layer": "pthreads",
+            "architecture": "SkylakeX"
+          }
+        ]
+      },
+      "device": "cuda",
+      "memory": {
+        "peak_rss_mib": 28153.0,
+        "arrow_peak_mib": 43.7,
+        "resident_files_mib": 26400.8,
+        "resident_anonymous_mib": 1752.2
+      }
+    }
+  }
+}

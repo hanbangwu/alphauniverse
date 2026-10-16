@@ -45,12 +45,12 @@ if __name__ == "__main__":
             {"_dist_arcsec": f"_dist_arcsec{right_suffix}"}
         )
 
-    output_dir = Path(".cache") / "alphauniverse-cosmos"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True)
+    output_directory = Path(".cache") / "alphauniverse-cosmos"
+    if output_directory.exists():
+        shutil.rmtree(output_directory)
+    output_directory.mkdir(parents=True)
 
-    output_file = output_dir / "data.parquet"
+    output_file = output_directory / "data.parquet"
 
     matched.compute().to_parquet(output_file)
 

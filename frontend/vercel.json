@@ -1,0 +1,4 @@
+{
+  "buildCommand": "LC_ALL=C.UTF-8 uv run --directory ../docs --group docs sphinx-build -b html . ../frontend/static/docs && bun run build",
+  "redirects": [{ "source": "/docs", "destination": "/docs/", "permanent": true }]
+}

@@ -1,26 +1,21 @@
 import importlib
 from collections.abc import Iterator
+from pathlib import Path
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
 
-from app import search as search_module
-from app.config import FLAG_SURVEYS, POINTS, artifact
-from scripts.fixture import build
+from app.config import FLAG_SURVEYS, POINTS, artifact, galaxy_count
+from scripts.fixture import build, forget
 
 pytest.importorskip("torch")
 umap_module = importlib.import_module("app.parametric_umap")
 
 LABELS = [1, None, 3, 0]
 PROJECTIONS = ("mean_points", "full_points")
-CACHES = (
-    search_module.source,
-    search_module.index,
-    search_module.with_spectrum,
-    search_module.starts,
-)
 
 
 @pytest.fixture(scope="module")
@@ -36,12 +31,8 @@ def runs(
             "dataset",
             lambda *_: Dataset.from_dict({FLAG_SURVEYS["gz10"]: LABELS}),
         )
-        for cache in CACHES:
-            cache.cache_clear()
         try:
             build(len(LABELS))
-            for cache in CACHES:
-                cache.cache_clear()
             tables = []
             for _ in range(2):
                 for role in PROJECTIONS:
@@ -52,8 +43,7 @@ def runs(
                 )
             yield tables
         finally:
-            for cache in CACHES:
-                cache.cache_clear()
+            forget()
 
 
 def test_projections_have_the_points_schema(runs: list[dict[str, pa.Table]]) -> None:
@@ -75,3 +65,17 @@ def test_projections_are_deterministic(runs: list[dict[str, pa.Table]]) -> None:
 
     for role in first:
         assert first[role].equals(second[role])
+
+
+def test_scan_returns_each_chosen_embedding_in_the_order_asked(tree: Path) -> None:
+    streamed = np.concatenate([values for _, _, values in umap_module._stream()])
+    chosen = np.random.default_rng(0).permutation(len(streamed))[: len(streamed) // 3]
+
+    _, taken = umap_module.scan(galaxy_count(), chosen)
+
+    np.testing.assert_array_equal(taken, streamed[chosen])
+
+
+def test_scan_rejects_a_sample_past_the_streamed_embeddings(tree: Path) -> None:
+    with pytest.raises(ValueError, match="streamed embeddings"):
+        umap_module.scan(galaxy_count(), np.array([umap_module.embedding_count()]))

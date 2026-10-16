@@ -3,38 +3,53 @@ from __future__ import annotations
 import hashlib
 from contextlib import asynccontextmanager
 from io import BytesIO
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.dataset as ds
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
+from . import pql
 from .config import (
     ANCHOR,
     DATASET_AUTHOR,
     DATASET_NAME,
     FLAG_SURVEYS,
     GRID,
-    N_PATCHES,
-    N_SPANS,
+    IMAGE_MODES,
+    N_IMAGE_TOKENS,
+    OBSERVATIONS,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    REDSHIFT_LIMIT,
+    REDSHIFT_TABLE_VALUE,
+    SALIENCY_SAMPLE,
+    SPECTRUM_MODES,
     SPECTRUM_ORIGIN,
+    SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
+    TABLE_MODES,
+    TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
+    Catalogue,
     Download,
     GalaxyIndex,
     Projection,
+    SpectrumSurvey,
+    TextModality,
+    TokenMode,
     artifact,
     galaxy_count,
+    labels,
 )
-from .dataset import image, labels, spectrum
-from .search import Query as SearchQuery
-from .search import index, search, source, starts
+from .dataset import catalogue, image, redshift, smoothed, spectrum, table
+from .search import FIRST_LS_TABLE_VALUE, table_value_tokens, tokens
+from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
@@ -58,6 +73,21 @@ class Galaxy(BaseModel):
     sdss: bool
     gz10: bool
     provabgs: bool
+
+
+class TableRow(BaseModel):
+    section: Catalogue | Literal["redshift"]
+    column: str
+    value: float | int | bool | None
+    table_value: int | None
+    token: int | None
+    excluded: str | None
+
+
+class TextMatches(BaseModel):
+    galaxies: list[int]
+    modalities: list[TextModality]
+    scores: list[float]
 
 
 BINARY_OCTET: dict[str, Any] = {
@@ -103,8 +133,11 @@ class RevalidatedRoute(APIRoute):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
-    index()
-    starts()
+    labels()
+    pql.predictions()
+    pql.basis()
+    for column in OBSERVATIONS:
+        pql.observed(column)
     yield
 
 
@@ -195,13 +228,80 @@ def head_download_artifact(role: Download, request: Request) -> Response:
     "/galaxy/{galaxy}",
 )
 def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
-    table = source("tokens").to_table(
-        columns=[*TOKEN_SURVEYS, *FLAG_SURVEYS], filter=ds.field("galaxy") == galaxy
-    )
+    table = tokens().slice(galaxy, 1)
     return Galaxy(
         **{survey: table.column(survey)[0].is_valid for survey in TOKEN_SURVEYS},
         **{survey: bool(table.column(survey)[0].as_py()) for survey in FLAG_SURVEYS},
     )
+
+
+def excluded(values: dict, survey: SpectrumSurvey, chosen: str | None) -> str | None:
+    value, _, warning = (values[column] for column in REDSHIFT_COLUMNS[survey])
+    if value is None or survey == chosen:
+        return None
+    if warning:
+        return f"flagged by {survey.upper()}"
+    if not value <= REDSHIFT_LIMIT:
+        return f"above AION's redshift limit, {REDSHIFT_LIMIT:g}"
+    return f"AION takes one redshift: {chosen.upper()}'s"
+
+
+def redshift_row(
+    column: str,
+    survey: SpectrumSurvey,
+    values: dict,
+    chosen: str | None,
+    token: int | None,
+) -> TableRow:
+    first = column == REDSHIFT_COLUMNS[survey][0]
+    selectable = first and survey == chosen
+    return TableRow(
+        section=REDSHIFT,
+        column=f"{survey.upper()} {column.partition('-')[0]}",
+        value=values[column],
+        table_value=REDSHIFT_TABLE_VALUE if selectable else None,
+        token=token if selectable else None,
+        excluded=excluded(values, survey, chosen) if first else None,
+    )
+
+
+def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRow:
+    table_value = (
+        FIRST_LS_TABLE_VALUE + TABLE_VALUE_COLUMNS.index(column)
+        if column in TABLE_VALUE_COLUMNS
+        else None
+    )
+    return TableRow(
+        section=catalogue(column),
+        column=column.partition("-")[0],
+        value=value,
+        table_value=table_value,
+        token=None if table_value is None else token_ids.get(column),
+        excluded=None,
+    )
+
+
+@app.get(
+    "/galaxy/{galaxy}/table",
+)
+def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
+    token_ids = table_value_tokens(galaxy)
+    values = table(galaxy)
+    chosen = redshift(values)
+    shown = [
+        (column, survey)
+        for survey, columns in REDSHIFT_COLUMNS.items()
+        for column in columns
+    ]
+    redshifts = {column for column, _ in shown}
+    return [
+        redshift_row(column, survey, values, chosen, token_ids.get(REDSHIFT))
+        for column, survey in shown
+    ] + [
+        catalogue_row(column, value, token_ids)
+        for column, value in values.items()
+        if column not in redshifts
+    ]
 
 
 @app.get(
@@ -223,12 +323,9 @@ def get_image(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_image_tokens(galaxy: GalaxyIndex) -> Response:
-    table = source("tokens").to_table(
-        columns=[ANCHOR], filter=ds.field("galaxy") == galaxy
-    )
-    cell = table.column(ANCHOR).combine_chunks()[0]
+    cell = tokens().column(ANCHOR)[galaxy]
     return Response(
-        np.asarray(cell.values)[:N_PATCHES].tobytes(),
+        np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
         media_type="application/octet-stream",
     )
 
@@ -237,12 +334,15 @@ def get_image_tokens(galaxy: GalaxyIndex) -> Response:
     "/galaxy/{galaxy}/spectrum",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
+    description="The galaxy's spectrum for display, its flux smoothed with a "
+    f"Gaussian of sigma {SPECTRUM_SMOOTHING_SIGMA} pixels; masked pixels stay NaN.",
 )
 def get_spectrum(galaxy: GalaxyIndex) -> Response:
     table = spectrum(galaxy, SPECTRUM_SURVEY)
     if table is None:
         raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
-    return arrow(table)
+    flux = smoothed(table["flux"].to_numpy())
+    return arrow(table.set_column(1, "flux", pa.array(flux, pa.float32())))
 
 
 @app.get(
@@ -251,10 +351,7 @@ def get_spectrum(galaxy: GalaxyIndex) -> Response:
     responses={200: {"content": BINARY_OCTET}},
 )
 def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
-    table = source("tokens").to_table(
-        columns=[SPECTRUM_SURVEY], filter=ds.field("galaxy") == galaxy
-    )
-    cell = table.column(SPECTRUM_SURVEY)[0]
+    cell = tokens().column(SPECTRUM_SURVEY)[galaxy]
     if not cell.is_valid:
         raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
     return Response(
@@ -263,34 +360,111 @@ def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
 
 
 @app.get(
+    "/galaxy/{galaxy}/cosines/{mode}",
+    response_class=Response,
+    responses={200: {"content": BINARY_OCTET}},
+    description="The cosine between AION's predicted distributions at every pair of "
+    "the galaxy's slots of one image or spectrum mode: n by n float32, row-major, "
+    "n the mode's slot count.",
+)
+def get_cosines(galaxy: GalaxyIndex, mode: TokenMode) -> Response:
+    return Response(
+        pql.cosines(galaxy, mode).tobytes(), media_type="application/octet-stream"
+    )
+
+
+def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Array]]:
+    item = pa.field("item", pa.float32(), nullable=False)
+    return (
+        [
+            pa.field(mode, pa.list_(item, values.shape[1]), nullable=False)
+            for mode, values in maps.items()
+        ],
+        [
+            pa.FixedSizeListArray.from_arrays(
+                pa.array(values.reshape(-1), pa.float32()), values.shape[1]
+            )
+            for values in maps.values()
+        ],
+    )
+
+
+@app.get(
+    "/saliency",
+    response_class=Response,
+    responses={200: {"content": ARROW_STREAM}},
+    description="For the query galaxy, at every slot of every mode, the partial "
+    "correlation over every other galaxy between its score on the selection and its "
+    "agreement with the query galaxy at that slot, controlling for its mean agreement "
+    "outside the selection. With anywhere, the correlation runs over "
+    f"{SALIENCY_SAMPLE} other galaxies drawn at random with the query galaxy as "
+    "the seed, and a mode named in anywhere takes, at each slot, the best agreement "
+    "at any slot of that mode. One row, one list column per map.",
+)
+def get_saliency(query: Annotated[pql.Selection, Query()]) -> Response:
+    fields, columns = map_arrays(pql.by_mode(pql.saliency(query)[None]))
+    return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
+
+
+@app.get(
     "/search",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
 )
-def get_search(query: Annotated[SearchQuery, Query()]) -> Response:
-    galaxies, scores, values, spans = search(query, index=index())
+def get_search(query: Annotated[pql.Query, Query()]) -> Response:
+    results = pql.search(query)
+    count = len(results.galaxies)
+    fields = [
+        pa.field("galaxy", pa.int32(), nullable=False),
+        pa.field("score", pa.float32(), nullable=False),
+        pa.field("similarity", pa.float32(), nullable=False),
+    ]
+    columns = [
+        pa.array(results.galaxies),
+        pa.array(results.scores),
+        pa.array(results.similarity, pa.float32()),
+    ]
+    map_fields, map_columns = map_arrays(results.maps)
+    fields += map_fields
+    columns += map_columns
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES):
+        fields.append(pa.field(f"{mode}_sum", pa.float32()))
+        sums = results.sums.get(mode)
+        columns.append(
+            pa.nulls(count, pa.float32())
+            if sums is None
+            else pa.array(sums, pa.float32())
+        )
+        fields.append(pa.field(f"{mode}_similarity", pa.float32()))
+        shares = results.similarities.get(mode)
+        columns.append(
+            pa.nulls(count, pa.float32())
+            if shares is None
+            else pa.array(shares, pa.float32())
+        )
+    places = pa.list_(pa.field("item", pa.int32(), nullable=False))
+    for mode in (*IMAGE_MODES, *SPECTRUM_MODES):
+        fields.append(pa.field(f"{mode}_positions", places))
+        positions = results.positions.get(mode)
+        columns.append(
+            pa.nulls(count, places)
+            if positions is None
+            else pa.array(positions.tolist(), places)
+        )
+    for column in OBSERVATIONS:
+        fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))
+        columns.append(pa.array(pql.observed(column)[results.galaxies]))
+    observations = pa.list_(pa.field("item", pa.string(), nullable=False))
+    fields.append(pa.field("predicted", observations, nullable=False))
+    columns.append(pa.array(results.predicted, observations))
+    return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
 
-    item = pa.field("item", pa.float32(), nullable=False)
-    schema = pa.schema(
-        [
-            pa.field("galaxy", pa.int32(), nullable=False),
-            pa.field("score", pa.float32(), nullable=False),
-            pa.field("map", pa.list_(item, N_PATCHES), nullable=False),
-            pa.field("spectrum", pa.list_(item, N_SPANS)),
-        ]
-    )
-    batch = pa.record_batch(
-        [
-            pa.array(galaxies),
-            pa.array(scores),
-            pa.FixedSizeListArray.from_arrays(pa.array(values.reshape(-1)), N_PATCHES),
-            pa.FixedSizeListArray.from_arrays(
-                pa.array(spans.reshape(-1)),
-                N_SPANS,
-                mask=pa.array(np.isnan(spans[:, 0])),
-            ),
-        ],
-        schema=schema,
-    )
 
-    return arrow(batch)
+@app.get("/search/text")
+def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
+    galaxies, modalities, scores = text_search(query)
+    return TextMatches(
+        galaxies=galaxies.tolist(),
+        modalities=modalities.tolist(),
+        scores=scores.tolist(),
+    )

@@ -62,7 +62,7 @@
         selection={highlighted}
         {width}
         {height}
-        config={{ colorScheme: mode.current }}
+        config={{ colorScheme: mode.current, autoLabelEnabled: false }}
         theme={{ statusBar: false }}
         customTooltip={Tooltip}
         onSelection={(picked: DataPoint[] | null) => {

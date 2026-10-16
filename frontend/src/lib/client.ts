@@ -1,9 +1,11 @@
-import type { DownloadArtifactData, GetProjectionsData } from './api'
+import type { DownloadArtifactData, GetCosinesData, GetProjectionsData } from './api'
 import { client } from './api/client.gen'
 
 export { client }
 
 export type Projection = GetProjectionsData['path']['projection']
+
+export type CosineMode = GetCosinesData['path']['mode']
 
 export function projectionUrl(projection: Projection): string {
   return client.buildUrl<GetProjectionsData>({
