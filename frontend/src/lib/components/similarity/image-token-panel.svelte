@@ -95,13 +95,8 @@
         stroke-linecap="square"
         aria-hidden="true"
       >
-        {#each OUTLINE as { color, width } (color)}
-          <path
-            d={outline}
-            stroke={color}
-            stroke-width={width}
-            vector-effect="non-scaling-stroke"
-          />
+        {#each OUTLINE as { stroke, width } (stroke)}
+          <path d={outline} {stroke} stroke-width={width} vector-effect="non-scaling-stroke" />
         {/each}
       </svg>
     </PanelFrame>

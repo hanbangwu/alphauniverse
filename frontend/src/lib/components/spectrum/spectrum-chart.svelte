@@ -82,10 +82,11 @@
       else runs.push([index, index])
     }
     const outlines = runs.flatMap(([first, last]) =>
-      OUTLINE.map(({ color, width }): Areas[number] => [
+      OUTLINE.map(({ stroke, width }, layer): Areas[number] => [
         {
           xAxis: spectrumTokenOf(meta, first)[0],
-          itemStyle: { color: 'transparent', borderColor: color, borderWidth: width }
+          itemStyle: { color: 'transparent', borderColor: stroke, borderWidth: width },
+          z2: layer + 1
         },
         { xAxis: spectrumTokenOf(meta, last)[1] }
       ])

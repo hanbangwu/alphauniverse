@@ -48,8 +48,8 @@ export function morphologyColors(classes: number, scheme: Scheme): string[] {
 export const SELECTED = 'oklch(0.637 0.237 25.331)'
 
 export const OUTLINE = [
-  { color: 'black', width: 4 },
-  { color: SELECTED, width: 2 }
+  { stroke: 'black', width: 4 },
+  { stroke: SELECTED, width: 2 }
 ]
 
 export function tokenAlpha(picked: boolean): number {
