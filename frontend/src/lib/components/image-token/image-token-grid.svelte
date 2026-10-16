@@ -29,6 +29,7 @@
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
+    painted?: number[]
     ontoggle?: (index: number) => void
     class?: string
     label: string
@@ -41,6 +42,7 @@
     opacity = () => 1,
     title,
     selected = [],
+    painted = $bindable([]),
     ontoggle,
     class: className,
     label
@@ -49,7 +51,6 @@
   const interactive = $derived(Boolean(ontoggle))
 
   let instance: ECharts
-  let painted = $state.raw<number[]>([])
   let adding = false
   let pointer: number | null = null
   let last: number[] = []
