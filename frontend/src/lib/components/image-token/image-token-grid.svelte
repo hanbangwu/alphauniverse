@@ -14,7 +14,7 @@
 
 <script lang="ts">
   import { type RGB, SELECTED } from '$lib/color'
-  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
+  import { TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
@@ -95,9 +95,8 @@
     series: [{ type: 'custom', data: cells, renderItem: cell }]
   })
 
-  function position({ clientX, clientY }: PointerEvent): number[] {
-    const { left, top } = instance.getDom().getBoundingClientRect()
-    return instance.convertFromPixel('grid', [clientX - left, clientY - top])
+  function position(event: PointerEvent): number[] {
+    return instance.convertFromPixel('grid', pixel(instance, event))
   }
 
   function paint([column, row]: number[]): void {
@@ -150,7 +149,7 @@
   )}
   onpointerdown={interactive ? start : undefined}
   type={interactive ? 'button' : undefined}
-  class={className}
+  class={[className, interactive && 'touch-pinch-zoom']}
   role={interactive ? undefined : 'img'}
   aria-label={label}
 ></svelte:element>

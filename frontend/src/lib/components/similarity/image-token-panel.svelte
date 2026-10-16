@@ -64,7 +64,7 @@
           {selected}
           {ontoggle}
           label={describe ?? label}
-          class={ontoggle ? 'absolute inset-0 cursor-pointer touch-pinch-zoom' : 'absolute inset-0'}
+          class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
         />
       {/if}
       {#if galaxy !== undefined}

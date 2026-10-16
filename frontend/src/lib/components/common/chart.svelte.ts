@@ -13,6 +13,11 @@ export const TOOLTIP: TooltipComponentOption = {
   textStyle: { color: '#fff', fontFamily: 'monospace', fontSize: 10 }
 }
 
+export function pixel(instance: ECharts, { clientX, clientY }: PointerEvent): number[] {
+  const { left, top } = instance.getDom().getBoundingClientRect()
+  return [clientX - left, clientY - top]
+}
+
 export function chart(
   option: () => EChartsCoreOption,
   listen: (instance: ECharts) => void

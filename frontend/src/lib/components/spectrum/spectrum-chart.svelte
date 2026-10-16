@@ -21,7 +21,7 @@
 
 <script lang="ts">
   import { type RGB, SELECTED, chartInk } from '$lib/color'
-  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
+  import { TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
@@ -154,17 +154,12 @@
     ]
   })
 
-  function pixel({ clientX, clientY }: PointerEvent): number[] {
-    const { left, top } = instance.getDom().getBoundingClientRect()
-    return [clientX - left, clientY - top]
-  }
-
   function windowAt(event: PointerEvent): number {
     const [{ startValue, endValue }] = instance.getOption().dataZoom as {
       startValue: number
       endValue: number
     }[]
-    const [wavelength] = instance.convertFromPixel('grid', pixel(event))
+    const [wavelength] = instance.convertFromPixel('grid', pixel(instance, event))
     return spectrumTokenAt(meta, Math.min(Math.max(wavelength, startValue), endValue))
   }
 
@@ -177,7 +172,8 @@
       end(event)
       return
     }
-    if (event.button !== 0 || event.shiftKey || !instance.containPixel('grid', pixel(event))) return
+    if (event.button !== 0 || event.shiftKey) return
+    if (!instance.containPixel('grid', pixel(instance, event))) return
     last = windowAt(event)
     adding = !selected.includes(last)
     paint(last)
