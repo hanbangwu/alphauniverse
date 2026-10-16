@@ -26,14 +26,14 @@ def colours(galaxies: np.ndarray) -> np.ndarray:
         return np.where((green > 0) & (red > 0), -2.5 * np.log10(green / red), np.nan)
 
 
-def predicted_redshifts() -> tuple[np.ndarray, np.ndarray]:
+def redshift_widths() -> np.ndarray:
     bins = templates.bin_values(REDSHIFT)
-    medians, widths = [], []
-    for rows in pql.predictions().select([REDSHIFT]).to_batches():
-        probabilities = pql.table_value_probabilities(rows, REDSHIFT)
-        medians.append(templates.quantiles(probabilities, bins, 0.5)[:, 0])
-        widths.append(templates.half_widths(probabilities, bins)[:, 0])
-    return np.concatenate(medians), np.concatenate(widths)
+    return np.concatenate(
+        [
+            templates.half_widths(pql.table_value_probabilities(rows, REDSHIFT), bins)
+            for rows in pql.predictions().select([REDSHIFT]).to_batches()
+        ]
+    )[:, 0]
 
 
 def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]:
@@ -49,11 +49,10 @@ def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]
 def generate_properties() -> None:
     features = np.load(artifact("joint_embedding"))
     galaxies = np.arange(len(features))
-    predicted, width = predicted_redshifts()
     columns = {
         f"{REDSHIFT}_measured": measured_redshifts(galaxies)[0],
-        f"{REDSHIFT}_predicted": predicted,
-        f"{REDSHIFT}_width": width,
+        f"{REDSHIFT}_predicted": np.load(artifact(f"template_{REDSHIFT}"))[:, 0],
+        f"{REDSHIFT}_width": redshift_widths(),
         "g_r": colours(galaxies),
     }
     for label, values in provabgs(galaxies).items():

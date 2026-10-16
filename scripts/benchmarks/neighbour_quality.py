@@ -258,7 +258,10 @@ def maps(
 )
 def measure() -> dict[str, Any]:
     families = {role: vectors(role) for role in ROLES}
-    joints = {role: joint(blocks) for role, blocks in families.items()}
+    joints = {
+        "token": torch.from_numpy(np.load(artifact("joint_embedding"))),
+        "template": joint(families["template"]),
+    }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     return {
         "environment": environment(),

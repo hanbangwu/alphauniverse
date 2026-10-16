@@ -193,7 +193,7 @@ def _properties(
         {"galaxy": np.arange(galaxies, dtype=np.int32)}
         | {
             name: pa.array(
-                rng.standard_normal(galaxies, np.float32),
+                rng.random(galaxies, np.float32),
                 mask=~measured.get(name, np.ones(galaxies, dtype=bool)),
             )
             for name in PROPERTIES.names[1:]

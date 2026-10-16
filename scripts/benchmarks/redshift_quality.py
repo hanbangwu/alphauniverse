@@ -34,7 +34,7 @@ TARGET = {predictions.REDSHIFT_KEY: predictions.TARGETS[predictions.REDSHIFT_KEY
 def hidden(galaxies: np.ndarray) -> np.ndarray:
     blank = dict.fromkeys(column for column in STORE_COLUMNS if column not in KEPT)
     found = []
-    for row in tqdm(tokens().take(galaxies).to_pylist(), desc="encode"):
+    for row in tqdm(tokens().select(KEPT).take(galaxies).to_pylist(), desc="encode"):
         predicted = predictions.predictions(predictions.inputs(row | blank), TARGET)
         found.append(predictions.flushed(np.exp(predicted[predictions.REDSHIFT_KEY])))
     return templates.quantiles(np.stack(found), templates.bin_values(REDSHIFT), 0.5)[

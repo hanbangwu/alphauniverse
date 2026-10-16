@@ -8,6 +8,7 @@ from datasets import Dataset
 from app import observations, properties, templates
 from app.config import (
     LS,
+    PROBED,
     PROPERTIES,
     PROVABGS,
     REDSHIFT,
@@ -68,6 +69,8 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     np.save(
         artifact("joint_embedding"), rng.normal(size=(galaxies, 4)).astype(np.float32)
     )
+    template = rng.normal(size=(galaxies, 1)).astype(np.float32)
+    np.save(artifact(f"template_{REDSHIFT}"), template)
 
     properties.generate_properties()
 
@@ -78,7 +81,8 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
         found[f"{REDSHIFT}_measured"], redshift.astype(np.float32)
     )
     np.testing.assert_array_equal(np.isfinite(found["mass_measured"]), labelled)
-    for label in (REDSHIFT, "mass", "sfr", "ssfr"):
+    np.testing.assert_array_equal(found[f"{REDSHIFT}_predicted"], template[:, 0])
+    for label in PROBED:
         assert np.isfinite(found[f"{label}_predicted"]).all(), label
     expected = -2.5 * np.log10(green / np.abs(red))
     expected[2] = np.nan
