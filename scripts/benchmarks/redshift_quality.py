@@ -34,7 +34,7 @@ def measured(galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def stored(galaxies: np.ndarray) -> np.ndarray:
-    table = pql.predictions().take(galaxies)
+    table = pql.predictions().select([REDSHIFT]).take(galaxies)
     return np.concatenate(
         [pql.table_value_probabilities(rows, REDSHIFT) for rows in table.to_batches()]
     )
@@ -66,7 +66,7 @@ def scored(probabilities: np.ndarray, values: np.ndarray) -> dict[str, Any]:
     gpu="T4",
     cpu=4,
     memory=(16 * 1024, 32 * 1024),
-    timeout=60 * 60,
+    timeout=20 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def measure() -> dict[str, Any]:
