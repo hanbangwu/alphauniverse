@@ -15,7 +15,7 @@ import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { matchMean } from './scores'
 import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
-import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
+import { Query, column, eq, isIn, literal } from '@uwdata/mosaic-sql'
 import {
   type Float32,
   type Int32,
@@ -153,6 +153,29 @@ export function morphologyQuery(mosaic: MosaicState, table: string | null, galax
             )
             const category = rows.get(0)?.category
             return category == null ? null : Number(category)
+          },
+    ...FOREVER
+  })
+}
+
+export function morphologyFilterQuery(
+  mosaic: MosaicState,
+  table: string | null,
+  galaxies: number[] | null,
+  morphologies: number[]
+) {
+  return queryOptions({
+    queryKey: ['morphology-filter', table, galaxies, morphologies] as const,
+    queryFn:
+      table === null || galaxies === null || morphologies.length === 0
+        ? skipToken
+        : async () => {
+            const rows = await mosaic.coordinator.query(
+              Query.from(table)
+                .select('galaxy')
+                .where(isIn(column('galaxy'), galaxies), isIn(column('category'), morphologies))
+            )
+            return new Set<number>(rows.getChild('galaxy')!.toArray())
           },
     ...FOREVER
   })

@@ -28,14 +28,14 @@
 
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
-  import { similarityQuery } from '$lib/data/queries'
+  import { morphologyFilterQuery, similarityQuery } from '$lib/data/queries'
   import { getApp } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
   import { mode } from 'mode-watcher'
 
   const app = getApp()
-  const { view, mosaic } = app
+  const { view, mosaic, filters } = app
 
   let width = $state(0)
   let height = $state(0)
@@ -48,11 +48,20 @@
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
+  const results = $derived(
+    search.data && !search.isPlaceholderData && !view.full ? Array.from(search.data.galaxies) : null
+  )
+  const kept = createQuery(() =>
+    morphologyFilterQuery(mosaic, mean.data ?? null, results, filters.morphologies.value)
+  )
+
   let highlighted = $derived(
     view.galaxy.value === null
       ? null
-      : search.data && !search.isPlaceholderData && !view.full
-        ? Array.from(search.data.galaxies)
+      : results
+        ? results.filter(
+            (galaxy) => galaxy === view.galaxy.value || !filters.active || kept.data?.has(galaxy)
+          )
         : [view.galaxy.value]
   )
 </script>
