@@ -231,6 +231,7 @@ ARTIFACTS: dict[str, str] = {
     "observed_reference": "npz",
     **{f"template_embedding_{name}": "npz" for name in GRAM_NAMES},
     "joint_embedding": "npy",
+    "properties": "parquet",
 }
 
 PREDICTIONS = pa.schema(
@@ -276,6 +277,19 @@ PREDICTIONS = pa.schema(
     ]
 )
 
+
+PROBED = ("mass", "sfr", "ssfr")
+PROPERTIES = pa.schema(
+    [
+        pa.field("galaxy", pa.int32(), nullable=False),
+        *(
+            pa.field(f"{label}_{part}", pa.float32())
+            for label in (REDSHIFT, *PROBED)
+            for part in ("measured", "predicted", "width")
+        ),
+        pa.field("g_r", pa.float32()),
+    ]
+)
 
 POINTS = pa.schema(
     [

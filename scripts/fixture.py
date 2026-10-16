@@ -17,6 +17,7 @@ from app.config import (
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
+    PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
     SPECTRUM_SURVEYS,
@@ -179,6 +180,17 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
 
+def _properties(rng: np.random.Generator, galaxies: int) -> pa.Table:
+    return pa.table(
+        {"galaxy": np.arange(galaxies, dtype=np.int32)}
+        | {
+            name: rng.standard_normal(galaxies, np.float32)
+            for name in PROPERTIES.names[1:]
+        },
+        schema=PROPERTIES,
+    )
+
+
 def forget() -> None:
     for cached in (
         galaxy_count,
@@ -248,6 +260,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     )
 
     _predictions(rng, galaxies)
+    pq.write_table(_properties(rng, galaxies), artifact("properties"))
 
     forget()
     return target

@@ -11,8 +11,7 @@ from tqdm import tqdm
 
 from app import pql, predictions, templates
 from app.config import DATASET_REVISION, REDSHIFT, REDSHIFT_COLUMNS, STORE_COLUMNS
-from app.dataset import redshift
-from app.observations import redshift_rows
+from app.observations import measured_redshifts
 from app.search import tokens
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
@@ -24,13 +23,6 @@ REPORT = Path("docs/benchmarks/redshift_quality.json")
 KEPT = ("ls", "hsc")
 OUTLIER = 0.15
 TARGET = {predictions.REDSHIFT_KEY: predictions.TARGETS[predictions.REDSHIFT_KEY]}
-
-
-def measured(galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    rows = redshift_rows(galaxies)
-    surveys = np.array([redshift(row) for row in rows])
-    values = [row[REDSHIFT_COLUMNS[survey][0]] for row, survey in zip(rows, surveys)]
-    return np.array(values, dtype=np.float64), surveys
 
 
 def stored(galaxies: np.ndarray) -> np.ndarray:
@@ -71,7 +63,8 @@ def scored(probabilities: np.ndarray, values: np.ndarray) -> dict[str, Any]:
 )
 def measure() -> dict[str, Any]:
     galaxies = np.flatnonzero(pql.observed(REDSHIFT))
-    values, surveys = measured(galaxies)
+    values, surveys = measured_redshifts(galaxies)
+    surveys = np.array(surveys)
     inputs = {"stored": stored(galaxies), "hidden": hidden(galaxies)}
     return {
         "environment": environment(),

@@ -114,6 +114,20 @@ def generate_joint_embedding() -> None:
 
 @app.function(
     image=build_image,
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=20 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_properties() -> None:
+    from app.properties import generate_properties
+
+    generate_properties()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
     gpu="L4",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
