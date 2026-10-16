@@ -51,19 +51,15 @@
   const results = $derived(
     search.data && !search.isPlaceholderData && !view.full ? Array.from(search.data.galaxies) : null
   )
-  const morphologies = createQuery(() =>
-    morphologiesQuery(mosaic, mean.data ?? null, filters.active ? results : null)
-  )
+  const circled = $derived(view.galaxy.value === null ? null : (results ?? [view.galaxy.value]))
+  const morphologies = createQuery(() => morphologiesQuery(mosaic, mean.data ?? null, circled))
 
   let highlighted = $derived(
-    view.galaxy.value === null
-      ? null
-      : (results?.filter(
-          (galaxy) =>
-            galaxy === view.galaxy.value ||
-            !filters.active ||
-            filters.morphologies.value.some((index) => index === morphologies.data?.get(galaxy))
-        ) ?? [view.galaxy.value])
+    circled?.filter(
+      (galaxy) =>
+        !filters.active ||
+        filters.morphologies.value.some((index) => index === morphologies.data?.get(galaxy))
+    )
   )
 </script>
 
