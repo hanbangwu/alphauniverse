@@ -158,26 +158,27 @@ export function morphologyQuery(mosaic: MosaicState, table: string | null, galax
   })
 }
 
-export function morphologyFilterQuery(
+export function morphologiesQuery(
   mosaic: MosaicState,
   table: string | null,
-  galaxies: number[] | null,
-  morphologies: number[]
+  galaxies: number[] | null
 ) {
   return queryOptions({
-    queryKey: ['morphology-filter', table, galaxies, morphologies] as const,
+    queryKey: ['morphologies', table, galaxies] as const,
     queryFn:
-      table === null || galaxies === null || morphologies.length === 0
+      table === null || galaxies === null
         ? skipToken
         : async () => {
             const rows = await mosaic.coordinator.query(
               Query.from(table)
-                .select('galaxy')
-                .where(isIn(column('galaxy'), galaxies), isIn(column('category'), morphologies))
+                .select('galaxy', 'category')
+                .where(isIn(column('galaxy'), galaxies))
             )
-            return new Set<number>(rows.getChild('galaxy')!.toArray())
+            return new Map(
+              Array.from(rows, ({ galaxy, category }): [number, number] => [galaxy, category])
+            )
           },
-    ...FOREVER
+    staleTime: Infinity
   })
 }
 

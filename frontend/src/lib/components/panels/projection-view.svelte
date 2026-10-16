@@ -28,7 +28,7 @@
 
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
-  import { morphologyFilterQuery, similarityQuery } from '$lib/data/queries'
+  import { morphologiesQuery, similarityQuery } from '$lib/data/queries'
   import { getApp } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
@@ -51,18 +51,19 @@
   const results = $derived(
     search.data && !search.isPlaceholderData && !view.full ? Array.from(search.data.galaxies) : null
   )
-  const kept = createQuery(() =>
-    morphologyFilterQuery(mosaic, mean.data ?? null, results, filters.morphologies.value)
+  const morphologies = createQuery(() =>
+    morphologiesQuery(mosaic, mean.data ?? null, filters.active ? results : null)
   )
 
   let highlighted = $derived(
     view.galaxy.value === null
       ? null
-      : results
-        ? results.filter(
-            (galaxy) => galaxy === view.galaxy.value || !filters.active || kept.data?.has(galaxy)
-          )
-        : [view.galaxy.value]
+      : (results?.filter(
+          (galaxy) =>
+            galaxy === view.galaxy.value ||
+            !filters.active ||
+            filters.morphologies.value.some((index) => index === morphologies.data?.get(galaxy))
+        ) ?? [view.galaxy.value])
   )
 </script>
 
