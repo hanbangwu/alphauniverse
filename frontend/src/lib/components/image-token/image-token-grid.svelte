@@ -161,7 +161,7 @@
   )}
   onpointerdown={interactive ? start : undefined}
   type={interactive ? 'button' : undefined}
-  class={[className, interactive && 'touch-pinch-zoom']}
+  class={[className, interactive && 'touch-pan-y touch-pinch-zoom']}
   role={interactive ? undefined : 'img'}
   aria-label={label}
 ></svelte:element>
