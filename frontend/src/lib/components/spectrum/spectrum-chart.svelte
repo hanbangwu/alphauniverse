@@ -61,19 +61,20 @@
 
   let instance: ECharts
   let painted = $state.raw<number[]>([])
-  let adding = false
+  let adding: boolean
   let pointer: number | null = null
-  let previous = 0
-  let visible: number[] = []
-  let press: number[] = []
+  let previous: number
+  let visible: number[]
+  let press: number[]
 
   const points = $derived(
     Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
   )
 
+  const chosen = $derived(new Set(selected).symmetricDifference(new Set(painted)))
+
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
-    const chosen = new Set(selected).symmetricDifference(new Set(painted))
     const cells = Array.from(values, (value, index): Areas[number] => {
       const [low, high] = spectrumTokenOf(meta, index)
       const [r, g, b] = color(value)
@@ -169,19 +170,16 @@
   }
 
   function paint(index: number): void {
-    if (selected.includes(index) !== adding && !painted.includes(index)) {
-      painted = [...painted, index]
-    }
+    if (chosen.has(index) !== adding) painted = [...painted, index]
+  }
+
+  function blockPan(event: MouseEvent): void {
+    if (!event.shiftKey) event.stopPropagation()
   }
 
   function intercept(event: PointerEvent): void {
-    if (event.shiftKey) return
-    if (event.pointerType !== 'touch') event.stopPropagation()
-    if (interactive) start(event)
-  }
-
-  function block(event: MouseEvent): void {
-    if (!event.shiftKey) event.stopPropagation()
+    if (event.pointerType !== 'touch') blockPan(event)
+    if (interactive && !event.shiftKey) start(event)
   }
 
   function start(event: PointerEvent): void {
@@ -241,7 +239,7 @@
     (created) => (instance = created)
   )}
   onpointerdowncapture={intercept}
-  onmousedowncapture={block}
+  onmousedowncapture={blockPan}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}

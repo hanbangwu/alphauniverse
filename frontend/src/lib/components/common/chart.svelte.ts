@@ -20,13 +20,13 @@ export function pixel(instance: ECharts, { clientX, clientY }: PointerEvent): nu
 
 export function chart(
   option: () => EChartsCoreOption,
-  listen: (instance: ECharts) => void
+  oncreate: (instance: ECharts) => void
 ): Attachment<HTMLElement> {
   return (element) => {
     const instance = init(element)
     const observer = new ResizeObserver(() => instance.resize())
     observer.observe(element)
-    listen(instance)
+    oncreate(instance)
     $effect(() => {
       instance.setOption(option())
     })

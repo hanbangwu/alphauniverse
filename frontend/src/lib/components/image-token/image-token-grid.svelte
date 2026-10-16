@@ -29,7 +29,7 @@
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
-    painted?: number[]
+    painted: number[]
     ontoggle?: (index: number) => void
     class?: string
     label: string
@@ -42,7 +42,7 @@
     opacity = () => 1,
     title,
     selected = [],
-    painted = $bindable([]),
+    painted = $bindable(),
     ontoggle,
     class: className,
     label
@@ -51,9 +51,9 @@
   const interactive = $derived(Boolean(ontoggle))
 
   let instance: ECharts
-  let adding = false
+  let adding: boolean
   let pointer: number | null = null
-  let last: number[] = []
+  let last: number[]
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
   const chosen = $derived(new Set(selected).symmetricDifference(new Set(painted)))
@@ -99,9 +99,7 @@
   function paint([column, row]: number[]): void {
     const index = row * grid + column
     if (Math.min(column, row) < 0 || Math.max(column, row) >= grid) return
-    if (selected.includes(index) !== adding && !painted.includes(index)) {
-      painted = [...painted, index]
-    }
+    if (chosen.has(index) !== adding) painted = [...painted, index]
   }
 
   function start(event: PointerEvent): void {
@@ -124,7 +122,8 @@
       return
     }
     const [fromX, fromY] = last
-    const [toX, toY] = (last = position(event))
+    last = position(event)
+    const [toX, toY] = last
     let [column, row] = [Math.floor(fromX), Math.floor(fromY)]
     const [endColumn, endRow] = [Math.floor(toX), Math.floor(toY)]
     while (column !== endColumn || row !== endRow) {
