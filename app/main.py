@@ -283,7 +283,7 @@ def redshift_row(
         section=REDSHIFT,
         column=f"{survey.upper()} {column.partition('-')[0]}",
         value=values[column],
-        template=template if selectable else None,
+        template=template if first and survey == (chosen or SPECTRUM_SURVEY) else None,
         table_value=REDSHIFT_TABLE_VALUE if selectable else None,
         token=token if selectable else None,
         excluded=excluded(values, survey, chosen) if first else None,

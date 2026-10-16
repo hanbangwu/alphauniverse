@@ -367,6 +367,30 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
     ]
 
 
+def test_a_galaxy_without_a_usable_redshift_shows_aion_s_beside_desi_z(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = Dataset.from_dict(
+        {
+            f"Z{DESI}": [0.25],
+            f"ZERR{DESI}": [1e-4],
+            f"ZWARN{DESI}": [True],
+            f"Z{SDSS}": [0.26],
+            f"Z_ERR{SDSS}": [2e-4],
+            f"ZWARNING{SDSS}": [True],
+        }
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    table_columns.cache_clear()
+
+    response = client.get("/galaxy/0/table")
+    table_columns.cache_clear()
+
+    templates = {row["column"]: row["template"] for row in response.json()}
+    assert templates["DESI Z"] == float(_template(REDSHIFT)[0, 0])
+    assert templates["SDSS Z"] is None
+
+
 def test_search_without_a_selection_is_rejected(client: TestClient) -> None:
     assert client.get("/search", params={"galaxy": 0}).status_code == 422
 

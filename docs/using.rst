@@ -24,7 +24,7 @@ AION also reads the HSC image and the SDSS spectrum, but the site shows neither,
 
 - AION's Legacy Survey image in place of the observed one, coloured the same way and marked AION;
 - AION's DESI spectrum over the observed one, scaled to its flux; without a DESI spectrum, AION's alone, normalised, since AION does not predict a spectrum's overall flux;
-- in the search, the median of AION's predicted distribution beside each of the 25 catalogue values it reads, and beside the redshift when the galaxy has one AION reads.
+- in the search, the median of AION's predicted distribution beside each of the 25 catalogue values it reads, and beside the redshift it reads, or beside DESI's when the galaxy has no redshift AION reads.
 
 A template is what AION expects from the galaxy's tokens (:doc:`concepts`), not a measurement.
 
