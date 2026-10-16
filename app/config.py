@@ -203,6 +203,7 @@ OBSERVATIONS = {
 }
 
 MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+Mode = Literal[*MODES]
 TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
     for mode in MODES

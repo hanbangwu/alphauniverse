@@ -34,6 +34,8 @@ from app.config import (
     store_schema,
     store_writer,
 )
+from app.embeddings import generate_token_embeddings, stored
+from app.grams import generate_token_grams
 from app.pql import (
     MATRICES,
     SAMPLES,
@@ -190,6 +192,7 @@ def forget() -> None:
         prediction_basis,
         basis,
         observed,
+        stored,
     ):
         cached.cache_clear()
     MATRICES.clear()
@@ -250,6 +253,8 @@ def build(galaxies: int, seed: int = 0) -> Path:
     _predictions(rng, galaxies)
 
     forget()
+    generate_token_grams()
+    generate_token_embeddings()
     return target
 
 

@@ -1,6 +1,6 @@
 import math
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from functools import cache, partial
 from itertools import accumulate
@@ -665,8 +665,8 @@ def similarity(shares: dict[str, np.ndarray]) -> np.ndarray:
     return np.exp(weighted / sum(weights.values()))
 
 
-def predicted(selected: dict[str, np.ndarray], galaxies: np.ndarray) -> list[list[str]]:
-    needed = {OBSERVED_IN[mode] for mode in selected.keys() & OBSERVED_IN.keys()}
+def predicted(modes: Iterable[str], galaxies: np.ndarray) -> list[list[str]]:
+    needed = {OBSERVED_IN[mode] for mode in modes if mode in OBSERVED_IN}
     return [
         [
             column

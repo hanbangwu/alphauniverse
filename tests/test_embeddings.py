@@ -72,3 +72,36 @@ def test_a_galaxy_s_own_row_gives_its_stored_query_vector() -> None:
         found["queries"][chosen],
         atol=1e-9,
     )
+
+
+def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
+    tree: Path,
+) -> None:
+    embeddings.stored.cache_clear()
+    query = embeddings.ModeQuery(
+        galaxy=4,
+        modes=("ls_image", "desi_spectrum", "redshift"),
+        anywhere=("desi_spectrum",),
+        matches=5,
+    )
+
+    found = embeddings.mode_search(query)
+
+    standardised = []
+    for name in ("ls_image", "desi_spectrum_anywhere", "redshift"):
+        stored = np.load(artifact(f"token_embedding_{name}"))
+        cut = slice(embeddings.SEARCH_RANK)
+        row = (
+            stored["queries"][4, cut].astype(np.float64)
+            @ stored["galleries"][:, cut].T.astype(np.float64)
+            + stored["offsets"]
+        )
+        standardised.append((row - row.mean()) / row.std())
+    expected = np.mean(standardised, axis=0)
+    others = np.argsort(-expected, kind="stable")
+    order = np.concatenate(([4], others[others != 4][:5]))
+    np.testing.assert_array_equal(found.galaxies, order)
+    np.testing.assert_allclose(found.scores, expected[order], atol=1e-3)
+    np.testing.assert_allclose(
+        sum(found.contributions.values()), found.scores, atol=1e-12
+    )
