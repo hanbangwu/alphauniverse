@@ -49,6 +49,11 @@ def test_a_redshift_bin_s_probability_spreads_from_the_bin_below_to_its_value() 
 
     np.testing.assert_allclose(lower, [0.116, 0.132, 0.116], rtol=1e-6)
     np.testing.assert_allclose(upper, [0.184, 0.268, 0.184], rtol=1e-6)
+    np.testing.assert_allclose(
+        properties.spread_quantiles(probabilities, values, 0.5),
+        [0.15, 0.2, 0.15],
+        rtol=1e-6,
+    )
 
 
 def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
@@ -84,8 +89,6 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     np.save(
         artifact("joint_embedding"), rng.normal(size=(galaxies, 4)).astype(np.float32)
     )
-    template = rng.normal(size=(galaxies, 1)).astype(np.float32)
-    np.save(artifact(f"template_{REDSHIFT}"), template)
 
     properties.generate_properties()
 
@@ -96,7 +99,10 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
         found[f"{REDSHIFT}_measured"], redshift.astype(np.float32)
     )
     np.testing.assert_array_equal(np.isfinite(found["mass_measured"]), labelled)
-    np.testing.assert_array_equal(found[f"{REDSHIFT}_predicted"], template[:, 0])
+    predicted = found[f"{REDSHIFT}_predicted"]
+    assert (
+        (predicted >= bins[REDSHIFT][0, 0]) & (predicted <= bins[REDSHIFT][0, -1])
+    ).all()
     for label in PROBED:
         assert np.isfinite(found[f"{label}_predicted"]).all(), label
     expected = -2.5 * np.log10(green / np.abs(red))

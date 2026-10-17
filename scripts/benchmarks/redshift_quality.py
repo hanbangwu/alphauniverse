@@ -5,11 +5,12 @@ from typing import Any
 
 import modal
 import numpy as np
+import pyarrow.parquet as pq
 import torch
 from astropy.stats import mad_std
 from tqdm import tqdm
 
-from app import predictions, templates
+from app import predictions, properties, templates
 from app.config import (
     DATASET_REVISION,
     REDSHIFT,
@@ -37,9 +38,9 @@ def hidden(galaxies: np.ndarray) -> np.ndarray:
     for row in tqdm(tokens().select(KEPT).take(galaxies).to_pylist(), desc="encode"):
         predicted = predictions.predictions(predictions.inputs(row | blank), TARGET)
         found.append(predictions.flushed(np.exp(predicted[predictions.REDSHIFT_KEY])))
-    return templates.quantiles(np.stack(found), templates.bin_values(REDSHIFT), 0.5)[
-        :, 0
-    ]
+    return properties.spread_quantiles(
+        np.stack(found)[:, 0], templates.bin_values(REDSHIFT)[0], 0.5
+    )
 
 
 def scored(medians: np.ndarray, values: np.ndarray) -> dict[str, Any]:
@@ -64,8 +65,9 @@ def measure() -> dict[str, Any]:
     galaxies = observed(REDSHIFT)
     values, surveys = measured_redshifts(galaxies)
     surveys = np.array(surveys)
+    shipped = pq.read_table(artifact("properties"), columns=[f"{REDSHIFT}_predicted"])
     medians = {
-        "stored": np.load(artifact(f"template_{REDSHIFT}"), mmap_mode="r")[galaxies, 0],
+        "stored": shipped.column(0).to_numpy()[galaxies],
         "hidden": hidden(galaxies),
     }
     return {

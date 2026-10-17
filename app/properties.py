@@ -39,17 +39,17 @@ def spread_quantiles(
     return lower + fraction * (values[index] - lower)
 
 
-def redshift_widths() -> np.ndarray:
+def predicted_redshifts() -> tuple[np.ndarray, np.ndarray]:
     values = templates.bin_values(REDSHIFT)[0]
     batches = [
         pql.table_value_probabilities(rows, REDSHIFT)[:, 0]
         for rows in pql.predictions().select([REDSHIFT]).to_batches()
     ]
-    lower, upper = (
+    lower, median, upper = (
         np.concatenate([spread_quantiles(found, values, share) for found in batches])
-        for share in templates.CENTRAL
+        for share in (templates.CENTRAL[0], 0.5, templates.CENTRAL[1])
     )
-    return (upper - lower) / 2
+    return median, (upper - lower) / 2
 
 
 def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]:
@@ -65,10 +65,11 @@ def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]
 def generate_properties() -> None:
     features = np.load(artifact("joint_embedding"))
     galaxies = np.arange(len(features))
+    predicted, width = predicted_redshifts()
     columns = {
         f"{REDSHIFT}_measured": measured_redshifts(galaxies)[0],
-        f"{REDSHIFT}_predicted": np.load(artifact(f"template_{REDSHIFT}"))[:, 0],
-        f"{REDSHIFT}_width": redshift_widths(),
+        f"{REDSHIFT}_predicted": predicted,
+        f"{REDSHIFT}_width": width,
         "g_r": colours(galaxies),
     }
     for label, values in provabgs(galaxies).items():
