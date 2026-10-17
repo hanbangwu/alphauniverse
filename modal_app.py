@@ -130,7 +130,7 @@ def generate_properties() -> None:
     image=build_image,
     cpu=8,
     memory=(8 * 1024, 32 * 1024),
-    timeout=20 * 60,
+    timeout=5 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_maps() -> None:
