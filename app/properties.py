@@ -26,14 +26,30 @@ def colours(galaxies: np.ndarray) -> np.ndarray:
         return np.where((green > 0) & (red > 0), -2.5 * np.log10(green / red), np.nan)
 
 
+def spread_quantiles(
+    probabilities: np.ndarray, values: np.ndarray, share: float
+) -> np.ndarray:
+    weights = np.where(np.isnan(values), 0, probabilities)
+    cumulative = weights.cumsum(axis=1)
+    target = share * cumulative[:, -1]
+    index = (cumulative < target[:, None]).sum(axis=1)
+    rows = np.arange(len(weights))
+    fraction = 1 - (cumulative[rows, index] - target) / weights[rows, index]
+    lower = values[np.maximum(index - 1, 0)]
+    return lower + fraction * (values[index] - lower)
+
+
 def redshift_widths() -> np.ndarray:
-    bins = templates.bin_values(REDSHIFT)
-    return np.concatenate(
-        [
-            templates.half_widths(pql.table_value_probabilities(rows, REDSHIFT), bins)
-            for rows in pql.predictions().select([REDSHIFT]).to_batches()
-        ]
-    )[:, 0]
+    values = templates.bin_values(REDSHIFT)[0]
+    batches = [
+        pql.table_value_probabilities(rows, REDSHIFT)[:, 0]
+        for rows in pql.predictions().select([REDSHIFT]).to_batches()
+    ]
+    lower, upper = (
+        np.concatenate([spread_quantiles(found, values, share) for found in batches])
+        for share in templates.CENTRAL
+    )
+    return (upper - lower) / 2
 
 
 def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]:

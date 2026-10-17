@@ -36,6 +36,21 @@ def test_a_labelled_galaxy_s_prediction_does_not_depend_on_its_own_label() -> No
     assert width == pytest.approx(np.sqrt(np.mean(residuals**2)))
 
 
+def test_a_redshift_bin_s_probability_spreads_from_the_bin_below_to_its_value() -> None:
+    values = np.array([0.0, 0.1, 0.2, 0.3, np.nan], np.float32)
+    probabilities = np.array(
+        [[0, 0, 1, 0, 0], [0, 0, 0.5, 0.5, 0], [0, 0, 1, 0, 5]], np.float32
+    )
+
+    lower, upper = (
+        properties.spread_quantiles(probabilities, values, share)
+        for share in templates.CENTRAL
+    )
+
+    np.testing.assert_allclose(lower, [0.116, 0.132, 0.116], rtol=1e-6)
+    np.testing.assert_allclose(upper, [0.184, 0.268, 0.184], rtol=1e-6)
+
+
 def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     tree: Path, galaxies: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
