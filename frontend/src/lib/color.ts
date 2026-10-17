@@ -41,7 +41,7 @@ export function tokenColors(values: ArrayLike<number>): (value: number) => RGB {
     TOKEN_PALETTE[must(ranks.get(value), `rank for token ${value}`) % TOKEN_PALETTE.length]
 }
 
-const NO_VALUE = { light: '#52525b', dark: '#d4d4d8' }
+export const NO_VALUE = { light: '#52525b', dark: '#d4d4d8' }
 
 const BACKGROUND = { light: '#ffffff', dark: '#18181b' }
 
@@ -62,8 +62,12 @@ function fade(color: string, scheme: Scheme): string {
   return rgb(mix(from.r, to.r), mix(from.g, to.g), mix(from.b, to.b)).formatHex()
 }
 
+export function fadedShades(scheme: Scheme): string[] {
+  return SHADES.map((color) => fade(color, scheme))
+}
+
 export function propertyColors(scheme: Scheme): string[] {
-  return [...SHADES, ...SHADES.map((color) => fade(color, scheme)), NO_VALUE[scheme]]
+  return [...SHADES, ...fadedShades(scheme), NO_VALUE[scheme]]
 }
 
 export const SELECTED = 'oklch(0.637 0.237 25.331)'

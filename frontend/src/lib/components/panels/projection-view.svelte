@@ -5,6 +5,7 @@
 
   interface TooltipProps {
     tooltip: DataPoint
+    label: string | null
   }
 
   class Tooltip {
@@ -18,6 +19,7 @@
 
     update(props: TooltipProps): void {
       this.#props.tooltip = props.tooltip
+      this.#props.label = props.label
     }
 
     destroy(): void {
@@ -48,11 +50,10 @@
 
   const loaded = $derived((view.full ? full.data : mean.data) ?? null)
   const colouring = createQuery(() =>
-    colouringQuery(mosaic, loaded, view.property, view.source.value)
+    colouringQuery(mosaic, loaded, view.property, view.everywhere)
   )
   const coloured = $derived(view.property ? (colouring.data ?? null) : null)
   const table = $derived(view.property ? (coloured?.table ?? null) : loaded)
-  const faded = $derived(view.source.value === 'measured' && view.property !== 'g_r')
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
@@ -81,13 +82,8 @@
         y="y"
         category={coloured ? 'colour' : 'category'}
         categoryColors={coloured ? app.shades : app.swatches}
-        additionalFields={view.property
-          ? {
-              property: { sql: `'${COLOURINGS[view.property].label}'` },
-              value: 'value',
-              width: 'width',
-              predicted: 'predicted'
-            }
+        additionalFields={coloured
+          ? { value: 'value', width: 'width', predicted: 'predicted' }
           : null}
         identifier="galaxy"
         filter={mosaic.filter}
@@ -97,7 +93,10 @@
         {height}
         config={{ colorScheme: mode.current, autoLabelEnabled: false }}
         theme={{ statusBar: false }}
-        customTooltip={Tooltip}
+        customTooltip={{
+          class: Tooltip,
+          props: { label: coloured ? COLOURINGS[coloured.property].label : null }
+        }}
         onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
           const galaxies = picked?.map((point) => Number(point.identifier)) ?? []
@@ -108,8 +107,8 @@
         }}
       />
     {/key}
-    {#if view.property && coloured}
-      <ColourLegend property={view.property} {coloured} {faded} />
+    {#if coloured}
+      <ColourLegend {coloured} scheme={mode.current} />
     {/if}
   {:else}
     <div class="absolute inset-0 grid place-content-center">

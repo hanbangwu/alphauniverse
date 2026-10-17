@@ -4,6 +4,7 @@ import {
   COLOURINGS,
   type Colouring,
   POINT_SETS,
+  PREDICTABLE,
   type PointSet,
   type Property,
   SOURCES,
@@ -42,6 +43,14 @@ export class ViewState {
   get property(): Property | null {
     const colouring = this.colouring.value
     return colouring === 'morphology' ? null : colouring
+  }
+
+  get predictable(): boolean {
+    return this.property !== null && PREDICTABLE.includes(this.property)
+  }
+
+  get everywhere(): boolean {
+    return this.predictable && this.source.value === 'predicted'
   }
 
   get table(): string {

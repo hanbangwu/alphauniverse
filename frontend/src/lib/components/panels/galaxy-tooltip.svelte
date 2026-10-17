@@ -6,12 +6,12 @@
 
   interface Props {
     tooltip: DataPoint
+    label: string | null
   }
 
-  let { tooltip }: Props = $props()
+  let { tooltip, label }: Props = $props()
 
   const galaxy = $derived(Number(tooltip.identifier))
-  const fields = $derived(tooltip.fields)
 </script>
 
 <div
@@ -21,12 +21,13 @@
     <GalaxyThumb {galaxy} />
   </PanelFrame>
   <span class="text-sm font-medium">#{galaxy}</span>
-  {#if fields?.property}
+  {#if label && tooltip.fields}
+    {@const { value, width, predicted } = tooltip.fields}
     <span class="text-xs">
-      {fields.property}:
-      {fields.value === null
+      {label}:
+      {value === null
         ? 'no value'
-        : `${fields.value.toPrecision(3)}${fields.predicted ? ` ± ${fields.width.toPrecision(2)} (AION)` : ''}`}
+        : `${value.toPrecision(3)}${predicted ? ` ± ${width.toPrecision(2)} (AION)` : ''}`}
     </span>
   {:else}
     <span class="text-muted-foreground text-xs">{MORPHOLOGIES[tooltip.category ?? UNLABELLED]}</span

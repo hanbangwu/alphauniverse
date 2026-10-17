@@ -18,7 +18,7 @@
       {/each}
     </Select.Content>
   </Select.Root>
-  {#if view.property && view.property !== 'g_r'}
+  {#if view.predictable}
     <Segmented field={view.source} />
   {/if}
 </div>

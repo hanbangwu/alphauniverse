@@ -51,6 +51,8 @@ export type Colouring = keyof typeof COLOURINGS
 
 export type Property = Exclude<Colouring, 'morphology'>
 
+export const PREDICTABLE: readonly Property[] = ['redshift', 'mass', 'sfr', 'ssfr']
+
 export const UNITS: Record<Property, string> = {
   redshift: 'z',
   mass: 'log M☉',
