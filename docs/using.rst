@@ -21,7 +21,7 @@ The search shows the same groups and a third, its catalogue values, with Galaxy 
 Search by similarity
 --------------------
 
-Start a search from the selected galaxy and pick what to compare: cells of its Legacy Survey or HSC image, windows of its DESI or SDSS spectrum, catalogue values, or any mix. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
+Start a search from the selected galaxy and pick what to compare: cells of its Legacy Survey or HSC image, windows of its DESI or SDSS spectrum, catalogue values, or any mix. Click a cell or a window to pick it, or Tab to an image or a spectrum, move with the arrow keys and press Enter or Space; a zoomed spectrum pans to follow. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
 
 - **Any position**, set separately for the images and the spectra; otherwise each selected cell or window is compared at the same place;
 - for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and for each image and spectrum it has, a map of where it agrees with the query;
