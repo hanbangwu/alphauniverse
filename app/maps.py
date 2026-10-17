@@ -6,16 +6,18 @@ from tqdm import tqdm
 from umap import UMAP
 
 from . import pql
-from .config import FLAG_SURVEYS, MAPS, MODES, SEED, artifact, galaxy_count, points
+from .config import FLAG_SURVEYS, MAPS, MODES, SEED, artifact, points
 from .dataset import dataset
 from .embeddings import BATCH
 
 NEIGHBOURS = UMAP().n_neighbors - 1
 
 
-def nearest(anywhere: frozenset[str], count: int) -> tuple[torch.Tensor, torch.Tensor]:
+def nearest(
+    galaxies: int, anywhere: frozenset[str], count: int
+) -> tuple[torch.Tensor, torch.Tensor]:
     parts = []
-    for rows in tqdm(torch.arange(galaxy_count()).split(BATCH), desc="search"):
+    for rows in tqdm(torch.arange(galaxies).split(BATCH), desc="search"):
         totals = pql.whole_mode_totals(rows.numpy(), MODES, anywhere)
         scored = torch.from_numpy(sum(pql.contributions(totals).values()))
         scored[torch.arange(len(rows)), rows] = -torch.inf
@@ -46,7 +48,11 @@ def generate_maps() -> None:
     galaxy = np.arange(len(category), dtype=np.int32)
     for name, anywhere in MAPS.items():
         pq.write_table(
-            points(galaxy, placed(nearest(anywhere, NEIGHBOURS), features), category),
+            points(
+                galaxy,
+                placed(nearest(len(features), anywhere, NEIGHBOURS), features),
+                category,
+            ),
             artifact(f"{name}_points"),
             compression="zstd",
         )

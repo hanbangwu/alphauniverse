@@ -1,6 +1,6 @@
 import math
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Iterable, Iterator
+from collections.abc import Callable, Collection, Hashable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from functools import cache, partial
 from itertools import accumulate
@@ -752,7 +752,7 @@ def search(query: Query) -> Results:
 
 
 def whole_mode_totals(
-    galaxies: np.ndarray, modes: Iterable[str], anywhere: Iterable[str]
+    galaxies: np.ndarray, modes: Collection[str], anywhere: Collection[str]
 ) -> dict[str, np.ndarray]:
     totals = {}
     for mode in MODES:

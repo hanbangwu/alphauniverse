@@ -10,7 +10,7 @@ def test_each_galaxys_map_neighbours_are_its_whole_mode_search_matches(
     tree: Path,
 ) -> None:
     for anywhere in MAPS.values():
-        found = maps.nearest(anywhere, NEIGHBOURS)[1]
+        found = maps.nearest(galaxy_count(), anywhere, NEIGHBOURS)[1]
         for galaxy in range(galaxy_count()):
             searched = pql.mode_search(
                 pql.ModeQuery(
