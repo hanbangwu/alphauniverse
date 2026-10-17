@@ -8,8 +8,11 @@
     IMAGE_SURVEYS,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
+    TABLE_MODES,
+    imageMode,
     spectrumMode
   } from '$lib/data/modes'
+  import type { ModeName } from '$lib/data/similarity'
   import { getApp } from '$lib/state/app.svelte'
   import type { Field } from '$lib/state/field.svelte'
   import type { IndexListField } from '$lib/state/fields.svelte'
@@ -19,20 +22,39 @@
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
   import TablePanel from './table-panel.svelte'
+  import WholeMode from './whole-mode.svelte'
 
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
+
+  const whole = $derived(view.wholeModes.value)
+
+  function count(modes: readonly ModeName[], fields: IndexListField[]): number {
+    return whole
+      ? modes.filter((mode) => view.modes.has(mode)).length
+      : fields.reduce((total, field) => total + field.value.length, 0)
+  }
+
+  function clear(modes: readonly ModeName[], fields: IndexListField[]): void {
+    if (whole) view.modes.value = view.modes.value.filter((mode) => !modes.includes(mode))
+    else fields.forEach((field) => field.reset())
+  }
 </script>
 
-{#snippet controls(noun: string, fields: IndexListField[], anywhere?: Field<boolean>)}
-  {@const count = fields.reduce((total, field) => total + field.value.length, 0)}
-  {#if count}
-    <span class="text-xs text-muted-foreground">{count} selected</span>
+{#snippet controls(
+  noun: string,
+  modes: readonly ModeName[],
+  fields: IndexListField[],
+  anywhere?: Field<boolean>
+)}
+  {@const selected = count(modes, fields)}
+  {#if selected}
+    <span class="text-xs text-muted-foreground">{selected} selected</span>
     <Button
       variant="ghost"
       size="xs"
       aria-label="Clear {noun} selection"
-      onclick={() => fields.forEach((field) => field.reset())}
+      onclick={() => clear(modes, fields)}
     >
       Clear
     </Button>
@@ -50,6 +72,7 @@
     {#snippet actions()}
       {@render controls(
         'image',
+        IMAGE_MODES,
         IMAGE_MODES.map((mode) => view.tokens[mode]),
         view.imageAnywhere
       )}
@@ -59,7 +82,9 @@
       {#each IMAGE_SURVEYS as survey (survey)}
         <Observed galaxy={similarity.galaxy} {survey} kind="image">
           {#snippet children(matched)}
-            <QueryImage {survey} {matched} />
+            <WholeMode mode={imageMode(survey)}>
+              <QueryImage {survey} {matched} />
+            </WholeMode>
           {/snippet}
         </Observed>
       {/each}
@@ -77,6 +102,7 @@
     {#snippet actions()}
       {@render controls(
         'spectrum',
+        SPECTRUM_MODES,
         SPECTRUM_MODES.map((mode) => view.tokens[mode]),
         view.spectrumAnywhere
       )}
@@ -86,23 +112,25 @@
       {@const layer = similarity.layerOf(mode)}
       <Observed galaxy={similarity.galaxy} {survey} kind="spectrum">
         {#snippet children(matched)}
-          <SpectrumPanel
-            galaxy={similarity.galaxy}
-            {survey}
-            {matched}
-            map={layer?.values ?? null}
-            heat={layer?.heat ?? null}
-            mask={layer &&
-              similarity.maskOf(
-                layer.values,
-                similarity.spectrumLayerDomain,
-                display.spectra.query
-              )}
-            caption={similarity.layerCaption}
-            selected={view.tokens[mode].value}
-            ontoggle={matched ? (index) => view.tokens[mode].toggle(index) : undefined}
-            error={similarity.layerError(mode)}
-          />
+          <WholeMode {mode}>
+            <SpectrumPanel
+              galaxy={similarity.galaxy}
+              {survey}
+              {matched}
+              map={layer?.values ?? null}
+              heat={layer?.heat ?? null}
+              mask={layer &&
+                similarity.maskOf(
+                  layer.values,
+                  similarity.spectrumLayerDomain,
+                  display.spectra.query
+                )}
+              caption={similarity.layerCaption}
+              selected={view.tokens[mode].value}
+              ontoggle={matched && !whole ? (index) => view.tokens[mode].toggle(index) : undefined}
+              error={similarity.layerError(mode)}
+            />
+          </WholeMode>
         {/snippet}
       </Observed>
     {/each}
@@ -117,12 +145,12 @@
 
   <CollapsibleGroup title="Catalogue" bind:open={view.open.current.catalogue}>
     {#snippet actions()}
-      {@render controls('catalogue', [view.tableValues])}
+      {@render controls('catalogue', Object.values(TABLE_MODES), [view.tableValues])}
     {/snippet}
     <TablePanel
       galaxy={similarity.galaxy}
       selected={view.tableValues.value}
-      ontoggle={(index) => view.tableValues.toggle(index)}
+      ontoggle={whole ? undefined : (index) => view.tableValues.toggle(index)}
     />
     {#if display.on.value && similarity.tableValueDomain}
       <MaskControls

@@ -42,7 +42,9 @@
     {survey}
     title={layer ? similarity.layerCaption : similarity.caption}
     selected={view.tokens[mode].value}
-    ontoggle={matched ? (index) => view.tokens[mode].toggle(index) : undefined}
+    ontoggle={matched && !view.wholeModes.value
+      ? (index) => view.tokens[mode].toggle(index)
+      : undefined}
     busy={matched && !tokens.data && !tokens.isError}
     onhover={(value) => (hovered = value)}
     imageOpacity={layer || hovered || !matched ? undefined : tokenAlpha(false)}

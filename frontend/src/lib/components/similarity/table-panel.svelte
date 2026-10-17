@@ -3,6 +3,7 @@
   import { type RGB, SELECTED, tokenAlpha, tokenColors } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
+  import { TABLE_MODES } from '$lib/data/modes'
   import { tableQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { SECTIONS } from '$lib/labels'
@@ -13,7 +14,7 @@
   interface Props {
     galaxy: number
     selected: number[]
-    ontoggle: (index: number) => void
+    ontoggle?: (index: number) => void
   }
 
   let { galaxy, selected, ontoggle }: Props = $props()
@@ -36,9 +37,16 @@
     return `background-color: rgb(${color.join(' ')} / ${alpha})`
   }
 
+  function chosen(row: TableRow): boolean {
+    if (!view.wholeModes.value)
+      return row.table_value !== null && selected.includes(row.table_value)
+    const mode = TABLE_MODES[row.section]
+    return mode !== undefined && view.modes.has(mode)
+  }
+
   function fill(row: TableRow): string | undefined {
     if (row.table_value === null || row.token === null) return undefined
-    const picked = selected.includes(row.table_value)
+    const picked = chosen(row)
     const score = similarity.tableValueMap?.[row.table_value] ?? NaN
     const heat = similarity.tableValueHeat
     const style =
@@ -83,7 +91,22 @@
               colspan={view.predictions.value ? 4 : 3}
               class="px-0 pt-3 pb-1 text-muted-foreground uppercase"
             >
-              {SECTIONS[section].label}
+              {@const mode = TABLE_MODES[section]}
+              {#if mode && view.wholeModes.value}
+                {@const pressed = view.modes.has(mode)}
+                <button
+                  type="button"
+                  aria-pressed={pressed}
+                  aria-label="Search on the whole {SECTIONS[section].label} catalogue"
+                  onclick={() => view.modes.toggle(mode)}
+                  class="cursor-pointer rounded-sm px-1 uppercase outline-offset-1 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                  style:outline={pressed ? `2px solid ${SELECTED}` : undefined}
+                >
+                  {SECTIONS[section].label}
+                </button>
+              {:else}
+                {SECTIONS[section].label}
+              {/if}
             </Table.Cell>
           </Table.Row>
           {#each rows as row (row.column)}
@@ -102,9 +125,9 @@
                   <input
                     type="checkbox"
                     class="accent-primary disabled:cursor-not-allowed"
-                    checked={selected.includes(tableValue)}
-                    disabled={row.token === null}
-                    onchange={() => ontoggle(tableValue)}
+                    checked={chosen(row)}
+                    disabled={row.token === null || !ontoggle}
+                    onchange={() => ontoggle?.(tableValue)}
                     aria-label={`Query ${row.column}`}
                   />
                 {:else if row.excluded !== null}

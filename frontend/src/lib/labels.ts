@@ -1,4 +1,5 @@
 import type { Galaxy, TableRow } from '$lib/api'
+import type { ModeName } from '$lib/data/similarity'
 
 export interface Label {
   label: string
@@ -24,6 +25,16 @@ export const SURVEYS: Labels<keyof Galaxy> = {
   sdss: { label: 'SDSS' },
   gz10: { label: 'Galaxy Zoo 10' },
   provabgs: { label: 'PROVABGS' }
+}
+
+export const MODES: Labels<ModeName> = {
+  ls_image: { label: 'Legacy Survey image' },
+  hsc_image: { label: 'HSC image' },
+  desi_spectrum: { label: 'DESI spectrum' },
+  sdss_spectrum: { label: 'SDSS spectrum' },
+  redshift: { label: 'Redshift' },
+  ls_table: { label: 'Legacy Survey catalogue' },
+  hsc_table: { label: 'HSC catalogue' }
 }
 
 export const SECTIONS: Labels<TableRow['section']> = {

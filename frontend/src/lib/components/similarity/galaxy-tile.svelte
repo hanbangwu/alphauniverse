@@ -24,7 +24,7 @@
 
 <div class="flex flex-1 flex-col gap-2">
   <span class="text-sm font-medium">
-    #{galaxy}{score === undefined ? '' : `: ${similarity.score(score)}`}
+    #{galaxy}{score === undefined ? '' : `: ${similarity.total(score)}`}
   </span>
   {#if onselect}
     <button

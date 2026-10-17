@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
   import { IMAGE_MODES, SPECTRUM_MODES } from '$lib/data/modes'
+  import { OBSERVATIONS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import MaskControls from './mask-controls.svelte'
   import MatchRow from './match-row.svelte'
@@ -11,13 +12,23 @@
 
   const images = $derived(IMAGE_MODES.some((mode) => similarity.anywhere(mode)))
   const spectra = $derived(SPECTRUM_MODES.some((mode) => similarity.anywhere(mode)))
+  const predicted = $derived(similarity.predictedAt(0).map((column) => OBSERVATIONS[column]))
 </script>
 
 <span class="text-sm font-medium">Whole dataset</span>
 <p class="text-xs text-muted-foreground">
   Image matches are compared {images ? 'anywhere in the image' : 'at the same place in the image'};
   spectrum matches {spectra ? 'at any wavelength' : 'at the same observed wavelength'}.
+  {#if similarity.wholeModes}
+    Each match's score is the mean over the chosen modes of its standardised score in each; the bars
+    show each mode's share. Maps compare each slot at the same place.
+  {/if}
 </p>
+{#if predicted.length}
+  <p class="text-xs text-muted-foreground">
+    #{similarity.galaxy} has no {predicted.join(', ')}: searched with AION's prediction
+  </p>
+{/if}
 
 {#if similarity.error}
   <p role="alert" class="text-sm text-destructive">{similarity.error}</p>

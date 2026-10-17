@@ -4,15 +4,17 @@ import { type RGB, continuous } from '$lib/color'
 import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, surveyOf } from '$lib/data/modes'
 import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
-import type {
-  Extent,
-  SaliencyResult,
-  SimilarityQuery,
-  SimilarityResult
+import {
+  type Extent,
+  type ModeName,
+  type SaliencyResult,
+  type SearchQuery,
+  type SimilarityResult,
+  isModeQuery
 } from '$lib/data/similarity'
 import { errorMessage } from '$lib/errors'
 import { must } from '$lib/invariant'
-import { SIMILARITY } from '$lib/labels'
+import { MODES, SIMILARITY } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
 import { DECIMALS, type Threshold } from '$lib/state/mask.svelte'
 import { type CreateQueryResult, createQuery } from '@tanstack/svelte-query'
@@ -85,7 +87,7 @@ export class Similarity {
 
   layer: Layer = $state('galaxy')
 
-  readonly draft: SimilarityQuery | null
+  readonly draft: SearchQuery | null
 
   readonly galaxies: Int32Array
   readonly scales: Record<CosineMode, Scale | null> | null
@@ -102,16 +104,29 @@ export class Similarity {
 
     const selections = $derived(byMode((mode) => view.tokens[mode].value))
     const selection = $derived(
-      search.selection(
-        galaxy,
-        selections,
-        view.tableValues.value,
-        view.imageAnywhere.value,
-        view.spectrumAnywhere.value
-      )
+      view.wholeModes.value
+        ? null
+        : search.selection(
+            galaxy,
+            selections,
+            view.tableValues.value,
+            view.imageAnywhere.value,
+            view.spectrumAnywhere.value
+          )
     )
     this.#selected = $derived(selection !== null)
-    this.draft = $derived(search.request(selection))
+    this.draft = $derived(
+      search.request(
+        view.wholeModes.value
+          ? search.modeSelection(
+              galaxy,
+              view.modes.value,
+              view.imageAnywhere.value,
+              view.spectrumAnywhere.value
+            )
+          : selection
+      )
+    )
     this.#result = createQuery(() => similarityQuery(view.searched.value))
     this.#coverage = createQuery(() => coverageQuery(galaxy))
     const own = $derived(this.layer === 'galaxy')
@@ -196,7 +211,8 @@ export class Similarity {
 
   outlinesAt(mode: CosineMode, index: number): number[] {
     const data = this.#result.data
-    return data?.positions[mode][index] ?? data?.request[mode] ?? []
+    if (!data || isModeQuery(data.request)) return []
+    return data.positions[mode]?.[index] ?? data.request[mode] ?? []
   }
 
   observes(survey: string, index: number): boolean {
@@ -230,8 +246,16 @@ export class Similarity {
     }))
   }
 
+  get wholeModes(): boolean {
+    const request = this.#result.data?.request
+    return request !== undefined && isModeQuery(request)
+  }
+
   readonly score = (value: number): string =>
     `${SIMILARITY.short} ${Math.min(1, value).toFixed(DECIMALS)}`
+
+  readonly total = (value: number): string =>
+    this.wholeModes ? `score ${value.toFixed(DECIMALS)}` : this.score(value)
 
   readonly cosine: Caption = (value) => `cosine ${value.toFixed(DECIMALS)}`
 
@@ -248,7 +272,23 @@ export class Similarity {
   }
 
   scoreAt(index: number): number {
-    return this.#result.data?.similarities[index] ?? 0
+    return this.#result.data?.scores[index] ?? 0
+  }
+
+  contributionsAt(index: number): [ModeName, number][] {
+    const contributions = this.#result.data?.contributions ?? {}
+    return (Object.keys(MODES) as ModeName[]).flatMap((mode) => {
+      const values = contributions[mode]
+      return values ? [[mode, values[index]]] : []
+    })
+  }
+
+  get contributionLimit(): number {
+    return Math.max(
+      ...this.matches.flatMap(({ index }) =>
+        this.contributionsAt(index).map(([, value]) => Math.abs(value))
+      )
+    )
   }
 
   mapAt(mode: CosineMode, index: number): Float32Array {

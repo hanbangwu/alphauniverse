@@ -1,4 +1,6 @@
+import type { TableRow } from '$lib/api'
 import type { CosineMode, ImageSurvey, SpectrumSurvey } from '$lib/client'
+import type { ModeName } from './similarity'
 
 export const ANCHOR: ImageSurvey = 'ls'
 export const IMAGE_SURVEYS: readonly ImageSurvey[] = [ANCHOR, 'hsc']
@@ -14,4 +16,21 @@ export const TOKEN_MODES: readonly CosineMode[] = [...IMAGE_MODES, ...SPECTRUM_M
 
 export function byMode<T>(make: (mode: CosineMode) => T): Record<CosineMode, T> {
   return Object.fromEntries(TOKEN_MODES.map((mode) => [mode, make(mode)])) as Record<CosineMode, T>
+}
+
+export const TABLE_MODES: Partial<Record<TableRow['section'], ModeName>> = {
+  redshift: 'redshift',
+  ls: 'ls_table',
+  hsc: 'hsc_table'
+}
+
+export function anywhereModes(
+  modes: readonly string[],
+  imageAnywhere: boolean,
+  spectrumAnywhere: boolean
+): CosineMode[] {
+  return [
+    ...(imageAnywhere ? IMAGE_MODES : []),
+    ...(spectrumAnywhere ? SPECTRUM_MODES : [])
+  ].filter((mode) => modes.includes(mode))
 }
