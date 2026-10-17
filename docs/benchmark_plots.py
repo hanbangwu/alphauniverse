@@ -779,6 +779,10 @@ def search_performance():
             f"any-position {name.replace('_', ' ')}": figures
             for name, figures in current["anywhere"].items()
         }
+        | {
+            f"whole modes, {name.replace('_', ' ')}": figures
+            for name, figures in current.get("modes", {}).items()
+        }
     )
     versions = ", ".join(
         f"{name} <code>{commit[:7]}</code>" for name, commit in found["commits"].items()

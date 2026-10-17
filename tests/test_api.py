@@ -158,8 +158,8 @@ def test_spectrum_tokens_drop_the_normalisation_token(
     np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
 
 
-def _similarity(client: TestClient, **query) -> pa.RecordBatch:
-    response = client.get("/search", params=query)
+def _similarity(client: TestClient, path: str = "/search", **query) -> pa.RecordBatch:
+    response = client.get(path, params=query)
     assert response.status_code == 200, response.text
     assert response.headers["content-type"] == ARROW
     return pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
@@ -267,6 +267,40 @@ def test_a_selection_on_a_mode_the_galaxy_lacks_is_rejected(
     assert response.status_code == 422
     [error] = response.json()["detail"]
     assert f"galaxy 1 has no {missing}" in error["msg"]
+
+
+def test_whole_mode_search_on_a_mode_the_galaxy_lacks_returns_each_selected_contribution(
+    client: TestClient,
+) -> None:
+    table = _similarity(
+        client,
+        "/search/modes",
+        galaxy=1,
+        modes=["ls_image", "desi_spectrum"],
+        anywhere=["desi_spectrum"],
+        matches=5,
+    )
+
+    assert table.num_rows == 6
+    assert table.column("galaxy")[0].as_py() == 1
+    contributed = {
+        name
+        for name in table.column_names
+        if name.endswith("_contribution") and table.column(name).null_count == 0
+    }
+    assert contributed == {"ls_image_contribution", "desi_spectrum_contribution"}
+    assert len(table.column("ls_image")[0]) == N_IMAGE_TOKENS
+
+
+def test_whole_mode_search_takes_any_position_only_in_a_selected_mode(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/search/modes",
+        params={"galaxy": 1, "modes": ["redshift"], "anywhere": ["ls_image"]},
+    )
+
+    assert response.status_code == 422
 
 
 def test_the_redshift_is_searchable_for_a_galaxy_with_a_usable_redshift(

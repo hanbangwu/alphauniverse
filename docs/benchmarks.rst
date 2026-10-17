@@ -201,7 +201,7 @@ Are a galaxy's nearest galaxies like it, and does one vector per galaxy show the
 Search speed
 ------------
 
-In a container built like the server, ``search_performance`` times the checked-out commit and, when its code differs, the stored report's fastest version, alternating them so neither always runs first. Every figure is from a running server: the median time of each stage of a search, building a galaxy's agreement matrix and the Population map from it on 4 galaxies, whole searches with 4 image cells at 32, 64 and 128 matches, and an any-position search over 4 image cells with its first and repeated Population map.
+In a container built like the server, ``search_performance`` times the checked-out commit and, when its code differs, the stored report's fastest version, alternating them so neither always runs first. Every figure is from a running server: the median time of each stage of a search, building a galaxy's agreement matrix and the Population map from it on 4 galaxies, whole searches with 4 image cells at 32, 64 and 128 matches, and an any-position search over 4 image cells with its first and repeated Population map. For whole-mode search it times loading the 256-component copies of the token embeddings, then searches over all seven modes at 32 matches, at the same place and at any position: the ranking, the maps, the missing-data marks and the whole search.
 
 .. bokeh-plot::
    :source-position: none
@@ -215,7 +215,7 @@ In a container built like the server, ``search_performance`` times the checked-o
 Request speed
 -------------
 
-``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``/meta``, a similarity search, a text search, a galaxy's image, its spectrum and its catalogue table, it times the first request of each kind to a freshly started server (cold, paying for what that request loads first) and then 30 more to the running server (warm).
+``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``/meta``, a similarity search, a whole-mode search over all seven modes, a text search, a galaxy's image, its spectrum and its catalogue table, it times the first request of each kind to a freshly started server (cold, paying for what that request loads first) and then 30 more to the running server (warm).
 
 .. bokeh-plot::
    :source-position: none

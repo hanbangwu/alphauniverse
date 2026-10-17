@@ -11,6 +11,7 @@ from app.config import (
     ANCHOR,
     DIM,
     GEMMA_DIM,
+    GRAM_NAMES,
     IMAGE_VOCABULARY,
     KEPT,
     N_IMAGE_TOKENS,
@@ -26,6 +27,7 @@ from app.config import (
     STORE_COLUMNS,
     TABLE_VALUE_SURVEYS,
     TEXT_SURVEYS,
+    TOKEN_EMBEDDING_RANK,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -36,6 +38,7 @@ from app.config import (
     store_schema,
     store_writer,
 )
+from app.embeddings import generate_token_search
 from app.pql import (
     MATRICES,
     SAMPLES,
@@ -46,6 +49,7 @@ from app.pql import (
     prediction_batch,
     predictions,
     save_prediction_basis,
+    stored,
 )
 from app.search import source, tokens
 from app.text_search import aion_gemma_space
@@ -202,6 +206,18 @@ def _properties(
     )
 
 
+def _token_embeddings(rng: np.random.Generator, galaxies: int) -> None:
+    for name in GRAM_NAMES:
+        np.savez(
+            artifact(f"token_embedding_{name}"),
+            queries=rng.standard_normal((galaxies, TOKEN_EMBEDDING_RANK), np.float32),
+            galleries=rng.standard_normal((galaxies, TOKEN_EMBEDDING_RANK), np.float32),
+            offsets=rng.standard_normal(galaxies, np.float32),
+            self_scores=rng.standard_normal(galaxies, np.float32),
+            singular_values=np.sort(rng.random(galaxies))[::-1],
+        )
+
+
 def forget() -> None:
     for cached in (
         galaxy_count,
@@ -213,6 +229,7 @@ def forget() -> None:
         prediction_basis,
         basis,
         observed,
+        stored,
     ):
         cached.cache_clear()
     MATRICES.clear()
@@ -274,6 +291,8 @@ def build(galaxies: int, seed: int = 0) -> Path:
     pq.write_table(
         _properties(rng, galaxies, flags["provabgs"]), artifact("properties")
     )
+    _token_embeddings(rng, galaxies)
+    generate_token_search()
 
     forget()
     return target

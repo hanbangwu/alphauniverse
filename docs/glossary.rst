@@ -87,3 +87,6 @@ Glossary
 
    transformer
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
+
+   whole-mode search
+      Search over every slot of each chosen :term:`mode`, ranked from the modes' :term:`token embeddings <token embedding>`. See :doc:`methods/similarity-search`.
