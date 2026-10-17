@@ -22,7 +22,7 @@
 
 <script lang="ts">
   import type { RGB } from '$lib/color'
-  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
+  import { TAP_RADIUS, TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
@@ -37,6 +37,7 @@
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
+    painted: number[]
     ontoggle?: (index: number) => void
     class?: string
     label: string
@@ -49,6 +50,7 @@
     opacity = () => 1,
     title,
     selected = [],
+    painted = $bindable(),
     ontoggle,
     class: className,
     label
@@ -57,6 +59,10 @@
   const interactive = $derived(Boolean(ontoggle))
 
   let instance: ECharts
+  let adding: boolean
+  let pointer: number | null = null
+  let last: number[]
+  let press: number[]
   let cursor = $state<number | null>(null)
 
   const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
@@ -102,6 +108,68 @@
     series: [{ type: 'custom', data: cells, renderItem: cell }]
   })
 
+  function position(event: PointerEvent): number[] {
+    return instance.convertFromPixel('grid', pixel(instance, event))
+  }
+
+  function paint([column, row]: number[]): void {
+    const index = row * grid + column
+    if (Math.min(column, row) < 0 || Math.max(column, row) >= grid) return
+    if (chosen.has(index) !== adding && !painted.includes(index)) painted = [...painted, index]
+  }
+
+  function start(event: PointerEvent): void {
+    if (pointer !== null) {
+      drop()
+      return
+    }
+    if (event.button !== 0) return
+    cursor = null
+    pointer = event.pointerId
+    press = [event.clientX, event.clientY]
+    last = position(event)
+    const [column, row] = last.map((value) => Math.min(Math.floor(value), grid - 1))
+    adding = !selected.includes(row * grid + column)
+    paint([column, row])
+  }
+
+  function move(event: PointerEvent): void {
+    if (event.pointerId !== pointer) return
+    if (!event.buttons) {
+      drop()
+      return
+    }
+    const [pressX, pressY] = press
+    const near = Math.hypot(event.clientX - pressX, event.clientY - pressY) <= TAP_RADIUS
+    if (event.pointerType !== 'mouse' && near) return
+    const [fromX, fromY] = last
+    last = position(event)
+    const [toX, toY] = last
+    let [column, row] = [Math.floor(fromX), Math.floor(fromY)]
+    const [endColumn, endRow] = [Math.floor(toX), Math.floor(toY)]
+    while (column !== endColumn || row !== endRow) {
+      const across = (column + Number(toX > fromX) - fromX) / (toX - fromX)
+      const down = (row + Number(toY > fromY) - fromY) / (toY - fromY)
+      if (row === endRow || (column !== endColumn && across < down)) {
+        column += Math.sign(toX - fromX)
+      } else {
+        row += Math.sign(toY - fromY)
+      }
+      paint([column, row])
+    }
+  }
+
+  function end(event: PointerEvent): void {
+    if (event.pointerId !== pointer) return
+    if (event.type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+    drop()
+  }
+
+  function drop(): void {
+    painted = []
+    pointer = null
+  }
+
   function point(index: number | null): void {
     cursor = index
     instance.dispatchAction(
@@ -109,7 +177,7 @@
     )
   }
 
-  function move(event: KeyboardEvent): void {
+  function navigate(event: KeyboardEvent): void {
     const step = STEPS[event.key]
     if (!step || event.altKey || event.ctrlKey || event.metaKey) return
     event.preventDefault()
@@ -128,23 +196,20 @@
   }
 </script>
 
+<svelte:window onpointermove={move} onpointerup={end} onpointercancel={end} />
+
 <svelte:element
   this={interactive ? 'button' : 'div'}
   {@attach chart(
     () => option,
-    (created) => {
-      instance = created
-      created.on('click', ({ dataIndex }) => {
-        cursor = null
-        ontoggle?.(dataIndex)
-      })
-    }
+    (created) => (instance = created)
   )}
-  onkeydown={move}
+  onpointerdown={interactive ? start : undefined}
+  onkeydown={navigate}
   onclick={activate}
   onblur={() => point(null)}
   type={interactive ? 'button' : undefined}
-  class={className}
+  class={[className, interactive && 'touch-pan-y touch-pinch-zoom']}
   role={interactive ? undefined : 'img'}
   aria-label={label}
 ></svelte:element>

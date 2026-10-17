@@ -36,7 +36,7 @@
 
       <ImageTokenPanel
         label="Image Tokens"
-        describe="Click an image token to query it"
+        describe="Click or drag across image tokens to query them"
         values={similarity.imageLayer ?? tokens.data ?? null}
         grid={similarity.grid}
         color={similarity.imageLayer ? similarity.imageLayerHeat : palette}
