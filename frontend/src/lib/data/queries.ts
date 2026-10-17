@@ -12,6 +12,7 @@ import {
   getTextSearch
 } from '$lib/api'
 import type { CosineMode, ImageSurvey, Projection, SpectrumSurvey } from '$lib/client'
+import type { Property, Source } from '$lib/labels'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { byMode } from './modes'
 import { matchMean } from './scores'
@@ -162,6 +163,22 @@ export function pointsQuery(mosaic: MosaicState, projection: Projection, enabled
     queryKey: ['points', projection] as const,
     queryFn: () => mosaic.load(projection),
     enabled,
+    ...FOREVER
+  })
+}
+
+export function colouringQuery(
+  mosaic: MosaicState,
+  points: string | null,
+  property: Property | null,
+  source: Source
+) {
+  return queryOptions({
+    queryKey: ['colouring', points, property, source] as const,
+    queryFn:
+      points === null || property === null
+        ? skipToken
+        : () => mosaic.colour(points, property, source),
     ...FOREVER
   })
 }

@@ -28,8 +28,10 @@
 
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
-  import { morphologiesQuery, similarityQuery } from '$lib/data/queries'
+  import { colouringQuery, morphologiesQuery, similarityQuery } from '$lib/data/queries'
+  import { COLOURINGS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
+  import ColourLegend from './colour-legend.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
   import { mode } from 'mode-watcher'
@@ -45,6 +47,12 @@
   const search = createQuery(() => similarityQuery(view.searched.value))
 
   const loaded = $derived((view.full ? full.data : mean.data) ?? null)
+  const colouring = createQuery(() =>
+    colouringQuery(mosaic, loaded, view.property, view.source.value)
+  )
+  const coloured = $derived(view.property ? (colouring.data ?? null) : null)
+  const table = $derived(view.property ? (coloured?.table ?? null) : loaded)
+  const faded = $derived(view.source.value === 'measured' && view.property !== 'g_r')
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
@@ -64,15 +72,23 @@
 </script>
 
 <div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
-  {#if loaded && app.swatches && mode.current && width > 0 && height > 0}
-    {#key loaded}
+  {#if table && app.swatches && app.shades && mode.current && width > 0 && height > 0}
+    {#key table}
       <EmbeddingViewMosaic
         coordinator={mosaic.coordinator}
-        table={loaded}
+        {table}
         x="x"
         y="y"
-        category="category"
-        categoryColors={app.swatches}
+        category={coloured ? 'colour' : 'category'}
+        categoryColors={coloured ? app.shades : app.swatches}
+        additionalFields={view.property
+          ? {
+              property: { sql: `'${COLOURINGS[view.property].label}'` },
+              value: 'value',
+              width: 'width',
+              predicted: 'predicted'
+            }
+          : null}
         identifier="galaxy"
         filter={mosaic.filter}
         {tooltip}
@@ -92,6 +108,9 @@
         }}
       />
     {/key}
+    {#if view.property && coloured}
+      <ColourLegend property={view.property} {coloured} {faded} />
+    {/if}
   {:else}
     <div class="absolute inset-0 grid place-content-center">
       <Spinner class="size-8" />

@@ -1,12 +1,22 @@
 import { byMode } from '$lib/data/modes'
 import type { SimilarityQuery } from '$lib/data/similarity'
-import { POINT_SETS, type PointSet } from '$lib/labels'
+import {
+  COLOURINGS,
+  type Colouring,
+  POINT_SETS,
+  type PointSet,
+  type Property,
+  SOURCES,
+  type Source
+} from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField } from './fields.svelte'
 import { PersistedState } from 'runed'
 
 export class ViewState {
   readonly pointSet: EnumField<PointSet>
+  readonly colouring: EnumField<Colouring> = new EnumField(COLOURINGS)
+  readonly source: EnumField<Source> = new EnumField(SOURCES)
   readonly galaxy = new Field<number | null>(null)
   readonly tokens = byMode(() => new IndexListField())
   readonly tableValues = new IndexListField()
@@ -27,6 +37,11 @@ export class ViewState {
 
   get full(): boolean {
     return this.pointSet.value === 'full'
+  }
+
+  get property(): Property | null {
+    const colouring = this.colouring.value
+    return colouring === 'morphology' ? null : colouring
   }
 
   get table(): string {

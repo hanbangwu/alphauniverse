@@ -41,8 +41,29 @@ export function tokenColors(values: ArrayLike<number>): (value: number) => RGB {
     TOKEN_PALETTE[must(ranks.get(value), `rank for token ${value}`) % TOKEN_PALETTE.length]
 }
 
+const NO_VALUE = { light: '#52525b', dark: '#d4d4d8' }
+
+const BACKGROUND = { light: '#ffffff', dark: '#18181b' }
+
 export function morphologyColors(classes: number, scheme: Scheme): string[] {
-  return [...defaultCategoryColors(classes), { light: '#52525b', dark: '#d4d4d8' }[scheme]]
+  return [...defaultCategoryColors(classes), NO_VALUE[scheme]]
+}
+
+export const BINS = 32
+
+export const SHADES: string[] = Array.from({ length: BINS }, (_, bin) =>
+  interpolateViridis((bin + 0.5) / BINS)
+)
+
+function fade(color: string, scheme: Scheme): string {
+  const from = rgb(color)
+  const to = rgb(BACKGROUND[scheme])
+  const mix = (a: number, b: number) => a + (b - a) * 0.6
+  return rgb(mix(from.r, to.r), mix(from.g, to.g), mix(from.b, to.b)).formatHex()
+}
+
+export function propertyColors(scheme: Scheme): string[] {
+  return [...SHADES, ...SHADES.map((color) => fade(color, scheme)), NO_VALUE[scheme]]
 }
 
 export const SELECTED = 'oklch(0.637 0.237 25.331)'

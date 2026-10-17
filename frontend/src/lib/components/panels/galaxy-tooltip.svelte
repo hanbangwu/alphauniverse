@@ -11,6 +11,7 @@
   let { tooltip }: Props = $props()
 
   const galaxy = $derived(Number(tooltip.identifier))
+  const fields = $derived(tooltip.fields)
 </script>
 
 <div
@@ -20,5 +21,15 @@
     <GalaxyThumb {galaxy} />
   </PanelFrame>
   <span class="text-sm font-medium">#{galaxy}</span>
-  <span class="text-muted-foreground text-xs">{MORPHOLOGIES[tooltip.category ?? UNLABELLED]}</span>
+  {#if fields?.property}
+    <span class="text-xs">
+      {fields.property}:
+      {fields.value === null
+        ? 'no value'
+        : `${fields.value.toPrecision(3)}${fields.predicted ? ` ± ${fields.width.toPrecision(2)} (AION)` : ''}`}
+    </span>
+  {:else}
+    <span class="text-muted-foreground text-xs">{MORPHOLOGIES[tooltip.category ?? UNLABELLED]}</span
+    >
+  {/if}
 </div>
