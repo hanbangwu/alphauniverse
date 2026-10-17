@@ -3,6 +3,28 @@ import { BINS } from '$lib/color'
 import { PREDICTABLE, type Property, UNLABELLED } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
 import { Query, column, count, isBetween, isIn, loadParquet } from '@uwdata/mosaic-sql'
+import type { Point, Rectangle } from 'embedding-atlas'
+
+function bounds(polygon: Point[]): Rectangle {
+  const xs = polygon.map(({ x }) => x)
+  const ys = polygon.map(({ y }) => y)
+  return {
+    xMin: Math.min(...xs),
+    xMax: Math.max(...xs),
+    yMin: Math.min(...ys),
+    yMax: Math.max(...ys)
+  }
+}
+
+function inside(x: number, y: number, polygon: Point[]): boolean {
+  let crossed = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]
+    const b = polygon[j]
+    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) crossed = !crossed
+  }
+  return crossed
+}
 
 export interface Values {
   name: string
@@ -25,7 +47,6 @@ export class MosaicState {
   readonly coordinator = new Coordinator()
   readonly filter = Selection.intersect()
   readonly colouredFilter = Selection.intersect({ include: this.filter })
-  readonly region = Selection.intersect()
 
   #connected = false
   #properties: Promise<unknown> | null = null
@@ -136,15 +157,27 @@ export class MosaicState {
     return Number(counted.get(0).count)
   }
 
-  async inRegion(table: string, filter: Selection): Promise<number[]> {
+  async inRegion(
+    table: string,
+    region: Rectangle | Point[],
+    morphologies: number[],
+    range: readonly [number, number] | null
+  ): Promise<number[]> {
+    const box = 'xMin' in region ? region : bounds(region)
+    const where = [
+      isBetween(column('x'), [box.xMin, box.xMax]),
+      isBetween(column('y'), [box.yMin, box.yMax]),
+      ...(morphologies.length ? [isIn(column('category'), morphologies)] : []),
+      ...(range ? [isBetween(column('value'), [...range])] : [])
+    ]
     const rows = await this.connect().query(
-      Query.from(table)
-        .select('galaxy')
-        .distinct()
-        .where([this.region, filter].flatMap((selection) => selection.predicate(null) ?? []))
-        .orderby('galaxy')
+      Query.from(table).select('galaxy', 'x', 'y').where(where)
     )
-    return Array.from(rows, ({ galaxy }) => Number(galaxy))
+    const galaxies = Array.from(rows)
+      .filter(({ x, y }) => 'xMin' in region || inside(x, y, region))
+      .map(({ galaxy }) => Number(galaxy))
+      .sort((a, b) => a - b)
+    return galaxies.filter((galaxy, index) => galaxy !== galaxies[index - 1])
   }
 
   async csv(galaxies: number[]): Promise<string> {

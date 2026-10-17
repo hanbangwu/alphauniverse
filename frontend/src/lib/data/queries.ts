@@ -19,7 +19,6 @@ import { matchMean } from './scores'
 import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
 import type { Spectrum } from './spectra'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
-import type { Selection } from '@uwdata/mosaic-core'
 import { Query, column, eq, isIn, literal } from '@uwdata/mosaic-sql'
 import {
   type Float32,
@@ -220,12 +219,16 @@ export function regionQuery(
   mosaic: MosaicState,
   table: string | null,
   region: Rectangle | Point[] | null,
-  filter: Selection,
-  filtered: readonly [number[], readonly [number, number] | null]
+  morphologies: number[],
+  range: readonly [number, number] | null
 ) {
   return queryOptions({
-    queryKey: ['region', table, region, filtered] as const,
-    queryFn: table === null || region === null ? skipToken : () => mosaic.inRegion(table, filter),
+    queryKey: ['region', table, region, morphologies, range] as const,
+    queryFn:
+      table === null || region === null
+        ? skipToken
+        : () => mosaic.inRegion(table, region, morphologies, range),
+    placeholderData: keepPreviousData,
     staleTime: Infinity
   })
 }

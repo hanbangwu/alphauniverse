@@ -23,7 +23,7 @@
       link.href = url
       link.download = 'alphauniverse-selection.csv'
       link.click()
-      URL.revokeObjectURL(url)
+      setTimeout(() => URL.revokeObjectURL(url))
       error = null
     } catch (caught) {
       error = errorMessage(caught)

@@ -67,8 +67,9 @@
   let drawn = $state<{ points: string; value: Rectangle | Point[] } | null>(null)
   const region = $derived(drawn && drawn.points === loaded ? drawn.value : null)
   const selected = createQuery(() =>
-    regionQuery(mosaic, table, region, filter, [filters.morphologies.value, filters.range.value])
+    regionQuery(mosaic, table, region, filters.morphologies.value, filters.range.value)
   )
+  let settling: ReturnType<typeof setTimeout> | undefined
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
@@ -113,10 +114,14 @@
           : null}
         identifier="galaxy"
         {filter}
-        rangeSelection={mosaic.region}
         rangeSelectionValue={region}
-        onRangeSelection={(value: Rectangle | Point[] | null) =>
-          (drawn = value && loaded ? { points: loaded, value } : null)}
+        onRangeSelection={(value: Rectangle | Point[] | null) => {
+          clearTimeout(settling)
+          settling = setTimeout(
+            () => (drawn = value && loaded ? { points: loaded, value } : null),
+            200
+          )
+        }}
         {tooltip}
         selection={highlighted}
         {width}
@@ -137,11 +142,15 @@
         }}
       />
     {/key}
-    {#if region && selected.data}
+    {#if region && selected.isError}
+      <p role="alert" class="absolute top-3 right-3 text-xs text-destructive">
+        {errorMessage(selected.error)}
+      </p>
+    {:else if region && selected.data}
       <MapSelection galaxies={selected.data} onclear={() => (drawn = null)} />
     {:else}
       <p class="pointer-events-none absolute top-3 right-3 text-xs text-muted-foreground">
-        Shift-drag to select a box; Shift-⌘-drag, a lasso
+        Shift-drag to select a box; Shift-⌘-drag (Shift-Windows key), a lasso
       </p>
     {/if}
     {#if coloured}
