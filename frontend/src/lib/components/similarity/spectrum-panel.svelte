@@ -52,9 +52,9 @@
         {selected}
         {ontoggle}
         label={ontoggle
-          ? `Scroll to zoom, drag to pan, click a ${label} spectrum token to select it`
+          ? `Scroll to zoom, Shift-drag to pan, click or drag across ${label} spectrum tokens to select them`
           : `${label} spectrum of galaxy ${galaxy}`}
-        class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
+        class="absolute inset-0"
       />
     {/if}
   </PanelFrame>

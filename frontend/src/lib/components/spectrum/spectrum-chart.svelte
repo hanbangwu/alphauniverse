@@ -23,11 +23,11 @@
 
 <script lang="ts">
   import { OUTLINE, type RGB, chartInk } from '$lib/color'
-  import { TOOLTIP, chart } from '$lib/components/common/chart.svelte'
+  import { TAP_RADIUS, TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
-  import type { ECharts, ElementEvent } from 'echarts/core'
+  import type { ECharts } from 'echarts/core'
   import { mode } from 'mode-watcher'
 
   interface Props {
@@ -62,6 +62,12 @@
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
   let instance: ECharts
+  let painted = $state.raw<number[]>([])
+  let adding: boolean
+  let pointer: number | null = null
+  let previous: number
+  let visible: number[]
+  let press: number[]
   let cursor: number | null = null
 
   const first = $derived(spectrum.wavelength[0])
@@ -71,9 +77,10 @@
     Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
   )
 
+  const chosen = $derived(new Set(selected).symmetricDifference(new Set(painted)))
+
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
-    const chosen = new Set(selected)
     const cells = Array.from(values, (value, index): Areas[number] => {
       const [low, high] = spectrumTokenOf(meta, index)
       const [r, g, b] = color(value)
@@ -151,7 +158,7 @@
           axisPointer: { lineStyle: { color: ink.muted } }
         }
       : undefined,
-    dataZoom: [{ type: 'inside' }],
+    dataZoom: [{ type: 'inside', cursorGrab: interactive ? 'pointer' : 'default' }],
     series: [
       {
         type: 'line',
@@ -164,14 +171,67 @@
     ]
   })
 
-  function pick(event: ElementEvent): void {
-    if (!values) return
-    const position = [event.offsetX, event.offsetY]
-    if (!instance.containPixel('grid', position)) return
-    const index = spectrumTokenAt(meta, instance.convertFromPixel('grid', position)[0])
-    if (index < 0 || index >= values.length) return
+  function windowAt(event: PointerEvent): number {
+    const [wavelength] = instance.convertFromPixel('grid', pixel(instance, event))
+    const [low, high] = visible
+    return spectrumTokenAt(meta, Math.min(Math.max(wavelength, low), high))
+  }
+
+  function paint(index: number): void {
+    if (chosen.has(index) !== adding) painted = [...painted, index]
+  }
+
+  function blockPan(event: MouseEvent): void {
+    if (!event.shiftKey) event.stopPropagation()
+  }
+
+  function intercept(event: PointerEvent): void {
+    if (event.pointerType !== 'touch') blockPan(event)
+    if (interactive && !event.shiftKey) start(event)
+  }
+
+  function start(event: PointerEvent): void {
+    if (pointer !== null) {
+      drop()
+      return
+    }
+    if (event.button !== 0) return
+    if (!instance.containPixel('grid', pixel(instance, event))) return
     cursor = null
-    ontoggle?.(index)
+    visible = shown()
+    pointer = event.pointerId
+    press = [event.clientX, event.clientY]
+    previous = windowAt(event)
+    adding = !selected.includes(previous)
+    paint(previous)
+  }
+
+  function move(event: PointerEvent): void {
+    if (event.pointerId !== pointer) return
+    if (!event.buttons) {
+      drop()
+      return
+    }
+    if (event.pointerType !== 'mouse') {
+      if (Math.hypot(event.clientX - press[0], event.clientY - press[1]) > TAP_RADIUS) drop()
+      return
+    }
+    const index = windowAt(event)
+    for (let between = Math.min(previous, index); between <= Math.max(previous, index); between++) {
+      paint(between)
+    }
+    previous = index
+  }
+
+  function end(event: PointerEvent): void {
+    if (event.pointerId !== pointer) return
+    if (event.type === 'pointerup') painted.forEach((index) => ontoggle?.(index))
+    drop()
+  }
+
+  function drop(): void {
+    painted = []
+    pointer = null
   }
 
   function shown(): [number, number] {
@@ -192,8 +252,8 @@
     const left = Math.max(low, first)
     const right = Math.min(high, last)
     const y = instance.getHeight() / 2
-    const pixel = (value: number) => instance.convertToPixel({ xAxisIndex: 0 }, value)
-    if (![left, right].every((value) => instance.containPixel('grid', [pixel(value), y]))) {
+    const toPixel = (value: number) => instance.convertToPixel({ xAxisIndex: 0 }, value)
+    if (![left, right].every((value) => instance.containPixel('grid', [toPixel(value), y]))) {
       const [from, to] = shown()
       const shift =
         right - left > to - from
@@ -201,10 +261,10 @@
           : Math.min(left - from, 0) + Math.max(right - to, 0)
       instance.dispatchAction({ type: 'dataZoom', startValue: from + shift, endValue: to + shift })
     }
-    instance.dispatchAction({ type: 'showTip', x: pixel((left + right) / 2), y })
+    instance.dispatchAction({ type: 'showTip', x: toPixel((left + right) / 2), y })
   }
 
-  function move(event: KeyboardEvent): void {
+  function navigate(event: KeyboardEvent): void {
     const step = STEPS[event.key]
     if (!step || event.altKey || event.ctrlKey || event.metaKey) return
     event.preventDefault()
@@ -223,16 +283,17 @@
   }
 </script>
 
+<svelte:window onpointermove={move} onpointerup={end} onpointercancel={end} />
+
 <svelte:element
   this={interactive ? 'button' : 'div'}
   {@attach chart(
     () => option,
-    (created) => {
-      instance = created
-      created.getZr().on('click', pick)
-    }
+    (created) => (instance = created)
   )}
-  onkeydown={move}
+  onpointerdowncapture={intercept}
+  onmousedowncapture={blockPan}
+  onkeydown={navigate}
   onclick={activate}
   onblur={() => point(null)}
   type={interactive ? 'button' : undefined}

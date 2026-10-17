@@ -16,12 +16,14 @@ A selected galaxy shows which surveys it is matched in and, in groups that can e
 - its Legacy Survey and HSC images, the central 96 × 96 px of each: the Legacy Survey colour image, and the HSC image coloured from its *g r i z* flux by the mapping that made the Legacy Survey's;
 - its DESI and SDSS spectra, smoothed for display with a Gaussian of σ = 2 pixels; search uses AION's predictions, never the smoothed flux.
 
+Every spectrum zooms with the wheel or a pinch and pans with Shift-drag or a one-finger drag.
+
 The search shows the same groups and a third, its catalogue values, with Galaxy Zoo 10, PROVABGS and the redshift; the 26 values AION reads can be selected for search. A group stays open or collapsed for every galaxy, in both views.
 
 Search by similarity
 --------------------
 
-Start a search from the selected galaxy and pick what to compare: cells of its Legacy Survey or HSC image, windows of its DESI or SDSS spectrum, catalogue values, or any mix. Click a cell or a window to pick it, or Tab to an image or a spectrum, move with the arrow keys and press Enter or Space; a zoomed spectrum pans to follow. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
+Start a search from the selected galaxy and pick what to compare: cells of its Legacy Survey or HSC image, windows of its DESI or SDSS spectrum, catalogue values, or any mix. Click or tap a cell or a window to select or deselect it, or drag the mouse across several: the drag selects every one it passes over, or deselects them if it starts on a selected one. On a touch screen, a sideways drag over an image does the same, and a vertical swipe scrolls. With the keyboard, Tab to an image or a spectrum, move with the arrow keys and press Enter or Space; a zoomed spectrum pans to follow. :doc:`methods/similarity-search` explains the ranking. The search returns between 1 and 128 galaxies, 32 by default, and offers:
 
 - **Any position**, set separately for the images and the spectra; otherwise each selected cell or window is compared at the same place;
 - for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and for each image and spectrum it has, a map of where it agrees with the query;

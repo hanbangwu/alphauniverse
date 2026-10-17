@@ -44,8 +44,10 @@
     children
   }: Props = $props()
 
+  let painted = $state.raw<number[]>([])
+
   const outline = $derived.by(() => {
-    const chosen = new Set(selected)
+    const chosen = new Set(selected).symmetricDifference(new Set(painted))
     const edges: string[] = []
     for (const index of chosen) {
       const column = index % grid
@@ -79,6 +81,7 @@
           {opacity}
           {title}
           {selected}
+          bind:painted
           {ontoggle}
           label={describe ?? label}
           class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}

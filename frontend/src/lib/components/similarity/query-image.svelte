@@ -31,7 +31,7 @@
 <div class="flex flex-col gap-5">
   <ImageTokenPanel
     label={SURVEYS[survey].label}
-    describe={`Click a ${SURVEYS[survey].label} image token to query it`}
+    describe={`Click or drag across ${SURVEYS[survey].label} image tokens to query them`}
     values={layer?.values ?? tokens.data ?? null}
     grid={similarity.grid}
     color={layer?.heat ?? palette}
