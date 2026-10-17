@@ -92,7 +92,9 @@ def overlap(first: torch.Tensor, second: torch.Tensor) -> float:
 
 
 def physics(
-    families: dict[str, dict], joints: dict[str, torch.Tensor], aion: np.ndarray
+    families: dict[str, dict],
+    joints: dict[str, dict[str, torch.Tensor]],
+    aion: np.ndarray,
 ) -> dict[str, Any]:
     values = targets()
     labelled = np.flatnonzero(np.all([np.isfinite(v) for v in values.values()], 0))
@@ -107,11 +109,12 @@ def physics(
         for combination, names in COMBINATIONS.items():
             scores = searched(subset, names, own)
             rankings[f"{role}_{combination}"] = top(scores, own, NEIGHBOURS).indices
-    for name, joint_vectors in joints.items():
-        found = joint_vectors[labelled]
-        rankings[f"{name}_joint"] = top(
-            -torch.cdist(found, found), own, NEIGHBOURS
-        ).indices
+    for role, variants in joints.items():
+        for variant, embedded in variants.items():
+            found = embedded[labelled]
+            rankings[f"{role}_{variant}"] = top(
+                -torch.cdist(found, found), own, NEIGHBOURS
+            ).indices
     unit = torch.nn.functional.normalize(
         torch.from_numpy(aion[labelled]).double(), dim=1
     )
@@ -145,7 +148,7 @@ def physics(
 
 
 def geometry(
-    families: dict[str, dict], joints: dict[str, torch.Tensor]
+    families: dict[str, dict], joints: dict[str, dict[str, torch.Tensor]]
 ) -> dict[str, Any]:
     count = galaxy_count()
     chosen = np.sort(
@@ -170,18 +173,19 @@ def geometry(
             for combination, names in COMBINED.items()
         }
         nearest = {
-            name: top(
-                -torch.cdist(joint_vectors[chosen], joint_vectors), chosen, NEIGHBOURS
+            variant: top(
+                -torch.cdist(embedded[chosen], embedded), chosen, NEIGHBOURS
             ).indices
-            for name, joint_vectors in joints.items()
-            if name.startswith(role)
+            for variant, embedded in joints[role].items()
         }
         found[role] = {
             "blocks": overlaps,
             "joint": {
-                f"{name} {combination}": overlap(indices, nearest[name])
-                for name in nearest
-                for combination, indices in combined.items()
+                variant: {
+                    combination: overlap(indices, kept)
+                    for combination, indices in combined.items()
+                }
+                for variant, kept in nearest.items()
             },
         }
     return {
@@ -220,7 +224,9 @@ def search_map(
 
 
 def maps(
-    families: dict[str, dict], joints: dict[str, torch.Tensor], aion: np.ndarray
+    families: dict[str, dict],
+    joints: dict[str, dict[str, torch.Tensor]],
+    aion: np.ndarray,
 ) -> dict[str, Any]:
     largest = max(projection_quality.NEIGHBOURS)
     searches = {
@@ -234,12 +240,11 @@ def maps(
     )
     stored = pq.read_table(artifact("mean_points"), columns=["x", "y"])
     projected = {
-        "token_search": search_map(searches["token"], joints["token"].numpy()),
+        "token_search": search_map(searches["token"], joints["token"]["joint"].numpy()),
         **{
-            f"{name}_joint": UMAP(random_state=SEED).fit_transform(
-                joint_vectors.numpy()
-            )
-            for name, joint_vectors in joints.items()
+            f"{role}_{variant}": UMAP(random_state=SEED).fit_transform(embedded.numpy())
+            for role, variants in joints.items()
+            for variant, embedded in variants.items()
         },
         "site": np.column_stack([stored["x"].to_numpy(), stored["y"].to_numpy()]),
     }
@@ -269,11 +274,9 @@ def measure() -> dict[str, Any]:
     token = np.load(artifact("joint_embedding"))
     reduced = principal(token)
     joints = {
-        "token": torch.from_numpy(token),
-        "template": joint(families["template"]),
-    } | {
-        f"token_{width}": torch.from_numpy(reduced[:, :width].copy())
-        for width in WIDTHS
+        "token": {"joint": torch.from_numpy(token)}
+        | {f"pca_{width}": torch.from_numpy(reduced[:, :width]) for width in WIDTHS},
+        "template": {"joint": joint(families["template"])},
     }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     return {

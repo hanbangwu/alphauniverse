@@ -6,6 +6,7 @@ from typing import Any
 import modal
 import numpy as np
 from sklearn.compose import ColumnTransformer
+from sklearn.decomposition import PCA
 from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import LinearRegression, RidgeCV
 from sklearn.metrics import r2_score, root_mean_squared_error
@@ -48,8 +49,7 @@ BLOCKS = {
 
 
 def principal(matrix: np.ndarray) -> np.ndarray:
-    left, values, _ = np.linalg.svd(matrix - matrix.mean(axis=0), full_matrices=False)
-    return left[:, : max(WIDTHS)] * values[: max(WIDTHS)]
+    return PCA(max(WIDTHS), svd_solver="full").fit_transform(matrix)
 
 
 def targets() -> dict[str, np.ndarray]:
@@ -149,11 +149,11 @@ def measure() -> dict[str, Any]:
                 )
                 for label, names in BLOCKS.items()
             }
-            excluded = (role, target in blocks)
-            if excluded not in reduced:
-                reduced[excluded] = principal(features["all"])
+            decomposed = (role, tuple(name for name in blocks if name != target))
+            if decomposed not in reduced:
+                reduced[decomposed] = principal(features["all"])
             features |= {
-                f"pca_{width}": reduced[excluded][:, :width] for width in WIDTHS
+                f"pca_{width}": reduced[decomposed][:, :width] for width in WIDTHS
             }
             report[target][role] = {
                 label: scores(matrix[kept], column[kept], PROBES)
