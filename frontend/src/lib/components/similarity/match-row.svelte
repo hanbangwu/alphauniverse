@@ -2,6 +2,7 @@
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
   import { OBSERVATIONS, SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
+  import ContributionBars from './contribution-bars.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
@@ -44,7 +45,10 @@
       {/each}
     </div>
   {:else}
-    <span class="text-sm font-medium">#{galaxy}: {similarity.score(score)}</span>
+    <span class="text-sm font-medium">#{galaxy}: {similarity.total(score)}</span>
+  {/if}
+  {#if similarity.wholeModes}
+    <ContributionBars {index} />
   {/if}
   {#if predicted.length}
     <p class="text-xs text-muted-foreground">
