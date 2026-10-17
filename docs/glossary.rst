@@ -4,6 +4,27 @@ Glossary
 .. glossary::
    :sorted:
 
+   against-data score
+      The log-likelihood of one galaxy's data under another galaxy's :term:`template`, with the data's own errors, less its log-likelihood under the median template. See :doc:`reference`.
+
+   predictive width
+      How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalogue value. See :doc:`reference`.
+
+   saturation
+      A galaxy's highest possible :term:`against-data score` in a :term:`mode`: the score of a template equal to its data.
+
+   template embedding
+      A galaxy's query and gallery vectors for one :term:`mode`, from the singular value decomposition of the mode's :term:`template Gram`, as for a :term:`token embedding`.
+
+   template Gram
+      A :term:`mode`'s :term:`templates <template>` compared with each other at the :term:`typical depth`: minus half the squared distance between every pair. See :doc:`reference`.
+
+   typical depth
+      The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
+
+   classical MDS
+      Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
+
    code
       One entry in a :term:`codec`'s fixed vocabulary. A :term:`token` is the code of one piece of an observation.
 
@@ -22,8 +43,14 @@ Glossary
    foundation model
       A large network trained once on broad data and then used unchanged for many tasks.
 
+   Gram matrix
+      A :term:`mode`'s search scores between every pair of galaxies: entry :math:`(q, g)` scores galaxy :math:`g` against query :math:`q` with every :term:`slot` of the mode selected. See :doc:`reference`.
+
    held out
       Left out of a network's training and used only to test it.
+
+   joint embedding
+      One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`template embeddings <template embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes: 2,816 values for the 11 blocks.
 
    mean embedding
       The average of a galaxy's encoded :term:`embeddings <embedding>`, one vector per galaxy.
@@ -41,7 +68,7 @@ Glossary
       The probability AION assigns to each :term:`code` at a :term:`slot`, given the galaxy's tokens. See :doc:`concepts`.
 
    PROVABGS
-      A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the text search benchmark.
+      A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the text search and probe benchmarks, and in ``properties`` as the measured mass and star formation rate, to which the predicted ones are fitted.
 
    standing benchmark
       A benchmark that measures what the site ships, in its shipped configuration, and reruns when the code or artifacts it measures change. See :doc:`benchmarks`.
@@ -55,8 +82,17 @@ Glossary
    sSFR
       Specific star formation rate: star formation rate divided by stellar mass, in yr\ :sup:`-1`.
 
+   template
+      A galaxy's :term:`prediction` in one :term:`mode` turned back into an observation by the mode's :term:`codec`: an image, a spectrum's shape, or a catalogue value or redshift. See :doc:`reference`.
+
    token
       The integer a :term:`codec` assigns to one piece of an observation, such as a 4 × 4 px image cell or a 25.6 Å spectral window.
 
+   token embedding
+      A galaxy's query and gallery vectors for one :term:`mode`, from the singular value decomposition of the mode's :term:`Gram matrix`: :math:`q`'s query vector times :math:`g`'s gallery vector, plus an offset for :math:`g`, ranks :math:`g` for query :math:`q` as search does, up to the components left out. Unrelated to the :term:`embedding` of a token.
+
    transformer
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
+
+   whole-mode search
+      Search over every slot of each chosen :term:`mode`, ranked from the modes' :term:`token embeddings <token embedding>`. See :doc:`methods/similarity-search`.

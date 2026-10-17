@@ -1,26 +1,31 @@
 <script lang="ts">
   import type { GetImageData } from '$lib/api'
-  import { client } from '$lib/client'
+  import { type ImageSurvey, client } from '$lib/client'
   import { Spinner } from '$lib/components/ui/spinner'
+  import { SURVEYS } from '$lib/labels'
 
   interface Props {
     galaxy: number
+    survey?: ImageSurvey
   }
 
-  let { galaxy }: Props = $props()
+  let { galaxy, survey = 'ls' }: Props = $props()
 
   let loaded = $state<number | null>(null)
   let failed = $state<number | null>(null)
 
   const src = $derived(
-    client.buildUrl<GetImageData>({ url: '/galaxy/{galaxy}/image', path: { galaxy } })
+    client.buildUrl<GetImageData>({
+      url: '/galaxy/{galaxy}/image/{survey}',
+      path: { galaxy, survey }
+    })
   )
 </script>
 
 {#if failed !== galaxy}
   <img
     {src}
-    alt="Legacy Survey image of galaxy {galaxy}"
+    alt="{SURVEYS[survey].label} image of galaxy {galaxy}"
     loading="lazy"
     onload={() => (loaded = galaxy)}
     onerror={() => (failed = galaxy)}

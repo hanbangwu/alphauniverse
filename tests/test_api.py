@@ -90,13 +90,15 @@ def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     assert client.get("/downloads/codebook").status_code == 404
 
 
+@pytest.mark.parametrize("survey", [ANCHOR, "hsc"])
 def test_image_tokens_are_that_galaxys_stored_image_token_ids(
-    client: TestClient, galaxies: int
+    client: TestClient, survey: str
 ) -> None:
-    galaxy = galaxies - 1
-    cell = _stored("tokens").column(ANCHOR)[galaxy]
+    column = _stored("tokens").column(survey)
+    galaxy = int(np.flatnonzero(column.is_valid())[-1])
+    cell = column[galaxy]
 
-    response = client.get(f"/galaxy/{galaxy}/image/tokens")
+    response = client.get(f"/galaxy/{galaxy}/image/{survey}/tokens")
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
@@ -129,27 +131,35 @@ def test_cosines_are_a_square_float32_table_of_the_mode_s_slots(
         )
 
 
-def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:
-    tokens = _stored("tokens").column("desi")
+@pytest.mark.parametrize(
+    ("survey", "path"), [("hsc", "image/hsc"), ("desi", "spectrum/desi")]
+)
+def test_unmatched_tokens_are_not_found(
+    client: TestClient, survey: str, path: str
+) -> None:
+    tokens = _stored("tokens").column(survey)
     untokenised = tokens.is_valid().to_pylist().index(False)
 
-    assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
+    assert client.get(f"/galaxy/{untokenised}/{path}/tokens").status_code == 404
 
 
-def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    column = _stored("tokens").column("desi")
-    galaxy = column.is_valid().to_pylist().index(True)
+@pytest.mark.parametrize("survey", ["desi", "sdss"])
+def test_spectrum_tokens_drop_the_normalisation_token(
+    client: TestClient, survey: str
+) -> None:
+    column = _stored("tokens").column(survey)
+    galaxy = int(np.flatnonzero(column.is_valid())[-1])
     cell = column[galaxy]
 
-    response = client.get(f"/galaxy/{galaxy}/spectrum/tokens")
+    response = client.get(f"/galaxy/{galaxy}/spectrum/{survey}/tokens")
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
     np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
 
 
-def _similarity(client: TestClient, **query) -> pa.RecordBatch:
-    response = client.get("/search", params=query)
+def _similarity(client: TestClient, path: str = "/search", **query) -> pa.RecordBatch:
+    response = client.get(path, params=query)
     assert response.status_code == 200, response.text
     assert response.headers["content-type"] == ARROW
     return pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
@@ -259,6 +269,40 @@ def test_a_selection_on_a_mode_the_galaxy_lacks_is_rejected(
     assert f"galaxy 1 has no {missing}" in error["msg"]
 
 
+def test_whole_mode_search_on_a_mode_the_galaxy_lacks_returns_each_selected_contribution(
+    client: TestClient,
+) -> None:
+    table = _similarity(
+        client,
+        "/search/modes",
+        galaxy=1,
+        modes=["ls_image", "desi_spectrum"],
+        anywhere=["desi_spectrum"],
+        matches=5,
+    )
+
+    assert table.num_rows == 6
+    assert table.column("galaxy")[0].as_py() == 1
+    contributed = {
+        name
+        for name in table.column_names
+        if name.endswith("_contribution") and table.column(name).null_count == 0
+    }
+    assert contributed == {"ls_image_contribution", "desi_spectrum_contribution"}
+    assert len(table.column("ls_image")[0]) == N_IMAGE_TOKENS
+
+
+def test_whole_mode_search_takes_any_position_only_in_a_selected_mode(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/search/modes",
+        params={"galaxy": 1, "modes": ["redshift"], "anywhere": ["ls_image"]},
+    )
+
+    assert response.status_code == 422
+
+
 def test_the_redshift_is_searchable_for_a_galaxy_with_a_usable_redshift(
     client: TestClient,
 ) -> None:
@@ -330,11 +374,11 @@ def test_search_without_a_selection_is_rejected(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "path",
     [
-        "/galaxy/{galaxy}/image",
-        "/galaxy/{galaxy}/image/tokens",
+        "/galaxy/{galaxy}/image/ls",
+        "/galaxy/{galaxy}/image/hsc/tokens",
         "/galaxy/{galaxy}",
-        "/galaxy/{galaxy}/spectrum",
-        "/galaxy/{galaxy}/spectrum/tokens",
+        "/galaxy/{galaxy}/spectrum/sdss",
+        "/galaxy/{galaxy}/spectrum/desi/tokens",
         "/galaxy/{galaxy}/table",
         "/search?galaxy={galaxy}&ls_image=0",
     ],

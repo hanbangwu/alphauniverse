@@ -15,12 +15,13 @@ from pydantic import BaseModel
 
 from . import pql
 from .config import (
-    ANCHOR,
     DATASET_AUTHOR,
     DATASET_NAME,
     FLAG_SURVEYS,
+    GRAM_NAMES,
     GRID,
     IMAGE_MODES,
+    MODES,
     N_IMAGE_TOKENS,
     OBSERVATIONS,
     REDSHIFT,
@@ -28,10 +29,10 @@ from .config import (
     REDSHIFT_LIMIT,
     REDSHIFT_TABLE_VALUE,
     SALIENCY_SAMPLE,
+    SEARCH_RANK,
     SPECTRUM_MODES,
     SPECTRUM_ORIGIN,
     SPECTRUM_SMOOTHING_SIGMA,
-    SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
     TABLE_MODES,
     TABLE_VALUE_COLUMNS,
@@ -39,6 +40,7 @@ from .config import (
     Catalogue,
     Download,
     GalaxyIndex,
+    ImageSurvey,
     Projection,
     SpectrumSurvey,
     TextModality,
@@ -138,6 +140,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pql.basis()
     for column in OBSERVATIONS:
         pql.observed(column)
+    for name in GRAM_NAMES:
+        pql.stored(name)
     yield
 
 
@@ -305,25 +309,34 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
 
 
 @app.get(
-    "/galaxy/{galaxy}/image",
+    "/galaxy/{galaxy}/image/{survey}",
     response_class=Response,
     responses={
         200: {
             "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}
         }
     },
+    description="The central 96 by 96 px of the galaxy's image in one survey: the "
+    "dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i "
+    "and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy "
+    "Survey's.",
 )
-def get_image(galaxy: GalaxyIndex) -> Response:
-    return Response(image(galaxy), media_type="image/png")
+def get_image(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
+    found = image(galaxy, survey)
+    if found is None:
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} image")
+    return Response(found, media_type="image/png")
 
 
 @app.get(
-    "/galaxy/{galaxy}/image/tokens",
+    "/galaxy/{galaxy}/image/{survey}/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
 )
-def get_image_tokens(galaxy: GalaxyIndex) -> Response:
-    cell = tokens().column(ANCHOR)[galaxy]
+def get_image_tokens(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
+    cell = tokens().column(survey)[galaxy]
+    if not cell.is_valid:
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} image")
     return Response(
         np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
         media_type="application/octet-stream",
@@ -331,29 +344,29 @@ def get_image_tokens(galaxy: GalaxyIndex) -> Response:
 
 
 @app.get(
-    "/galaxy/{galaxy}/spectrum",
+    "/galaxy/{galaxy}/spectrum/{survey}",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
     description="The galaxy's spectrum for display, its flux smoothed with a "
     f"Gaussian of sigma {SPECTRUM_SMOOTHING_SIGMA} pixels; masked pixels stay NaN.",
 )
-def get_spectrum(galaxy: GalaxyIndex) -> Response:
-    table = spectrum(galaxy, SPECTRUM_SURVEY)
+def get_spectrum(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    table = spectrum(galaxy, survey)
     if table is None:
-        raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
     flux = smoothed(table["flux"].to_numpy())
     return arrow(table.set_column(1, "flux", pa.array(flux, pa.float32())))
 
 
 @app.get(
-    "/galaxy/{galaxy}/spectrum/tokens",
+    "/galaxy/{galaxy}/spectrum/{survey}/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
 )
-def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
-    cell = tokens().column(SPECTRUM_SURVEY)[galaxy]
+def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    cell = tokens().column(survey)[galaxy]
     if not cell.is_valid:
-        raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
     return Response(
         np.asarray(cell.values)[1:].tobytes(), media_type="application/octet-stream"
     )
@@ -387,6 +400,29 @@ def map_arrays(maps: dict[str, np.ndarray]) -> tuple[list[pa.Field], list[pa.Arr
             for values in maps.values()
         ],
     )
+
+
+def search_response(
+    fields: list[pa.Field],
+    columns: list[pa.Array],
+    galaxies: np.ndarray,
+    predicted: list[list[str]],
+) -> Response:
+    observations = pa.list_(pa.field("item", pa.string(), nullable=False))
+    fields = [
+        *fields,
+        *(
+            pa.field(f"has_{column}", pa.bool_(), nullable=False)
+            for column in OBSERVATIONS
+        ),
+        pa.field("predicted", observations, nullable=False),
+    ]
+    columns = [
+        *columns,
+        *(pa.array(pql.observed(column)[galaxies]) for column in OBSERVATIONS),
+        pa.array(predicted, observations),
+    ]
+    return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
 
 
 @app.get(
@@ -451,13 +487,40 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
             if positions is None
             else pa.array(positions.tolist(), places)
         )
-    for column in OBSERVATIONS:
-        fields.append(pa.field(f"has_{column}", pa.bool_(), nullable=False))
-        columns.append(pa.array(pql.observed(column)[results.galaxies]))
-    observations = pa.list_(pa.field("item", pa.string(), nullable=False))
-    fields.append(pa.field("predicted", observations, nullable=False))
-    columns.append(pa.array(results.predicted, observations))
-    return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
+    return search_response(fields, columns, results.galaxies, results.predicted)
+
+
+@app.get(
+    "/search/modes",
+    response_class=Response,
+    responses={200: {"content": ARROW_STREAM}},
+    description="Ranks every galaxy against the query galaxy over whole modes, from "
+    f"the stored token embeddings cut to {SEARCH_RANK} components: each "
+    "mode's scores, at any position for a mode named in anywhere, are standardised "
+    "over all galaxies, and a galaxy's score is their mean. The query galaxy comes "
+    "first. A selected mode's contribution is its standardised score over the "
+    "number of modes, so the contributions sum to the score; an unselected mode's "
+    "is null. Each mode's map holds, at every slot, the galaxy's overlap with the "
+    "query galaxy at the same place over the query galaxy's highest probability "
+    "there. A flag per observation says whether the galaxy has it, and predicted "
+    "lists the selected modes' observations it lacks.",
+)
+def get_mode_search(query: Annotated[pql.ModeQuery, Query()]) -> Response:
+    results = pql.mode_search(query)
+    count = len(results.galaxies)
+    fields = [
+        pa.field("galaxy", pa.int32(), nullable=False),
+        pa.field("score", pa.float32(), nullable=False),
+    ]
+    columns = [pa.array(results.galaxies), pa.array(results.scores)]
+    map_fields, map_columns = map_arrays(results.maps)
+    fields += map_fields
+    columns += map_columns
+    for mode in MODES:
+        fields.append(pa.field(f"{mode}_contribution", pa.float32()))
+        values = results.contributions.get(mode)
+        columns.append(pa.nulls(count) if values is None else pa.array(values))
+    return search_response(fields, columns, results.galaxies, results.predicted)
 
 
 @app.get("/search/text")

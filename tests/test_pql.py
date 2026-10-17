@@ -7,7 +7,7 @@ import pyarrow as pa
 import pytest
 from pydantic import ValidationError
 
-from app import pql
+from app import embeddings, pql
 from app.config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
@@ -15,6 +15,7 @@ from app.config import (
     N_SPECTRUM_TOKENS,
     OBSERVATIONS,
     REDSHIFT,
+    SEARCH_RANK,
     SPECTRUM_MODES,
     SPECTRUM_TOKEN_RANK,
     TABLE_MODES,
@@ -501,3 +502,37 @@ def test_predicted_lists_each_missing_observation_of_the_selection_once(
         assert missing == [
             column for column in OBSERVATIONS if not pql.observed(column)[galaxy]
         ]
+
+
+def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
+    tree: Path,
+) -> None:
+    query = pql.ModeQuery(
+        galaxy=1,
+        modes={"ls_image", "desi_spectrum", REDSHIFT},
+        anywhere={"desi_spectrum"},
+        matches=5,
+    )
+
+    found = pql.mode_search(query)
+
+    standardised = []
+    for name in ("ls_image", "desi_spectrum_anywhere", REDSHIFT):
+        stored = pql.stored(name)
+        row = embeddings.scores(stored["queries"][[1]], stored, SEARCH_RANK)[0]
+        row = row.double().numpy()
+        standardised.append((row - row.mean()) / row.std())
+    expected = np.mean(standardised, axis=0)
+    others = np.delete(np.arange(len(expected)), 1)
+    best = others[np.argsort(-expected[others], kind="stable")][:5]
+    assert found.galaxies.tolist() == [1, *best.tolist()]
+    np.testing.assert_allclose(found.scores, expected[found.galaxies], atol=1e-12)
+    np.testing.assert_allclose(sum(found.contributions.values()), found.scores)
+    assert found.predicted == [
+        [
+            column
+            for column in OBSERVATIONS
+            if column in {"desi", REDSHIFT} and not pql.observed(column)[galaxy]
+        ]
+        for galaxy in found.galaxies.tolist()
+    ]

@@ -1,5 +1,8 @@
+import type { Galaxy } from '$lib/api'
+import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { cosinesQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
+import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, surveyOf } from '$lib/data/modes'
+import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
 import type {
   Extent,
@@ -17,132 +20,182 @@ import { Context } from 'runed'
 
 type Caption = (value: number, index: number) => string
 
+type Heat = (value: number) => RGB
+
+interface Scale {
+  domain: Extent
+  heat: Heat
+}
+
+interface Layered extends Scale {
+  values: Float32Array
+}
+
 export type Layer = 'galaxy' | 'population'
+
+function scale(domain: Extent): Scale {
+  return { domain, heat: continuous(domain) }
+}
+
+function union(domains: (Extent | undefined)[]): Extent | null {
+  const ends = domains.flatMap((domain) => domain ?? [])
+  return ends.length ? extent(ends) : null
+}
+
+class ModeLayer {
+  readonly #cosines: CreateQueryResult<Float32Array>
+  readonly #own: () => boolean
+  readonly current: Layered | null
+
+  constructor(
+    mode: CosineMode,
+    galaxy: number,
+    selected: () => number[],
+    own: () => boolean,
+    saliency: () => SaliencyResult | null
+  ) {
+    this.#own = own
+    this.#cosines = createQuery(() =>
+      cosinesQuery(own() && selected().length ? galaxy : null, mode)
+    )
+    this.current = $derived.by(() => {
+      const population = saliency()
+      const cosines = this.#cosines.data
+      const values = population ? population.maps[mode] : cosines ? best(cosines, selected()) : null
+      return values && { values, ...scale(extent(values)) }
+    })
+  }
+
+  get error(): string | null {
+    if (!this.#own()) return null
+    return this.#cosines.isError ? errorMessage(this.#cosines.error) : null
+  }
+}
 
 export class Similarity {
   readonly galaxy: number
   readonly grid: number
 
   readonly #app: AppState = getApp()
-  readonly #imageTokenCount: number = this.#app.meta.grid ** 2
   readonly #result: CreateQueryResult<SimilarityResult>
-  readonly #imageCosines: CreateQueryResult<Float32Array>
-  readonly #spectrumCosines: CreateQueryResult<Float32Array>
+  readonly #coverage: CreateQueryResult<Galaxy>
+  readonly #layers: Record<CosineMode, ModeLayer>
   readonly #saliency: CreateQueryResult<SaliencyResult>
-  #submitted: SimilarityQuery | null = $state(null)
   readonly #selected: boolean
 
   layer: Layer = $state('galaxy')
 
   readonly draft: SimilarityQuery | null
 
-  readonly imageMaps: Float32Array | null
   readonly galaxies: Int32Array
+  readonly scales: Record<CosineMode, Scale | null> | null
   readonly imageDomain: Extent | null
-  readonly imageHeat: ((value: number) => RGB) | null
-  readonly imageLayer: Float32Array | null
-  readonly imageLayerDomain: Extent | null
-  readonly imageLayerHeat: ((value: number) => RGB) | null
-  readonly spectrumMaps: Float32Array | null
-  readonly spectrumHeat: ((value: number) => RGB) | null
-  readonly spectrumLayer: Float32Array | null
-  readonly spectrumLayerHeat: ((value: number) => RGB) | null
+  readonly spectrumDomain: Extent | null
   readonly tableValueMap: Float32Array | null
-  readonly tableValueHeat: ((value: number) => RGB) | null
+  readonly tableValueDomain: Extent | null
+  readonly tableValueHeat: Heat | null
 
   constructor(galaxy: number) {
-    const app = this.#app
+    const { view, search } = this.#app
     this.galaxy = galaxy
-    this.grid = app.meta.grid
+    this.grid = this.#app.meta.grid
 
+    const selections = $derived(byMode((mode) => view.tokens[mode].value))
     const selection = $derived(
-      app.search.selection(
+      search.selection(
         galaxy,
-        app.view.imageTokens.value,
-        app.view.spectrumTokens.value,
-        app.view.tableValues.value,
-        app.view.imageAnywhere.value,
-        app.view.spectrumAnywhere.value
+        selections,
+        view.tableValues.value,
+        view.imageAnywhere.value,
+        view.spectrumAnywhere.value
       )
     )
     this.#selected = $derived(selection !== null)
-    this.draft = $derived(app.search.request(selection))
-    this.#result = createQuery(() => similarityQuery(this.#submitted))
+    this.draft = $derived(search.request(selection))
+    this.#result = createQuery(() => similarityQuery(view.searched.value))
+    this.#coverage = createQuery(() => coverageQuery(galaxy))
     const own = $derived(this.layer === 'galaxy')
-    this.#imageCosines = createQuery(() =>
-      cosinesQuery(own && app.view.imageTokens.value.length ? galaxy : null, 'ls_image')
-    )
-    this.#spectrumCosines = createQuery(() =>
-      cosinesQuery(own && app.view.spectrumTokens.value.length ? galaxy : null, 'desi_spectrum')
-    )
     this.#saliency = createQuery(() => saliencyQuery(own ? null : selection))
     const saliency = $derived(own || !selection ? null : (this.#saliency.data ?? null))
+    this.#layers = byMode(
+      (mode) =>
+        new ModeLayer(
+          mode,
+          galaxy,
+          () => view.tokens[mode].value,
+          () => own,
+          () => saliency
+        )
+    )
+    const result = $derived(this.#result.data)
 
-    this.imageMaps = $derived(this.#result.data?.imageMaps ?? null)
-    this.galaxies = $derived(this.#result.data?.galaxies ?? new Int32Array())
-    this.imageDomain = $derived(
-      this.imageMaps ? extent(this.imageMaps.subarray(this.#imageTokenCount)) : null
-    )
-    this.imageHeat = $derived(this.imageDomain ? continuous(this.imageDomain) : null)
-    this.imageLayer = $derived(
-      saliency
-        ? saliency.image
-        : this.#imageCosines.data
-          ? best(this.#imageCosines.data, app.view.imageTokens.value)
-          : null
-    )
-    this.imageLayerDomain = $derived(this.imageLayer ? extent(this.imageLayer) : null)
-    this.imageLayerHeat = $derived(this.imageLayerDomain ? continuous(this.imageLayerDomain) : null)
-    this.spectrumMaps = $derived(this.#result.data?.spectrumMaps ?? null)
-    this.spectrumHeat = $derived(
-      this.spectrumMaps
-        ? continuous(extent(this.spectrumMaps.subarray(this.spectrumMapAt(0).length)))
+    this.galaxies = $derived(result?.galaxies ?? new Int32Array())
+    this.scales = $derived(
+      result
+        ? byMode((mode) => {
+            const maps = result.maps[mode]
+            const width = maps.length / result.galaxies.length
+            const domain = union(
+              this.matches
+                .filter(({ index }) => this.observes(surveyOf(mode), index))
+                .map(({ index }) => extent(row(maps, index, width)))
+            )
+            return domain && scale(domain)
+          })
         : null
     )
-    this.spectrumLayer = $derived(
-      saliency
-        ? saliency.spectrum
-        : this.#spectrumCosines.data
-          ? best(this.#spectrumCosines.data, app.view.spectrumTokens.value)
-          : null
-    )
-    this.spectrumLayerHeat = $derived(
-      this.spectrumLayer ? continuous(extent(this.spectrumLayer)) : null
-    )
-    this.tableValueMap = $derived(
-      saliency ? saliency.tableValues : (this.#result.data?.tableValueMap ?? null)
-    )
-    this.tableValueHeat = $derived(
-      this.tableValueMap ? continuous(extent(this.tableValueMap)) : null
-    )
+    this.imageDomain = $derived(union(IMAGE_MODES.map((mode) => this.scales?.[mode]?.domain)))
+    this.spectrumDomain = $derived(union(SPECTRUM_MODES.map((mode) => this.scales?.[mode]?.domain)))
+    this.tableValueMap = $derived(saliency ? saliency.tableValues : (result?.tableValueMap ?? null))
+    this.tableValueDomain = $derived(this.tableValueMap && extent(this.tableValueMap))
+    this.tableValueHeat = $derived(this.tableValueDomain && continuous(this.tableValueDomain))
   }
 
   get error(): string | null {
     return this.#result.isError ? errorMessage(this.#result.error) : null
   }
 
-  get imageLayerError(): string | null {
-    const failed = this.layer === 'galaxy' ? this.#imageCosines : this.#saliency
-    return failed.isError ? errorMessage(failed.error) : null
+  get saliencyError(): string | null {
+    if (this.layer === 'galaxy') return null
+    return this.#saliency.isError ? errorMessage(this.#saliency.error) : null
   }
 
-  get spectrumLayerError(): string | null {
-    if (this.layer !== 'galaxy') return null
-    return this.#spectrumCosines.isError ? errorMessage(this.#spectrumCosines.error) : null
+  layerOf(mode: CosineMode): Layered | null {
+    return this.#layers[mode].current
   }
 
-  anywhere(mode: 'ls_image' | 'desi_spectrum'): boolean {
+  get imageLayerDomain(): Extent | null {
+    return this.#layerDomain(IMAGE_MODES)
+  }
+
+  get spectrumLayerDomain(): Extent | null {
+    return this.#layerDomain(SPECTRUM_MODES)
+  }
+
+  #layerDomain(modes: readonly CosineMode[]): Extent | null {
+    const coverage = this.#coverage.data
+    return union(
+      modes
+        .filter((mode) => surveyOf(mode) === ANCHOR || coverage?.[surveyOf(mode)])
+        .map((mode) => this.layerOf(mode)?.domain)
+    )
+  }
+
+  layerError(mode: CosineMode): string | null {
+    return this.#layers[mode].error
+  }
+
+  anywhere(mode: CosineMode): boolean {
     return this.#result.data?.request.anywhere?.includes(mode) ?? false
   }
 
-  imageOutlinesAt(index: number): number[] {
+  outlinesAt(mode: CosineMode, index: number): number[] {
     const data = this.#result.data
-    return data?.imagePositions[index] ?? data?.request.ls_image ?? []
+    return data?.positions[mode][index] ?? data?.request[mode] ?? []
   }
 
-  spectrumOutlinesAt(index: number): number[] {
-    const data = this.#result.data
-    return data?.spectrumPositions[index] ?? data?.request.desi_spectrum ?? []
+  observes(survey: string, index: number): boolean {
+    return survey === ANCHOR || (this.#result.data?.observed[survey]?.[index] ?? false)
   }
 
   get layerStale(): boolean {
@@ -154,11 +207,11 @@ export class Similarity {
   }
 
   get searched(): boolean {
-    return this.#submitted !== null
+    return this.#app.view.searched.value !== null
   }
 
   submit(): void {
-    this.#submitted = this.draft
+    this.#app.view.searched.value = this.draft
   }
 
   get matches(): { galaxy: number; index: number }[] {
@@ -181,10 +234,6 @@ export class Similarity {
 
   readonly caption: Caption = (value) => `token ${value}`
 
-  readonly maskColor = (value: number): RGB => (value ? [255, 255, 255] : [0, 0, 0])
-
-  readonly maskTitle: Caption = (value) => (value ? 'masked' : 'unmasked')
-
   predictedAt(index: number): string[] {
     return this.#result.data?.predicted[index] ?? []
   }
@@ -193,12 +242,8 @@ export class Similarity {
     return this.#result.data?.similarities[index] ?? 0
   }
 
-  imageMapAt(index: number): Float32Array {
-    return row(must(this.imageMaps, 'the image maps'), index, this.#imageTokenCount)
-  }
-
-  spectrumMapAt(index: number): Float32Array {
-    const maps = must(this.spectrumMaps, 'the spectrum maps')
+  mapAt(mode: CosineMode, index: number): Float32Array {
+    const maps = must(this.#result.data, 'the search result').maps[mode]
     return row(maps, index, maps.length / this.galaxies.length)
   }
 

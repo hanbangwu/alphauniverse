@@ -81,7 +81,7 @@ class Current:
             dense = spread[..., None].expand(*spread.shape, self.vocabulary).clone()
             return dense.scatter_(-1, codes, probabilities)
         if self.kind == "spectrum":
-            return self.mean + self.projected(stored) @ self.directions
+            return self.mean.float() + self.projected(stored) @ self.directions.float()
         return stored["values"]
 
     def overlap(self, stored: Stored, query: torch.Tensor) -> torch.Tensor:
@@ -90,8 +90,8 @@ class Current:
             overlaps = pql.image_token_overlaps(query.cpu().numpy(), *parts)
             return torch.from_numpy(overlaps).to(query.device)
         if self.kind == "spectrum":
-            return query @ self.mean + (
-                self.projected(stored) * (query @ self.directions.T)
+            return query @ self.mean.float() + (
+                self.projected(stored) * (query @ self.directions.float().T)
             ).sum(dim=-1)
         overlaps = pql.table_value_overlaps(
             stored["values"].cpu().numpy(), slice(None), query.cpu().numpy()

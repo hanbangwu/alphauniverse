@@ -53,6 +53,7 @@ PROVABGS = "-mmu_desi_provabgs"
 
 
 SpectrumSurvey = Literal["desi", "sdss"]
+ImageSurvey = Literal["ls", "hsc"]
 SPECTRUM_SURVEYS: dict[SpectrumSurvey, str] = {
     "desi": f"spectrum{DESI}",
     "sdss": f"spectrum{SDSS}",
@@ -67,6 +68,10 @@ FLAG_SURVEYS: dict[str, str] = {
     "provabgs": f"LOG_MSTAR{PROVABGS}",
 }
 RGB_COLUMN = f"rgb{LS}"
+BANDS: dict[str, list[str]] = {
+    ANCHOR: ["DES-G", "DES-R", "DES-I", "DES-Z"],
+    "hsc": ["HSC-G", "HSC-R", "HSC-I", "HSC-Z", "HSC-Y"],
+}
 
 TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
     ANCHOR: tuple(
@@ -178,13 +183,19 @@ SPECTRUM_TOKEN_RANK = 256
 IMAGE_VOCABULARY = 4375
 VOCABULARY = 1024
 REDSHIFT_VOCABULARY = 1025
-IMAGE_MODES = {f"{survey}_image": survey for survey in (ANCHOR, "hsc")}
+IMAGE_MODES = {f"{survey}_image": survey for survey in get_args(ImageSurvey)}
 SPECTRUM_MODES = {f"{survey}_spectrum": survey for survey in SPECTRUM_SURVEYS}
 TokenMode = Literal[*IMAGE_MODES, *SPECTRUM_MODES]
 TABLE_MODES = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
     f"{survey}_table": (f"{survey}_table_values", len(columns), VOCABULARY)
     for survey, columns in TABLE_VALUE_SURVEYS.items()
 }
+MODE_SURVEYS = (
+    IMAGE_MODES
+    | SPECTRUM_MODES
+    | {f"{survey}_table": survey for survey in TABLE_VALUE_SURVEYS}
+    | {REDSHIFT: REDSHIFT}
+)
 OBSERVATIONS = {
     "hsc": "HSC match",
     "desi": "DESI spectrum",
@@ -192,10 +203,15 @@ OBSERVATIONS = {
     REDSHIFT: "usable redshift",
 }
 
+MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+ModeName = Literal[*MODES]
 TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
-    for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+    for mode in MODES
 }
+GRAM_NAMES = tuple(name for names in TOKEN_GRAMS.values() for name in names)
+TOKEN_EMBEDDING_RANK = 1024
+SEARCH_RANK = 256
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",
@@ -209,7 +225,16 @@ ARTIFACTS: dict[str, str] = {
     "aion_gemma_space": "npz",
     "probabilities": "arrow",
     "probability_basis": "npz",
-    **{f"token_gram_{name}": "npy" for names in TOKEN_GRAMS.values() for name in names},
+    **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
+    **{f"token_embedding_{name}": "npz" for name in GRAM_NAMES},
+    **{f"token_search_{name}": "npz" for name in GRAM_NAMES},
+    **{f"template_{mode}": "npy" for mode in MODES},
+    **{f"data_gram_{name}": "npy" for name in GRAM_NAMES},
+    **{f"template_gram_{name}": "npy" for name in GRAM_NAMES},
+    "observed_reference": "npz",
+    **{f"template_embedding_{name}": "npz" for name in GRAM_NAMES},
+    "joint_embedding": "npy",
+    "properties": "parquet",
 }
 
 PREDICTIONS = pa.schema(
@@ -255,6 +280,19 @@ PREDICTIONS = pa.schema(
     ]
 )
 
+
+PROBED = ("mass", "sfr", "ssfr")
+PROPERTIES = pa.schema(
+    [
+        pa.field("galaxy", pa.int32(), nullable=False),
+        *(
+            pa.field(f"{label}_{part}", pa.float32())
+            for label in (REDSHIFT, *PROBED)
+            for part in ("measured", "predicted", "width")
+        ),
+        pa.field("g_r", pa.float32()),
+    ]
+)
 
 POINTS = pa.schema(
     [
