@@ -124,11 +124,6 @@ def quantiles(
     return values[np.arange(len(values)), index]
 
 
-def half_widths(probabilities: np.ndarray, values: np.ndarray) -> np.ndarray:
-    lower, upper = (quantiles(probabilities, values, share) for share in CENTRAL)
-    return (upper - lower) / 2
-
-
 def templates(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
     return {
         **{
@@ -189,7 +184,6 @@ def widths(
             pql.table_value_probabilities(rows, mode),
             bin_values(mode),
         )
-        found[mode] = np.sqrt(
-            ((half_widths(probabilities, values) * depths[mode]) ** 2).mean(axis=1)
-        )
+        lower, upper = (quantiles(probabilities, values, share) for share in CENTRAL)
+        found[mode] = np.sqrt((((upper - lower) / 2 * depths[mode]) ** 2).mean(axis=1))
     return found
