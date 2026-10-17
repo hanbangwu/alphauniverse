@@ -447,7 +447,7 @@ def probe_quality():
             x_axis_type="log",
             x_axis_label="galaxies fitted",
             y_axis_label="R²",
-            height=300,
+            height=340,
             title=f"{target}: ridge R² on a held-out fifth, mean and standard deviation of {found['draws']} draws",
             **WIDTH,
         )
@@ -487,7 +487,7 @@ def probe_quality():
                     line_color=colour,
                 )
             )
-        curve.legend.location = "bottom_right"
+        curve.add_layout(curve.legend[0], "right")
         curves.append(curve)
         modes.extend(
             {
