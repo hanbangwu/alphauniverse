@@ -876,6 +876,103 @@
         }
       }
     },
+    "/search/modes": {
+      "get": {
+        "summary": "Get Mode Search",
+        "description": "Ranks every galaxy against the query galaxy over whole modes, from the stored token embeddings cut to 256 components: each mode's scores, at any position for a mode named in anywhere, are standardised over all galaxies, and a galaxy's score is their mean. The query galaxy comes first. A selected mode's contribution is its standardised score over the number of modes, so the contributions sum to the score; an unselected mode's is null. Each mode's map holds, at every slot, the galaxy's overlap with the query galaxy at the same place over the query galaxy's highest probability there. A flag per observation says whether the galaxy has it, and predicted lists the selected modes' observations it lacks.",
+        "operationId": "get_mode_search",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "modes",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum",
+                  "redshift",
+                  "ls_table",
+                  "hsc_table"
+                ],
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Modes"
+            }
+          },
+          {
+            "name": "anywhere",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum"
+                ],
+                "type": "string"
+              },
+              "default": [],
+              "title": "Anywhere"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search/text": {
       "get": {
         "summary": "Get Text Search",

@@ -13,6 +13,7 @@ from app.config import (
     CROP_PIXELS,
     DIM,
     GEMMA_DIM,
+    GRAM_NAMES,
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     KEPT,
@@ -20,6 +21,8 @@ from app.config import (
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
+    PROBED,
+    PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
     SPECTRUM_GRID,
@@ -30,6 +33,7 @@ from app.config import (
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TEXT_SURVEYS,
+    TOKEN_EMBEDDING_RANK,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -40,15 +44,18 @@ from app.config import (
     store_schema,
     store_writer,
 )
+from app.embeddings import generate_token_search
 from app.pql import (
     MATRICES,
     SAMPLES,
     SUMS,
     basis,
     observed,
+    prediction_basis,
     prediction_batch,
     predictions,
     save_prediction_basis,
+    stored,
 )
 from app.search import source, templates, tokens
 from app.text_search import aion_gemma_space
@@ -213,6 +220,39 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
 
+def _properties(
+    rng: np.random.Generator, galaxies: int, provabgs: np.ndarray
+) -> pa.Table:
+    measured = {f"{label}_measured": provabgs for label in PROBED} | {
+        f"{REDSHIFT}_measured": np.array(
+            [covered(REDSHIFT, galaxy) for galaxy in range(galaxies)]
+        )
+    }
+    return pa.table(
+        {"galaxy": np.arange(galaxies, dtype=np.int32)}
+        | {
+            name: pa.array(
+                rng.random(galaxies, np.float32),
+                mask=~measured.get(name, np.ones(galaxies, dtype=bool)),
+            )
+            for name in PROPERTIES.names[1:]
+        },
+        schema=PROPERTIES,
+    )
+
+
+def _token_embeddings(rng: np.random.Generator, galaxies: int) -> None:
+    for name in GRAM_NAMES:
+        np.savez(
+            artifact(f"token_embedding_{name}"),
+            queries=rng.standard_normal((galaxies, TOKEN_EMBEDDING_RANK), np.float32),
+            galleries=rng.standard_normal((galaxies, TOKEN_EMBEDDING_RANK), np.float32),
+            offsets=rng.standard_normal(galaxies, np.float32),
+            self_scores=rng.standard_normal(galaxies, np.float32),
+            singular_values=np.sort(rng.random(galaxies))[::-1],
+        )
+
+
 def forget() -> None:
     for cached in (
         galaxy_count,
@@ -222,8 +262,10 @@ def forget() -> None:
         templates,
         aion_gemma_space,
         predictions,
+        prediction_basis,
         basis,
         observed,
+        stored,
     ):
         cached.cache_clear()
     MATRICES.clear()
@@ -283,6 +325,11 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
     _predictions(rng, galaxies)
     _templates(rng, galaxies)
+    pq.write_table(
+        _properties(rng, galaxies, flags["provabgs"]), artifact("properties")
+    )
+    _token_embeddings(rng, galaxies)
+    generate_token_search()
 
     forget()
     return target

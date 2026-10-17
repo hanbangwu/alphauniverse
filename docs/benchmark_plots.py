@@ -10,7 +10,7 @@ from bokeh.models import (
     TableColumn,
     Whisker,
 )
-from bokeh.palettes import Category10_10
+from bokeh.palettes import Category10_10, Category20_20
 from bokeh.plotting import figure
 
 REPORTS = Path(__file__).parent / "benchmarks"
@@ -214,6 +214,484 @@ def compression_quality():
     )
 
 
+def token_embedding_quality():
+    found = report("token_embedding_quality")
+    if found is None:
+        return missing()
+    ranks = found["ranks"]
+    curves = {name: matrix["stored"] for name, matrix in found["matrices"].items()} | {
+        f"{name}, combined": combined for name, combined in found["combined"].items()
+    }
+    chart = figure(
+        x_axis_type="log",
+        x_axis_label="k",
+        y_range=(0, 1.05),
+        height=420,
+        title="Share of the exact top 10 found with the stored vectors, by k",
+        **WIDTH,
+    )
+    for (name, curve), colour in zip(curves.items(), Category20_20):
+        chart.line(
+            ranks,
+            [curve[str(rank)]["top10"] for rank in ranks],
+            legend_label=name,
+            color=colour,
+            line_width=2,
+        )
+    chart.legend.location = "bottom_right"
+    chart.legend.click_policy = "hide"
+    last = str(ranks[-1])
+    rows = [
+        {
+            "matrix": name,
+            f"top 10 at k = {last}": matrix["stored"][last]["top10"],
+            f"top 100 at k = {last}": matrix["stored"][last]["top100"],
+            f"positive MDS top 10 at k = {last}": matrix["positive"][last]["top10"],
+            f"energy at k = {last}": matrix["energy"][last],
+            "negative share": matrix["negative_share"],
+            "antisymmetric share": matrix.get("antisymmetric_share"),
+            "symmetric part's top 10": matrix.get("symmetric", {}).get("top10"),
+        }
+        for name, matrix in found["matrices"].items()
+    ]
+    return column(
+        heading(
+            found,
+            f"every one of {found['galaxies']:,} galaxies as a query",
+            found["device"],
+        ),
+        chart,
+        table(rows, list(rows[0])),
+        **WIDTH,
+    )
+
+
+def template_embedding_quality():
+    found = report("template_embedding_quality")
+    if found is None:
+        return missing()
+    ranks = found["ranks"]
+    exact = {"score": "S", "share": "S / S_sat", "fit": "S − S_sat"}
+    truths = exact | {"template": "the template Gram"}
+    charts = []
+    for truth, label in truths.items():
+        chart = figure(
+            x_axis_type="log",
+            x_axis_label="k",
+            y_range=(0, 1.05),
+            height=360,
+            title=f"Share of the top 10 by {label} found with the stored vectors, by k",
+            **WIDTH,
+        )
+        for (name, block), colour in zip(found["blocks"].items(), Category20_20):
+            if truth in block["stored"][str(ranks[0])]:
+                chart.line(
+                    ranks,
+                    [block["stored"][str(rank)][truth]["top10"] for rank in ranks],
+                    legend_label=name,
+                    color=colour,
+                    line_width=2,
+                )
+        chart.legend.location = "bottom_right"
+        chart.legend.click_policy = "hide"
+        charts.append(chart)
+    last = str(ranks[-1])
+    rows = [
+        {
+            "block": name,
+            "galleries": block["galleries"],
+            **{
+                f"own rank by {label}, median": block["own_rank"]
+                .get(truth, {})
+                .get("p50")
+                for truth, label in exact.items()
+            },
+            **{
+                f"own data in top 10 by {label}": block["own_rank"]
+                .get(truth, {})
+                .get("top10")
+                for truth, label in exact.items()
+            },
+            **{
+                f"template Gram's top 10 by {label}": block["template_gram"]
+                .get(truth, {})
+                .get("top10")
+                for truth, label in exact.items()
+            },
+            f"energy at k = {last}": block["energy"][last],
+        }
+        for name, block in found["blocks"].items()
+    ]
+    return column(
+        heading(
+            found,
+            f"every one of {found['galaxies']:,} galaxies as a query",
+            found["device"],
+        ),
+        *charts,
+        table(rows, list(rows[0])),
+        **WIDTH,
+    )
+
+
+def recalled(exact, reverse):
+    return {
+        "R@1": exact["r1"],
+        "R@10": exact["r10"],
+        "median rank": exact["median"],
+        "reverse R@1": reverse["r1"],
+        "reverse R@10": reverse["r10"],
+        "reverse median rank": reverse["median"],
+    }
+
+
+def retrieval_quality():
+    found = report("retrieval_quality")
+    if found is None:
+        return missing()
+    ranks = [str(rank) for rank in found["ranks"]]
+    rows, full = [], []
+    for test, measured in found["tests"].items():
+        row = {
+            "set": test,
+            "galaxies": measured["galaxies"],
+            "score": "AION",
+        } | recalled(**measured["aion"])
+        rows.append(row | {f"R@10 at k = {rank}": "" for rank in ranks})
+        full.append(row)
+        for role in ("token", "template"):
+            for group in ("combined", "blocks"):
+                for name, exact in measured[role]["exact"][group].items():
+                    row = {
+                        "set": test,
+                        "galaxies": measured["galaxies"],
+                        "score": f"{role} {name}",
+                    } | recalled(exact, measured[role]["reverse"][group][name])
+                    rows.append(
+                        row
+                        | {
+                            f"R@10 at k = {rank}": measured[role][rank][group][name][
+                                "r10"
+                            ]
+                            for rank in ranks
+                        }
+                    )
+                    if group == "combined":
+                        full.append(row)
+    source = ColumnDataSource(
+        {
+            "factor": [(row["set"], row["score"]) for row in full],
+            "r1": [row["R@1"] for row in full],
+            "r10": [row["R@10"] for row in full],
+            "reverse": [row["reverse R@10"] for row in full],
+        }
+    )
+    chart = figure(
+        x_range=FactorRange(*source.data["factor"]),
+        y_range=(0, 1.05),
+        height=420,
+        title="Share in the top 10 by full-object scores: each galaxy, ranked from its encoding (bars), and each encoding, ranked from its galaxy (dots)",
+        tooltips=[("R@1", "@r1"), ("R@10", "@r10"), ("reverse R@10", "@reverse")],
+        **WIDTH,
+    )
+    chart.vbar(x="factor", top="r10", width=0.8, source=source)
+    chart.scatter(x="factor", y="reverse", size=8, color="black", source=source)
+    chart.xaxis.major_label_orientation = 0.8
+    return column(
+        heading(found, f"ranked among {found['galaxies']:,} galaxies", found["device"]),
+        chart,
+        table(rows, list(rows[0]), height=600),
+        **WIDTH,
+    )
+
+
+def drawn(probe, shots):
+    found = {}
+    for count, shot in shots.items():
+        found[f"{probe} r2, {count} fitted"] = f"{shot['r2']} ± {shot['sd']}"
+        if "alpha" in shot:
+            found[f"{probe} α, {count} fitted"] = (
+                f"{shot['alpha']:.3g}, {shot['alpha_at_edge']:.0%} at an end"
+            )
+    return found
+
+
+def redshift_quality():
+    found = report("redshift_quality")
+    if found is None:
+        return missing()
+    rows = [
+        {"input": name, "survey": survey} | figures
+        for name, surveys in found["inputs"].items()
+        for survey, figures in surveys.items()
+    ]
+    return column(
+        heading(found, found["device"]),
+        table(rows, ("input", "survey", "galaxies", "bias", "nmad", "outlier_rate")),
+        **WIDTH,
+    )
+
+
+def probe_quality():
+    found = report("probe_quality")
+    if found is None:
+        return missing()
+    rows, curves, modes = [], [], []
+    for target, measured in found["probes"].items():
+        features = {"AION": measured["aion"]} | {
+            f"{role} {kind}": probes
+            for role in ("token", "template")
+            for kind, probes in measured[role].items()
+        }
+        curve = figure(
+            x_axis_type="log",
+            x_axis_label="galaxies fitted",
+            y_axis_label="R²",
+            height=340,
+            title=f"{target}: ridge R² on a held-out fifth, mean and standard deviation of {found['draws']} draws",
+            **WIDTH,
+        )
+        for (name, probes), colour in zip(
+            features.items(), Category20_20[::2] + Category20_20[1::2]
+        ):
+            row = {"target": target, "features": name, "galaxies": measured["galaxies"]}
+            for probe, metrics in probes.items():
+                row |= {
+                    f"{probe} r2": metrics["r2"],
+                    f"{probe} rms": metrics["rms"],
+                } | drawn(probe, metrics["shots"])
+            rows.append(row)
+            shots = probes["ridge"]["shots"]
+            spread = ColumnDataSource(
+                {
+                    "count": [int(count) for count in shots],
+                    "r2": [shot["r2"] for shot in shots.values()],
+                    "lower": [shot["r2"] - shot["sd"] for shot in shots.values()],
+                    "upper": [shot["r2"] + shot["sd"] for shot in shots.values()],
+                }
+            )
+            curve.line(
+                "count",
+                "r2",
+                source=spread,
+                legend_label=name,
+                color=colour,
+                line_width=2,
+            )
+            curve.add_layout(
+                Whisker(
+                    base="count",
+                    lower="lower",
+                    upper="upper",
+                    source=spread,
+                    line_color=colour,
+                )
+            )
+        curve.add_layout(curve.legend[0], "right")
+        curves.append(curve)
+        modes.extend(
+            {
+                "target": target,
+                "features": role,
+                "mode": name,
+                "stacked weight, all galaxies": entry["weight"],
+            }
+            | drawn("ridge", entry["shots"])
+            for role, fits in measured["modes"].items()
+            for name, entry in fits.items()
+        )
+    source = ColumnDataSource(
+        {
+            "factor": [(row["target"], row["features"]) for row in rows],
+            "ridge": [row["ridge r2"] for row in rows],
+            "knn": [row.get("knn r2") for row in rows],
+        }
+    )
+    chart = figure(
+        x_range=FactorRange(*source.data["factor"]),
+        height=420,
+        title=f"R² of ridge regression (bars) and of the {found['neighbours']} nearest neighbours (dots)",
+        tooltips=[("ridge", "@ridge"), ("neighbours", "@knn")],
+        **WIDTH,
+    )
+    chart.vbar(x="factor", top="ridge", width=0.8, source=source)
+    chart.scatter(x="factor", y="knn", size=8, color="black", source=source)
+    chart.xaxis.major_label_orientation = 0.8
+    return column(
+        heading(
+            found,
+            f"{found['rank']} components per mode",
+            f"all: every mode's components side by side, as the joint embedding holds them; pca_n: their first n principal components, n = {', '.join(map(str, found['widths']))}",
+            "stacked: ridge on each mode, weighted by a non-negative fit to their cross-validated predictions",
+            f"{found['folds']}-fold cross-validation",
+            cpus(found),
+        ),
+        chart,
+        *curves,
+        table(
+            [{name: row.get(name, "") for name in rows[0]} for row in rows],
+            list(rows[0]),
+        ),
+        table(modes, list(modes[0]), height=600),
+        **WIDTH,
+    )
+
+
+def neighbour_quality():
+    found = report("neighbour_quality")
+    if found is None:
+        return missing()
+    rankings = [
+        {"ranking": name}
+        | {
+            f"{target} |Δ|, median": values["median"]
+            for target, values in entry.items()
+        }
+        | {
+            f"{target}, beats random": values["beats_random"]
+            for target, values in entry.items()
+        }
+        for name, entry in found["physics"]["rankings"].items()
+    ]
+    geometry = found["geometry"]
+    share = f"share of its top {found['neighbours']}"
+    agreement = [
+        {"features": f"{role} blocks", "search": name, share: value}
+        for role in ("token", "template")
+        for name, value in geometry[role]["blocks"].items()
+    ] + [
+        {"features": f"{role} {variant}", "search": combination, share: value}
+        for role in ("token", "template")
+        for variant, shares in geometry[role]["joint"].items()
+        for combination, value in shares.items()
+    ]
+    counts = [str(count) for count in found["preserved"]]
+    shares = [
+        {"factor": (name, search)} | kept
+        for name, searches in found["maps"].items()
+        for search, kept in searches.items()
+    ]
+    source = ColumnDataSource({key: [row[key] for row in shares] for key in shares[0]})
+    kept = [
+        {"map": map_name, "search": search}
+        | {f"{count} nearest kept": row[count] for count in counts}
+        for row in shares
+        for map_name, search in [row["factor"]]
+    ]
+    chart = figure(
+        x_range=FactorRange(*source.data["factor"]),
+        y_range=(0, 1.05),
+        height=380,
+        title=f"Share of each galaxy's {counts[0]} (bars) and {counts[1]} (dots) nearest by each search that a map keeps nearest",
+        tooltips=[(f"{count} nearest", f"@{{{count}}}") for count in counts],
+        **WIDTH,
+    )
+    chart.vbar(x="factor", top=counts[0], width=0.8, source=source)
+    chart.scatter(x="factor", y=counts[1], size=8, color="black", source=source)
+    chart.xaxis.major_label_orientation = 0.8
+    return column(
+        heading(
+            found,
+            f"{found['rank']} components per mode",
+            f"joint: all modes' components side by side; pca_n: the token joint embedding's first n principal components, n = {', '.join(map(str, found['widths']))}",
+            f"{found['physics']['galaxies']:,} PROVABGS galaxies for the physics",
+            f"{geometry['queries']:,} queries for the geometry, where chance shares {geometry['random']}",
+            cpus(found),
+        ),
+        chart,
+        table(kept, list(kept[0])),
+        table(rankings, list(rankings[0])),
+        table(agreement, list(agreement[0]), height=600),
+        **WIDTH,
+    )
+
+
+def fitted(measured):
+    return {
+        "galaxies": measured["galaxies"],
+        **{
+            f"{model} χ²ν, median": values["p50"]
+            for model, values in measured["chi2"].items()
+        },
+        "recovered, median": measured["recovered"]["p50"],
+    }
+
+
+def template_quality():
+    found = report("template_quality")
+    if found is None:
+        return missing()
+    modes = found["modes"]
+    source = ColumnDataSource(
+        {
+            "mode": list(modes),
+            **{
+                share: [measured["recovered"][share] for measured in modes.values()]
+                for share in ("p5", "p50", "p95")
+            },
+        }
+    )
+    recovered = figure(
+        x_range=list(modes),
+        height=300,
+        title="Share recovered, median and 5th to 95th percentile over galaxies",
+        **WIDTH,
+    )
+    recovered.vbar(x="mode", top="p50", width=0.8, source=source)
+    recovered.segment(
+        x0="mode", y0="p5", x1="mode", y1="p95", color="black", source=source
+    )
+    recovered.xaxis.major_label_orientation = 0.8
+    charts = [recovered]
+    for key in ("radius", "rest_wavelength"):
+        chart = figure(
+            height=300,
+            x_axis_label=key.replace("_", " "),
+            y_axis_label="mean normalised residual",
+            title=f"Residuals by {key.replace('_', ' ')}",
+            **WIDTH,
+        )
+        lines = [
+            (mode, model)
+            for mode, measured in modes.items()
+            if key in measured
+            for model in ("template", "floor")
+        ]
+        for (mode, model), colour in zip(lines, Category10_10):
+            chart.line(
+                modes[mode][key]["centres"],
+                modes[mode][key][model],
+                legend_label=f"{mode} {model}",
+                color=colour,
+                line_width=2,
+            )
+        chart.legend.click_policy = "hide"
+        charts.append(chart)
+    rows = [{"mode": mode} | fitted(measured) for mode, measured in modes.items()]
+    pulls = [
+        {
+            "value": name,
+            **{f"{model}, median |pull|": value for model, value in values.items()},
+        }
+        for measured in modes.values()
+        for name, values in measured.get("median_absolute_pull", {}).items()
+    ]
+    quartiles = [
+        {"mode": mode, "S/N per pixel": " to ".join(map(str, quartile["snr"]))}
+        | fitted(quartile)
+        for mode, measured in modes.items()
+        for quartile in measured.get("by_snr", [])
+    ]
+    return column(
+        heading(found, found["device"]),
+        *charts,
+        table(rows, list(rows[0])),
+        table(pulls, list(pulls[0])),
+        table(quartiles, list(quartiles[0])),
+        **WIDTH,
+    )
+
+
 def backend_performance():
     found = report("backend_performance")
     if found is None:
@@ -300,6 +778,10 @@ def search_performance():
         | {
             f"any-position {name.replace('_', ' ')}": figures
             for name, figures in current["anywhere"].items()
+        }
+        | {
+            f"whole modes, {name.replace('_', ' ')}": figures
+            for name, figures in current.get("modes", {}).items()
         }
     )
     versions = ", ".join(

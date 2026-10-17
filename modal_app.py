@@ -85,6 +85,94 @@ def generate_token_grams() -> None:
 
 @app.function(
     image=build_image,
+    gpu="H100!",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=5 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_token_embeddings() -> None:
+    from app.embeddings import generate_token_embeddings
+
+    generate_token_embeddings()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    cpu=2,
+    memory=(2 * 1024, 8 * 1024),
+    timeout=1 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_joint_embedding() -> None:
+    from app.embeddings import generate_joint_embedding
+
+    generate_joint_embedding()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=2 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_properties() -> None:
+    from app.properties import generate_properties
+
+    generate_properties()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=20 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_templates() -> None:
+    from app.templates import generate_templates
+
+    generate_templates()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="H100!",
+    cpu=4,
+    memory=(16 * 1024, 64 * 1024),
+    timeout=80 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_observed_grams() -> None:
+    from app.observed_grams import generate_observed_grams
+
+    generate_observed_grams()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="H100!",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=10 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_template_embeddings() -> None:
+    from app.observed_grams import generate_template_embeddings
+
+    generate_template_embeddings()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
     gpu="L4",
     cpu=4,
     memory=(32 * 1024, 64 * 1024),

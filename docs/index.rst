@@ -17,7 +17,7 @@ DESI EDR SV3       spectrum 3500–10463 Å, resampled to 0.8 Å
 SDSS               spectrum 3500–10463 Å, resampled to 0.8 Å
 ================== ======== =====================================================
 
-It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test. Galaxy Zoo 10 morphologies colour the map; PROVABGS stellar masses, star formation rates and redshifts are the ground truth in the text search benchmark.
+It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test. Galaxy Zoo 10 morphologies colour the map; PROVABGS stellar masses, star formation rates and redshifts are the ground truth in the text search and probe benchmarks, and its masses and star formation rates are the labels every galaxy's predicted ones are fitted to.
 
 .. toctree::
    :caption: Background
