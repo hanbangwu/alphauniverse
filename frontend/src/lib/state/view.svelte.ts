@@ -1,3 +1,4 @@
+import type { SimilarityQuery } from '$lib/data/similarity'
 import { DETAIL_VIEWS, type DetailView, POINT_SETS, type PointSet } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField } from './fields.svelte'
@@ -11,6 +12,7 @@ export class ViewState {
   readonly tableValues = new IndexListField()
   readonly imageAnywhere = new Field(false)
   readonly spectrumAnywhere = new Field(false)
+  readonly searched = new Field<SimilarityQuery | null>(null)
   readonly explorer = new Field(false)
 
   constructor() {
@@ -31,6 +33,7 @@ export class ViewState {
       this.imageTokens.reset()
       this.spectrumTokens.reset()
       this.tableValues.reset()
+      this.searched.reset()
     }
     this.galaxy.value = galaxy
   }
