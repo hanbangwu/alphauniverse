@@ -170,14 +170,21 @@ def predictions() -> pa.Table:
 
 
 @cache
-def basis() -> dict[str, tuple[np.ndarray, np.ndarray, np.float32, np.ndarray]]:
+def prediction_basis() -> dict[str, tuple[np.ndarray, np.ndarray]]:
     with np.load(artifact("probability_basis")) as stored:
-        fitted = {}
-        for survey in SPECTRUM_SURVEYS:
-            mean = stored[f"{survey}_mean"].astype(np.float32)
-            directions = stored[f"{survey}_directions"].astype(np.float32)
-            fitted[survey] = (mean, directions, mean @ mean, directions @ mean)
-        return fitted
+        return {
+            survey: (stored[f"{survey}_mean"], stored[f"{survey}_directions"])
+            for survey in SPECTRUM_SURVEYS
+        }
+
+
+@cache
+def basis() -> dict[str, tuple[np.ndarray, np.ndarray, np.float32, np.ndarray]]:
+    fitted = {}
+    for survey, pair in prediction_basis().items():
+        mean, directions = (part.astype(np.float32) for part in pair)
+        fitted[survey] = (mean, directions, mean @ mean, directions @ mean)
+    return fitted
 
 
 def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:

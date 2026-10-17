@@ -40,6 +40,7 @@ from app.pql import (
     SUMS,
     basis,
     observed,
+    prediction_basis,
     prediction_batch,
     predictions,
     save_prediction_basis,
@@ -186,6 +187,7 @@ def forget() -> None:
         tokens,
         aion_gemma_space,
         predictions,
+        prediction_basis,
         basis,
         observed,
     ):

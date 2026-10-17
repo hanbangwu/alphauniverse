@@ -131,6 +131,59 @@ How much of exact against-data search do the template embeddings keep? ``templat
 
    show(template_embedding_quality())
 
+Retrieval from partial data
+---------------------------
+
+Does a galaxy seen with less of its data still find itself? ``retrieval_quality`` encodes sampled galaxies again from part of their data, predicts every mode from that encoding, and ranks every galaxy, with all of its data, against it: by the encoding's row of each :term:`Gram matrix` and :term:`template Gram`, exactly and through the stored :term:`token embeddings <token embedding>` and :term:`template embeddings <template embedding>` cut to their first :math:`k` components, and by the :term:`cosine similarity` of :term:`mean embeddings <mean embedding>`. Each set holds up to 512 galaxies and keeps:
+
+- all of a galaxy's data;
+- the Legacy Survey image and values alone, or HSC's alone, of a galaxy with both;
+- the DESI spectrum alone, or SDSS's alone, of a galaxy with both;
+- everything but the DESI spectrum and the redshift, of a galaxy with a DESI spectrum.
+
+For each mode and for the two full-object scores of ``token_embedding_quality``, it reports the share of galaxies that rank themselves first (R@1) and in their top 10 (R@10), and their median rank, a galaxy tied with others taking their mean rank. A Gram matrix's row need not peak at its own galaxy, so the set with all the data is each score's ceiling. It also ranks the other way, as a search from the galaxy with all its data would: the encoding takes its galaxy's place among the stored galaxies and is ranked by the galaxy's own row. This uses the exact rows only, since an encoding has no stored gallery vector.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import retrieval_quality
+
+   show(retrieval_quality())
+
+Property probes
+---------------
+
+How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate and redshift for the galaxies that have them, from three kinds of features: AION's mean embeddings; each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes; and the :term:`joint embedding`, the first 768 principal components of that concatenation over all galaxies, as many as a mean embedding has. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbours, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode's vectors, but every feature comes from an encoding that read the galaxy's redshift where it has one, so it measures how much of that input the features keep. To show how few examples each needs, it also fits each set to 32, 128 and 512 galaxies and reports :math:`R^2` on a fixed fifth of the others, the mean and standard deviation over 20 draws, with the median ridge penalty and how often it sits at an end of the grid it is chosen from. The same draws fit each mode's vectors alone, and a stack of them: ridge on each mode, combined with non-negative weights fitted to the modes' cross-validated predictions; it reports the weights of a stack fitted to every galaxy.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import probe_quality
+
+   show(probe_quality())
+
+Neighbourhoods
+--------------
+
+Are a galaxy's nearest galaxies like it, and does one vector per galaxy show them? ``neighbour_quality`` asks three things of the stored :term:`token embeddings <token embedding>` and :term:`template embeddings <template embedding>`, cut to their first 256 components, of their :term:`joint embeddings <joint embedding>` over all modes, and of AION's :term:`mean embeddings <mean embedding>`:
+
+* how far in :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate and redshift a galaxy's 10 nearest are, against 10 at random: the galaxies with all three are both the queries and the gallery, ranked by full-object search at the same place, at any position and at the same place without the redshift mode, by the joint embedding's Euclidean distance and by the :term:`cosine similarity` of mean embeddings;
+* how much of each mode's search top 10 the Euclidean top 10 of its gallery vectors keeps, and of full-object search the joint embedding's, for 2,000 queries against every galaxy;
+* how much of each galaxy's 15 and 100 nearest, by full-object search at the same place in either space or by the cosine of mean embeddings, a map keeps nearest: a UMAP map built from each galaxy's 14 nearest by the token search, UMAP maps of the joint embeddings, and the site's :term:`parametric UMAP` map of mean embeddings.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import neighbour_quality
+
+   show(neighbour_quality())
+
 Search speed
 ------------
 

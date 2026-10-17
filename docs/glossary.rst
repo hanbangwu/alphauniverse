@@ -49,6 +49,9 @@ Glossary
    held out
       Left out of a network's training and used only to test it.
 
+   joint embedding
+      One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`template embeddings <template embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes and cut to their first 768 principal components, as many as a :term:`mean embedding` has.
+
    mean embedding
       The average of a galaxy's encoded :term:`embeddings <embedding>`, one vector per galaxy.
 
@@ -65,7 +68,7 @@ Glossary
       The probability AION assigns to each :term:`code` at a :term:`slot`, given the galaxy's tokens. See :doc:`concepts`.
 
    PROVABGS
-      A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the text search benchmark.
+      A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the text search and probe benchmarks.
 
    slot
       A position a :term:`token` can occupy: one image cell, one spectral window, one catalogue value or the redshift. A galaxy has 1,722.

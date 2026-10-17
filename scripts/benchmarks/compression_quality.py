@@ -346,7 +346,10 @@ def measure(name: str, sample: int, queries: int) -> dict[str, Any]:
     redshift = torch.from_numpy(redshifts()[galaxies]).float().to(device)
 
     basis = (
-        [torch.from_numpy(array).to(device) for array in pql.basis()[mode.survey][:2]]
+        [
+            torch.from_numpy(array).to(device)
+            for array in pql.prediction_basis()[mode.survey]
+        ]
         if kind(mode) == "spectrum"
         else []
     )

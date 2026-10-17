@@ -13,6 +13,7 @@ from app.config import (
     IMAGE_MODES,
     MODES,
     N_IMAGE_TOKENS,
+    N_SPECTRUM_TOKENS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
@@ -145,6 +146,37 @@ def test_template_tiles_give_both_directions_of_the_nearest_patch_score(
                 rtol=1e-4,
                 atol=1e-2,
             )
+
+
+def test_a_template_gram_is_minus_half_the_squared_distance_between_templates() -> None:
+    rng = np.random.default_rng(4)
+    left, right = (torch.from_numpy(rng.normal(size=(count, 7))) for count in (3, 5))
+
+    found = observed_grams.template_gram(left, right)
+
+    np.testing.assert_allclose(found, -0.5 * torch.cdist(left, right) ** 2, rtol=1e-9)
+
+
+@pytest.mark.parametrize("mode", [MODE, "desi_spectrum"])
+def test_template_rows_of_other_queries_are_their_rows_of_the_template_grams(
+    mode: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(observed_grams, "ROWS", 2 * N_IMAGE_TOKENS)
+    rng = np.random.default_rng(6)
+    width = WIDTH if mode == MODE else 2 * N_SPECTRUM_TOKENS
+    everyone = torch.from_numpy(rng.normal(size=(5, width))).float()
+    depth = torch.from_numpy(rng.random(width)).float()
+    depth[: width // 4] = 0
+    chosen = [3, 0]
+
+    found = observed_grams.template_grams(everyone[chosen], depth, mode, everyone)
+
+    expected = observed_grams.template_grams(everyone, depth, mode)
+    assert found.keys() == expected.keys() == set(TOKEN_GRAMS[mode])
+    for name, matrix in found.items():
+        np.testing.assert_allclose(
+            matrix, expected[name][chosen], rtol=1e-5, atol=1e-4, err_msg=name
+        )
 
 
 def image(rng: np.random.Generator, survey: str) -> dict:
