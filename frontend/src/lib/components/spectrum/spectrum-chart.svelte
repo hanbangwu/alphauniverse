@@ -17,6 +17,8 @@
     LineSeriesOption | GridComponentOption | TooltipComponentOption | DataZoomComponentOption
   >
   type Areas = NonNullable<MarkAreaComponentOption['data']>
+
+  const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1 }
 </script>
 
 <script lang="ts">
@@ -60,6 +62,9 @@
   const interactive = $derived(Boolean(ontoggle))
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
+  let instance: ECharts
+  let cursor: number | null = null
+
   function line(drawn: Spectrum | null): number[][] {
     return drawn
       ? Array.from(drawn.wavelength, (wavelength, index) => [wavelength, drawn.flux[index]])
@@ -71,6 +76,8 @@
   const wavelengths = $derived(
     must(spectrum ?? prediction, 'a spectrum or a prediction').wavelength
   )
+  const first = $derived(wavelengths[0])
+  const last = $derived(wavelengths[wavelengths.length - 1])
 
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
@@ -124,8 +131,8 @@
     grid: { left: 8, right: 12, top: 8, bottom: 8 },
     xAxis: {
       type: 'value',
-      min: Math.floor(wavelengths[0]),
-      max: Math.ceil(wavelengths[wavelengths.length - 1]),
+      min: Math.floor(first),
+      max: Math.ceil(last),
       name: 'Wavelength (Å)',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
@@ -170,13 +177,62 @@
     ]
   })
 
-  function pick(instance: ECharts, event: ElementEvent): void {
+  function pick(event: ElementEvent): void {
     if (!values) return
-    const point = [event.offsetX, event.offsetY]
-    if (!instance.containPixel('grid', point)) return
-    const index = spectrumTokenAt(meta, instance.convertFromPixel('grid', point)[0])
+    const position = [event.offsetX, event.offsetY]
+    if (!instance.containPixel('grid', position)) return
+    const index = spectrumTokenAt(meta, instance.convertFromPixel('grid', position)[0])
     if (index < 0 || index >= values.length) return
+    cursor = null
     ontoggle?.(index)
+  }
+
+  function shown(): [number, number] {
+    const [{ startValue, endValue }] = instance.getOption().dataZoom as {
+      startValue: number
+      endValue: number
+    }[]
+    return [startValue, endValue]
+  }
+
+  function point(index: number | null): void {
+    cursor = index
+    if (index === null) {
+      instance.dispatchAction({ type: 'showTip', x: -1, y: -1 })
+      return
+    }
+    const [low, high] = spectrumTokenOf(meta, index)
+    const left = Math.max(low, first)
+    const right = Math.min(high, last)
+    const y = instance.getHeight() / 2
+    const pixel = (value: number) => instance.convertToPixel({ xAxisIndex: 0 }, value)
+    if (![left, right].every((value) => instance.containPixel('grid', [pixel(value), y]))) {
+      const [from, to] = shown()
+      const shift =
+        right - left > to - from
+          ? (left + right - from - to) / 2
+          : Math.min(left - from, 0) + Math.max(right - to, 0)
+      instance.dispatchAction({ type: 'dataZoom', startValue: from + shift, endValue: to + shift })
+    }
+    instance.dispatchAction({ type: 'showTip', x: pixel((left + right) / 2), y })
+  }
+
+  function move(event: KeyboardEvent): void {
+    const step = STEPS[event.key]
+    if (!step || event.altKey || event.ctrlKey || event.metaKey) return
+    event.preventDefault()
+    if (cursor === null) {
+      const [from, to] = shown()
+      point(spectrumTokenAt(meta, (from + to) / 2))
+      return
+    }
+    point(
+      Math.min(Math.max(cursor + step, spectrumTokenAt(meta, first)), spectrumTokenAt(meta, last))
+    )
+  }
+
+  function activate(event: MouseEvent): void {
+    if (event.detail === 0 && cursor !== null) ontoggle?.(cursor)
   }
 </script>
 
@@ -184,8 +240,14 @@
   this={interactive ? 'button' : 'div'}
   {@attach chart(
     () => option,
-    (instance) => instance.getZr().on('click', (event) => pick(instance, event))
+    (created) => {
+      instance = created
+      created.getZr().on('click', pick)
+    }
   )}
+  onkeydown={move}
+  onclick={activate}
+  onblur={() => point(null)}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}
