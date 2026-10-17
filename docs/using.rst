@@ -39,6 +39,8 @@ Start a search from the selected galaxy and pick what to compare: cells of its L
 
 Click a match's image to search from it: it becomes the selected galaxy, with an empty selection. After a search, the **Mean** map circles whichever of the query galaxy and its matches the morphology filter shows, until another galaxy is selected or another search runs; **Full** circles only the selected galaxy's tokens.
 
+**Whole modes** switches to a :term:`whole-mode search`: a click on an image, a spectrum or a catalogue section (Redshift, Legacy Survey, HSC) selects or deselects that whole mode, outlined, and **Any position** applies to the images and spectra chosen. A mode the galaxy lacks can be chosen when AION predictions show it; the search then reads AION's prediction and says so. Each match shows its score, the mean of the chosen modes' standardised scores, one signed bar per mode for its contribution, and the same-place map of every slot. The cell, window and value selection stays as it was and returns when the switch is turned off; one search never mixes the two.
+
 Before or after a search, the **This galaxy** and **Population** maps shade the query galaxy's own slots by how they relate to the selection; see :doc:`methods/query-maps`.
 
 Each map is coloured on its own scale, from its lowest to its highest value; hover over a cell or a spectral window to read its value.
