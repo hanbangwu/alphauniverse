@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
+from .config import GRAM_NAMES, SEARCH_RANK, TOKEN_EMBEDDING_RANK, artifact, device
 
 BATCH = 1024
 
@@ -62,3 +62,23 @@ def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> Non
 def generate_token_embeddings() -> None:
     for name in tqdm(GRAM_NAMES, desc="token embeddings"):
         saved(f"token_embedding_{name}", embedding(loaded(f"token_gram_{name}")))
+
+
+def galleries(role: str) -> np.ndarray:
+    with np.load(artifact(role)) as found:
+        return found["galleries"][:, :SEARCH_RANK].copy()
+
+
+def scaled(block: np.ndarray) -> np.ndarray:
+    centred = block - block.mean(axis=0)
+    return centred / np.sqrt((centred**2).sum(axis=1).mean())
+
+
+def generate_joint_embedding() -> None:
+    np.save(
+        artifact("joint_embedding"),
+        np.concatenate(
+            [scaled(galleries(f"token_embedding_{name}")) for name in GRAM_NAMES],
+            axis=1,
+        ),
+    )

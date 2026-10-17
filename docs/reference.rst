@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Eleven Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Thirteen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ============================ ====================================== ==================================
 Job                          Reads                                  Writes
@@ -25,6 +25,10 @@ generate_template_embeddings probabilities, probability_basis,      template_emb
                              template_gram_<mode>,                  template_embedding_<mode>_anywhere
                              template_gram_<mode>_anywhere,
                              observed_reference
+generate_joint_embedding     token_embedding_<mode>,                joint_embedding
+                             token_embedding_<mode>_anywhere
+generate_properties          the dataset, probabilities,            properties
+                             joint_embedding
 generate_projections         the dataset, encoded                   mean_points, full_points,
                                                                     parametric_umap
 generate_pairs               the dataset, encoded                   pairs_<modality>
@@ -69,6 +73,14 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
 ``observed_reference`` is an ``np.savez`` holding, for each mode, ``<mode>_reference`` (:math:`\mu_0`), ``<mode>_galleries`` (the galaxies observed in the mode with data on the template's pixels), ``<mode>_saturation`` (each one's :term:`saturation`), ``<mode>_depth`` (:math:`\sqrt{\bar w}`) and, for spectra, ``<mode>_amplitudes`` (each galaxy's own template's best amplitude on its data).
 
 ``template_embedding_<mode>`` and ``template_embedding_<mode>_anywhere`` are :term:`template embeddings <template embedding>`, ``np.savez`` files with the parts of a token embedding, decomposed from the template Grams, and ``widths``, each galaxy's :term:`predictive width` in the mode: for an image or spectrum the root mean square over slots of the variance of AION's predicted codec latent, summed over its dimensions; for catalogue values and the redshift the root mean square over values of half the width of the predicted central 68%, times :math:`\sqrt{\bar w}`.
+
+``joint_embedding`` is an ``np.save`` file of every galaxy's :term:`joint embedding` from its token embeddings, galaxies × 2,816 ``float32``: the 11 blocks' 256 columns each, in ``GRAM_NAMES`` order, so any block can be taken alone.
+
+``properties`` is a Parquet file of every galaxy's redshift, stellar mass (``mass``, :math:`\log_{10} M_\odot`), star formation rate (``sfr``, :math:`\log_{10} M_\odot\,\text{yr}^{-1}`) and specific star formation rate (``ssfr``, :math:`\log_{10} \text{yr}^{-1}`), each measured where it has a value and predicted for every galaxy, with the prediction's width. The measured values are the spectroscopic redshift where usable, DESI's before SDSS's, and :term:`PROVABGS`'s mass and star formation rate. The redshift's prediction is the median of AION's predicted distribution, and its width half the range from the distribution's 16th to its 84th percentile. Both spread each bin's probability evenly over the redshifts its token covers, from the bin below up to its own value: a distribution in one bin, 0.0059 wide, predicts the bin's centre with a width of 0.0020, where the redshift :term:`template` takes the bin's top. A galaxy with a measured redshift read it, so its prediction is close to it; ``redshift_quality`` measures predictions without it. The others come from ridge regression on the joint embedding, its penalty chosen by leave-one-out, fitted to the galaxies PROVABGS covers. Those galaxies' own predictions come from 5-fold cross-validation, so none is fitted to its own value, and the RMS error of those predictions is the width, the same for every galaxy. PROVABGS fits DESI spectra, so the width is measured only on galaxies DESI observed. ``g_r`` is the observed Legacy Survey colour, :math:`-2.5 \log_{10}` of the g to r flux ratio, null where either flux is not positive.
+
+.. autodata:: app.config.PROPERTIES
+   :no-index:
+   :no-value:
 
 ``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet:
 

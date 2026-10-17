@@ -10,22 +10,24 @@ from sklearn.decomposition import PCA
 from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import LinearRegression, RidgeCV
 from sklearn.metrics import r2_score, root_mean_squared_error
-from sklearn.model_selection import KFold, cross_val_predict
+from sklearn.model_selection import cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import make_pipeline
 
+from app import embeddings
 from app.config import (
     DATASET_REVISION,
     GRAM_NAMES,
     PROVABGS,
     REDSHIFT,
+    SEARCH_RANK,
     SEED,
     SPECTRUM_MODES,
-    artifact,
     galaxy_count,
 )
 from app.observations import column_values
 from app.parametric_umap import scan
+from app.properties import ALPHAS, FOLDS, provabgs
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -33,15 +35,11 @@ app = modal.App("alphauniverse-probe-quality")
 image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/probe_quality.json")
-RANK = 256
-JOINT = 768
 NEIGHBOURS = 10
-ALPHAS = np.logspace(-3, 4, 15)
-FOLDS = KFold(shuffle=True, random_state=SEED)
 PROBES = {"ridge": RidgeCV(alphas=ALPHAS), "knn": KNeighborsRegressor(NEIGHBOURS)}
 SHOTS = (32, 128, 512)
 DRAWS = 20
-TARGETS = {"mass": "LOG_MSTAR", "sfr": "AVG_SFR", REDSHIFT: "Z_HP"}
+WIDTHS = (1408, 704, 352)
 BLOCKS = {
     "all": GRAM_NAMES,
     "without_spectra": tuple(
@@ -50,25 +48,13 @@ BLOCKS = {
 }
 
 
+def principal(matrix: np.ndarray) -> np.ndarray:
+    return PCA(max(WIDTHS), svd_solver="full").fit_transform(matrix)
+
+
 def targets() -> dict[str, np.ndarray]:
     galaxies = np.arange(galaxy_count())
-    values = {
-        name: column_values(f"{column}{PROVABGS}", galaxies)
-        for name, column in TARGETS.items()
-    }
-    with np.errstate(divide="ignore", invalid="ignore"):
-        values["sfr"] = np.log10(values["sfr"])
-    return values
-
-
-def galleries(role: str, name: str) -> np.ndarray:
-    with np.load(artifact(f"{role}_{name}")) as stored:
-        return stored["galleries"][:, :RANK]
-
-
-def scaled(galleries: np.ndarray) -> np.ndarray:
-    centred = galleries - galleries.mean(axis=0)
-    return centred / np.sqrt((centred**2).sum(axis=1).mean())
+    return provabgs(galaxies) | {REDSHIFT: column_values(f"Z_HP{PROVABGS}", galaxies)}
 
 
 def shots(
@@ -135,19 +121,20 @@ def scores(
     image=image,
     cpu=8,
     memory=(8 * 1024, 32 * 1024),
-    timeout=30 * 60,
+    timeout=45 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def measure() -> dict[str, Any]:
     values = targets()
     families = {
         role: {
-            name: scaled(galleries(f"{role}_embedding", name)) for name in GRAM_NAMES
+            name: embeddings.scaled(embeddings.galleries(f"{role}_embedding_{name}"))
+            for name in GRAM_NAMES
         }
         for role in ("token", "template")
     }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
-    report = {}
+    report, reduced = {}, {}
     for target, column in values.items():
         kept = np.isfinite(column)
         report[target] = {
@@ -162,9 +149,12 @@ def measure() -> dict[str, Any]:
                 )
                 for label, names in BLOCKS.items()
             }
-            features["joint"] = PCA(JOINT, random_state=SEED).fit_transform(
-                features["all"]
-            )
+            decomposed = (role, tuple(name for name in blocks if name != target))
+            if decomposed not in reduced:
+                reduced[decomposed] = principal(features["all"])
+            features |= {
+                f"pca_{width}": reduced[decomposed][:, :width] for width in WIDTHS
+            }
             report[target][role] = {
                 label: scores(matrix[kept], column[kept], PROBES)
                 for label, matrix in features.items()
@@ -187,8 +177,8 @@ def measure() -> dict[str, Any]:
             }
     return {
         "environment": environment(),
-        "rank": RANK,
-        "joint": JOINT,
+        "rank": SEARCH_RANK,
+        "widths": WIDTHS,
         "folds": FOLDS.n_splits,
         "neighbours": NEIGHBOURS,
         "draws": DRAWS,

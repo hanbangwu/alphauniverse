@@ -18,6 +18,7 @@ on:
           - template_quality
           - template_embedding_quality
           - retrieval_quality
+          - redshift_quality
           - probe_quality
           - neighbour_quality
       args:

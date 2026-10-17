@@ -17,6 +17,8 @@ from app.config import (
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
+    PROBED,
+    PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
     SPECTRUM_SURVEYS,
@@ -179,6 +181,27 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
 
+def _properties(
+    rng: np.random.Generator, galaxies: int, provabgs: np.ndarray
+) -> pa.Table:
+    measured = {f"{label}_measured": provabgs for label in PROBED} | {
+        f"{REDSHIFT}_measured": np.array(
+            [covered(REDSHIFT, galaxy) for galaxy in range(galaxies)]
+        )
+    }
+    return pa.table(
+        {"galaxy": np.arange(galaxies, dtype=np.int32)}
+        | {
+            name: pa.array(
+                rng.random(galaxies, np.float32),
+                mask=~measured.get(name, np.ones(galaxies, dtype=bool)),
+            )
+            for name in PROPERTIES.names[1:]
+        },
+        schema=PROPERTIES,
+    )
+
+
 def forget() -> None:
     for cached in (
         galaxy_count,
@@ -248,6 +271,9 @@ def build(galaxies: int, seed: int = 0) -> Path:
     )
 
     _predictions(rng, galaxies)
+    pq.write_table(
+        _properties(rng, galaxies, flags["provabgs"]), artifact("properties")
+    )
 
     forget()
     return target

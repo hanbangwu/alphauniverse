@@ -416,6 +416,22 @@ def drawn(probe, shots):
     return found
 
 
+def redshift_quality():
+    found = report("redshift_quality")
+    if found is None:
+        return missing()
+    rows = [
+        {"input": name, "survey": survey} | figures
+        for name, surveys in found["inputs"].items()
+        for survey, figures in surveys.items()
+    ]
+    return column(
+        heading(found, found["device"]),
+        table(rows, ("input", "survey", "galaxies", "bias", "nmad", "outlier_rate")),
+        **WIDTH,
+    )
+
+
 def probe_quality():
     found = report("probe_quality")
     if found is None:
@@ -431,11 +447,13 @@ def probe_quality():
             x_axis_type="log",
             x_axis_label="galaxies fitted",
             y_axis_label="R²",
-            height=300,
+            height=340,
             title=f"{target}: ridge R² on a held-out fifth, mean and standard deviation of {found['draws']} draws",
             **WIDTH,
         )
-        for (name, probes), colour in zip(features.items(), Category10_10):
+        for (name, probes), colour in zip(
+            features.items(), Category20_20[::2] + Category20_20[1::2]
+        ):
             row = {"target": target, "features": name, "galaxies": measured["galaxies"]}
             for probe, metrics in probes.items():
                 row |= {
@@ -469,7 +487,7 @@ def probe_quality():
                     line_color=colour,
                 )
             )
-        curve.legend.location = "bottom_right"
+        curve.add_layout(curve.legend[0], "right")
         curves.append(curve)
         modes.extend(
             {
@@ -503,7 +521,7 @@ def probe_quality():
         heading(
             found,
             f"{found['rank']} components per mode",
-            f"joint: the first {found['joint']} principal components of all modes' components",
+            f"all: every mode's components side by side, as the joint embedding holds them; pca_n: their first n principal components, n = {', '.join(map(str, found['widths']))}",
             "stacked: ridge on each mode, weighted by a non-negative fit to their cross-validated predictions",
             f"{found['folds']}-fold cross-validation",
             cpus(found),
@@ -536,15 +554,16 @@ def neighbour_quality():
         for name, entry in found["physics"]["rankings"].items()
     ]
     geometry = found["geometry"]
+    share = f"share of its top {found['neighbours']}"
     agreement = [
-        {
-            "features": f"{role} {kind}",
-            "search": name,
-            f"share of its top {found['neighbours']}": value,
-        }
+        {"features": f"{role} blocks", "search": name, share: value}
         for role in ("token", "template")
-        for kind in ("blocks", "joint")
-        for name, value in geometry[role][kind].items()
+        for name, value in geometry[role]["blocks"].items()
+    ] + [
+        {"features": f"{role} {variant}", "search": combination, share: value}
+        for role in ("token", "template")
+        for variant, shares in geometry[role]["joint"].items()
+        for combination, value in shares.items()
     ]
     counts = [str(count) for count in found["preserved"]]
     shares = [
@@ -574,7 +593,7 @@ def neighbour_quality():
         heading(
             found,
             f"{found['rank']} components per mode",
-            f"joint: the first {found['joint']} principal components",
+            f"joint: all modes' components side by side; pca_n: the token joint embedding's first n principal components, n = {', '.join(map(str, found['widths']))}",
             f"{found['physics']['galaxies']:,} PROVABGS galaxies for the physics",
             f"{geometry['queries']:,} queries for the geometry, where chance shares {geometry['random']}",
             cpus(found),
