@@ -126,8 +126,8 @@
                   display.spectra.query
                 )}
               caption={similarity.layerCaption}
-              selected={view.tokens[mode].value}
-              ontoggle={matched && !whole ? (index) => view.tokens[mode].toggle(index) : undefined}
+              selected={similarity.tokensOf(mode)}
+              ontoggle={similarity.toggler(mode, matched)}
               error={similarity.layerError(mode)}
             />
           </WholeMode>
@@ -150,7 +150,7 @@
     <TablePanel
       galaxy={similarity.galaxy}
       selected={view.tableValues.value}
-      ontoggle={whole ? undefined : (index) => view.tableValues.toggle(index)}
+      ontoggle={(index) => view.tableValues.toggle(index)}
     />
     {#if display.on.value && similarity.tableValueDomain}
       <MaskControls

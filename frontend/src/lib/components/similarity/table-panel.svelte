@@ -9,12 +9,13 @@
   import { SECTIONS } from '$lib/labels'
   import { getMask, getView } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
+  import WholeMode from './whole-mode.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
     galaxy: number
     selected: number[]
-    ontoggle?: (index: number) => void
+    ontoggle: (index: number) => void
   }
 
   let { galaxy, selected, ontoggle }: Props = $props()
@@ -92,18 +93,8 @@
               class="px-0 pt-3 pb-1 text-muted-foreground uppercase"
             >
               {@const mode = TABLE_MODES[section]}
-              {#if mode && view.wholeModes.value}
-                {@const pressed = view.modes.has(mode)}
-                <button
-                  type="button"
-                  aria-pressed={pressed}
-                  aria-label="Search on the whole {SECTIONS[section].label} catalogue"
-                  onclick={() => view.modes.toggle(mode)}
-                  class="cursor-pointer rounded-sm px-1 uppercase outline-offset-1 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                  style:outline={pressed ? `2px solid ${SELECTED}` : undefined}
-                >
-                  {SECTIONS[section].label}
-                </button>
+              {#if mode}
+                <WholeMode {mode}>{SECTIONS[section].label}</WholeMode>
               {:else}
                 {SECTIONS[section].label}
               {/if}
@@ -126,8 +117,8 @@
                     type="checkbox"
                     class="accent-primary disabled:cursor-not-allowed"
                     checked={chosen(row)}
-                    disabled={row.token === null || !ontoggle}
-                    onchange={() => ontoggle?.(tableValue)}
+                    disabled={row.token === null || view.wholeModes.value}
+                    onchange={() => ontoggle(tableValue)}
                     aria-label={`Query ${row.column}`}
                   />
                 {:else if row.excluded !== null}

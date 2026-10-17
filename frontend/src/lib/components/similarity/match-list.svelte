@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
   import { IMAGE_MODES, SPECTRUM_MODES } from '$lib/data/modes'
-  import { OBSERVATIONS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import MaskControls from './mask-controls.svelte'
   import MatchRow from './match-row.svelte'
@@ -12,7 +11,7 @@
 
   const images = $derived(IMAGE_MODES.some((mode) => similarity.anywhere(mode)))
   const spectra = $derived(SPECTRUM_MODES.some((mode) => similarity.anywhere(mode)))
-  const predicted = $derived(similarity.predictedAt(0).map((column) => OBSERVATIONS[column]))
+  const predicted = $derived(similarity.predictedAt(0))
 </script>
 
 <span class="text-sm font-medium">Whole dataset</span>

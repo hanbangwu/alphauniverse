@@ -14,7 +14,7 @@ import {
 } from '$lib/data/similarity'
 import { errorMessage } from '$lib/errors'
 import { must } from '$lib/invariant'
-import { MODES, SIMILARITY } from '$lib/labels'
+import { MODES, OBSERVATIONS, SIMILARITY } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
 import { DECIMALS, type Threshold } from '$lib/state/mask.svelte'
 import { type CreateQueryResult, createQuery } from '@tanstack/svelte-query'
@@ -96,15 +96,18 @@ export class Similarity {
   readonly tableValueMap: Float32Array | null
   readonly tableValueDomain: Extent | null
   readonly tableValueHeat: Heat | null
+  readonly contributionModes: ModeName[]
+  readonly contributionLimit: number
 
   constructor(galaxy: number) {
     const { view, search } = this.#app
     this.galaxy = galaxy
     this.grid = this.#app.meta.grid
 
-    const selections = $derived(byMode((mode) => view.tokens[mode].value))
+    const whole = $derived(view.wholeModes.value)
+    const selections = $derived(byMode((mode) => this.tokensOf(mode)))
     const selection = $derived(
-      view.wholeModes.value
+      whole
         ? null
         : search.selection(
             galaxy,
@@ -117,7 +120,7 @@ export class Similarity {
     this.#selected = $derived(selection !== null)
     this.draft = $derived(
       search.request(
-        view.wholeModes.value
+        whole
           ? search.modeSelection(
               galaxy,
               view.modes.value,
@@ -137,7 +140,7 @@ export class Similarity {
         new ModeLayer(
           mode,
           galaxy,
-          () => view.tokens[mode].value,
+          () => this.tokensOf(mode),
           () => own,
           () => saliency
         )
@@ -164,6 +167,29 @@ export class Similarity {
     this.tableValueMap = $derived(saliency ? saliency.tableValues : (result?.tableValueMap ?? null))
     this.tableValueDomain = $derived(this.tableValueMap && extent(this.tableValueMap))
     this.tableValueHeat = $derived(this.tableValueDomain && continuous(this.tableValueDomain))
+    const contributions = $derived(result?.contributions ?? {})
+    this.contributionModes = $derived(
+      (Object.keys(MODES) as ModeName[]).filter((mode) => mode in contributions)
+    )
+    this.contributionLimit = $derived(
+      Object.values(contributions).reduce(
+        (limit, values) =>
+          values.subarray(1).reduce((most, value) => Math.max(most, Math.abs(value)), limit),
+        0
+      )
+    )
+  }
+
+  tokensOf(mode: CosineMode): number[] {
+    const { view } = this.#app
+    return view.wholeModes.value ? [] : view.tokens[mode].value
+  }
+
+  toggler(mode: CosineMode, matched: boolean): ((index: number) => void) | undefined {
+    const { view } = this.#app
+    return matched && !view.wholeModes.value
+      ? (index) => view.tokens[mode].toggle(index)
+      : undefined
   }
 
   get error(): string | null {
@@ -268,27 +294,15 @@ export class Similarity {
   readonly caption: Caption = (value) => `token ${value}`
 
   predictedAt(index: number): string[] {
-    return this.#result.data?.predicted[index] ?? []
+    return (this.#result.data?.predicted[index] ?? []).map((column) => OBSERVATIONS[column])
   }
 
   scoreAt(index: number): number {
     return this.#result.data?.scores[index] ?? 0
   }
 
-  contributionsAt(index: number): [ModeName, number][] {
-    const contributions = this.#result.data?.contributions ?? {}
-    return (Object.keys(MODES) as ModeName[]).flatMap((mode) => {
-      const values = contributions[mode]
-      return values ? [[mode, values[index]]] : []
-    })
-  }
-
-  get contributionLimit(): number {
-    return Math.max(
-      ...this.matches.flatMap(({ index }) =>
-        this.contributionsAt(index).map(([, value]) => Math.abs(value))
-      )
-    )
+  contributionAt(mode: ModeName, index: number): number {
+    return must(this.#result.data?.contributions[mode], `${mode}'s contributions`)[index]
   }
 
   mapAt(mode: CosineMode, index: number): Float32Array {

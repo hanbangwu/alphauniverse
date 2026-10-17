@@ -1,6 +1,6 @@
 <script lang="ts">
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
-  import { OBSERVATIONS, SURVEYS } from '$lib/labels'
+  import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import ContributionBars from './contribution-bars.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
@@ -19,7 +19,7 @@
   const { view, mask: display } = getApp()
 
   const score = $derived(similarity.scoreAt(index))
-  const predicted = $derived(similarity.predictedAt(index).map((column) => OBSERVATIONS[column]))
+  const predicted = $derived(similarity.predictedAt(index))
 </script>
 
 <div class="flex flex-col gap-5 pt-6">
