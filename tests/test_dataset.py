@@ -24,6 +24,7 @@ from app.dataset import (
     encode,
     fitted,
     image,
+    predicted_image,
     redshift,
     samples,
     spectrum,
@@ -133,6 +134,16 @@ def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
     brightest = np.unravel_index(pixels.sum(axis=2).argmax(), pixels.shape[:2])
     assert brightest == (0, 1)
     assert pixels[0, 1].argmax() == channel
+
+
+def test_an_hsc_template_is_coloured_from_nanomaggies_as_a_legacy_survey_one() -> None:
+    rng = np.random.default_rng(0)
+    flux = rng.uniform(0, 0.5, (4, CROP_PIXELS, CROP_PIXELS))
+    hsc = np.concatenate(
+        [flux * 10**1.8, rng.uniform(0, 50, (1, CROP_PIXELS, CROP_PIXELS))]
+    )
+
+    assert predicted_image(hsc, "hsc") == predicted_image(flux, "ls")
 
 
 def test_fitted_amplitude_weights_unmasked_samples_by_inverse_variance(

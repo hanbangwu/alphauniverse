@@ -17,7 +17,6 @@
     galaxy?: number
     survey?: ImageSurvey
     title?: (value: number, index: number) => string
-    describe?: string
     selected?: number[]
     ontoggle?: (index: number) => void
     busy?: boolean
@@ -36,7 +35,6 @@
     galaxy,
     survey,
     title,
-    describe,
     selected,
     ontoggle,
     busy = false,
@@ -86,7 +84,7 @@
           {selected}
           bind:painted
           {ontoggle}
-          label={describe ?? label}
+          label={ontoggle ? `Click or drag across ${label} image tokens to query them` : label}
           class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
         />
       {/if}

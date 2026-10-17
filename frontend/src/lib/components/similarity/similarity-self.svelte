@@ -100,7 +100,7 @@
               )}
             caption={similarity.layerCaption}
             selected={view.tokens[mode].value}
-            ontoggle={(index) => view.tokens[mode].toggle(index)}
+            ontoggle={matched ? (index) => view.tokens[mode].toggle(index) : undefined}
             error={similarity.layerError(mode)}
           />
         {/snippet}

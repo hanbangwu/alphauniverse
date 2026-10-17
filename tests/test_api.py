@@ -4,12 +4,11 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
-from datasets import Dataset, Features, Sequence, Value
+from datasets import Dataset
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from app import dataset as dataset_module
-from app import main as main_module
 from app import pql
 from app.config import (
     ANCHOR,
@@ -124,25 +123,6 @@ def test_image_template_is_a_png_of_the_crop(client: TestClient, survey: str) ->
         assert png.size == (CROP_PIXELS, CROP_PIXELS)
 
 
-def test_an_hsc_template_is_coloured_from_nanomaggies_as_a_legacy_survey_one(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    rng = np.random.default_rng(0)
-    flux = rng.uniform(0, 0.5, (1, 4, CROP_PIXELS, CROP_PIXELS))
-    hsc = np.concatenate(
-        [flux * 10**1.8, rng.uniform(0, 50, (1, 1, CROP_PIXELS, CROP_PIXELS))], axis=1
-    )
-    stored = {"ls_image": flux, "hsc_image": hsc}
-    monkeypatch.setattr(main_module, "templates", stored.__getitem__)
-
-    ls_png, hsc_png = (
-        client.get(f"/galaxy/0/image/{survey}/template").content
-        for survey in (ANCHOR, "hsc")
-    )
-
-    assert hsc_png == ls_png
-
-
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
     stored = _stored("tokens").filter(pc.field("galaxy") == galaxy)
@@ -200,12 +180,7 @@ def test_spectrum_tokens_drop_the_normalisation_token(
 def test_spectrum_template_without_that_spectrum_is_the_shape_on_the_codec_grid(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, survey: str
 ) -> None:
-    unobserved = Dataset.from_dict(
-        {SPECTRUM_SURVEYS[survey]: [None, None]},
-        features=Features(
-            {SPECTRUM_SURVEYS[survey]: {"lambda": Sequence(Value("float32"))}}
-        ),
-    )
+    unobserved = Dataset.from_dict({SPECTRUM_SURVEYS[survey]: [None, None]})
     monkeypatch.setattr(dataset_module, "dataset", lambda: unobserved)
 
     response = client.get(f"/galaxy/1/spectrum/{survey}/template")

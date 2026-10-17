@@ -37,7 +37,6 @@
 
   const cells = $derived(map ?? tokens.data ?? null)
   const palette = $derived(map ? heat : tokens.data ? tokenColors(tokens.data) : null)
-  const picking = $derived(matched ? ontoggle : undefined)
   const label = $derived(SURVEYS[survey].label)
   const message = $derived(
     spectrum.isError
@@ -57,7 +56,7 @@
   >
     {#if matched ? spectrum.data && cells && palette : prediction.data}
       <SpectrumChart
-        spectrum={spectrum.data ?? null}
+        spectrum={spectrum.data}
         prediction={prediction.data}
         values={cells}
         color={palette}
@@ -65,8 +64,8 @@
         opacity={map ? undefined : tokenAlpha}
         title={map ? caption : similarity.caption}
         {selected}
-        ontoggle={picking}
-        label={picking
+        {ontoggle}
+        label={ontoggle
           ? `Scroll to zoom, Shift-drag to pan, click or drag across ${label} spectrum tokens to select them`
           : matched
             ? `${label} spectrum of galaxy ${galaxy}`

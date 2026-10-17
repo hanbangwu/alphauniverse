@@ -32,8 +32,8 @@
   import { mode } from 'mode-watcher'
 
   interface Props {
-    spectrum: Spectrum | null
-    prediction?: Spectrum | null
+    spectrum: Spectrum | undefined
+    prediction?: Spectrum
     values?: ArrayLike<number> | null
     color?: ((value: number) => RGB) | null
     mask?: ArrayLike<number> | null
@@ -47,7 +47,7 @@
 
   let {
     spectrum,
-    prediction = null,
+    prediction,
     values,
     color,
     mask,
@@ -73,7 +73,7 @@
   let press: number[]
   let cursor: number | null = null
 
-  function line(drawn: Spectrum | null): number[][] {
+  function line(drawn: Spectrum | undefined): number[][] {
     return drawn
       ? Array.from(drawn.wavelength, (wavelength, index) => [wavelength, drawn.flux[index]])
       : []

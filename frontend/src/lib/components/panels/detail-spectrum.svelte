@@ -28,7 +28,7 @@
 <PanelFrame busy={spectrum.isFetching || prediction.isFetching} class="aspect-2/1 bg-card">
   {#if matched ? spectrum.data : prediction.data}
     <SpectrumChart
-      spectrum={spectrum.data ?? null}
+      spectrum={spectrum.data}
       prediction={prediction.data}
       label={matched
         ? `${label} spectrum of galaxy ${galaxy}${prediction.data ? ", with AION's prediction" : ''}`

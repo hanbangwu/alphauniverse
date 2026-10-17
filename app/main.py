@@ -273,8 +273,8 @@ def redshift_row(
     survey: SpectrumSurvey,
     values: dict,
     chosen: str | None,
-    token: int | None,
-    template: float,
+    token_ids: dict[str, int],
+    predicted: dict[str, float],
 ) -> TableRow:
     first = column == REDSHIFT_COLUMNS[survey][0]
     selectable = first and survey == chosen
@@ -282,9 +282,11 @@ def redshift_row(
         section=REDSHIFT,
         column=f"{survey.upper()} {column.partition('-')[0]}",
         value=values[column],
-        template=template if first and survey == (chosen or SPECTRUM_SURVEY) else None,
+        template=predicted[REDSHIFT]
+        if first and survey == (chosen or SPECTRUM_SURVEY)
+        else None,
         table_value=REDSHIFT_TABLE_VALUE if selectable else None,
-        token=token if selectable else None,
+        token=token_ids.get(REDSHIFT) if selectable else None,
         excluded=excluded(values, survey, chosen) if first else None,
     )
 
@@ -323,14 +325,7 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     ]
     redshifts = {column for column, _ in shown}
     return [
-        redshift_row(
-            column,
-            survey,
-            values,
-            chosen,
-            token_ids.get(REDSHIFT),
-            predicted[REDSHIFT],
-        )
+        redshift_row(column, survey, values, chosen, token_ids, predicted)
         for column, survey in shown
     ] + [
         catalogue_row(column, value, token_ids, predicted)

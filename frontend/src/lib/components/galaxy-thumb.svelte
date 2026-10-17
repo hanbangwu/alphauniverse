@@ -16,15 +16,12 @@
   let failed = $state<string | null>(null)
 
   const src = $derived(
-    predicted
-      ? client.buildUrl<GetImageTemplateData>({
-          url: '/galaxy/{galaxy}/image/{survey}/template',
-          path: { galaxy, survey }
-        })
-      : client.buildUrl<GetImageData>({
-          url: '/galaxy/{galaxy}/image/{survey}',
-          path: { galaxy, survey }
-        })
+    client.buildUrl<GetImageData | GetImageTemplateData>({
+      url: predicted
+        ? '/galaxy/{galaxy}/image/{survey}/template'
+        : '/galaxy/{galaxy}/image/{survey}',
+      path: { galaxy, survey }
+    })
   )
 </script>
 

@@ -9,6 +9,7 @@ import pyarrow.parquet as pq
 
 from app.config import (
     ANCHOR,
+    BANDS,
     CROP_PIXELS,
     DIM,
     GEMMA_DIM,
@@ -67,7 +68,7 @@ NOISE = 0.05
 
 PREDICTION_BATCH = 5
 
-IMAGE_UNITS: dict[str, tuple[int, float]] = {ANCHOR: (4, 1.0), "hsc": (5, 10**1.8)}
+IMAGE_UNITS: dict[str, float] = {ANCHOR: 1.0, "hsc": 10**1.8}
 
 
 def covered(survey: str, galaxy: int) -> bool:
@@ -188,10 +189,10 @@ def _templates(rng: np.random.Generator, galaxies: int) -> None:
     profile = np.exp(-0.5 * (radius / rng.uniform(2, 8, (galaxies, 1, 1, 1))) ** 2)
     made = {}
     for mode, survey in IMAGE_MODES.items():
-        bands, unit = IMAGE_UNITS[survey]
+        bands = len(BANDS[survey])
         peaks = rng.uniform(0.02, 0.5, (galaxies, bands, 1, 1))
         noise = 0.003 * rng.standard_normal((galaxies, bands, *radius.shape))
-        made[mode] = unit * (peaks * profile + noise)
+        made[mode] = IMAGE_UNITS[survey] * (peaks * profile + noise)
     for mode in SPECTRUM_MODES:
         tilt = rng.uniform(-0.3, 0.3, (galaxies, 1))
         centres = rng.uniform(4000, 9500, (galaxies, 1))
