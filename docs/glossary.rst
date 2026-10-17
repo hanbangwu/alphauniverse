@@ -4,6 +4,9 @@ Glossary
 .. glossary::
    :sorted:
 
+   classical MDS
+      Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
+
    code
       One entry in a :term:`codec`'s fixed vocabulary. A :term:`token` is the code of one piece of an observation.
 
@@ -21,6 +24,9 @@ Glossary
 
    foundation model
       A large network trained once on broad data and then used unchanged for many tasks.
+
+   Gram matrix
+      A :term:`mode`'s search scores between every pair of galaxies: entry :math:`(q, g)` scores galaxy :math:`g` against query :math:`q` with every :term:`slot` of the mode selected. See :doc:`reference`.
 
    held out
       Left out of a network's training and used only to test it.
@@ -51,6 +57,9 @@ Glossary
 
    token
       The integer a :term:`codec` assigns to one piece of an observation, such as a 4 × 4 px image cell or a 25.6 Å spectral window.
+
+   token embedding
+      A galaxy's query and gallery vectors for one :term:`mode`, from the singular value decomposition of the mode's :term:`Gram matrix`: :math:`q`'s query vector times :math:`g`'s gallery vector, plus an offset for :math:`g`, ranks :math:`g` for query :math:`q` as search does, up to the components left out. Unrelated to the :term:`embedding` of a token.
 
    transformer
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.

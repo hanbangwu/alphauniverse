@@ -26,6 +26,7 @@ uv run modal run -m scripts.benchmarks.backend_performance  # time the HTTP endp
 uv run modal run -m scripts.benchmarks.projection_quality   # measure projection quality on Modal
 uv run modal run -m scripts.benchmarks.text_search_quality  # measure text search on Modal
 uv run --group build modal run -m scripts.benchmarks.compression_quality  # measure prediction storage on Modal
+uv run modal run -m scripts.benchmarks.token_embedding_quality  # measure token embeddings on Modal
 uv run python -m scripts.openapi                            # regenerate frontend/openapi.json
 ```
 

@@ -197,6 +197,8 @@ TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
     for mode in (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
 }
+GRAM_NAMES = tuple(name for names in TOKEN_GRAMS.values() for name in names)
+TOKEN_EMBEDDING_RANK = 1024
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",
@@ -210,7 +212,8 @@ ARTIFACTS: dict[str, str] = {
     "aion_gemma_space": "npz",
     "probabilities": "arrow",
     "probability_basis": "npz",
-    **{f"token_gram_{name}": "npy" for names in TOKEN_GRAMS.values() for name in names},
+    **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
+    **{f"token_embedding_{name}": "npz" for name in GRAM_NAMES},
 }
 
 PREDICTIONS = pa.schema(
