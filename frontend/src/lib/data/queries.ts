@@ -221,7 +221,7 @@ export function regionQuery(
   table: string | null,
   region: Rectangle | Point[] | null,
   filter: Selection,
-  filtered: unknown
+  filtered: readonly [number[], readonly [number, number] | null]
 ) {
   return queryOptions({
     queryKey: ['region', table, region, filtered] as const,

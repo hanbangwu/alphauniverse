@@ -64,8 +64,8 @@
   const table = $derived(view.property ? (coloured?.table ?? null) : loaded)
   const filter = $derived(coloured ? mosaic.colouredFilter : mosaic.filter)
 
-  let drawn = $state<{ table: string; value: Rectangle | Point[] } | null>(null)
-  const region = $derived(drawn && drawn.table === table ? drawn.value : null)
+  let drawn = $state<{ points: string; value: Rectangle | Point[] } | null>(null)
+  const region = $derived(drawn && drawn.points === loaded ? drawn.value : null)
   const selected = createQuery(() =>
     regionQuery(mosaic, table, region, filter, [filters.morphologies.value, filters.range.value])
   )
@@ -116,7 +116,7 @@
         rangeSelection={mosaic.region}
         rangeSelectionValue={region}
         onRangeSelection={(value: Rectangle | Point[] | null) =>
-          (drawn = value && table ? { table, value } : null)}
+          (drawn = value && loaded ? { points: loaded, value } : null)}
         {tooltip}
         selection={highlighted}
         {width}
