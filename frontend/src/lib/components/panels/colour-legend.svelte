@@ -22,7 +22,10 @@
   const span = $derived(coloured.most - coloured.least)
   const at = (step: number) => coloured.least + (span * step) / STEPS
   const stepOf = (value: number) => Math.round(((value - coloured.least) / span) * STEPS)
-  const shown = $derived(filters.range.value ?? [coloured.least, coloured.most])
+  const committed = $derived((filters.range.value ?? [coloured.least, coloured.most]).map(stepOf))
+  let dragged = $state<number[] | null>(null)
+  const steps = $derived(dragged ?? committed)
+  const shown = $derived(steps.map(at))
   const within = createQuery(() => withinQuery(mosaic, coloured.name, filters.range.value))
 </script>
 
@@ -58,11 +61,14 @@
   <div class="pointer-events-auto flex flex-col gap-1.5 pt-1">
     <Slider
       type="multiple"
-      value={shown.map(stepOf)}
-      onValueChange={([low, high]) =>
-        (filters.range.value = low === 0 && high === STEPS ? null : [at(low), at(high)])}
+      value={steps}
+      onValueChange={(value) => (dragged = value)}
+      onValueCommit={([low, high]) => {
+        filters.range.value = low === 0 && high === STEPS ? null : [at(low), at(high)]
+        dragged = null
+      }}
       max={STEPS}
-      disabled={span <= 0}
+      disabled={span === 0}
     />
     <span class="font-mono tabular-nums">{format(shown[0])} to {format(shown[1])}</span>
     {#if filters.range.value}

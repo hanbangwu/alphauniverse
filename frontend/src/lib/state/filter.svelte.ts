@@ -6,7 +6,7 @@ import type { MosaicState } from './mosaic.svelte'
 import type { ViewState } from './view.svelte'
 import { clauseInterval, clausePoints } from '@uwdata/mosaic-core'
 import { column } from '@uwdata/mosaic-sql'
-import { onDestroy, untrack } from 'svelte'
+import { onDestroy } from 'svelte'
 
 export interface MorphologyClass {
   index: number
@@ -55,7 +55,7 @@ export class FilterState {
     $effect(() => this.#pushRange(this.range.value))
     $effect(() => {
       void [this.view.property, this.view.everywhere]
-      untrack(() => this.range.reset())
+      this.range.reset()
     })
     onDestroy(() => {
       this.#push([])

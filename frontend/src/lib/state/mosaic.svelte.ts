@@ -2,7 +2,7 @@ import { type Projection, downloadUrl, projectionUrl } from '$lib/client'
 import { BINS } from '$lib/color'
 import { PREDICTABLE, type Property, UNLABELLED } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
-import { loadParquet } from '@uwdata/mosaic-sql'
+import { Query, column, count, isBetween, loadParquet } from '@uwdata/mosaic-sql'
 
 export interface Values {
   name: string
@@ -128,7 +128,9 @@ export class MosaicState {
 
   async within(name: string, [low, high]: readonly [number, number]): Promise<number> {
     const counted = await this.connect().query(
-      `SELECT count(*) AS count FROM ${name} WHERE value BETWEEN ${low} AND ${high}`
+      Query.from(name)
+        .select({ count: count() })
+        .where(isBetween(column('value'), [low, high]))
     )
     return Number(counted.get(0).count)
   }
