@@ -129,9 +129,9 @@
         <ColourLegend {coloured} scheme={mode.current} />
       {/key}
     {/if}
-  {:else if view.property && colouring.isError}
+  {:else if shown.isError || (view.property && colouring.isError)}
     <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">
-      {errorMessage(colouring.error)}
+      {errorMessage(shown.error ?? colouring.error)}
     </p>
   {:else}
     <div class="absolute inset-0 grid place-content-center">

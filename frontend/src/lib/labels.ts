@@ -1,4 +1,5 @@
 import type { Galaxy, TableRow } from '$lib/api'
+import type { Projection } from '$lib/client'
 
 export interface Label {
   label: string
@@ -36,7 +37,7 @@ export const POINT_SETS = {
   any_position: { label: 'Any position' },
   mean: { label: 'Mean' },
   full: { label: 'Full' }
-} satisfies Labels<string>
+} satisfies Labels<Projection>
 
 export type PointSet = keyof typeof POINT_SETS
 
