@@ -53,10 +53,6 @@ export class ViewState {
     return this.predictable && this.source.value === 'predicted'
   }
 
-  get table(): string {
-    return this.full ? 'full_points' : 'mean_points'
-  }
-
   select(galaxy: number | null): void {
     if (galaxy !== this.galaxy.value) {
       for (const field of Object.values(this.tokens)) field.reset()

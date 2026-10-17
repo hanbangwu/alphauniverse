@@ -23,10 +23,12 @@
   )
   const mosaic = new MosaicState()
 
-  createQuery(
-    () => pointsQuery(mosaic, 'mean', browser),
-    () => queries
-  )
+  for (const projection of ['mean', 'same_place'] as const) {
+    createQuery(
+      () => pointsQuery(mosaic, projection),
+      () => queries
+    )
+  }
   onDestroy(() => mosaic.destroy())
 </script>
 
