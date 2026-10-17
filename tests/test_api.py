@@ -41,11 +41,12 @@ def _template(mode: str) -> np.ndarray:
     return np.load(artifact(f"template_{mode}"))
 
 
-def test_artifact_downloads(client: TestClient) -> None:
-    response = client.get("/downloads/encoded")
+@pytest.mark.parametrize("role", ["encoded", "properties"])
+def test_artifact_downloads(client: TestClient, role: str) -> None:
+    response = client.get(f"/downloads/{role}")
 
     assert response.status_code == 200
-    assert len(response.content) == artifact("encoded").stat().st_size
+    assert len(response.content) == artifact(role).stat().st_size
 
 
 def test_meta_reports_a_count_per_morphology_without_the_dataset(
