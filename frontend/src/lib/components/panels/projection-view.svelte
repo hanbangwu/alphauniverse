@@ -31,6 +31,7 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
   import { colouringQuery, morphologiesQuery, similarityQuery } from '$lib/data/queries'
+  import { errorMessage } from '$lib/errors'
   import { COLOURINGS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import ColourLegend from './colour-legend.svelte'
@@ -110,6 +111,10 @@
     {#if coloured}
       <ColourLegend {coloured} scheme={mode.current} />
     {/if}
+  {:else if view.property && colouring.isError}
+    <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">
+      {errorMessage(colouring.error)}
+    </p>
   {:else}
     <div class="absolute inset-0 grid place-content-center">
       <Spinner class="size-8" />

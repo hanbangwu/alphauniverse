@@ -179,7 +179,6 @@ export function colouringQuery(
       points === null || property === null
         ? skipToken
         : () => mosaic.colour(points, property, everywhere),
-    placeholderData: keepPreviousData,
     ...FOREVER
   })
 }

@@ -4,8 +4,8 @@ import { PREDICTABLE, type Property, UNLABELLED } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
 import { loadParquet } from '@uwdata/mosaic-sql'
 
-export interface Coloured {
-  table: string
+export interface Values {
+  name: string
   property: Property
   faded: boolean
   low: number
@@ -15,12 +15,17 @@ export interface Coloured {
   missing: number
 }
 
+export interface Coloured extends Values {
+  table: string
+}
+
 export class MosaicState {
   readonly coordinator = new Coordinator()
   readonly filter = Selection.intersect()
 
   #connected = false
   #properties: Promise<unknown> | null = null
+  readonly #tables: Record<string, Promise<Values>> = {}
 
   connect(): Coordinator {
     if (!this.#connected) {
@@ -44,13 +49,25 @@ export class MosaicState {
   }
 
   #loadProperties(): Promise<unknown> {
-    this.#properties ??= this.connect().exec(
-      loadParquet('properties', downloadUrl('properties'), { replace: true })
-    )
+    this.#properties ??= this.connect()
+      .exec(loadParquet('properties', downloadUrl('properties'), { replace: true }))
+      .catch((error: unknown) => {
+        this.#properties = null
+        throw error
+      })
     return this.#properties
   }
 
-  async colour(points: string, property: Property, everywhere: boolean): Promise<Coloured> {
+  #values(property: Property, everywhere: boolean): Promise<Values> {
+    const name = `${property}_${everywhere ? 'predicted' : 'measured'}`
+    this.#tables[name] ??= this.#build(name, property, everywhere).catch((error: unknown) => {
+      delete this.#tables[name]
+      throw error
+    })
+    return this.#tables[name]
+  }
+
+  async #build(name: string, property: Property, everywhere: boolean): Promise<Values> {
     await this.#loadProperties()
     const database = this.connect()
     const predictable = PREDICTABLE.includes(property)
@@ -73,22 +90,16 @@ export class MosaicState {
     const high = Number(summary.high)
     const span = high > low ? high - low : 1
     const faded = predictable && !everywhere
-    const values = `${property}_${everywhere ? 'predicted' : 'measured'}`
     await database.exec(`
-      CREATE OR REPLACE TABLE ${values} AS
+      CREATE OR REPLACE TABLE ${name} AS
       SELECT *, coalesce(
         least(${BINS - 1}, greatest(0, floor((value - ${low}) / ${span} * ${BINS})))
           + ${faded ? `CASE WHEN predicted THEN ${BINS} ELSE 0 END` : 0},
         ${2 * BINS}
       )::UTINYINT AS colour
       FROM (${shown})`)
-    const table = `${points}_${values}`
-    await database.exec(`
-      CREATE OR REPLACE VIEW ${table} AS
-      SELECT p.galaxy, p.x, p.y, p.category, c.value, c.width, c.predicted, c.colour
-      FROM ${points} p LEFT JOIN ${values} c USING (galaxy)`)
     return {
-      table,
+      name,
       property,
       faded,
       low,
@@ -97,6 +108,16 @@ export class MosaicState {
       predicted: Number(summary.predicted),
       missing: Number(summary.missing)
     }
+  }
+
+  async colour(points: string, property: Property, everywhere: boolean): Promise<Coloured> {
+    const values = await this.#values(property, everywhere)
+    const table = `${points}_${values.name}`
+    await this.connect().exec(`
+      CREATE OR REPLACE VIEW ${table} AS
+      SELECT p.galaxy, p.x, p.y, p.category, c.value, c.width, c.predicted, c.colour
+      FROM ${points} p LEFT JOIN ${values.name} c USING (galaxy)`)
+    return { ...values, table }
   }
 
   destroy(): void {

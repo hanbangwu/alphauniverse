@@ -27,7 +27,7 @@
       {label}:
       {value === null
         ? 'no value'
-        : `${value.toPrecision(3)}${predicted ? ` ± ${width.toPrecision(2)} (AION)` : ''}`}
+        : `${value.toPrecision(3)}${predicted ? `${width === null ? '' : ` ± ${width.toPrecision(2)}`} (AION)` : ''}`}
     </span>
   {:else}
     <span class="text-muted-foreground text-xs">{MORPHOLOGIES[tooltip.category ?? UNLABELLED]}</span
