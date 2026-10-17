@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { ImageSurvey } from '$lib/client'
   import { OUTLINE, type RGB } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
@@ -10,8 +11,10 @@
     values: ArrayLike<number> | null
     grid: number
     color: ((value: number) => RGB) | null
+    mask?: ArrayLike<number> | null
     opacity?: (picked: boolean) => number
     galaxy?: number
+    survey?: ImageSurvey
     title?: (value: number, index: number) => string
     describe?: string
     selected?: number[]
@@ -19,7 +22,6 @@
     busy?: boolean
     onhover?: (hovered: boolean) => void
     imageOpacity?: number
-    action?: Snippet
     children?: Snippet
   }
 
@@ -28,8 +30,10 @@
     values,
     grid,
     color,
+    mask,
     opacity,
     galaxy,
+    survey,
     title,
     describe,
     selected,
@@ -37,7 +41,6 @@
     busy = false,
     onhover,
     imageOpacity,
-    action,
     children
   }: Props = $props()
 
@@ -59,10 +62,7 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <div class="flex items-center justify-between gap-2">
-    <span class="text-sm font-medium">{label}</span>
-    {@render action?.()}
-  </div>
+  <span class="text-sm font-medium">{label}</span>
 
   <div
     role="presentation"
@@ -77,6 +77,7 @@
           {values}
           {grid}
           {color}
+          {mask}
           {opacity}
           {title}
           {selected}
@@ -91,7 +92,7 @@
           class="pointer-events-none absolute inset-0 mix-blend-screen transition-opacity duration-150 ease-in-out"
           style:opacity={imageOpacity}
         >
-          <GalaxyThumb {galaxy} />
+          <GalaxyThumb {galaxy} {survey} />
         </div>
       {/if}
       <svg

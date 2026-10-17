@@ -1,15 +1,9 @@
-import type { Galaxy, Meta } from '$lib/api'
+import type { Meta } from '$lib/api'
 import type { Extent } from './similarity'
-
-export const SPECTRUM_SURVEY = 'desi'
 
 export interface Spectrum {
   wavelength: Float32Array
   flux: Float32Array
-}
-
-export function hasSpectrum(galaxy: Galaxy): boolean {
-  return galaxy[SPECTRUM_SURVEY]
 }
 
 export function spectrumTokenAt(meta: Meta, wavelength: number): number {

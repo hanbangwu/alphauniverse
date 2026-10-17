@@ -1,23 +1,27 @@
+import { byMode } from '$lib/data/modes'
 import type { SimilarityQuery } from '$lib/data/similarity'
-import { DETAIL_VIEWS, type DetailView, POINT_SETS, type PointSet } from '$lib/labels'
+import { POINT_SETS, type PointSet } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField } from './fields.svelte'
+import { PersistedState } from 'runed'
 
 export class ViewState {
   readonly pointSet: EnumField<PointSet>
   readonly galaxy = new Field<number | null>(null)
-  readonly detail: EnumField<DetailView>
-  readonly imageTokens = new IndexListField()
-  readonly spectrumTokens = new IndexListField()
+  readonly tokens = byMode(() => new IndexListField())
   readonly tableValues = new IndexListField()
   readonly imageAnywhere = new Field(false)
   readonly spectrumAnywhere = new Field(false)
   readonly searched = new Field<SimilarityQuery | null>(null)
   readonly explorer = new Field(false)
+  readonly open = new PersistedState('open-groups', {
+    images: true,
+    spectra: true,
+    catalogue: true
+  })
 
   constructor() {
     this.pointSet = new EnumField(POINT_SETS)
-    this.detail = new EnumField(DETAIL_VIEWS)
   }
 
   get full(): boolean {
@@ -30,8 +34,7 @@ export class ViewState {
 
   select(galaxy: number | null): void {
     if (galaxy !== this.galaxy.value) {
-      this.imageTokens.reset()
-      this.spectrumTokens.reset()
+      for (const field of Object.values(this.tokens)) field.reset()
       this.tableValues.reset()
       this.searched.reset()
     }

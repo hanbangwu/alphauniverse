@@ -34,6 +34,7 @@
     values: ArrayLike<number>
     grid: number
     color: (value: number) => RGB
+    mask?: ArrayLike<number> | null
     opacity?: (picked: boolean) => number
     title?: (value: number, index: number) => string
     selected?: number[]
@@ -47,6 +48,7 @@
     values,
     grid,
     color,
+    mask,
     opacity = () => 1,
     title,
     selected = [],
@@ -80,7 +82,7 @@
       type: 'rect',
       shape: { x, y, width, height },
       style: {
-        fill: `rgba(${r}, ${g}, ${b}, ${opacity(chosen.has(params.dataIndex))})`,
+        fill: `rgba(${r}, ${g}, ${b}, ${mask?.[params.dataIndex] === 0 ? 0 : opacity(chosen.has(params.dataIndex))})`,
         stroke: pointed ? HOVER.stroke : undefined,
         lineWidth: HOVER.lineWidth
       },

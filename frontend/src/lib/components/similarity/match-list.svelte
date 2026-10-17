@@ -1,34 +1,47 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
-  import { getMask } from '$lib/state/app.svelte'
+  import { IMAGE_MODES, SPECTRUM_MODES } from '$lib/data/modes'
+  import { getApp } from '$lib/state/app.svelte'
   import MaskControls from './mask-controls.svelte'
   import MatchRow from './match-row.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   const similarity = getSimilarity()
-  const display = getMask()
+  const { view, mask: display } = getApp()
+
+  const images = $derived(IMAGE_MODES.some((mode) => similarity.anywhere(mode)))
+  const spectra = $derived(SPECTRUM_MODES.some((mode) => similarity.anywhere(mode)))
 </script>
 
 <span class="text-sm font-medium">Whole dataset</span>
 <p class="text-xs text-muted-foreground">
-  Image matches are compared {similarity.anywhere('ls_image')
-    ? 'anywhere in the image'
-    : 'at the same place in the image'}; spectrum matches {similarity.anywhere('desi_spectrum')
-    ? 'at any wavelength'
-    : 'at the same observed wavelength'}.
+  Image matches are compared {images ? 'anywhere in the image' : 'at the same place in the image'};
+  spectrum matches {spectra ? 'at any wavelength' : 'at the same observed wavelength'}.
 </p>
 
 {#if similarity.error}
   <p role="alert" class="text-sm text-destructive">{similarity.error}</p>
-{:else if !similarity.imageMaps}
+{:else if !similarity.scales}
   <div class="grid h-24 place-content-center">
     <Spinner class="size-6" />
   </div>
 {:else}
-  {#if display.on.value && similarity.imageDomain}
-    <div class="flex flex-col gap-1 md:max-w-xs">
-      <span class="text-xs text-muted-foreground">Match mask threshold</span>
-      <MaskControls domain={similarity.imageDomain} control={display.matches} />
+  {#if display.on.value}
+    <div class="flex flex-wrap gap-x-8 gap-y-3">
+      {#if view.open.current.images && similarity.imageDomain}
+        <MaskControls
+          label="Image mask threshold"
+          domain={similarity.imageDomain}
+          control={display.images.matches}
+        />
+      {/if}
+      {#if view.open.current.spectra && similarity.spectrumDomain}
+        <MaskControls
+          label="Spectrum mask threshold"
+          domain={similarity.spectrumDomain}
+          control={display.spectra.matches}
+        />
+      {/if}
     </div>
   {/if}
   <div class={['flex flex-col transition-opacity', similarity.stale && 'opacity-50']}>

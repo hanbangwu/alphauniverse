@@ -53,6 +53,7 @@ PROVABGS = "-mmu_desi_provabgs"
 
 
 SpectrumSurvey = Literal["desi", "sdss"]
+ImageSurvey = Literal["ls", "hsc"]
 SPECTRUM_SURVEYS: dict[SpectrumSurvey, str] = {
     "desi": f"spectrum{DESI}",
     "sdss": f"spectrum{SDSS}",
@@ -178,7 +179,7 @@ SPECTRUM_TOKEN_RANK = 256
 IMAGE_VOCABULARY = 4375
 VOCABULARY = 1024
 REDSHIFT_VOCABULARY = 1025
-IMAGE_MODES = {f"{survey}_image": survey for survey in (ANCHOR, "hsc")}
+IMAGE_MODES = {f"{survey}_image": survey for survey in get_args(ImageSurvey)}
 SPECTRUM_MODES = {f"{survey}_spectrum": survey for survey in SPECTRUM_SURVEYS}
 TokenMode = Literal[*IMAGE_MODES, *SPECTRUM_MODES]
 TABLE_MODES = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
