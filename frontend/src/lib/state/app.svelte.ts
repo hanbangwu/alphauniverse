@@ -38,8 +38,8 @@ export class AppState {
     return pointsQuery(this.mosaic, 'mean')
   }
 
-  get fullPoints() {
-    return pointsQuery(this.mosaic, 'full', this.view.full)
+  get shownPoints() {
+    return pointsQuery(this.mosaic, this.view.pointSet.value)
   }
 
   start(): void {

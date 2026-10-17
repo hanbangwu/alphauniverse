@@ -51,10 +51,10 @@
   let height = $state(0)
 
   const mean = createQuery(() => app.meanPoints)
-  const full = createQuery(() => app.fullPoints)
+  const shown = createQuery(() => app.shownPoints)
   const search = createQuery(() => similarityQuery(view.searched.value))
 
-  const loaded = $derived((view.full ? full.data : mean.data) ?? null)
+  const loaded = $derived(shown.data ?? null)
   const colouring = createQuery(() =>
     colouringQuery(mosaic, loaded, view.property, view.everywhere)
   )
