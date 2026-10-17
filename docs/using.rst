@@ -6,7 +6,7 @@ This page says what you can do on the site and what each result means. The metho
 Browse the map
 --------------
 
-The map shows every galaxy, or every token, placed by :doc:`methods/map`. Switch between **Mean**, one point per galaxy, and **Full**, one point per token embedding of every galaxy. Points are coloured by Galaxy Zoo 10 morphology; most galaxies have no label. Filter by morphology to show only some classes. Hover over a point to see the galaxy's image and label, and click it to select the galaxy; in Full, any of a galaxy's tokens selects it.
+The map shows every galaxy, or every token, placed by :doc:`methods/map`. Switch between **Mean**, one point per galaxy, and **Full**, one point per token embedding of every galaxy. Points are coloured by Galaxy Zoo 10 morphology, which most galaxies lack, or by one of the galaxy's properties (``properties`` in :doc:`reference`): redshift, stellar mass, star formation rate, specific star formation rate or g − r colour. A property is coloured on 32 viridis bins from its 1st to its 99th percentile, values beyond either end taking the end's colour. **Measured first** shows the measured value where there is one and AION's prediction elsewhere, faded; **Predicted** shows AION's prediction for every galaxy; g − r is only measured. A legend gives the range, its unit and how many galaxies have a measured value, a prediction or none. Filter by morphology to show only some classes. Hover over a point to see the galaxy's image and its morphology, or its property, with the prediction's width when it is AION's; click it to select the galaxy; in Full, any of a galaxy's tokens selects it.
 
 Look at a galaxy
 ----------------
