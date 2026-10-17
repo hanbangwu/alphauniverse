@@ -528,7 +528,9 @@ def selected_forms(
 
 def contributions(totals: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {
-        mode: (values - values.mean()) / values.std() / len(totals)
+        mode: (values - values.mean(axis=-1, keepdims=True))
+        / values.std(axis=-1, keepdims=True)
+        / len(totals)
         for mode, values in totals.items()
     }
 
@@ -749,15 +751,25 @@ def search(query: Query) -> Results:
     )
 
 
-def mode_search(query: ModeQuery) -> ModeResults:
+def whole_mode_totals(
+    galaxies: np.ndarray, modes: Iterable[str], anywhere: Iterable[str]
+) -> dict[str, np.ndarray]:
     totals = {}
     for mode in MODES:
-        if mode in query.modes:
-            found = stored(f"{mode}_anywhere" if mode in query.anywhere else mode)
-            matched = embeddings.scores(
-                found["queries"][[query.galaxy]], found, SEARCH_RANK
-            )
-            totals[mode] = matched[0].double().numpy()
+        if mode in modes:
+            found = stored(f"{mode}_anywhere" if mode in anywhere else mode)
+            matched = embeddings.scores(found["queries"][galaxies], found, SEARCH_RANK)
+            totals[mode] = matched.double().numpy()
+    return totals
+
+
+def mode_search(query: ModeQuery) -> ModeResults:
+    totals = {
+        mode: rows[0]
+        for mode, rows in whole_mode_totals(
+            np.array([query.galaxy]), query.modes, query.anywhere
+        ).items()
+    }
     contributed = contributions(totals)
     scored = sum(contributed.values())
     galaxies = ranked(scored, query.galaxy, query.matches)
