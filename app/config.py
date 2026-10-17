@@ -190,6 +190,12 @@ TABLE_MODES = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
     f"{survey}_table": (f"{survey}_table_values", len(columns), VOCABULARY)
     for survey, columns in TABLE_VALUE_SURVEYS.items()
 }
+MODE_SURVEYS = (
+    IMAGE_MODES
+    | SPECTRUM_MODES
+    | {f"{survey}_table": survey for survey in TABLE_VALUE_SURVEYS}
+    | {REDSHIFT: REDSHIFT}
+)
 OBSERVATIONS = {
     "hsc": "HSC match",
     "desi": "DESI spectrum",
@@ -220,6 +226,10 @@ ARTIFACTS: dict[str, str] = {
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
     **{f"token_embedding_{name}": "npz" for name in GRAM_NAMES},
     **{f"template_{mode}": "npy" for mode in MODES},
+    **{f"data_gram_{name}": "npy" for name in GRAM_NAMES},
+    **{f"template_gram_{name}": "npy" for name in GRAM_NAMES},
+    "observed_reference": "npz",
+    **{f"template_embedding_{name}": "npz" for name in GRAM_NAMES},
 }
 
 PREDICTIONS = pa.schema(

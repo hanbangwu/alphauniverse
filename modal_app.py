@@ -115,6 +115,36 @@ def generate_templates() -> None:
 
 @app.function(
     image=build_image,
+    gpu="H100!",
+    cpu=4,
+    memory=(16 * 1024, 64 * 1024),
+    timeout=80 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_observed_grams() -> None:
+    from app.observed_grams import generate_observed_grams
+
+    generate_observed_grams()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="H100!",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=10 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_template_embeddings() -> None:
+    from app.observed_grams import generate_template_embeddings
+
+    generate_template_embeddings()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
     gpu="L4",
     cpu=4,
     memory=(32 * 1024, 64 * 1024),

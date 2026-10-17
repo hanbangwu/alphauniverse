@@ -4,6 +4,24 @@ Glossary
 .. glossary::
    :sorted:
 
+   against-data score
+      The log-likelihood of one galaxy's data under another galaxy's :term:`template`, with the data's own errors, less its log-likelihood under the median template. See :doc:`reference`.
+
+   predictive width
+      How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalogue value. See :doc:`reference`.
+
+   saturation
+      A galaxy's highest possible :term:`against-data score` in a :term:`mode`: the score of a template equal to its data.
+
+   template embedding
+      A galaxy's query and gallery vectors for one :term:`mode`, from the singular value decomposition of the mode's :term:`template Gram`, as for a :term:`token embedding`.
+
+   template Gram
+      A :term:`mode`'s :term:`templates <template>` compared with each other at the :term:`typical depth`: minus half the squared distance between every pair. See :doc:`reference`.
+
+   typical depth
+      The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
+
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 

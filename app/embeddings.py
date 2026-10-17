@@ -7,9 +7,9 @@ from .config import GRAM_NAMES, TOKEN_EMBEDDING_RANK, artifact, device
 BATCH = 1024
 
 
-def loaded(name: str) -> torch.Tensor:
-    stored = np.load(artifact(f"token_gram_{name}"), mmap_mode="r")
-    gram = torch.empty(stored.shape, dtype=torch.float64, device=device())
+def loaded(role: str, dtype: torch.dtype = torch.float64) -> torch.Tensor:
+    stored = np.load(artifact(role), mmap_mode="r")
+    gram = torch.empty(stored.shape, dtype=dtype, device=device())
     for start in range(0, len(stored), BATCH):
         rows = slice(start, start + BATCH)
         gram[rows] = torch.tensor(stored[rows], device=gram.device)
@@ -36,12 +36,16 @@ def embedding(gram: torch.Tensor) -> dict[str, torch.Tensor]:
     }
 
 
+def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> None:
+    singular_values = found.pop("singular_values")
+    np.savez(
+        artifact(role),
+        singular_values=singular_values.cpu().numpy(),
+        **{part: values.float().cpu().numpy() for part, values in found.items()},
+        **extra,
+    )
+
+
 def generate_token_embeddings() -> None:
     for name in tqdm(GRAM_NAMES, desc="token embeddings"):
-        found = embedding(loaded(name))
-        singular_values = found.pop("singular_values")
-        np.savez(
-            artifact(f"token_embedding_{name}"),
-            singular_values=singular_values.cpu().numpy(),
-            **{part: values.float().cpu().numpy() for part, values in found.items()},
-        )
+        saved(f"token_embedding_{name}", embedding(loaded(f"token_gram_{name}")))

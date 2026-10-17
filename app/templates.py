@@ -29,6 +29,7 @@ from .config import (
 )
 
 DECODED_BANDS = [*BANDS[ANCHOR], *BANDS["hsc"]]
+CENTRAL = (0.16, 0.84)
 ZERO_POINTS = {ANCHOR: 22.5, "hsc": 27.0}
 MODALITIES = {
     "ls_image": LegacySurveyImage,
@@ -64,7 +65,20 @@ def image_latents(
     probabilities = torch.from_numpy(probabilities).to(device())
     spread = torch.from_numpy(spread).to(device())[..., None]
     latents = torch.einsum("gsc,gscd->gsd", probabilities - spread, vectors[codes])
-    return (latents + spread * vectors.sum(dim=0)).transpose(1, 2)
+    return latents + spread * vectors.sum(dim=0)
+
+
+def spectrum_latents(
+    rows: pa.RecordBatch, survey: str, vectors: torch.Tensor
+) -> torch.Tensor:
+    mean, directions, coefficients = (
+        torch.from_numpy(part).to(device())
+        for part in (
+            *pql.basis()[survey][:2],
+            pql.spectrum_token_coefficients(rows, survey, slice(None)),
+        )
+    )
+    return mean @ vectors + coefficients @ (directions @ vectors)
 
 
 @torch.inference_mode()
@@ -81,20 +95,12 @@ def decoded_spectra(codec: Codec, latents: torch.Tensor) -> np.ndarray:
 
 
 def image_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarray:
-    vectors = codebook(codec, IMAGE_VOCABULARY)
-    return decoded_images(codec, image_latents(rows, survey, vectors), survey)
+    latents = image_latents(rows, survey, codebook(codec, IMAGE_VOCABULARY))
+    return decoded_images(codec, latents.transpose(1, 2), survey)
 
 
 def spectrum_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarray:
-    vectors = codebook(codec, VOCABULARY)
-    mean, directions, coefficients = (
-        torch.from_numpy(part).to(device())
-        for part in (
-            *pql.basis()[survey][:2],
-            pql.spectrum_token_coefficients(rows, survey, slice(None)),
-        )
-    )
-    latents = mean @ vectors + coefficients @ (directions @ vectors)
+    latents = spectrum_latents(rows, survey, codebook(codec, VOCABULARY))
     return decoded_spectra(codec, latents.transpose(1, 2))
 
 
@@ -110,9 +116,11 @@ def bin_values(mode: str) -> np.ndarray:
     return values
 
 
-def medians(probabilities: np.ndarray, values: np.ndarray) -> np.ndarray:
+def quantiles(
+    probabilities: np.ndarray, values: np.ndarray, share: float
+) -> np.ndarray:
     cumulative = np.where(np.isnan(values), 0, probabilities).cumsum(axis=-1)
-    index = (cumulative < cumulative[..., -1:] / 2).sum(axis=-1)
+    index = (cumulative < share * cumulative[..., -1:]).sum(axis=-1)
     return values[np.arange(len(values)), index]
 
 
@@ -127,7 +135,9 @@ def templates(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
             for mode, survey in SPECTRUM_MODES.items()
         },
         **{
-            mode: medians(pql.table_value_probabilities(rows, mode), bin_values(mode))
+            mode: quantiles(
+                pql.table_value_probabilities(rows, mode), bin_values(mode), 0.5
+            )
             for mode in TABLE_MODES
         },
     }
@@ -150,3 +160,30 @@ def generate_templates() -> None:
         start += rows.num_rows
     for found in stored.values():
         found.flush()
+
+
+def deviation(moments: torch.Tensor) -> np.ndarray:
+    means, squares = moments.chunk(2, dim=-1)
+    return (squares - means**2).sum(dim=-1).mean(dim=-1).sqrt().cpu().numpy()
+
+
+def widths(
+    rows: pa.RecordBatch, depths: dict[str, np.ndarray]
+) -> dict[str, np.ndarray]:
+    found = {}
+    for mode, survey in IMAGE_MODES.items():
+        vectors = codebook(decoder(mode), IMAGE_VOCABULARY)
+        moments = torch.cat((vectors, vectors**2), dim=-1)
+        found[mode] = deviation(image_latents(rows, survey, moments))
+    for mode, survey in SPECTRUM_MODES.items():
+        vectors = codebook(decoder(mode), VOCABULARY)
+        moments = torch.cat((vectors, vectors**2), dim=-1)
+        found[mode] = deviation(spectrum_latents(rows, survey, moments))
+    for mode in TABLE_MODES:
+        probabilities, values = (
+            pql.table_value_probabilities(rows, mode),
+            bin_values(mode),
+        )
+        lower, upper = (quantiles(probabilities, values, share) for share in CENTRAL)
+        found[mode] = np.sqrt((((upper - lower) / 2 * depths[mode]) ** 2).mean(axis=1))
+    return found

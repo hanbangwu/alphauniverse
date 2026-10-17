@@ -5,30 +5,26 @@ from typing import Any
 
 import modal
 import numpy as np
-import pyarrow as pa
 import pyarrow.compute as pc
 import torch
-from astropy.stats import mad_std
 from tqdm import tqdm
 
-from app import pql, predictions, templates
+from app import observations, templates
 from app.config import (
-    BANDS,
     CROP_PIXELS,
     DATASET_REVISION,
-    HSC,
     IMAGE_MODES,
+    MODE_SURVEYS,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
-    TOKEN_SURVEYS,
     artifact,
     device,
 )
-from app.dataset import dataset, redshift, usable
+from app.dataset import usable
 from app.search import tokens
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
@@ -43,10 +39,6 @@ REST = np.arange(2000, 10600, 100)
 PERCENTILES = (5, 50, 95)
 QUARTILES = 4
 MODELS = ("template", "floor", "null")
-SURVEYS = {mode.name: mode.survey for mode in predictions.MODES}
-MAGNITUDE_ERRORS = {
-    f"{band}_cmodel_mag{HSC}": f"{band}_cmodel_magerr{HSC}" for band in "grizy"
-}
 
 
 def percentiles(values: np.ndarray) -> dict[str, float]:
@@ -60,58 +52,10 @@ def chunks(galaxies: np.ndarray) -> list[np.ndarray]:
     return [galaxies[start : start + BATCH] for start in range(0, len(galaxies), BATCH)]
 
 
-def taken(column: pa.ChunkedArray, galaxies: np.ndarray) -> pa.Array:
-    first = int(galaxies[0])
-    covering = column.slice(first, int(galaxies[-1]) + 1 - first)
-    return covering.take(pa.array(galaxies - first)).combine_chunks()
-
-
-def observed(mode: str) -> np.ndarray:
-    return np.flatnonzero(pql.observed(SURVEYS[mode]))
-
-
 def own_codes(mode: str, galaxies: np.ndarray, first: int, count: int) -> np.ndarray:
-    cells = taken(tokens().column(SURVEYS[mode]), galaxies)
+    cells = observations.taken(tokens().column(MODE_SURVEYS[mode]), galaxies)
     codes = pc.list_slice(cells, first, first + count).flatten().to_numpy()
     return codes.reshape(len(galaxies), count).astype(np.int64)
-
-
-def column_values(column: str, galaxies: np.ndarray) -> np.ndarray:
-    values = pc.fill_null(taken(dataset().data.column(column), galaxies), np.nan)
-    return values.to_numpy().astype(np.float64)
-
-
-def redshift_rows(galaxies: np.ndarray) -> list[dict]:
-    columns = [column for survey in REDSHIFT_COLUMNS.values() for column in survey]
-    return pa.table(
-        {column: taken(dataset().data.column(column), galaxies) for column in columns}
-    ).to_pylist()
-
-
-def pixels(field: pa.ListArray, galaxies: int, bands: int) -> np.ndarray:
-    values = field.flatten().flatten().flatten().to_numpy()
-    size = round((len(values) / (galaxies * bands)) ** 0.5)
-    start = round((size - CROP_PIXELS) / 2)
-    crop = slice(start, start + CROP_PIXELS)
-    return values.reshape(galaxies, bands, size, size)[:, :, crop, crop]
-
-
-def image_data(survey: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    first = int(galaxies[0])
-    column = dataset().data.column(TOKEN_SURVEYS[survey])
-    covering = column.slice(first, int(galaxies[-1]) + 1 - first).combine_chunks()
-    found = np.flatnonzero(covering.is_valid().to_numpy(zero_copy_only=False))
-    if not np.array_equal(found + first, galaxies):
-        raise ValueError(f"{survey} images are not the galaxies observed in it")
-    images = dict(zip(covering.type.names, covering.flatten(), strict=True))
-    names = np.asarray(images["band"].flatten()).reshape(len(galaxies), -1)
-    if not (np.char.upper(names.astype(str)) == BANDS[survey]).all():
-        raise ValueError(f"{survey} bands are not stored as {BANDS[survey]}")
-    bands = len(BANDS[survey])
-    return (
-        pixels(images["flux"], len(galaxies), bands),
-        pixels(images["ivar"], len(galaxies), bands),
-    )
 
 
 class Profile:
@@ -168,12 +112,12 @@ def image_quality(mode: str, survey: str) -> dict[str, Any]:
     radius = np.broadcast_to(
         np.hypot(rows - centre, columns - centre), stored.shape[1:]
     ).ravel()
-    galaxies = observed(mode)
+    galaxies = observations.observed(mode)
     profile = Profile(RADII)
     chi2 = {model: np.empty(len(galaxies)) for model in MODELS}
     for start in tqdm(range(0, len(galaxies), BATCH), desc=mode):
         part = galaxies[start : start + BATCH]
-        flux, ivar = image_data(survey, part)
+        flux, ivar = observations.images(survey, part)
         codes = torch.from_numpy(own_codes(mode, part, 0, N_IMAGE_TOKENS))
         models = {
             "template": stored[part],
@@ -208,13 +152,13 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
     stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
     null = stored.mean(axis=0, dtype=np.float64)
     value, _, warning = REDSHIFT_COLUMNS[survey]
-    galaxies = observed(mode)
+    galaxies = observations.observed(mode)
     profile = Profile(REST)
     chi2 = {model: np.full(len(galaxies), np.nan) for model in MODELS}
     snr = np.full(len(galaxies), np.nan)
     for start in tqdm(range(0, len(galaxies), BATCH), desc=mode):
         part = galaxies[start : start + BATCH]
-        spectra = taken(dataset().data.column(TOKEN_SURVEYS[survey]), part)
+        spectra = observations.spectra(survey, part)
         codes = torch.from_numpy(own_codes(mode, part, 1, N_SPECTRUM_TOKENS))
         models = {
             "template": stored[part],
@@ -223,13 +167,8 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
             ),
             "null": np.broadcast_to(null, (len(part), len(null))),
         }
-        for row, measured in enumerate(redshift_rows(part)):
-            wavelength, flux, ivar, mask = (
-                np.asarray(spectra.field(field)[row].values)
-                for field in ("lambda", "flux", "ivar", "mask")
-            )
-            valid = (wavelength > 0) & (ivar > 0) & ~mask
-            wavelength, flux, ivar = wavelength[valid], flux[valid], ivar[valid]
+        for row, measured in enumerate(observations.redshift_rows(part)):
+            wavelength, flux, ivar = observations.samples(spectra, row)
             if len(flux) < 2:
                 continue
             snr[start + row] = np.median(flux * np.sqrt(ivar))
@@ -251,30 +190,11 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
     }
 
 
-def table_data(mode: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    if SURVEYS[mode] not in TABLE_VALUE_SURVEYS:
-        rows = redshift_rows(galaxies)
-        chosen = [REDSHIFT_COLUMNS[redshift(row)] for row in rows]
-        return (
-            np.array([[row[value]] for row, (value, _, _) in zip(rows, chosen)], float),
-            np.array([[row[error]] for row, (_, error, _) in zip(rows, chosen)], float),
-        )
-    columns = TABLE_VALUE_SURVEYS[SURVEYS[mode]]
-    values = np.stack([column_values(column, galaxies) for column in columns], axis=1)
-    errors = [
-        column_values(MAGNITUDE_ERRORS[column], galaxies)
-        if column in MAGNITUDE_ERRORS
-        else np.full(len(galaxies), mad_std(values[:, index], ignore_nan=True))
-        for index, column in enumerate(columns)
-    ]
-    return values, np.stack(errors, axis=1)
-
-
 def table_quality(mode: str) -> dict[str, Any]:
-    galaxies = observed(mode)
-    measured, errors = table_data(mode, galaxies)
+    galaxies = observations.observed(mode)
+    measured, errors = observations.table_values(mode, galaxies)
     values = templates.bin_values(mode)
-    first = N_IMAGE_TOKENS if SURVEYS[mode] in IMAGE_MODES.values() else 0
+    first = N_IMAGE_TOKENS if MODE_SURVEYS[mode] in IMAGE_MODES.values() else 0
     own = np.concatenate(
         [own_codes(mode, part, first, len(values)) for part in chunks(galaxies)]
     )
@@ -292,7 +212,7 @@ def table_quality(mode: str) -> dict[str, Any]:
     typical = {
         model: np.nanmedian(np.abs(pull), axis=0) for model, pull in pulls.items()
     }
-    names = TABLE_VALUE_SURVEYS.get(SURVEYS[mode], (mode,))
+    names = TABLE_VALUE_SURVEYS.get(MODE_SURVEYS[mode], (mode,))
     return summary(
         {model: np.nanmean(pull**2, axis=1) for model, pull in pulls.items()}
     ) | {

@@ -15,6 +15,7 @@ from app.config import (
     N_IMAGE_TOKENS,
     REDSHIFT,
     SPECTRUM_MODES,
+    TABLE_MODES,
     VOCABULARY,
     artifact,
     device,
@@ -35,13 +36,28 @@ def test_image_latents_average_the_codebook_over_each_cell_s_stored_distribution
 
         np.testing.assert_allclose(
             found.cpu().numpy(),
-            (dense.to(vectors.device).double() @ vectors.double())
-            .transpose(1, 2)
-            .cpu()
-            .numpy(),
+            (dense.to(vectors.device).double() @ vectors.double()).cpu().numpy(),
             atol=1e-5,
             err_msg=mode,
         )
+
+
+def certain(codes: np.ndarray) -> pa.RecordBatch:
+    logits = np.full((N_IMAGE_TOKENS, IMAGE_VOCABULARY), -np.inf)
+    logits[np.arange(N_IMAGE_TOKENS), codes] = 0
+    rows = pql.row(GALAXY)
+    for survey in IMAGE_MODES.values():
+        for name, values in predictions.image_token_codes(logits).items():
+            field = rows.schema.field(f"{survey}_{name}")
+            rows = rows.set_column(
+                rows.schema.get_field_index(field.name),
+                field,
+                pa.FixedSizeListArray.from_arrays(
+                    pa.array(values.reshape(-1), field.type.value_type),
+                    field.type.list_size,
+                ),
+            )
+    return rows
 
 
 def test_an_image_template_of_certain_codes_is_the_codec_s_decoding_of_them(
@@ -54,20 +70,7 @@ def test_an_image_template_of_certain_codes_is_the_codec_s_decoding_of_them(
         raising=False,
     )
     codes = np.random.default_rng(0).integers(IMAGE_VOCABULARY, size=N_IMAGE_TOKENS)
-    certain = np.full((N_IMAGE_TOKENS, IMAGE_VOCABULARY), -np.inf)
-    certain[np.arange(N_IMAGE_TOKENS), codes] = 0
-    rows = pql.row(GALAXY)
-    for survey in IMAGE_MODES.values():
-        for name, values in predictions.image_token_codes(certain).items():
-            field = rows.schema.field(f"{survey}_{name}")
-            rows = rows.set_column(
-                rows.schema.get_field_index(field.name),
-                field,
-                pa.FixedSizeListArray.from_arrays(
-                    pa.array(values.reshape(-1), field.type.value_type),
-                    field.type.list_size,
-                ),
-            )
+    rows = certain(codes)
     for mode, survey in IMAGE_MODES.items():
         image = templates.decoder(mode)
 
@@ -146,10 +149,57 @@ def test_a_scalar_codec_s_open_top_bin_takes_its_lower_edge(
     assert np.isnan(found[0, len(decoded) :]).all()
 
 
-def test_medians_skip_bins_without_a_value() -> None:
+def test_quantiles_skip_bins_without_a_value() -> None:
     values = np.array([[1.0, 3.0, np.nan, 5.0]], np.float32)
     probabilities = np.array([[[0.2, 0.2, 0.5, 0.1]]], np.float32)
 
-    found = templates.medians(probabilities, values)
+    found = [
+        templates.quantiles(probabilities, values, share) for share in (0.16, 0.5, 0.84)
+    ]
 
-    np.testing.assert_array_equal(found, [[3.0]])
+    np.testing.assert_array_equal(found, [[[1.0]], [[3.0]], [[5.0]]])
+
+
+def test_widths_are_the_predicted_spread_in_every_mode(
+    tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = certain(
+        np.random.default_rng(1).integers(IMAGE_VOCABULARY, size=N_IMAGE_TOKENS)
+    )
+    rng = np.random.default_rng(2)
+    values = {
+        mode: np.sort(rng.normal(size=(count, vocabulary)), axis=1)
+        for mode, (_, count, vocabulary) in TABLE_MODES.items()
+    }
+    depths = {mode: rng.random(len(found)) for mode, found in values.items()}
+    monkeypatch.setattr(templates, "bin_values", values.get)
+
+    found = templates.widths(rows, depths)
+
+    for mode in IMAGE_MODES:
+        np.testing.assert_allclose(found[mode], 0, atol=1e-6, err_msg=mode)
+    for mode, survey in SPECTRUM_MODES.items():
+        vectors = templates.codebook(templates.decoder(mode), VOCABULARY).double()
+        coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
+        dense = torch.from_numpy(pql.distributions(mode, coefficients)).to(vectors)
+        variance = dense @ vectors**2 - (dense @ vectors) ** 2
+        np.testing.assert_allclose(
+            found[mode],
+            variance.sum(-1).mean(-1).sqrt().cpu().numpy(),
+            rtol=1e-4,
+            err_msg=mode,
+        )
+    for mode, bins in values.items():
+        cumulative = pql.table_value_probabilities(rows, mode)[0].cumsum(axis=-1)
+        lower, upper = (
+            bins[
+                np.arange(len(bins)), (cumulative < share * cumulative[:, -1:]).sum(-1)
+            ]
+            for share in templates.CENTRAL
+        )
+        np.testing.assert_allclose(
+            found[mode],
+            [np.sqrt((((upper - lower) / 2 * depths[mode]) ** 2).mean())],
+            rtol=1e-5,
+            err_msg=mode,
+        )
