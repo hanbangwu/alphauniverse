@@ -76,3 +76,24 @@ def test_a_galaxy_s_own_row_gives_its_stored_query_vector() -> None:
         found["queries"][chosen],
         atol=1e-9,
     )
+
+
+def test_the_joint_embedding_is_every_block_scaled_side_by_side(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rng = np.random.default_rng(3)
+    blocks = {
+        f"token_embedding_{name}": (index + 1) * rng.normal(size=(GALAXIES, 4))
+        for index, name in enumerate(GRAM_NAMES)
+    }
+    monkeypatch.setattr(embeddings, "galleries", blocks.__getitem__)
+
+    embeddings.generate_joint_embedding()
+
+    scaled = []
+    for block in blocks.values():
+        centred = block - block.mean(axis=0)
+        scaled.append(centred / np.sqrt((centred**2).sum(axis=1).mean()))
+    np.testing.assert_allclose(
+        np.load(artifact("joint_embedding")), np.concatenate(scaled, axis=1)
+    )

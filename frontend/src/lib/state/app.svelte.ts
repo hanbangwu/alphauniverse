@@ -14,6 +14,7 @@ export class AppState {
   readonly search: SearchState
   readonly mask = new MaskState()
   readonly filters: FilterState
+  readonly swatches: string[] | null
 
   constructor(
     readonly meta: Meta,
@@ -22,14 +23,13 @@ export class AppState {
     this.view = new ViewState()
     this.search = new SearchState()
     this.filters = new FilterState(meta, this.mosaic)
+    this.swatches = $derived(
+      mode.current ? morphologyColors(meta.morphologies.length - 1, mode.current) : null
+    )
   }
 
   get dataset(): string {
     return `${this.meta.author}/${this.meta.id}`
-  }
-
-  get swatches(): string[] | null {
-    return mode.current ? morphologyColors(this.meta.morphologies.length - 1, mode.current) : null
   }
 
   get meanPoints() {

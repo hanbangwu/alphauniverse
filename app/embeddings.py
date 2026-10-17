@@ -74,3 +74,23 @@ def generate_token_search() -> None:
                 galleries=found["galleries"][:, :SEARCH_RANK],
                 offsets=found["offsets"],
             )
+
+
+def galleries(role: str) -> np.ndarray:
+    with np.load(artifact(role)) as found:
+        return found["galleries"][:, :SEARCH_RANK].copy()
+
+
+def scaled(block: np.ndarray) -> np.ndarray:
+    centred = block - block.mean(axis=0)
+    return centred / np.sqrt((centred**2).sum(axis=1).mean())
+
+
+def generate_joint_embedding() -> None:
+    np.save(
+        artifact("joint_embedding"),
+        np.concatenate(
+            [scaled(galleries(f"token_embedding_{name}")) for name in GRAM_NAMES],
+            axis=1,
+        ),
+    )

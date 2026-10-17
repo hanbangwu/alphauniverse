@@ -48,6 +48,16 @@ def redshift_rows(galaxies: np.ndarray) -> list[dict]:
     ).to_pylist()
 
 
+def measured_redshifts(galaxies: np.ndarray) -> tuple[np.ndarray, list[str | None]]:
+    rows = redshift_rows(galaxies)
+    surveys = [redshift(row) for row in rows]
+    values = [
+        np.nan if survey is None else row[REDSHIFT_COLUMNS[survey][0]]
+        for row, survey in zip(rows, surveys)
+    ]
+    return np.array(values), surveys
+
+
 def pixels(field: pa.ListArray, galaxies: int, bands: int) -> np.ndarray:
     values = field.flatten().flatten().flatten().to_numpy()
     size = round((len(values) / (galaxies * bands)) ** 0.5)

@@ -10,12 +10,13 @@ import {
   getTable,
   getTextSearch
 } from '$lib/api'
-import type { CosineMode, Projection } from '$lib/client'
+import type { CosineMode, ImageSurvey, Projection, SpectrumSurvey } from '$lib/client'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
+import { byMode } from './modes'
 import { matchMean } from './scores'
 import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
-import { Query, column, eq, literal } from '@uwdata/mosaic-sql'
+import { Query, column, eq, isIn, literal } from '@uwdata/mosaic-sql'
 import {
   type Float32,
   type Int32,
@@ -36,14 +37,14 @@ export const metaQuery = queryOptions({
   ...FOREVER
 })
 
-export function tokensQuery(galaxy: number | null) {
+export function tokensQuery(galaxy: number | null, survey: ImageSurvey) {
   return queryOptions({
-    queryKey: ['tokens', galaxy] as const,
+    queryKey: ['tokens', galaxy, survey] as const,
     queryFn:
       galaxy === null
         ? skipToken
         : async () => {
-            const { data } = await getImageTokens({ path: { galaxy }, throwOnError: true })
+            const { data } = await getImageTokens({ path: { galaxy, survey }, throwOnError: true })
             return new Uint32Array(await data.arrayBuffer())
           },
     ...FOREVER
@@ -78,14 +79,14 @@ export function tableQuery(galaxy: number | null) {
   })
 }
 
-export function spectrumQuery(galaxy: number | null) {
+export function spectrumQuery(galaxy: number | null, survey: SpectrumSurvey) {
   return queryOptions({
-    queryKey: ['spectrum', galaxy] as const,
+    queryKey: ['spectrum', galaxy, survey] as const,
     queryFn:
       galaxy === null
         ? skipToken
         : async () => {
-            const { data } = await getSpectrum({ path: { galaxy }, throwOnError: true })
+            const { data } = await getSpectrum({ path: { galaxy, survey }, throwOnError: true })
             const table = tableFromIPC<{ wavelength: Float32; flux: Float32 }>(
               new Uint8Array(await data.arrayBuffer())
             )
@@ -98,14 +99,17 @@ export function spectrumQuery(galaxy: number | null) {
   })
 }
 
-export function spectrumTokensQuery(galaxy: number | null) {
+export function spectrumTokensQuery(galaxy: number | null, survey: SpectrumSurvey) {
   return queryOptions({
-    queryKey: ['spectrum', galaxy, 'tokens'] as const,
+    queryKey: ['spectrum', galaxy, survey, 'tokens'] as const,
     queryFn:
       galaxy === null
         ? skipToken
         : async () => {
-            const { data } = await getSpectrumTokens({ path: { galaxy }, throwOnError: true })
+            const { data } = await getSpectrumTokens({
+              path: { galaxy, survey },
+              throwOnError: true
+            })
             return new Uint32Array(await data.arrayBuffer())
           },
     ...FOREVER
@@ -158,6 +162,30 @@ export function morphologyQuery(mosaic: MosaicState, table: string | null, galax
   })
 }
 
+export function morphologiesQuery(
+  mosaic: MosaicState,
+  table: string | null,
+  galaxies: number[] | null
+) {
+  return queryOptions({
+    queryKey: ['morphologies', table, galaxies] as const,
+    queryFn:
+      table === null || galaxies === null
+        ? skipToken
+        : async () => {
+            const rows = await mosaic.coordinator.query(
+              Query.from(table)
+                .select('galaxy', 'category')
+                .where(isIn(column('galaxy'), galaxies))
+            )
+            return new Map(
+              Array.from(rows, ({ galaxy, category }): [number, number] => [galaxy, category])
+            )
+          },
+    staleTime: Infinity
+  })
+}
+
 function positions(table: Table, mode: string): (number[] | null)[] {
   return Array.from(table.getChild(`${mode}_positions`)!, (row: Vector<Int32> | null) =>
     row ? Array.from(row.toArray()) : null
@@ -181,11 +209,17 @@ export function similarityQuery(request: SimilarityQuery | null) {
               request,
               galaxies: table.getChild('galaxy')!.toArray(),
               similarities: table.getChild('similarity')!.toArray(),
-              imageMaps: maps(table, 'ls_image'),
-              spectrumMaps: maps(table, 'desi_spectrum'),
-              imagePositions: positions(table, 'ls_image'),
-              spectrumPositions: positions(table, 'desi_spectrum'),
+              maps: byMode((mode) => maps(table, mode)),
+              positions: byMode((mode) => positions(table, mode)),
               tableValueMap: matchMean(maps(table, 'table_values'), table.numRows),
+              observed: Object.fromEntries(
+                table.schema.fields
+                  .filter((field) => field.name.startsWith('has_'))
+                  .map((field) => [
+                    field.name.slice('has_'.length),
+                    Array.from(table.getChild(field.name)!, Boolean)
+                  ])
+              ),
               predicted: Array.from(
                 table.getChild('predicted')!,
                 (row: Vector<Utf8>) => Array.from(row) as string[]
@@ -207,8 +241,7 @@ export function saliencyQuery(request: SaliencyQuery | null) {
             const { data } = await getSaliency({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
             return {
-              image: maps(table, 'ls_image'),
-              spectrum: maps(table, 'desi_spectrum'),
+              maps: byMode((mode) => maps(table, mode)),
               tableValues: maps(table, 'table_values')
             }
           },

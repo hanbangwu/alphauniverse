@@ -36,13 +36,7 @@ export const POINT_SETS = {
   full: { label: 'Full' }
 } satisfies Labels<string>
 
-export const DETAIL_VIEWS = {
-  image: { label: 'Image' },
-  spectrum: { label: 'Spectrum' }
-} satisfies Labels<string>
-
 export type PointSet = keyof typeof POINT_SETS
-export type DetailView = keyof typeof DETAIL_VIEWS
 
 export const MORPHOLOGIES: readonly string[] = [
   'Disturbed Galaxies',
