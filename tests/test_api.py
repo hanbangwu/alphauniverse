@@ -374,8 +374,14 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
     ]
 
 
-def test_a_galaxy_without_a_usable_redshift_shows_aion_s_beside_desi_z(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("sdss_flagged", "beside"), [(False, "SDSS Z"), (True, "DESI Z")]
+)
+def test_aion_s_redshift_shows_beside_the_one_it_reads_or_else_desi_z(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    sdss_flagged: bool,
+    beside: str,
 ) -> None:
     rows = Dataset.from_dict(
         {
@@ -384,7 +390,7 @@ def test_a_galaxy_without_a_usable_redshift_shows_aion_s_beside_desi_z(
             f"ZWARN{DESI}": [True],
             f"Z{SDSS}": [0.26],
             f"Z_ERR{SDSS}": [2e-4],
-            f"ZWARNING{SDSS}": [True],
+            f"ZWARNING{SDSS}": [sdss_flagged],
         }
     )
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
@@ -394,8 +400,10 @@ def test_a_galaxy_without_a_usable_redshift_shows_aion_s_beside_desi_z(
     table_columns.cache_clear()
 
     templates = {row["column"]: row["template"] for row in response.json()}
-    assert templates["DESI Z"] == float(_template(REDSHIFT)[0, 0])
-    assert templates["SDSS Z"] is None
+    assert templates == {
+        column: float(_template(REDSHIFT)[0, 0]) if column == beside else None
+        for column in templates
+    }
 
 
 def test_search_without_a_selection_is_rejected(client: TestClient) -> None:

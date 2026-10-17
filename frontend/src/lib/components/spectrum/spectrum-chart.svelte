@@ -142,8 +142,8 @@
     grid: { left: 8, right: 12, top: 8, bottom: 8 },
     xAxis: {
       type: 'value',
-      min: Math.floor(first),
-      max: Math.ceil(last),
+      min: spectrum ? first : Math.floor(first),
+      max: spectrum ? last : Math.ceil(last),
       name: 'Wavelength (Å)',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
