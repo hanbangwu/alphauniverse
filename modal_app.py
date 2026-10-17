@@ -102,6 +102,21 @@ def generate_token_embeddings() -> None:
     image=build_image,
     gpu="L4",
     cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=20 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_templates() -> None:
+    from app.templates import generate_templates
+
+    generate_templates()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=4,
     memory=(32 * 1024, 64 * 1024),
     timeout=6 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},

@@ -266,6 +266,92 @@ def token_embedding_quality():
     )
 
 
+def fitted(measured):
+    return {
+        "galaxies": measured["galaxies"],
+        **{
+            f"{model} χ²ν, median": values["p50"]
+            for model, values in measured["chi2"].items()
+        },
+        "recovered, median": measured["recovered"]["p50"],
+    }
+
+
+def template_quality():
+    found = report("template_quality")
+    if found is None:
+        return missing()
+    modes = found["modes"]
+    source = ColumnDataSource(
+        {
+            "mode": list(modes),
+            **{
+                share: [measured["recovered"][share] for measured in modes.values()]
+                for share in ("p5", "p50", "p95")
+            },
+        }
+    )
+    recovered = figure(
+        x_range=list(modes),
+        height=300,
+        title="Share recovered, median and 5th to 95th percentile over galaxies",
+        **WIDTH,
+    )
+    recovered.vbar(x="mode", top="p50", width=0.8, source=source)
+    recovered.segment(
+        x0="mode", y0="p5", x1="mode", y1="p95", color="black", source=source
+    )
+    recovered.xaxis.major_label_orientation = 0.8
+    charts = [recovered]
+    for key in ("radius", "rest_wavelength"):
+        chart = figure(
+            height=300,
+            x_axis_label=key.replace("_", " "),
+            y_axis_label="mean normalised residual",
+            title=f"Residuals by {key.replace('_', ' ')}",
+            **WIDTH,
+        )
+        lines = [
+            (mode, model)
+            for mode, measured in modes.items()
+            if key in measured
+            for model in ("template", "floor")
+        ]
+        for (mode, model), colour in zip(lines, Category10_10):
+            chart.line(
+                modes[mode][key]["centres"],
+                modes[mode][key][model],
+                legend_label=f"{mode} {model}",
+                color=colour,
+                line_width=2,
+            )
+        chart.legend.click_policy = "hide"
+        charts.append(chart)
+    rows = [{"mode": mode} | fitted(measured) for mode, measured in modes.items()]
+    pulls = [
+        {
+            "value": name,
+            **{f"{model}, median |pull|": value for model, value in values.items()},
+        }
+        for measured in modes.values()
+        for name, values in measured.get("median_absolute_pull", {}).items()
+    ]
+    quartiles = [
+        {"mode": mode, "S/N per pixel": " to ".join(map(str, quartile["snr"]))}
+        | fitted(quartile)
+        for mode, measured in modes.items()
+        for quartile in measured.get("by_snr", [])
+    ]
+    return column(
+        heading(found, found["device"]),
+        *charts,
+        table(rows, list(rows[0])),
+        table(pulls, list(pulls[0])),
+        table(quartiles, list(quartiles[0])),
+        **WIDTH,
+    )
+
+
 def backend_performance():
     found = report("backend_performance")
     if found is None:

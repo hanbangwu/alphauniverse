@@ -33,6 +33,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_predictions
    uv run modal run modal_app.py::generate_token_grams
    uv run modal run modal_app.py::generate_token_embeddings
+   uv run modal run modal_app.py::generate_templates
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
    uv run modal run modal_app.py::generate_alignment
@@ -89,6 +90,7 @@ Run a benchmark
    uv run modal run -m scripts.benchmarks.text_search_quality
    uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --queries 200, --modes every mode
    uv run modal run -m scripts.benchmarks.token_embedding_quality
+   uv run --group build modal run -m scripts.benchmarks.template_quality
 
 Each writes its report to ``docs/benchmarks/<script>.json``.
 

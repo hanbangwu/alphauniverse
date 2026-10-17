@@ -17,6 +17,7 @@ from .config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     KEPT,
+    MODES,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
     N_TABLE_VALUES,
@@ -63,7 +64,6 @@ WIDTHS = (
     | dict.fromkeys(SPECTRUM_MODES, N_SPECTRUM_TOKENS)
     | {mode: count for mode, (_, count, _) in TABLE_MODES.items()}
 )
-MODES = tuple(WIDTHS)
 OFFSETS = {
     mode: end - WIDTHS[mode]
     for mode, end in zip(MODES, accumulate(WIDTHS.values()), strict=True)
