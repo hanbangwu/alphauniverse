@@ -1,6 +1,7 @@
 <script lang="ts">
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
   import Observed from '$lib/components/common/observed.svelte'
+  import PredictionsSwitch from '$lib/components/common/predictions-switch.svelte'
   import SimilarityDialog from '$lib/components/similarity/similarity-dialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
@@ -43,6 +44,8 @@
         {/if}
       </div>
 
+      <PredictionsSwitch />
+
       <Button variant="secondary" size="sm" onclick={() => (view.explorer.value = true)}>
         Search
       </Button>
@@ -61,10 +64,12 @@
       <CollapsibleGroup title="Spectra" bind:open={view.open.current.spectra}>
         {#each SPECTRUM_SURVEYS as survey (survey)}
           <Observed {galaxy} {survey} kind="spectrum">
-            <div class="flex flex-col gap-1">
-              <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
-              <DetailSpectrum {galaxy} {survey} />
-            </div>
+            {#snippet children(matched)}
+              <div class="flex flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
+                <DetailSpectrum {galaxy} {survey} {matched} />
+              </div>
+            {/snippet}
           </Observed>
         {/each}
       </CollapsibleGroup>

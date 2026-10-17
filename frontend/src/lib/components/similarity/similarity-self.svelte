@@ -58,7 +58,9 @@
       <GalaxyTile galaxy={similarity.galaxy} />
       {#each IMAGE_SURVEYS as survey (survey)}
         <Observed galaxy={similarity.galaxy} {survey} kind="image">
-          <QueryImage {survey} />
+          {#snippet children(matched)}
+            <QueryImage {survey} {matched} />
+          {/snippet}
         </Observed>
       {/each}
     </div>
@@ -83,18 +85,25 @@
       {@const mode = spectrumMode(survey)}
       {@const layer = similarity.layerOf(mode)}
       <Observed galaxy={similarity.galaxy} {survey} kind="spectrum">
-        <SpectrumPanel
-          galaxy={similarity.galaxy}
-          {survey}
-          map={layer?.values ?? null}
-          heat={layer?.heat ?? null}
-          mask={layer &&
-            similarity.maskOf(layer.values, similarity.spectrumLayerDomain, display.spectra.query)}
-          caption={similarity.layerCaption}
-          selected={view.tokens[mode].value}
-          ontoggle={(index) => view.tokens[mode].toggle(index)}
-          error={similarity.layerError(mode)}
-        />
+        {#snippet children(matched)}
+          <SpectrumPanel
+            galaxy={similarity.galaxy}
+            {survey}
+            {matched}
+            map={layer?.values ?? null}
+            heat={layer?.heat ?? null}
+            mask={layer &&
+              similarity.maskOf(
+                layer.values,
+                similarity.spectrumLayerDomain,
+                display.spectra.query
+              )}
+            caption={similarity.layerCaption}
+            selected={view.tokens[mode].value}
+            ontoggle={matched ? (index) => view.tokens[mode].toggle(index) : undefined}
+            error={similarity.layerError(mode)}
+          />
+        {/snippet}
       </Observed>
     {/each}
     {#if display.on.value && similarity.spectrumLayerDomain}

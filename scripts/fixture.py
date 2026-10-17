@@ -9,9 +9,12 @@ import pyarrow.parquet as pq
 
 from app.config import (
     ANCHOR,
+    BANDS,
+    CROP_PIXELS,
     DIM,
     GEMMA_DIM,
     GRAM_NAMES,
+    IMAGE_MODES,
     IMAGE_VOCABULARY,
     KEPT,
     N_IMAGE_TOKENS,
@@ -22,9 +25,12 @@ from app.config import (
     PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
+    SPECTRUM_GRID,
+    SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
+    TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TEXT_SURVEYS,
     TOKEN_EMBEDDING_RANK,
@@ -51,7 +57,7 @@ from app.pql import (
     save_prediction_basis,
     stored,
 )
-from app.search import source, tokens
+from app.search import source, templates, tokens
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
@@ -68,6 +74,8 @@ CLUSTERS = 64
 NOISE = 0.05
 
 PREDICTION_BATCH = 5
+
+IMAGE_UNITS: dict[str, float] = {ANCHOR: 1.0, "hsc": 10**1.8}
 
 
 def covered(survey: str, galaxy: int) -> bool:
@@ -181,6 +189,33 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
             writer.write_batch(prediction_batch(list(chunk)))
 
 
+def _templates(rng: np.random.Generator, galaxies: int) -> None:
+    centre = (CROP_PIXELS - 1) / 2
+    rows, columns = np.indices((CROP_PIXELS, CROP_PIXELS))
+    radius = np.hypot(rows - centre, columns - centre)
+    profile = np.exp(-0.5 * (radius / rng.uniform(2, 8, (galaxies, 1, 1, 1))) ** 2)
+    made = {}
+    for mode, survey in IMAGE_MODES.items():
+        bands = len(BANDS[survey])
+        peaks = rng.uniform(0.02, 0.5, (galaxies, bands, 1, 1))
+        noise = 0.003 * rng.standard_normal((galaxies, bands, *radius.shape))
+        made[mode] = IMAGE_UNITS[survey] * (peaks * profile + noise)
+    for mode in SPECTRUM_MODES:
+        tilt = rng.uniform(-0.3, 0.3, (galaxies, 1))
+        centres = rng.uniform(4000, 9500, (galaxies, 1))
+        line = rng.uniform(0, 2, (galaxies, 1))
+        made[mode] = (
+            1
+            + tilt * (SPECTRUM_GRID / SPECTRUM_GRID.mean() - 1)
+            + line * np.exp(-0.5 * ((SPECTRUM_GRID - centres) / 4) ** 2)
+            + 0.02 * rng.standard_normal((galaxies, len(SPECTRUM_GRID)))
+        )
+    for mode, (_, count, _) in TABLE_MODES.items():
+        made[mode] = rng.lognormal(size=(galaxies, count))
+    for mode, values in made.items():
+        np.save(artifact(f"template_{mode}"), values.astype(np.float32))
+
+
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
@@ -224,6 +259,7 @@ def forget() -> None:
         labels,
         source,
         tokens,
+        templates,
         aion_gemma_space,
         predictions,
         prediction_basis,
@@ -288,6 +324,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     )
 
     _predictions(rng, galaxies)
+    _templates(rng, galaxies)
     pq.write_table(
         _properties(rng, galaxies, flags["provabgs"]), artifact("properties")
     )

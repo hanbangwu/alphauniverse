@@ -12,15 +12,16 @@
 
   interface Props {
     survey: ImageSurvey
+    matched: boolean
   }
 
-  let { survey }: Props = $props()
+  let { survey, matched }: Props = $props()
 
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
 
   const mode = $derived(imageMode(survey))
-  const tokens = createQuery(() => tokensQuery(similarity.galaxy, survey))
+  const tokens = createQuery(() => tokensQuery(matched ? similarity.galaxy : null, survey))
   const palette = $derived(tokens.data ? tokenColors(tokens.data) : null)
   const layer = $derived(similarity.layerOf(mode))
   const error = $derived(tokens.isError ? errorMessage(tokens.error) : similarity.layerError(mode))
@@ -31,7 +32,6 @@
 <div class="flex flex-col gap-5">
   <ImageTokenPanel
     label={SURVEYS[survey].label}
-    describe={`Click or drag across ${SURVEYS[survey].label} image tokens to query them`}
     values={layer?.values ?? tokens.data ?? null}
     grid={similarity.grid}
     color={layer?.heat ?? palette}
@@ -42,10 +42,10 @@
     {survey}
     title={layer ? similarity.layerCaption : similarity.caption}
     selected={view.tokens[mode].value}
-    ontoggle={(index) => view.tokens[mode].toggle(index)}
-    busy={!tokens.data && !tokens.isError}
+    ontoggle={matched ? (index) => view.tokens[mode].toggle(index) : undefined}
+    busy={matched && !tokens.data && !tokens.isError}
     onhover={(value) => (hovered = value)}
-    imageOpacity={layer || hovered ? undefined : tokenAlpha(false)}
+    imageOpacity={layer || hovered || !matched ? undefined : tokenAlpha(false)}
   >
     {#if error}
       <p role="alert" class="text-xs leading-relaxed text-destructive">{error}</p>

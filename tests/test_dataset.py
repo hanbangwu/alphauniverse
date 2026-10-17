@@ -14,13 +14,17 @@ from app.config import (
     LS,
     REDSHIFT_COLUMNS,
     RGB_COLUMN,
+    SPECTRUM_GRID,
     SPECTRUM_SURVEYS,
     TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
 )
 from app.dataset import (
+    colour,
     encode,
+    fitted,
     image,
+    predicted_image,
     redshift,
     samples,
     spectrum,
@@ -77,6 +81,20 @@ def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
         )
 
 
+def test_colour_maps_bands_by_letter_g_to_blue_and_z_to_red() -> None:
+    half = CROP_PIXELS // 2
+    flux = np.zeros((5, CROP_PIXELS, CROP_PIXELS), dtype=np.float32)
+    flux[0, :, half:] = 1
+    flux[3, :, :half] = 1
+    flux[4] = 1
+
+    with Image.open(BytesIO(colour(flux, ["z", "i", "r", "g", "y"]))) as png:
+        left, right = png.getpixel((0, 0)), png.getpixel((CROP_PIXELS - 1, 0))
+
+    assert left[2] > left[0]
+    assert right[0] > right[2]
+
+
 def test_samples_drop_padding_and_blank_masked_flux() -> None:
     cell = pa.scalar(
         {
@@ -116,6 +134,43 @@ def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
     brightest = np.unravel_index(pixels.sum(axis=2).argmax(), pixels.shape[:2])
     assert brightest == (0, 1)
     assert pixels[0, 1].argmax() == channel
+
+
+def test_an_hsc_template_is_coloured_from_nanomaggies_as_a_legacy_survey_one() -> None:
+    rng = np.random.default_rng(0)
+    flux = rng.uniform(0, 0.5, (4, CROP_PIXELS, CROP_PIXELS))
+    hsc = np.concatenate(
+        [flux * 10**1.8, rng.uniform(0, 50, (1, CROP_PIXELS, CROP_PIXELS))]
+    )
+
+    assert predicted_image(hsc, "hsc") == predicted_image(flux, "ls")
+
+
+def test_fitted_amplitude_weights_unmasked_samples_by_inverse_variance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    shape = np.linspace(1.0, 2.0, len(SPECTRUM_GRID))
+    at = 2000
+    cell = {
+        "lambda": [0.0, SPECTRUM_GRID[at], SPECTRUM_GRID[at], 6000.0, 7000.0],
+        "flux": [1e6, 2 * shape[at], 6 * shape[at], 1e6, 1e6],
+        "ivar": [1.0, 3.0, 1.0, 0.0, 1.0],
+        "mask": [False, False, False, False, True],
+    }
+    rows = Dataset.from_dict(
+        {SPECTRUM_SURVEYS["desi"]: [cell]},
+        features=Features(
+            {
+                SPECTRUM_SURVEYS["desi"]: {
+                    name: Sequence(Value("bool" if name == "mask" else "float32"))
+                    for name in cell
+                }
+            }
+        ),
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+
+    np.testing.assert_allclose(fitted(shape, 0, "desi"), 3 * shape, rtol=1e-6)
 
 
 def test_unmatched_survey_has_no_spectrum(stored: None) -> None:

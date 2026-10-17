@@ -137,7 +137,7 @@ export class Similarity {
             const width = maps.length / result.galaxies.length
             const domain = union(
               this.matches
-                .filter(({ index }) => this.observes(surveyOf(mode), index))
+                .filter(({ index }) => this.shows(surveyOf(mode), index))
                 .map(({ index }) => extent(row(maps, index, width)))
             )
             return domain && scale(domain)
@@ -176,7 +176,12 @@ export class Similarity {
     const coverage = this.#coverage.data
     return union(
       modes
-        .filter((mode) => surveyOf(mode) === ANCHOR || coverage?.[surveyOf(mode)])
+        .filter(
+          (mode) =>
+            this.#app.view.predictions.value ||
+            surveyOf(mode) === ANCHOR ||
+            coverage?.[surveyOf(mode)]
+        )
         .map((mode) => this.layerOf(mode)?.domain)
     )
   }
@@ -196,6 +201,10 @@ export class Similarity {
 
   observes(survey: string, index: number): boolean {
     return survey === ANCHOR || (this.#result.data?.observed[survey]?.[index] ?? false)
+  }
+
+  shows(survey: string, index: number): boolean {
+    return this.#app.view.predictions.value || this.observes(survey, index)
   }
 
   get layerStale(): boolean {

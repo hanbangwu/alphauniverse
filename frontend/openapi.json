@@ -305,6 +305,61 @@
         }
       }
     },
+    "/galaxy/{galaxy}/image/{survey}/template": {
+      "get": {
+        "summary": "Get Image Template",
+        "description": "AION's predicted image of the galaxy in one survey, 96 by 96 px, coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy Survey's colour images.",
+        "operationId": "get_image_template",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/galaxy/{galaxy}/spectrum/{survey}": {
       "get": {
         "summary": "Get Spectrum",
@@ -394,6 +449,61 @@
             "description": "Successful Response",
             "content": {
               "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxy/{galaxy}/spectrum/{survey}/template": {
+      "get": {
+        "summary": "Get Spectrum Template",
+        "description": "AION's predicted spectrum of the galaxy in one survey on its codec's grid, from 3500 \u00c5 in 0.8 \u00c5 steps. For a galaxy with that survey's spectrum it is scaled to the flux, by the amplitude that fits the unmasked pixels in inverse-variance weighted least squares; otherwise it is the normalised shape AION predicts.",
+        "operationId": "get_spectrum_template",
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.apache.arrow.stream": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -1059,6 +1169,17 @@
             ],
             "title": "Value"
           },
+          "template": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
           "table_value": {
             "anyOf": [
               {
@@ -1098,6 +1219,7 @@
           "section",
           "column",
           "value",
+          "template",
           "table_value",
           "token",
           "excluded"

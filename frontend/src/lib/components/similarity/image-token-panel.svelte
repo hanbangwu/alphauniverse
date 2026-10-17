@@ -4,6 +4,7 @@
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
+  import { getView } from '$lib/state/app.svelte'
   import type { Snippet } from 'svelte'
 
   interface Props {
@@ -16,7 +17,6 @@
     galaxy?: number
     survey?: ImageSurvey
     title?: (value: number, index: number) => string
-    describe?: string
     selected?: number[]
     ontoggle?: (index: number) => void
     busy?: boolean
@@ -35,7 +35,6 @@
     galaxy,
     survey,
     title,
-    describe,
     selected,
     ontoggle,
     busy = false,
@@ -43,6 +42,8 @@
     imageOpacity,
     children
   }: Props = $props()
+
+  const view = getView()
 
   let painted = $state.raw<number[]>([])
 
@@ -83,7 +84,7 @@
           {selected}
           bind:painted
           {ontoggle}
-          label={describe ?? label}
+          label={ontoggle ? `Click or drag across ${label} image tokens to query them` : label}
           class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
         />
       {/if}
@@ -92,7 +93,7 @@
           class="pointer-events-none absolute inset-0 mix-blend-screen transition-opacity duration-150 ease-in-out"
           style:opacity={imageOpacity}
         >
-          <GalaxyThumb {galaxy} {survey} />
+          <GalaxyThumb {galaxy} {survey} predicted={view.predictions.value} />
         </div>
       {/if}
       <svg

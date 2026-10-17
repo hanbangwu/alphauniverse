@@ -9,6 +9,7 @@ from datasets import Dataset, Image, load_dataset
 
 from .config import (
     ANCHOR,
+    BANDS,
     CATALOGUES,
     CROP_PIXELS,
     DATASET_AUTHOR,
@@ -17,6 +18,7 @@ from .config import (
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     RGB_COLUMN,
+    SPECTRUM_GRID,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
@@ -83,6 +85,11 @@ def image(galaxy: int, survey: ImageSurvey) -> bytes | None:
     return colour(flux * HSC_TO_NANOMAGGIES, bands)
 
 
+def predicted_image(flux: np.ndarray, survey: ImageSurvey) -> bytes:
+    bands = [band.partition("-")[2].lower() for band in BANDS[survey]]
+    return colour(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
+
+
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
     wavelength = np.asarray(cell["lambda"].values, dtype=np.float32)
     flux = np.asarray(cell["flux"].values, dtype=np.float32)
@@ -100,6 +107,20 @@ def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
     if not cell.is_valid:
         return None
     return pa.table(samples(cell))
+
+
+def fitted(shape: np.ndarray, galaxy: int, survey: SpectrumSurvey) -> np.ndarray:
+    cell = dataset().data.column(SPECTRUM_SURVEYS[survey])[galaxy]
+    if not cell.is_valid:
+        return shape
+    wavelength, flux, ivar, mask = (
+        np.asarray(cell[field].values) for field in ("lambda", "flux", "ivar", "mask")
+    )
+    unmasked = (wavelength > 0) & ~mask
+    model = np.interp(wavelength[unmasked], SPECTRUM_GRID, shape)
+    weights = ivar[unmasked]
+    amplitude = (weights * flux[unmasked] * model).sum() / (weights * model**2).sum()
+    return amplitude * shape
 
 
 def catalogue(column: str) -> Catalogue | None:

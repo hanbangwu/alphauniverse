@@ -26,7 +26,7 @@
     <div class="grid max-w-5xl gap-5 md:grid-cols-3">
       <GalaxyTile {galaxy} {score} onselect={() => view.select(galaxy)} />
       {#each IMAGE_SURVEYS as survey (survey)}
-        {#if similarity.observes(survey, index)}
+        {#if similarity.shows(survey, index)}
           {@const mode = imageMode(survey)}
           {@const values = similarity.mapAt(mode, index)}
           <div class="flex flex-col gap-5">
@@ -53,12 +53,13 @@
   {/if}
   {#if view.open.current.spectra}
     {#each SPECTRUM_SURVEYS as survey (survey)}
-      {#if similarity.observes(survey, index)}
+      {#if similarity.shows(survey, index)}
         {@const mode = spectrumMode(survey)}
         {@const values = similarity.mapAt(mode, index)}
         <SpectrumPanel
           {galaxy}
           {survey}
+          matched={similarity.observes(survey, index)}
           map={values}
           mask={similarity.maskOf(values, similarity.spectrumDomain, display.spectra.matches)}
           heat={similarity.scales?.[mode]?.heat ?? null}

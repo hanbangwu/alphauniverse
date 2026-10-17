@@ -52,6 +52,8 @@ export const OUTLINE = [
   { stroke: SELECTED, width: 2 }
 ]
 
+export const PREDICTED = 'oklch(0.667 0.295 322.15)'
+
 export function tokenAlpha(picked: boolean): number {
   return picked ? 0.8 : 0.3
 }

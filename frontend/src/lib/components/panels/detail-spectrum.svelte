@@ -2,26 +2,37 @@
   import type { SpectrumSurvey } from '$lib/client'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
-  import { spectrumQuery } from '$lib/data/queries'
+  import { spectrumQuery, spectrumTemplateQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
+  import { getView } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
     galaxy: number
     survey: SpectrumSurvey
+    matched: boolean
   }
 
-  let { galaxy, survey }: Props = $props()
+  let { galaxy, survey, matched }: Props = $props()
 
-  const spectrum = createQuery(() => spectrumQuery(galaxy, survey))
+  const view = getView()
+
+  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, survey))
+  const prediction = createQuery(() =>
+    spectrumTemplateQuery(view.predictions.value ? galaxy : null, survey)
+  )
+  const label = $derived(SURVEYS[survey].label)
 </script>
 
-<PanelFrame busy={spectrum.isFetching} class="aspect-2/1 bg-card">
-  {#if spectrum.data}
+<PanelFrame busy={spectrum.isFetching || prediction.isFetching} class="aspect-2/1 bg-card">
+  {#if matched ? spectrum.data : prediction.data}
     <SpectrumChart
       spectrum={spectrum.data}
-      label={`${SURVEYS[survey].label} spectrum of galaxy ${galaxy}`}
+      prediction={prediction.data}
+      label={matched
+        ? `${label} spectrum of galaxy ${galaxy}${prediction.data ? ", with AION's prediction" : ''}`
+        : `AION's predicted ${label} spectrum of galaxy ${galaxy}, normalised`}
       class="absolute inset-0"
     />
   {/if}
@@ -30,5 +41,10 @@
 {#if spectrum.isError}
   <p class="text-xs leading-relaxed text-destructive">
     {errorMessage(spectrum.error)}
+  </p>
+{/if}
+{#if prediction.isError}
+  <p class="text-xs leading-relaxed text-destructive">
+    {errorMessage(prediction.error)}
   </p>
 {/if}

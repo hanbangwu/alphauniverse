@@ -6,11 +6,13 @@ import pyarrow.compute as pc
 import pytest
 from datasets import Dataset
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app import dataset as dataset_module
 from app import pql
 from app.config import (
     ANCHOR,
+    CROP_PIXELS,
     DESI,
     FLAG_SURVEYS,
     N_IMAGE_TOKENS,
@@ -20,6 +22,8 @@ from app.config import (
     REDSHIFT,
     REDSHIFT_TABLE_VALUE,
     SDSS,
+    SPECTRUM_GRID,
+    SPECTRUM_SURVEYS,
     TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
     artifact,
@@ -31,6 +35,10 @@ ARROW = "application/vnd.apache.arrow.stream"
 
 def _stored(role: str) -> pa.Table:
     return pa.ipc.open_file(artifact(role)).read_all()
+
+
+def _template(mode: str) -> np.ndarray:
+    return np.load(artifact(f"template_{mode}"))
 
 
 def test_artifact_downloads(client: TestClient) -> None:
@@ -105,6 +113,16 @@ def test_image_tokens_are_that_galaxys_stored_image_token_ids(
     np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_IMAGE_TOKENS])
 
 
+@pytest.mark.parametrize("survey", [ANCHOR, "hsc"])
+def test_image_template_is_a_png_of_the_crop(client: TestClient, survey: str) -> None:
+    response = client.get(f"/galaxy/0/image/{survey}/template")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    with Image.open(io.BytesIO(response.content)) as png:
+        assert png.size == (CROP_PIXELS, CROP_PIXELS)
+
+
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
     stored = _stored("tokens").filter(pc.field("galaxy") == galaxy)
@@ -156,6 +174,26 @@ def test_spectrum_tokens_drop_the_normalisation_token(
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
     np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
+
+
+@pytest.mark.parametrize("survey", ["desi", "sdss"])
+def test_spectrum_template_without_that_spectrum_is_the_shape_on_the_codec_grid(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, survey: str
+) -> None:
+    unobserved = Dataset.from_dict({SPECTRUM_SURVEYS[survey]: [None, None]})
+    monkeypatch.setattr(dataset_module, "dataset", lambda: unobserved)
+
+    response = client.get(f"/galaxy/1/spectrum/{survey}/template")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == ARROW
+    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
+    np.testing.assert_array_equal(
+        table.column("wavelength").to_numpy(), SPECTRUM_GRID.astype(np.float32)
+    )
+    np.testing.assert_array_equal(
+        table.column("flux").to_numpy(), _template(f"{survey}_spectrum")[1]
+    )
 
 
 def _similarity(client: TestClient, path: str = "/search", **query) -> pa.RecordBatch:
@@ -333,13 +371,14 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
 
     stored = _stored("tokens")
     hsc, redshift = (stored.column(name)[0] for name in ("hsc", REDSHIFT))
-    plain = {"table_value": None, "token": None, "excluded": None}
+    plain = {"template": None, "table_value": None, "token": None, "excluded": None}
     assert response.status_code == 200
     assert response.json() == [
         {
             "section": REDSHIFT,
             "column": "DESI Z",
             "value": 0.25,
+            "template": float(_template(REDSHIFT)[0, 0]),
             "table_value": REDSHIFT_TABLE_VALUE,
             "token": redshift.values[0].as_py(),
             "excluded": None,
@@ -350,6 +389,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             "section": REDSHIFT,
             "column": "SDSS Z",
             "value": 0.26,
+            "template": None,
             "table_value": None,
             "token": None,
             "excluded": "AION takes one redshift: DESI's",
@@ -360,11 +400,44 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             "section": "hsc",
             "column": "a_g",
             "value": 1.5,
+            "template": float(_template("hsc_table")[0, 0]),
             "table_value": 13,
             "token": hsc.values[N_IMAGE_TOKENS].as_py(),
             "excluded": None,
         },
     ]
+
+
+@pytest.mark.parametrize(
+    ("sdss_flagged", "beside"), [(False, "SDSS Z"), (True, "DESI Z")]
+)
+def test_aion_s_redshift_shows_beside_the_one_it_reads_or_else_desi_z(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    sdss_flagged: bool,
+    beside: str,
+) -> None:
+    rows = Dataset.from_dict(
+        {
+            f"Z{DESI}": [0.25],
+            f"ZERR{DESI}": [1e-4],
+            f"ZWARN{DESI}": [True],
+            f"Z{SDSS}": [0.26],
+            f"Z_ERR{SDSS}": [2e-4],
+            f"ZWARNING{SDSS}": [sdss_flagged],
+        }
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    table_columns.cache_clear()
+
+    response = client.get("/galaxy/0/table")
+    table_columns.cache_clear()
+
+    templates = {row["column"]: row["template"] for row in response.json()}
+    assert templates == {
+        column: float(_template(REDSHIFT)[0, 0]) if column == beside else None
+        for column in templates
+    }
 
 
 def test_search_without_a_selection_is_rejected(client: TestClient) -> None:
@@ -376,9 +449,11 @@ def test_search_without_a_selection_is_rejected(client: TestClient) -> None:
     [
         "/galaxy/{galaxy}/image/ls",
         "/galaxy/{galaxy}/image/hsc/tokens",
+        "/galaxy/{galaxy}/image/hsc/template",
         "/galaxy/{galaxy}",
         "/galaxy/{galaxy}/spectrum/sdss",
         "/galaxy/{galaxy}/spectrum/desi/tokens",
+        "/galaxy/{galaxy}/spectrum/sdss/template",
         "/galaxy/{galaxy}/table",
         "/search?galaxy={galaxy}&ls_image=0",
     ],

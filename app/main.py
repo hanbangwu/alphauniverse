@@ -30,9 +30,12 @@ from .config import (
     REDSHIFT_TABLE_VALUE,
     SALIENCY_SAMPLE,
     SEARCH_RANK,
+    SPECTRUM_GRID,
     SPECTRUM_MODES,
     SPECTRUM_ORIGIN,
+    SPECTRUM_PIXEL,
     SPECTRUM_SMOOTHING_SIGMA,
+    SPECTRUM_SURVEY,
     SPECTRUM_TOKEN_WIDTH,
     TABLE_MODES,
     TABLE_VALUE_COLUMNS,
@@ -49,8 +52,23 @@ from .config import (
     galaxy_count,
     labels,
 )
-from .dataset import catalogue, image, redshift, smoothed, spectrum, table
-from .search import FIRST_LS_TABLE_VALUE, table_value_tokens, tokens
+from .dataset import (
+    catalogue,
+    fitted,
+    image,
+    predicted_image,
+    redshift,
+    smoothed,
+    spectrum,
+    table,
+)
+from .search import (
+    FIRST_LS_TABLE_VALUE,
+    table_value_templates,
+    table_value_tokens,
+    templates,
+    tokens,
+)
 from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
@@ -81,6 +99,7 @@ class TableRow(BaseModel):
     section: Catalogue | Literal["redshift"]
     column: str
     value: float | int | bool | None
+    template: float | None
     table_value: int | None
     token: int | None
     excluded: str | None
@@ -100,6 +119,7 @@ ARROW_STREAM: dict[str, Any] = {
         "schema": {"type": "string", "format": "binary"}
     }
 }
+PNG: dict[str, Any] = {"image/png": {"schema": {"type": "string", "format": "binary"}}}
 
 
 def arrow(data: pa.RecordBatch | pa.Table) -> Response:
@@ -140,6 +160,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pql.basis()
     for column in OBSERVATIONS:
         pql.observed(column)
+    for mode in MODES:
+        templates(mode)
     for name in GRAM_NAMES:
         pql.stored(name)
     yield
@@ -255,7 +277,8 @@ def redshift_row(
     survey: SpectrumSurvey,
     values: dict,
     chosen: str | None,
-    token: int | None,
+    token_ids: dict[str, int],
+    predicted: dict[str, float],
 ) -> TableRow:
     first = column == REDSHIFT_COLUMNS[survey][0]
     selectable = first and survey == chosen
@@ -263,13 +286,18 @@ def redshift_row(
         section=REDSHIFT,
         column=f"{survey.upper()} {column.partition('-')[0]}",
         value=values[column],
+        template=predicted[REDSHIFT]
+        if first and survey == (chosen or SPECTRUM_SURVEY)
+        else None,
         table_value=REDSHIFT_TABLE_VALUE if selectable else None,
-        token=token if selectable else None,
+        token=token_ids.get(REDSHIFT) if selectable else None,
         excluded=excluded(values, survey, chosen) if first else None,
     )
 
 
-def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRow:
+def catalogue_row(
+    column: str, value: Any, token_ids: dict[str, int], predicted: dict[str, float]
+) -> TableRow:
     table_value = (
         FIRST_LS_TABLE_VALUE + TABLE_VALUE_COLUMNS.index(column)
         if column in TABLE_VALUE_COLUMNS
@@ -279,6 +307,7 @@ def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRo
         section=catalogue(column),
         column=column.partition("-")[0],
         value=value,
+        template=predicted.get(column),
         table_value=table_value,
         token=None if table_value is None else token_ids.get(column),
         excluded=None,
@@ -290,6 +319,7 @@ def catalogue_row(column: str, value: Any, token_ids: dict[str, int]) -> TableRo
 )
 def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     token_ids = table_value_tokens(galaxy)
+    predicted = table_value_templates(galaxy)
     values = table(galaxy)
     chosen = redshift(values)
     shown = [
@@ -299,10 +329,10 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     ]
     redshifts = {column for column, _ in shown}
     return [
-        redshift_row(column, survey, values, chosen, token_ids.get(REDSHIFT))
+        redshift_row(column, survey, values, chosen, token_ids, predicted)
         for column, survey in shown
     ] + [
-        catalogue_row(column, value, token_ids)
+        catalogue_row(column, value, token_ids, predicted)
         for column, value in values.items()
         if column not in redshifts
     ]
@@ -311,11 +341,7 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
 @app.get(
     "/galaxy/{galaxy}/image/{survey}",
     response_class=Response,
-    responses={
-        200: {
-            "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}
-        }
-    },
+    responses={200: {"content": PNG}},
     description="The central 96 by 96 px of the galaxy's image in one survey: the "
     "dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i "
     "and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy "
@@ -340,6 +366,21 @@ def get_image_tokens(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     return Response(
         np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
         media_type="application/octet-stream",
+    )
+
+
+@app.get(
+    "/galaxy/{galaxy}/image/{survey}/template",
+    response_class=Response,
+    responses={200: {"content": PNG}},
+    description="AION's predicted image of the galaxy in one survey, 96 by 96 px, "
+    "coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, "
+    "which made the Legacy Survey's colour images.",
+)
+def get_image_template(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
+    return Response(
+        predicted_image(templates(f"{survey}_image")[galaxy], survey),
+        media_type="image/png",
     )
 
 
@@ -369,6 +410,28 @@ def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response
         raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
     return Response(
         np.asarray(cell.values)[1:].tobytes(), media_type="application/octet-stream"
+    )
+
+
+@app.get(
+    "/galaxy/{galaxy}/spectrum/{survey}/template",
+    response_class=Response,
+    responses={200: {"content": ARROW_STREAM}},
+    description="AION's predicted spectrum of the galaxy in one survey on its codec's "
+    f"grid, from {SPECTRUM_ORIGIN:g} Å in {SPECTRUM_PIXEL:g} Å steps. For a galaxy "
+    "with that survey's spectrum it is scaled to the flux, by the amplitude that fits "
+    "the unmasked pixels in inverse-variance weighted least squares; otherwise it is "
+    "the normalised shape AION predicts.",
+)
+def get_spectrum_template(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    flux = fitted(templates(f"{survey}_spectrum")[galaxy], galaxy, survey)
+    return arrow(
+        pa.table(
+            {
+                "wavelength": pa.array(SPECTRUM_GRID, pa.float32()),
+                "flux": pa.array(flux, pa.float32()),
+            }
+        )
     )
 
 

@@ -14,6 +14,7 @@ export class ViewState {
   readonly spectrumAnywhere = new Field(false)
   readonly searched = new Field<SimilarityQuery | null>(null)
   readonly explorer = new Field(false)
+  readonly predictions = new Field(false)
   readonly open = new PersistedState('open-groups', {
     images: true,
     spectra: true,

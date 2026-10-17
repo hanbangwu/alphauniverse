@@ -6,7 +6,7 @@
   import { tableQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { SECTIONS } from '$lib/labels'
-  import { getMask } from '$lib/state/app.svelte'
+  import { getMask, getView } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -20,6 +20,7 @@
 
   const similarity = getSimilarity()
   const display = getMask()
+  const view = getView()
   const table = createQuery(() => tableQuery(galaxy))
 
   const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.section)])
@@ -70,12 +71,18 @@
           >
           <Table.Head class="h-7 px-0 font-normal">Name</Table.Head>
           <Table.Head class="h-7 px-0 text-right font-normal">Value</Table.Head>
+          {#if view.predictions.value}
+            <Table.Head class="h-7 pr-0 pl-3 text-right font-normal">AION</Table.Head>
+          {/if}
         </Table.Row>
       </Table.Header>
       <Table.Body>
         {#each groups as [section, rows] (section)}
           <Table.Row class="hover:bg-transparent">
-            <Table.Cell colspan={3} class="px-0 pt-3 pb-1 text-muted-foreground uppercase">
+            <Table.Cell
+              colspan={view.predictions.value ? 4 : 3}
+              class="px-0 pt-3 pb-1 text-muted-foreground uppercase"
+            >
               {SECTIONS[section].label}
             </Table.Cell>
           </Table.Row>
@@ -118,6 +125,11 @@
               <Table.Cell class="px-0 py-1.5 text-right font-mono tabular-nums">
                 {format(row.value)}
               </Table.Cell>
+              {#if view.predictions.value}
+                <Table.Cell class="py-1.5 pr-0 pl-3 text-right font-mono tabular-nums">
+                  {format(row.template)}
+                </Table.Cell>
+              {/if}
             </Table.Row>
           {/each}
         {/each}

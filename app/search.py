@@ -35,6 +35,11 @@ def tokens() -> pa.Table:
     return source("tokens").to_table()
 
 
+@cache
+def templates(mode: str) -> np.ndarray:
+    return np.load(artifact(f"template_{mode}"), mmap_mode="r")
+
+
 def table_value_tokens(galaxy: int) -> dict[str, int]:
     found = {
         column: int(token)
@@ -46,4 +51,16 @@ def table_value_tokens(galaxy: int) -> dict[str, int]:
     }
     if (cell := tokens().column(REDSHIFT)[galaxy]).is_valid:
         found[REDSHIFT] = int(cell.values[0].as_py())
+    return found
+
+
+def table_value_templates(galaxy: int) -> dict[str, float]:
+    found = {
+        column: float(value)
+        for survey, columns in TABLE_VALUE_SURVEYS.items()
+        for column, value in zip(
+            columns, templates(f"{survey}_table")[galaxy], strict=True
+        )
+    }
+    found[REDSHIFT] = float(templates(REDSHIFT)[galaxy, 0])
     return found
