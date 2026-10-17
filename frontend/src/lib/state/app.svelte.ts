@@ -23,7 +23,7 @@ export class AppState {
   ) {
     this.view = new ViewState()
     this.search = new SearchState()
-    this.filters = new FilterState(meta, this.mosaic)
+    this.filters = new FilterState(meta, this.mosaic, this.view)
     this.swatches = $derived(
       mode.current ? morphologyColors(meta.morphologies.length - 1, mode.current) : null
     )

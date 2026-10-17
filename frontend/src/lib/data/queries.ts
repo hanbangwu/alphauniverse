@@ -183,6 +183,19 @@ export function colouringQuery(
   })
 }
 
+export function withinQuery(
+  mosaic: MosaicState,
+  name: string,
+  range: readonly [number, number] | null
+) {
+  return queryOptions({
+    queryKey: ['within', name, range] as const,
+    queryFn: range === null ? skipToken : () => mosaic.within(name, range),
+    placeholderData: keepPreviousData,
+    ...FOREVER
+  })
+}
+
 export function morphologyQuery(mosaic: MosaicState, table: string | null, galaxy: number | null) {
   return queryOptions({
     queryKey: ['morphology', table, galaxy] as const,

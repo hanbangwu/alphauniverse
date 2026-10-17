@@ -87,7 +87,7 @@
           ? { value: 'value', width: 'width', predicted: 'predicted' }
           : null}
         identifier="galaxy"
-        filter={mosaic.filter}
+        filter={coloured ? mosaic.colouredFilter : mosaic.filter}
         {tooltip}
         selection={highlighted}
         {width}
