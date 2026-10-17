@@ -24,8 +24,11 @@ export const TABLE_MODES: Partial<Record<TableRow['section'], ModeName>> = {
   hsc: 'hsc_table'
 }
 
+export const isTokenMode = (mode: ModeName): mode is CosineMode =>
+  (TOKEN_MODES as readonly ModeName[]).includes(mode)
+
 export function anywhereModes(
-  modes: readonly string[],
+  modes: readonly ModeName[],
   imageAnywhere: boolean,
   spectrumAnywhere: boolean
 ): CosineMode[] {

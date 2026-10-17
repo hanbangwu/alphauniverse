@@ -47,7 +47,7 @@
   {:else}
     <span class="text-sm font-medium">#{galaxy}: {similarity.total(score)}</span>
   {/if}
-  {#if similarity.wholeModes}
+  {#if similarity.wholeResult}
     <ContributionBars {index} />
   {/if}
   {#if predicted.length}

@@ -1,7 +1,7 @@
 import type { Galaxy } from '$lib/api'
 import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, surveyOf } from '$lib/data/modes'
+import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, isTokenMode, surveyOf } from '$lib/data/modes'
 import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
 import {
@@ -98,6 +98,7 @@ export class Similarity {
   readonly tableValueHeat: Heat | null
   readonly contributionModes: ModeName[]
   readonly contributionLimit: number
+  readonly modes: ModeName[]
 
   constructor(galaxy: number) {
     const { view, search } = this.#app
@@ -105,7 +106,7 @@ export class Similarity {
     this.grid = this.#app.meta.grid
 
     const whole = $derived(view.wholeModes.value)
-    const selections = $derived(byMode((mode) => this.tokensOf(mode)))
+    const selections = $derived(byMode((mode) => view.tokens[mode].value))
     const selection = $derived(
       whole
         ? null
@@ -118,12 +119,17 @@ export class Similarity {
           )
     )
     this.#selected = $derived(selection !== null)
+    this.modes = $derived(
+      (Object.keys(MODES) as ModeName[]).filter(
+        (mode) => view.modes.has(mode) && (!isTokenMode(mode) || this.#shown(mode))
+      )
+    )
     this.draft = $derived(
       search.request(
         whole
           ? search.modeSelection(
               galaxy,
-              view.modes.value,
+              this.modes,
               view.imageAnywhere.value,
               view.spectrumAnywhere.value
             )
@@ -213,17 +219,18 @@ export class Similarity {
     return this.#layerDomain(SPECTRUM_MODES)
   }
 
+  #shown(mode: CosineMode): boolean {
+    const survey = surveyOf(mode)
+    return (
+      this.#app.view.predictions.value ||
+      survey === ANCHOR ||
+      (this.#coverage.data?.[survey] ?? false)
+    )
+  }
+
   #layerDomain(modes: readonly CosineMode[]): Extent | null {
-    const coverage = this.#coverage.data
     return union(
-      modes
-        .filter(
-          (mode) =>
-            this.#app.view.predictions.value ||
-            surveyOf(mode) === ANCHOR ||
-            coverage?.[surveyOf(mode)]
-        )
-        .map((mode) => this.layerOf(mode)?.domain)
+      modes.filter((mode) => this.#shown(mode)).map((mode) => this.layerOf(mode)?.domain)
     )
   }
 
@@ -272,7 +279,7 @@ export class Similarity {
     }))
   }
 
-  get wholeModes(): boolean {
+  get wholeResult(): boolean {
     const request = this.#result.data?.request
     return request !== undefined && isModeQuery(request)
   }
@@ -281,7 +288,7 @@ export class Similarity {
     `${SIMILARITY.short} ${Math.min(1, value).toFixed(DECIMALS)}`
 
   readonly total = (value: number): string =>
-    this.wholeModes ? `score ${value.toFixed(DECIMALS)}` : this.score(value)
+    this.wholeResult ? `score ${value.toFixed(DECIMALS)}` : this.score(value)
 
   readonly cosine: Caption = (value) => `cosine ${value.toFixed(DECIMALS)}`
 

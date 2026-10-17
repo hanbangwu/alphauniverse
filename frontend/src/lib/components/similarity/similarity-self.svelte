@@ -31,7 +31,7 @@
 
   function count(modes: readonly ModeName[], fields: IndexListField[]): number {
     return whole
-      ? modes.filter((mode) => view.modes.has(mode)).length
+      ? similarity.modes.filter((mode) => modes.includes(mode)).length
       : fields.reduce((total, field) => total + field.value.length, 0)
   }
 

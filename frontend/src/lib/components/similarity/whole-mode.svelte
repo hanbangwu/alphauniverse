@@ -16,7 +16,9 @@
 </script>
 
 <div class="relative flex flex-1 flex-col">
-  {@render children()}
+  <div class="flex flex-1 flex-col" inert={view.wholeModes.value}>
+    {@render children()}
+  </div>
   {#if view.wholeModes.value}
     {@const selected = view.modes.has(mode)}
     <button

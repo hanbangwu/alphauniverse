@@ -18,12 +18,12 @@
 <p class="text-xs text-muted-foreground">
   Image matches are compared {images ? 'anywhere in the image' : 'at the same place in the image'};
   spectrum matches {spectra ? 'at any wavelength' : 'at the same observed wavelength'}.
-  {#if similarity.wholeModes}
+  {#if similarity.wholeResult}
     Each match's score is the mean over the chosen modes of its standardised score in each; the bars
     show each mode's share. Maps compare each slot at the same place.
   {/if}
 </p>
-{#if predicted.length}
+{#if similarity.wholeResult && predicted.length}
   <p class="text-xs text-muted-foreground">
     #{similarity.galaxy} has no {predicted.join(', ')}: searched with AION's prediction
   </p>

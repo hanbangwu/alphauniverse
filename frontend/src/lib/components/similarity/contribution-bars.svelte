@@ -11,7 +11,8 @@
 
   const similarity = getSimilarity()
 
-  const half = (value: number) => (50 * Math.abs(value)) / similarity.contributionLimit
+  const half = (value: number) =>
+    similarity.contributionLimit > 0 ? (50 * Math.abs(value)) / similarity.contributionLimit : 0
 </script>
 
 <dl class="grid max-w-md grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1 text-xs">
