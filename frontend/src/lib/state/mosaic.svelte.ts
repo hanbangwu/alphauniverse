@@ -2,7 +2,7 @@ import { type Projection, downloadUrl, projectionUrl } from '$lib/client'
 import { BINS } from '$lib/color'
 import { PREDICTABLE, type Property, UNLABELLED } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
-import { Query, column, count, isBetween, loadParquet } from '@uwdata/mosaic-sql'
+import { Query, column, count, isBetween, isIn, loadParquet } from '@uwdata/mosaic-sql'
 
 export interface Values {
   name: string
@@ -25,6 +25,7 @@ export class MosaicState {
   readonly coordinator = new Coordinator()
   readonly filter = Selection.intersect()
   readonly colouredFilter = Selection.intersect({ include: this.filter })
+  readonly region = Selection.intersect()
 
   #connected = false
   #properties: Promise<unknown> | null = null
@@ -133,6 +134,30 @@ export class MosaicState {
         .where(isBetween(column('value'), [low, high]))
     )
     return Number(counted.get(0).count)
+  }
+
+  async inRegion(table: string, filter: Selection): Promise<number[]> {
+    const rows = await this.connect().query(
+      Query.from(table)
+        .select('galaxy')
+        .distinct()
+        .where([this.region, filter].flatMap((selection) => selection.predicate(null) ?? []))
+        .orderby('galaxy')
+    )
+    return Array.from(rows, ({ galaxy }) => Number(galaxy))
+  }
+
+  async csv(galaxies: number[]): Promise<string> {
+    await this.#loadProperties()
+    const rows = await this.connect().query(
+      Query.from('properties')
+        .select('*')
+        .where(isIn(column('galaxy'), galaxies))
+        .orderby('galaxy')
+    )
+    const names = rows.schema.fields.map(({ name }: { name: string }) => name)
+    const lines = Array.from(rows, (row) => names.map((name: string) => row[name] ?? '').join(','))
+    return [names.join(','), ...lines].join('\n')
   }
 
   destroy(): void {

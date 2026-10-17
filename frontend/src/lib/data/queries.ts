@@ -19,6 +19,7 @@ import { matchMean } from './scores'
 import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
 import type { Spectrum } from './spectra'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
+import type { Selection } from '@uwdata/mosaic-core'
 import { Query, column, eq, isIn, literal } from '@uwdata/mosaic-sql'
 import {
   type Float32,
@@ -28,6 +29,7 @@ import {
   type Vector,
   tableFromIPC
 } from 'apache-arrow'
+import type { Point, Rectangle } from 'embedding-atlas'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
@@ -210,6 +212,20 @@ export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: 
               Array.from(rows, ({ galaxy, value }): [number, number | null] => [galaxy, value])
             )
           },
+    staleTime: Infinity
+  })
+}
+
+export function regionQuery(
+  mosaic: MosaicState,
+  table: string | null,
+  region: Rectangle | Point[] | null,
+  filter: Selection,
+  filtered: unknown
+) {
+  return queryOptions({
+    queryKey: ['region', table, region, filtered] as const,
+    queryFn: table === null || region === null ? skipToken : () => mosaic.inRegion(table, filter),
     staleTime: Infinity
   })
 }
