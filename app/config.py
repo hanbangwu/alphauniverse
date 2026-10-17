@@ -212,6 +212,10 @@ TOKEN_GRAMS = {
     for mode in MODES
 }
 GRAM_NAMES = tuple(name for names in TOKEN_GRAMS.values() for name in names)
+MAPS: dict[str, frozenset[str]] = {
+    "same_place": frozenset(),
+    "any_position": frozenset(get_args(TokenMode)),
+}
 TOKEN_EMBEDDING_RANK = 1024
 SEARCH_RANK = 256
 
@@ -237,6 +241,7 @@ ARTIFACTS: dict[str, str] = {
     **{f"template_embedding_{name}": "npz" for name in GRAM_NAMES},
     "joint_embedding": "npy",
     "properties": "parquet",
+    **{f"{name}_points": "parquet" for name in MAPS},
 }
 
 PREDICTIONS = pa.schema(

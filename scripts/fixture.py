@@ -17,6 +17,7 @@ from app.config import (
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     KEPT,
+    MAPS,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
@@ -302,6 +303,15 @@ def build(galaxies: int, seed: int = 0) -> Path:
         artifact("mean_points"),
         compression="zstd",
     )
+
+    for name in MAPS:
+        pq.write_table(
+            points(
+                rows, rng.standard_normal((galaxies, 2)).astype(np.float32), category
+            ),
+            artifact(f"{name}_points"),
+            compression="zstd",
+        )
 
     owner = np.repeat(rows, anchors.shape[1])
     pq.write_table(

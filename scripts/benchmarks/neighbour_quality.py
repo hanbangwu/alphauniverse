@@ -21,6 +21,7 @@ from app.config import (
     artifact,
     galaxy_count,
 )
+from app.maps import placed
 from app.parametric_umap import scan
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks import projection_quality
@@ -210,19 +211,6 @@ def nearest_by_search(
     )
 
 
-def search_map(
-    found: tuple[torch.Tensor, torch.Tensor], features: np.ndarray
-) -> np.ndarray:
-    others = UMAP().n_neighbors - 1
-    scores, indices = (part[:, :others].numpy() for part in found)
-    own = np.arange(len(features))[:, None]
-    knn = (
-        np.hstack([own, indices]),
-        np.hstack([np.zeros(own.shape), 1 + scores[:, :1] - scores]).astype(np.float32),
-    )
-    return UMAP(random_state=SEED, precomputed_knn=knn).fit_transform(features)
-
-
 def maps(
     families: dict[str, dict],
     joints: dict[str, dict[str, torch.Tensor]],
@@ -240,7 +228,7 @@ def maps(
     )
     stored = pq.read_table(artifact("mean_points"), columns=["x", "y"])
     projected = {
-        "token_search": search_map(searches["token"], joints["token"]["joint"].numpy()),
+        "token_search": placed(searches["token"], joints["token"]["joint"].numpy()),
         **{
             f"{role}_{variant}": UMAP(random_state=SEED).fit_transform(embedded.numpy())
             for role, variants in joints.items()

@@ -128,6 +128,20 @@ def generate_properties() -> None:
 
 @app.function(
     image=build_image,
+    cpu=8,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=20 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_maps() -> None:
+    from app.maps import generate_maps
+
+    generate_maps()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
     gpu="L4",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
