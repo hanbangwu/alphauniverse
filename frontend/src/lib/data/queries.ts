@@ -191,8 +191,27 @@ export function withinQuery(
   return queryOptions({
     queryKey: ['within', name, range] as const,
     queryFn: range === null ? skipToken : () => mosaic.within(name, range),
-    placeholderData: keepPreviousData,
-    ...FOREVER
+    staleTime: Infinity
+  })
+}
+
+export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: number[] | null) {
+  return queryOptions({
+    queryKey: ['values', name, galaxies] as const,
+    queryFn:
+      name === null || galaxies === null
+        ? skipToken
+        : async () => {
+            const rows = await mosaic.coordinator.query(
+              Query.from(name)
+                .select('galaxy', 'value')
+                .where(isIn(column('galaxy'), galaxies))
+            )
+            return new Map(
+              Array.from(rows, ({ galaxy, value }): [number, number | null] => [galaxy, value])
+            )
+          },
+    staleTime: Infinity
   })
 }
 

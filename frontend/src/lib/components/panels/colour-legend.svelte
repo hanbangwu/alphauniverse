@@ -19,9 +19,19 @@
 
   const format = (value: number) => value.toPrecision(3)
   const STEPS = 200
-  const span = $derived(coloured.most - coloured.least)
-  const at = (step: number) => coloured.least + (span * step) / STEPS
-  const stepOf = (value: number) => Math.round(((value - coloured.least) / span) * STEPS)
+  const span = $derived(coloured.high - coloured.low)
+  const at = (step: number) =>
+    step === 0
+      ? coloured.least
+      : step === STEPS
+        ? coloured.most
+        : coloured.low + (span * step) / STEPS
+  const stepOf = (value: number) =>
+    value <= coloured.least
+      ? 0
+      : value >= coloured.most
+        ? STEPS
+        : Math.min(STEPS - 1, Math.max(1, Math.round(((value - coloured.low) / span) * STEPS)))
   const committed = $derived((filters.range.value ?? [coloured.least, coloured.most]).map(stepOf))
   let dragged = $state<number[] | null>(null)
   const steps = $derived(dragged ?? committed)
@@ -73,7 +83,7 @@
     <span class="font-mono tabular-nums">{format(shown[0])} to {format(shown[1])}</span>
     {#if filters.range.value}
       <div class="flex items-center justify-between gap-2">
-        <span class="text-muted-foreground">{within.data ?? '…'} in range</span>
+        <span class="text-muted-foreground">{within.data ?? '…'} galaxies in range</span>
         <Button variant="ghost" size="xs" onclick={() => filters.range.reset()}>Reset</Button>
       </div>
     {/if}
