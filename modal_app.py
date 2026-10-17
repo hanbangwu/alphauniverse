@@ -102,7 +102,7 @@ def generate_token_embeddings() -> None:
     image=build_image,
     cpu=2,
     memory=(2 * 1024, 8 * 1024),
-    timeout=20 * 60,
+    timeout=1 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_joint_embedding() -> None:
@@ -116,7 +116,7 @@ def generate_joint_embedding() -> None:
     image=build_image,
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
-    timeout=20 * 60,
+    timeout=2 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_properties() -> None:
