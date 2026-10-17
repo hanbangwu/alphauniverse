@@ -13,7 +13,10 @@
 </script>
 
 <div
-  class={cn('relative aspect-square w-full overflow-hidden rounded-lg border bg-black', className)}
+  class={cn(
+    'relative aspect-square w-full overflow-hidden rounded-lg border bg-black has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring/30',
+    className
+  )}
 >
   {@render children()}
   {#if busy}

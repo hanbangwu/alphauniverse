@@ -17,6 +17,8 @@
     LineSeriesOption | GridComponentOption | TooltipComponentOption | DataZoomComponentOption
   >
   type Areas = NonNullable<MarkAreaComponentOption['data']>
+
+  const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1 }
 </script>
 
 <script lang="ts">
@@ -64,6 +66,10 @@
   let previous: number
   let visible: number[]
   let press: number[]
+  let cursor: number | null = null
+
+  const first = $derived(spectrum.wavelength[0])
+  const last = $derived(spectrum.wavelength[spectrum.wavelength.length - 1])
 
   const points = $derived(
     Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
@@ -187,11 +193,8 @@
     }
     if (event.button !== 0) return
     if (!instance.containPixel('grid', pixel(instance, event))) return
-    const [{ startValue, endValue }] = instance.getOption().dataZoom as {
-      startValue: number
-      endValue: number
-    }[]
-    visible = [startValue, endValue]
+    cursor = null
+    visible = shown()
     pointer = event.pointerId
     press = [event.clientX, event.clientY]
     previous = windowAt(event)
@@ -226,6 +229,54 @@
     painted = []
     pointer = null
   }
+
+  function shown(): [number, number] {
+    const [{ startValue, endValue }] = instance.getOption().dataZoom as {
+      startValue: number
+      endValue: number
+    }[]
+    return [startValue, endValue]
+  }
+
+  function point(index: number | null): void {
+    cursor = index
+    if (index === null) {
+      instance.dispatchAction({ type: 'showTip', x: -1, y: -1 })
+      return
+    }
+    const [low, high] = spectrumTokenOf(meta, index)
+    const left = Math.max(low, first)
+    const right = Math.min(high, last)
+    const y = instance.getHeight() / 2
+    const toPixel = (value: number) => instance.convertToPixel({ xAxisIndex: 0 }, value)
+    if (![left, right].every((value) => instance.containPixel('grid', [toPixel(value), y]))) {
+      const [from, to] = shown()
+      const shift =
+        right - left > to - from
+          ? (left + right - from - to) / 2
+          : Math.min(left - from, 0) + Math.max(right - to, 0)
+      instance.dispatchAction({ type: 'dataZoom', startValue: from + shift, endValue: to + shift })
+    }
+    instance.dispatchAction({ type: 'showTip', x: toPixel((left + right) / 2), y })
+  }
+
+  function navigate(event: KeyboardEvent): void {
+    const step = STEPS[event.key]
+    if (!step || event.altKey || event.ctrlKey || event.metaKey) return
+    event.preventDefault()
+    if (cursor === null) {
+      const [from, to] = shown()
+      point(spectrumTokenAt(meta, (from + to) / 2))
+      return
+    }
+    point(
+      Math.min(Math.max(cursor + step, spectrumTokenAt(meta, first)), spectrumTokenAt(meta, last))
+    )
+  }
+
+  function activate(event: MouseEvent): void {
+    if (event.detail === 0 && cursor !== null) ontoggle?.(cursor)
+  }
 </script>
 
 <svelte:window onpointermove={move} onpointerup={end} onpointercancel={end} />
@@ -238,6 +289,9 @@
   )}
   onpointerdowncapture={intercept}
   onmousedowncapture={blockPan}
+  onkeydown={navigate}
+  onclick={activate}
+  onblur={() => point(null)}
   type={interactive ? 'button' : undefined}
   class={className}
   role={interactive ? undefined : 'img'}
