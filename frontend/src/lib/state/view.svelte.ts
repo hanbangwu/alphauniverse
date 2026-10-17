@@ -1,4 +1,5 @@
 import { byMode } from '$lib/data/modes'
+import type { SimilarityQuery } from '$lib/data/similarity'
 import { POINT_SETS, type PointSet } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField } from './fields.svelte'
@@ -11,6 +12,7 @@ export class ViewState {
   readonly tableValues = new IndexListField()
   readonly imageAnywhere = new Field(false)
   readonly spectrumAnywhere = new Field(false)
+  readonly searched = new Field<SimilarityQuery | null>(null)
   readonly explorer = new Field(false)
   readonly open = new PersistedState('open-groups', {
     images: true,
@@ -34,6 +36,7 @@ export class ViewState {
     if (galaxy !== this.galaxy.value) {
       for (const field of Object.values(this.tokens)) field.reset()
       this.tableValues.reset()
+      this.searched.reset()
     }
     this.galaxy.value = galaxy
   }

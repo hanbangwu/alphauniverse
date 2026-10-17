@@ -24,7 +24,7 @@
 <div class="flex flex-col gap-5 pt-6">
   {#if view.open.current.images}
     <div class="grid max-w-5xl gap-5 md:grid-cols-3">
-      <GalaxyTile {galaxy} {score} />
+      <GalaxyTile {galaxy} {score} onselect={() => view.select(galaxy)} />
       {#each IMAGE_SURVEYS as survey (survey)}
         {#if similarity.observes(survey, index)}
           {@const mode = imageMode(survey)}

@@ -81,7 +81,6 @@ export class Similarity {
   readonly #coverage: CreateQueryResult<Galaxy>
   readonly #layers: Record<CosineMode, ModeLayer>
   readonly #saliency: CreateQueryResult<SaliencyResult>
-  #submitted: SimilarityQuery | null = $state(null)
   readonly #selected: boolean
 
   layer: Layer = $state('galaxy')
@@ -113,7 +112,7 @@ export class Similarity {
     )
     this.#selected = $derived(selection !== null)
     this.draft = $derived(search.request(selection))
-    this.#result = createQuery(() => similarityQuery(this.#submitted))
+    this.#result = createQuery(() => similarityQuery(view.searched.value))
     this.#coverage = createQuery(() => coverageQuery(galaxy))
     const own = $derived(this.layer === 'galaxy')
     this.#saliency = createQuery(() => saliencyQuery(own ? null : selection))
@@ -208,11 +207,11 @@ export class Similarity {
   }
 
   get searched(): boolean {
-    return this.#submitted !== null
+    return this.#app.view.searched.value !== null
   }
 
   submit(): void {
-    this.#submitted = this.draft
+    this.#app.view.searched.value = this.draft
   }
 
   get matches(): { galaxy: number; index: number }[] {
