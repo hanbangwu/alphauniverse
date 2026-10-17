@@ -15,12 +15,12 @@ from pydantic import BaseModel
 
 from . import pql
 from .config import (
-    ANCHOR,
     DATASET_AUTHOR,
     DATASET_NAME,
     FLAG_SURVEYS,
     GRID,
     IMAGE_MODES,
+    MODES,
     N_IMAGE_TOKENS,
     OBSERVATIONS,
     REDSHIFT,
@@ -41,6 +41,7 @@ from .config import (
     Catalogue,
     Download,
     GalaxyIndex,
+    ImageSurvey,
     Projection,
     SpectrumSurvey,
     TextModality,
@@ -51,9 +52,9 @@ from .config import (
 )
 from .dataset import (
     catalogue,
-    colour,
     fitted,
     image,
+    predicted_image,
     redshift,
     smoothed,
     spectrum,
@@ -117,8 +118,6 @@ ARROW_STREAM: dict[str, Any] = {
     }
 }
 PNG: dict[str, Any] = {"image/png": {"schema": {"type": "string", "format": "binary"}}}
-IMAGE_TEMPLATE = f"{ANCHOR}_image"
-SPECTRUM_TEMPLATE = f"{SPECTRUM_SURVEY}_spectrum"
 
 
 def arrow(data: pa.RecordBatch | pa.Table) -> Response:
@@ -159,7 +158,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pql.basis()
     for column in OBSERVATIONS:
         pql.observed(column)
-    for mode in (IMAGE_TEMPLATE, SPECTRUM_TEMPLATE, *TABLE_MODES):
+    for mode in MODES:
         templates(mode)
     yield
 
@@ -341,21 +340,30 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
 
 
 @app.get(
-    "/galaxy/{galaxy}/image",
+    "/galaxy/{galaxy}/image/{survey}",
     response_class=Response,
     responses={200: {"content": PNG}},
+    description="The central 96 by 96 px of the galaxy's image in one survey: the "
+    "dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i "
+    "and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy "
+    "Survey's.",
 )
-def get_image(galaxy: GalaxyIndex) -> Response:
-    return Response(image(galaxy), media_type="image/png")
+def get_image(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
+    found = image(galaxy, survey)
+    if found is None:
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} image")
+    return Response(found, media_type="image/png")
 
 
 @app.get(
-    "/galaxy/{galaxy}/image/tokens",
+    "/galaxy/{galaxy}/image/{survey}/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
 )
-def get_image_tokens(galaxy: GalaxyIndex) -> Response:
-    cell = tokens().column(ANCHOR)[galaxy]
+def get_image_tokens(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
+    cell = tokens().column(survey)[galaxy]
+    if not cell.is_valid:
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} image")
     return Response(
         np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
         media_type="application/octet-stream",
@@ -363,60 +371,61 @@ def get_image_tokens(galaxy: GalaxyIndex) -> Response:
 
 
 @app.get(
-    "/galaxy/{galaxy}/image/template",
+    "/galaxy/{galaxy}/image/{survey}/template",
     response_class=Response,
     responses={200: {"content": PNG}},
-    description="AION's predicted Legacy Survey image of the galaxy, coloured as the "
-    "dataset's colour image is: legacypipe's g, r, i, z mapping.",
+    description="AION's predicted image of the galaxy in one survey, 96 by 96 px, "
+    "coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, "
+    "which made the Legacy Survey's colour images.",
 )
-def get_image_template(galaxy: GalaxyIndex) -> Response:
+def get_image_template(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     return Response(
-        colour(templates(IMAGE_TEMPLATE)[galaxy], ["g", "r", "i", "z"]),
+        predicted_image(templates(f"{survey}_image")[galaxy], survey),
         media_type="image/png",
     )
 
 
 @app.get(
-    "/galaxy/{galaxy}/spectrum",
+    "/galaxy/{galaxy}/spectrum/{survey}",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
     description="The galaxy's spectrum for display, its flux smoothed with a "
     f"Gaussian of sigma {SPECTRUM_SMOOTHING_SIGMA} pixels; masked pixels stay NaN.",
 )
-def get_spectrum(galaxy: GalaxyIndex) -> Response:
-    table = spectrum(galaxy, SPECTRUM_SURVEY)
+def get_spectrum(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    table = spectrum(galaxy, survey)
     if table is None:
-        raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
     flux = smoothed(table["flux"].to_numpy())
     return arrow(table.set_column(1, "flux", pa.array(flux, pa.float32())))
 
 
 @app.get(
-    "/galaxy/{galaxy}/spectrum/tokens",
+    "/galaxy/{galaxy}/spectrum/{survey}/tokens",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
 )
-def get_spectrum_tokens(galaxy: GalaxyIndex) -> Response:
-    cell = tokens().column(SPECTRUM_SURVEY)[galaxy]
+def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    cell = tokens().column(survey)[galaxy]
     if not cell.is_valid:
-        raise HTTPException(404, f"galaxy {galaxy} has no {SPECTRUM_SURVEY} spectrum")
+        raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
     return Response(
         np.asarray(cell.values)[1:].tobytes(), media_type="application/octet-stream"
     )
 
 
 @app.get(
-    "/galaxy/{galaxy}/spectrum/template",
+    "/galaxy/{galaxy}/spectrum/{survey}/template",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
-    description="AION's predicted DESI spectrum of the galaxy on its codec's grid, "
-    f"from {SPECTRUM_ORIGIN:g} Å in {SPECTRUM_PIXEL:g} Å steps. "
-    "For a galaxy with a DESI spectrum it is scaled to the flux, by the amplitude "
-    "that fits the unmasked pixels in inverse-variance weighted least squares; "
-    "otherwise it is the normalised shape AION predicts.",
+    description="AION's predicted spectrum of the galaxy in one survey on its codec's "
+    f"grid, from {SPECTRUM_ORIGIN:g} Å in {SPECTRUM_PIXEL:g} Å steps. For a galaxy "
+    "with that survey's spectrum it is scaled to the flux, by the amplitude that fits "
+    "the unmasked pixels in inverse-variance weighted least squares; otherwise it is "
+    "the normalised shape AION predicts.",
 )
-def get_spectrum_template(galaxy: GalaxyIndex) -> Response:
-    flux = fitted(templates(SPECTRUM_TEMPLATE)[galaxy], galaxy, SPECTRUM_SURVEY)
+def get_spectrum_template(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+    flux = fitted(templates(f"{survey}_spectrum")[galaxy], galaxy, survey)
     return arrow(
         pa.table(
             {

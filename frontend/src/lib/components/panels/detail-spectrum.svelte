@@ -1,8 +1,8 @@
 <script lang="ts">
+  import type { SpectrumSurvey } from '$lib/client'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
-  import { coverageQuery, spectrumQuery, spectrumTemplateQuery } from '$lib/data/queries'
-  import { SPECTRUM_SURVEY, hasSpectrum } from '$lib/data/spectra'
+  import { spectrumQuery, spectrumTemplateQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
@@ -10,40 +10,31 @@
 
   interface Props {
     galaxy: number
+    survey: SpectrumSurvey
+    matched: boolean
   }
 
-  let { galaxy }: Props = $props()
+  let { galaxy, survey, matched }: Props = $props()
 
   const view = getView()
 
-  const coverage = createQuery(() => coverageQuery(galaxy))
-  const matched = $derived(coverage.data ? hasSpectrum(coverage.data) : false)
-  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null))
+  const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, survey))
   const prediction = createQuery(() =>
-    spectrumTemplateQuery(view.predictions.value ? galaxy : null)
+    spectrumTemplateQuery(view.predictions.value ? galaxy : null, survey)
   )
-  const observed = $derived(matched ? (spectrum.data ?? null) : null)
-  const predicted = $derived(prediction.data ?? null)
-  const survey = SURVEYS[SPECTRUM_SURVEY].label
+  const label = $derived(SURVEYS[survey].label)
 </script>
 
-<PanelFrame
-  busy={coverage.isPending || spectrum.isFetching || prediction.isFetching}
-  class="bg-card"
->
-  {#if matched ? observed : predicted}
+<PanelFrame busy={spectrum.isFetching || prediction.isFetching} class="aspect-2/1 bg-card">
+  {#if matched ? spectrum.data : prediction.data}
     <SpectrumChart
-      spectrum={observed}
-      prediction={predicted}
-      label={observed
-        ? `${survey} spectrum of galaxy ${galaxy}${predicted ? ", with AION's prediction" : ''}`
-        : `AION's predicted ${survey} spectrum of galaxy ${galaxy}, normalised`}
+      spectrum={spectrum.data ?? null}
+      prediction={prediction.data}
+      label={matched
+        ? `${label} spectrum of galaxy ${galaxy}${prediction.data ? ", with AION's prediction" : ''}`
+        : `AION's predicted ${label} spectrum of galaxy ${galaxy}, normalised`}
       class="absolute inset-0"
     />
-  {:else if coverage.data && !matched && !view.predictions.value}
-    <p class="absolute inset-0 grid place-content-center text-xs text-muted-foreground">
-      No spectrum
-    </p>
   {/if}
 </PanelFrame>
 

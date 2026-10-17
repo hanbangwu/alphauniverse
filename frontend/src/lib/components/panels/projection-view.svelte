@@ -28,23 +28,39 @@
 
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
+  import { morphologiesQuery, similarityQuery } from '$lib/data/queries'
   import { getApp } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
   import { mode } from 'mode-watcher'
 
   const app = getApp()
-  const { view, mosaic } = app
+  const { view, mosaic, filters } = app
 
   let width = $state(0)
   let height = $state(0)
 
   const mean = createQuery(() => app.meanPoints)
   const full = createQuery(() => app.fullPoints)
+  const search = createQuery(() => similarityQuery(view.searched.value))
 
   const loaded = $derived((view.full ? full.data : mean.data) ?? null)
 
-  const highlighted = $derived(view.galaxy.value === null ? null : [view.galaxy.value])
+  let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
+
+  const results = $derived(
+    search.data && !search.isPlaceholderData && !view.full ? Array.from(search.data.galaxies) : null
+  )
+  const circled = $derived(view.galaxy.value === null ? null : (results ?? [view.galaxy.value]))
+  const morphologies = createQuery(() => morphologiesQuery(mosaic, mean.data ?? null, circled))
+
+  let highlighted = $derived(
+    circled?.filter(
+      (galaxy) =>
+        !filters.active ||
+        filters.morphologies.value.some((index) => index === morphologies.data?.get(galaxy))
+    )
+  )
 </script>
 
 <div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
@@ -59,15 +75,20 @@
         categoryColors={app.swatches}
         identifier="galaxy"
         filter={mosaic.filter}
+        {tooltip}
         selection={highlighted}
         {width}
         {height}
         config={{ colorScheme: mode.current, autoLabelEnabled: false }}
         theme={{ statusBar: false }}
         customTooltip={Tooltip}
+        onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
-          const galaxy = picked?.at(-1)?.identifier
-          view.select(galaxy === undefined ? null : Number(galaxy))
+          const galaxies = picked?.map((point) => Number(point.identifier)) ?? []
+          const galaxy = galaxies.at(-1) ?? null
+          const toggled = galaxies.length > 1 && highlighted?.some((circled) => circled === galaxy)
+          if (picked && !toggled) view.select(galaxy)
+          highlighted = highlighted && [...highlighted]
         }}
       />
     {/key}

@@ -32,13 +32,13 @@
     class="z-100 max-h-11/12 w-full overflow-y-auto sm:max-w-[90vw]"
   >
     <Dialog.Header class="flex-row items-center gap-6">
-      <Dialog.Title>Search</Dialog.Title>
+      <Dialog.Title>Search from #{galaxy}</Dialog.Title>
       <PredictionsSwitch />
     </Dialog.Header>
 
-    <SimilaritySelf />
-
     <SearchForm />
+
+    <SimilaritySelf />
 
     {#if similarity.searched}
       <Separator />

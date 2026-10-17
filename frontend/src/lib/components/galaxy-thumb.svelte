@@ -1,14 +1,16 @@
 <script lang="ts">
   import type { GetImageData, GetImageTemplateData } from '$lib/api'
-  import { client } from '$lib/client'
+  import { type ImageSurvey, client } from '$lib/client'
   import { Spinner } from '$lib/components/ui/spinner'
+  import { SURVEYS } from '$lib/labels'
 
   interface Props {
     galaxy: number
+    survey?: ImageSurvey
     predicted?: boolean
   }
 
-  let { galaxy, predicted = false }: Props = $props()
+  let { galaxy, survey = 'ls', predicted = false }: Props = $props()
 
   let loaded = $state<string | null>(null)
   let failed = $state<string | null>(null)
@@ -16,17 +18,20 @@
   const src = $derived(
     predicted
       ? client.buildUrl<GetImageTemplateData>({
-          url: '/galaxy/{galaxy}/image/template',
-          path: { galaxy }
+          url: '/galaxy/{galaxy}/image/{survey}/template',
+          path: { galaxy, survey }
         })
-      : client.buildUrl<GetImageData>({ url: '/galaxy/{galaxy}/image', path: { galaxy } })
+      : client.buildUrl<GetImageData>({
+          url: '/galaxy/{galaxy}/image/{survey}',
+          path: { galaxy, survey }
+        })
   )
 </script>
 
 {#if failed !== src}
   <img
     {src}
-    alt={`${predicted ? "AION's predicted " : ''}Legacy Survey image of galaxy ${galaxy}`}
+    alt={`${predicted ? "AION's predicted " : ''}${SURVEYS[survey].label} image of galaxy ${galaxy}`}
     loading="lazy"
     onload={() => (loaded = src)}
     onerror={() => (failed = src)}

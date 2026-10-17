@@ -196,9 +196,10 @@
         }
       }
     },
-    "/galaxy/{galaxy}/image": {
+    "/galaxy/{galaxy}/image/{survey}": {
       "get": {
         "summary": "Get Image",
+        "description": "The central 96 by 96 px of the galaxy's image in one survey: the dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy Survey's.",
         "operationId": "get_image",
         "parameters": [
           {
@@ -209,6 +210,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -237,7 +251,7 @@
         }
       }
     },
-    "/galaxy/{galaxy}/image/tokens": {
+    "/galaxy/{galaxy}/image/{survey}/tokens": {
       "get": {
         "summary": "Get Image Tokens",
         "operationId": "get_image_tokens",
@@ -250,6 +264,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -278,10 +305,10 @@
         }
       }
     },
-    "/galaxy/{galaxy}/image/template": {
+    "/galaxy/{galaxy}/image/{survey}/template": {
       "get": {
         "summary": "Get Image Template",
-        "description": "AION's predicted Legacy Survey image of the galaxy, coloured as the dataset's colour image is: legacypipe's g, r, i, z mapping.",
+        "description": "AION's predicted image of the galaxy in one survey, 96 by 96 px, coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy Survey's colour images.",
         "operationId": "get_image_template",
         "parameters": [
           {
@@ -292,6 +319,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -320,7 +360,7 @@
         }
       }
     },
-    "/galaxy/{galaxy}/spectrum": {
+    "/galaxy/{galaxy}/spectrum/{survey}": {
       "get": {
         "summary": "Get Spectrum",
         "description": "The galaxy's spectrum for display, its flux smoothed with a Gaussian of sigma 2 pixels; masked pixels stay NaN.",
@@ -334,6 +374,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -362,7 +415,7 @@
         }
       }
     },
-    "/galaxy/{galaxy}/spectrum/tokens": {
+    "/galaxy/{galaxy}/spectrum/{survey}/tokens": {
       "get": {
         "summary": "Get Spectrum Tokens",
         "operationId": "get_spectrum_tokens",
@@ -375,6 +428,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],
@@ -403,10 +469,10 @@
         }
       }
     },
-    "/galaxy/{galaxy}/spectrum/template": {
+    "/galaxy/{galaxy}/spectrum/{survey}/template": {
       "get": {
         "summary": "Get Spectrum Template",
-        "description": "AION's predicted DESI spectrum of the galaxy on its codec's grid, from 3500 \u00c5 in 0.8 \u00c5 steps. For a galaxy with a DESI spectrum it is scaled to the flux, by the amplitude that fits the unmasked pixels in inverse-variance weighted least squares; otherwise it is the normalised shape AION predicts.",
+        "description": "AION's predicted spectrum of the galaxy in one survey on its codec's grid, from 3500 \u00c5 in 0.8 \u00c5 steps. For a galaxy with that survey's spectrum it is scaled to the flux, by the amplitude that fits the unmasked pixels in inverse-variance weighted least squares; otherwise it is the normalised shape AION predicts.",
         "operationId": "get_spectrum_template",
         "parameters": [
           {
@@ -417,6 +483,19 @@
               "type": "integer",
               "minimum": 0,
               "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "desi",
+                "sdss"
+              ],
+              "type": "string",
+              "title": "Survey"
             }
           }
         ],

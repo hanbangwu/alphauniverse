@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app import dataset as dataset_module
+from app import main as main_module
 from app import pql
 from app.config import (
     ANCHOR,
@@ -98,21 +99,24 @@ def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
     assert client.get("/downloads/codebook").status_code == 404
 
 
+@pytest.mark.parametrize("survey", [ANCHOR, "hsc"])
 def test_image_tokens_are_that_galaxys_stored_image_token_ids(
-    client: TestClient, galaxies: int
+    client: TestClient, survey: str
 ) -> None:
-    galaxy = galaxies - 1
-    cell = _stored("tokens").column(ANCHOR)[galaxy]
+    column = _stored("tokens").column(survey)
+    galaxy = int(np.flatnonzero(column.is_valid())[-1])
+    cell = column[galaxy]
 
-    response = client.get(f"/galaxy/{galaxy}/image/tokens")
+    response = client.get(f"/galaxy/{galaxy}/image/{survey}/tokens")
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
     np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_IMAGE_TOKENS])
 
 
-def test_image_template_is_a_png_of_the_crop(client: TestClient) -> None:
-    response = client.get("/galaxy/0/image/template")
+@pytest.mark.parametrize("survey", [ANCHOR, "hsc"])
+def test_image_template_is_a_png_of_the_crop(client: TestClient, survey: str) -> None:
+    response = client.get(f"/galaxy/0/image/{survey}/template")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
@@ -120,28 +124,23 @@ def test_image_template_is_a_png_of_the_crop(client: TestClient) -> None:
         assert png.size == (CROP_PIXELS, CROP_PIXELS)
 
 
-def test_spectrum_template_without_a_desi_spectrum_is_the_shape_on_the_codec_grid(
+def test_an_hsc_template_is_coloured_from_nanomaggies_as_a_legacy_survey_one(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    unobserved = Dataset.from_dict(
-        {SPECTRUM_SURVEYS["desi"]: [None, None]},
-        features=Features(
-            {SPECTRUM_SURVEYS["desi"]: {"lambda": Sequence(Value("float32"))}}
-        ),
+    rng = np.random.default_rng(0)
+    flux = rng.uniform(0, 0.5, (1, 4, CROP_PIXELS, CROP_PIXELS))
+    hsc = np.concatenate(
+        [flux * 10**1.8, rng.uniform(0, 50, (1, 1, CROP_PIXELS, CROP_PIXELS))], axis=1
     )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: unobserved)
+    stored = {"ls_image": flux, "hsc_image": hsc}
+    monkeypatch.setattr(main_module, "templates", stored.__getitem__)
 
-    response = client.get("/galaxy/1/spectrum/template")
+    ls_png, hsc_png = (
+        client.get(f"/galaxy/0/image/{survey}/template").content
+        for survey in (ANCHOR, "hsc")
+    )
 
-    assert response.status_code == 200
-    assert response.headers["content-type"] == ARROW
-    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
-    np.testing.assert_array_equal(
-        table.column("wavelength").to_numpy(), SPECTRUM_GRID.astype(np.float32)
-    )
-    np.testing.assert_array_equal(
-        table.column("flux").to_numpy(), _template("desi_spectrum")[1]
-    )
+    assert hsc_png == ls_png
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
@@ -170,23 +169,56 @@ def test_cosines_are_a_square_float32_table_of_the_mode_s_slots(
         )
 
 
-def test_unmatched_spectrum_tokens_are_not_found(client: TestClient) -> None:
-    tokens = _stored("tokens").column("desi")
+@pytest.mark.parametrize(
+    ("survey", "path"), [("hsc", "image/hsc"), ("desi", "spectrum/desi")]
+)
+def test_unmatched_tokens_are_not_found(
+    client: TestClient, survey: str, path: str
+) -> None:
+    tokens = _stored("tokens").column(survey)
     untokenised = tokens.is_valid().to_pylist().index(False)
 
-    assert client.get(f"/galaxy/{untokenised}/spectrum/tokens").status_code == 404
+    assert client.get(f"/galaxy/{untokenised}/{path}/tokens").status_code == 404
 
 
-def test_spectrum_tokens_drop_the_normalisation_token(client: TestClient) -> None:
-    column = _stored("tokens").column("desi")
-    galaxy = column.is_valid().to_pylist().index(True)
+@pytest.mark.parametrize("survey", ["desi", "sdss"])
+def test_spectrum_tokens_drop_the_normalisation_token(
+    client: TestClient, survey: str
+) -> None:
+    column = _stored("tokens").column(survey)
+    galaxy = int(np.flatnonzero(column.is_valid())[-1])
     cell = column[galaxy]
 
-    response = client.get(f"/galaxy/{galaxy}/spectrum/tokens")
+    response = client.get(f"/galaxy/{galaxy}/spectrum/{survey}/tokens")
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
     np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
+
+
+@pytest.mark.parametrize("survey", ["desi", "sdss"])
+def test_spectrum_template_without_that_spectrum_is_the_shape_on_the_codec_grid(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, survey: str
+) -> None:
+    unobserved = Dataset.from_dict(
+        {SPECTRUM_SURVEYS[survey]: [None, None]},
+        features=Features(
+            {SPECTRUM_SURVEYS[survey]: {"lambda": Sequence(Value("float32"))}}
+        ),
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: unobserved)
+
+    response = client.get(f"/galaxy/1/spectrum/{survey}/template")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == ARROW
+    table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
+    np.testing.assert_array_equal(
+        table.column("wavelength").to_numpy(), SPECTRUM_GRID.astype(np.float32)
+    )
+    np.testing.assert_array_equal(
+        table.column("flux").to_numpy(), _template(f"{survey}_spectrum")[1]
+    )
 
 
 def _similarity(client: TestClient, **query) -> pa.RecordBatch:
@@ -398,13 +430,13 @@ def test_search_without_a_selection_is_rejected(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "path",
     [
-        "/galaxy/{galaxy}/image",
-        "/galaxy/{galaxy}/image/tokens",
-        "/galaxy/{galaxy}/image/template",
+        "/galaxy/{galaxy}/image/ls",
+        "/galaxy/{galaxy}/image/hsc/tokens",
+        "/galaxy/{galaxy}/image/hsc/template",
         "/galaxy/{galaxy}",
-        "/galaxy/{galaxy}/spectrum",
-        "/galaxy/{galaxy}/spectrum/tokens",
-        "/galaxy/{galaxy}/spectrum/template",
+        "/galaxy/{galaxy}/spectrum/sdss",
+        "/galaxy/{galaxy}/spectrum/desi/tokens",
+        "/galaxy/{galaxy}/spectrum/sdss/template",
         "/galaxy/{galaxy}/table",
         "/search?galaxy={galaxy}&ls_image=0",
     ],

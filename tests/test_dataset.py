@@ -17,6 +17,7 @@ from app.config import (
     SPECTRUM_GRID,
     SPECTRUM_SURVEYS,
     TABLE_VALUE_COLUMNS,
+    TOKEN_SURVEYS,
 )
 from app.dataset import (
     colour,
@@ -110,7 +111,28 @@ def test_samples_drop_padding_and_blank_masked_flux() -> None:
 
 
 def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
-    assert image(1) == encode(SOURCE)
+    assert image(1, "ls") == encode(SOURCE)
+
+
+@pytest.mark.parametrize(("band", "channel"), [("g", 2), ("r", 1), ("i", 1), ("z", 0)])
+def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
+    monkeypatch: pytest.MonkeyPatch, band: str, channel: int
+) -> None:
+    bands = ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]
+    flux = np.zeros((len(bands), CROP_PIXELS + 8, CROP_PIXELS + 8), dtype=np.float32)
+    flux[bands.index(f"hsc-{band}"), 4, 5] = 100.0
+    rows = Dataset.from_dict(
+        {TOKEN_SURVEYS["hsc"]: [None, {"band": bands, "flux": flux.tolist()}]}
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+
+    assert image(0, "hsc") is None
+    with Image.open(BytesIO(image(1, "hsc"))) as png:
+        pixels = np.asarray(png.convert("RGB"))
+    assert pixels.shape == (CROP_PIXELS, CROP_PIXELS, 3)
+    brightest = np.unravel_index(pixels.sum(axis=2).argmax(), pixels.shape[:2])
+    assert brightest == (0, 1)
+    assert pixels[0, 1].argmax() == channel
 
 
 def test_fitted_amplitude_weights_unmasked_samples_by_inverse_variance(

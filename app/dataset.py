@@ -8,6 +8,8 @@ from astropy.convolution import Gaussian1DKernel, convolve
 from datasets import Dataset, Image, load_dataset
 
 from .config import (
+    ANCHOR,
+    BANDS,
     CATALOGUES,
     CROP_PIXELS,
     DATASET_AUTHOR,
@@ -19,7 +21,9 @@ from .config import (
     SPECTRUM_GRID,
     SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEYS,
+    TOKEN_SURVEYS,
     Catalogue,
+    ImageSurvey,
     SpectrumSurvey,
 )
 
@@ -32,6 +36,7 @@ RGB_WEIGHTS = {
 }
 RGB_SOFTENING = 0.03
 RGB_STRETCH = 20
+HSC_TO_NANOMAGGIES = 10 ** (-0.4 * (27.0 - 22.5))
 
 
 @cache
@@ -51,11 +56,6 @@ def encode(image: PIL.Image.Image) -> bytes:
     return buffer.getvalue()
 
 
-def image(galaxy: int) -> bytes:
-    cell = dataset().data.column(RGB_COLUMN)[galaxy]
-    return encode(Image().decode_example(cell.as_py()))
-
-
 def colour(flux: np.ndarray, bands: list[str]) -> bytes:
     mapped = [band for band in bands if band in RGB_SCALES]
     scales = np.array([RGB_SCALES[band] for band in mapped])[:, None, None]
@@ -70,6 +70,24 @@ def colour(flux: np.ndarray, bands: list[str]) -> bytes:
     weights = np.array([RGB_WEIGHTS[band] for band in mapped])
     rgb = np.einsum("bhw,bc->hwc", np.clip(scaled * stretch, 0, 1), weights)
     return encode(PIL.Image.fromarray((rgb * 255).astype(np.uint8)))
+
+
+def image(galaxy: int, survey: ImageSurvey) -> bytes | None:
+    if survey == ANCHOR:
+        cell = dataset().data.column(RGB_COLUMN)[galaxy]
+        return encode(Image().decode_example(cell.as_py()))
+    cell = dataset().data.column(TOKEN_SURVEYS[survey])[galaxy]
+    if not cell.is_valid:
+        return None
+    bands = [band.partition("-")[2] for band in cell["band"].as_py()]
+    rows = cell["flux"].values.flatten()
+    flux = rows.flatten().to_numpy().reshape(len(bands), len(rows) // len(bands), -1)
+    return colour(flux * HSC_TO_NANOMAGGIES, bands)
+
+
+def predicted_image(flux: np.ndarray, survey: ImageSurvey) -> bytes:
+    bands = [band.partition("-")[2].lower() for band in BANDS[survey]]
+    return colour(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
 
 
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:

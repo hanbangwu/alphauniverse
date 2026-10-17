@@ -1,115 +1,135 @@
 <script lang="ts">
-  import { tokenAlpha, tokenColors } from '$lib/color'
+  import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
+  import Observed from '$lib/components/common/observed.svelte'
+  import { Button } from '$lib/components/ui/button'
   import { Switch } from '$lib/components/ui/switch'
-  import * as Tabs from '$lib/components/ui/tabs'
-  import { tokensQuery } from '$lib/data/queries'
-  import { errorMessage } from '$lib/errors'
+  import {
+    IMAGE_MODES,
+    IMAGE_SURVEYS,
+    SPECTRUM_MODES,
+    SPECTRUM_SURVEYS,
+    spectrumMode
+  } from '$lib/data/modes'
   import { getApp } from '$lib/state/app.svelte'
+  import type { Field } from '$lib/state/field.svelte'
+  import type { IndexListField } from '$lib/state/fields.svelte'
   import GalaxyTile from './galaxy-tile.svelte'
-  import ImageTokenMask from './image-token-mask.svelte'
-  import ImageTokenPanel from './image-token-panel.svelte'
   import MaskControls from './mask-controls.svelte'
+  import QueryImage from './query-image.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
   import TablePanel from './table-panel.svelte'
-  import { createQuery } from '@tanstack/svelte-query'
 
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
-
-  const tokens = createQuery(() => tokensQuery(similarity.galaxy))
-  const palette = $derived(tokens.data ? tokenColors(tokens.data) : null)
-
-  let hovered = $state(false)
 </script>
 
-<div class="flex flex-col gap-5">
-  <Tabs.Root bind:value={similarity.layer} class="self-center">
-    <Tabs.List aria-label="Query map">
-      <Tabs.Trigger value="galaxy">This galaxy</Tabs.Trigger>
-      <Tabs.Trigger value="population">Population</Tabs.Trigger>
-    </Tabs.List>
-  </Tabs.Root>
-  <div class={['flex flex-col gap-5 transition-opacity', similarity.layerStale && 'opacity-50']}>
-    <div class="flex flex-col gap-5 md:flex-row md:justify-center md:*:max-w-xs">
+{#snippet controls(noun: string, fields: IndexListField[], anywhere?: Field<boolean>)}
+  {@const count = fields.reduce((total, field) => total + field.value.length, 0)}
+  {#if count}
+    <span class="text-xs text-muted-foreground">{count} selected</span>
+    <Button
+      variant="ghost"
+      size="xs"
+      aria-label="Clear {noun} selection"
+      onclick={() => fields.forEach((field) => field.reset())}
+    >
+      Clear
+    </Button>
+  {/if}
+  {#if anywhere}
+    <label class="ml-auto flex items-center gap-2 text-xs">
+      <Switch size="sm" aria-label="Any position for {noun} tokens" bind:checked={anywhere.value} />
+      Any position
+    </label>
+  {/if}
+{/snippet}
+
+<div class={['flex flex-col gap-6 transition-opacity', similarity.layerStale && 'opacity-50']}>
+  <CollapsibleGroup title="Images" bind:open={view.open.current.images}>
+    {#snippet actions()}
+      {@render controls(
+        'image',
+        IMAGE_MODES.map((mode) => view.tokens[mode]),
+        view.imageAnywhere
+      )}
+    {/snippet}
+    <div class="grid max-w-5xl gap-5 md:grid-cols-3">
       <GalaxyTile galaxy={similarity.galaxy} />
-
-      <ImageTokenPanel
-        label="Image Tokens"
-        describe="Click an image token to query it"
-        values={similarity.imageLayer ?? tokens.data ?? null}
-        grid={similarity.grid}
-        color={similarity.imageLayer ? similarity.imageLayerHeat : palette}
-        opacity={similarity.imageLayer ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
-        galaxy={similarity.galaxy}
-        title={similarity.imageLayer ? similarity.layerCaption : similarity.caption}
-        selected={view.imageTokens.value}
-        ontoggle={(index) => view.imageTokens.toggle(index)}
-        busy={!tokens.data && !tokens.isError}
-        onhover={(value) => (hovered = value)}
-        imageOpacity={similarity.imageLayer || hovered ? undefined : tokenAlpha(false)}
-      >
-        {#snippet action()}
-          <div class="flex items-center gap-4">
-            <label class="flex items-center gap-2 text-sm font-medium">
-              <Switch
-                checked={display.on.value}
-                disabled={!display.on.value && !similarity.imageLayer && !similarity.searched}
-                onCheckedChange={(checked) => (display.on.value = checked)}
-              />
-              Mask
-            </label>
-            <label class="flex items-center gap-2 text-sm font-medium">
-              <Switch
-                checked={display.invert.value}
-                disabled={!display.on.value}
-                onCheckedChange={(checked) => (display.invert.value = checked)}
-              />
-              Invert
-            </label>
-          </div>
-        {/snippet}
-        {#if tokens.isError}
-          <p role="alert" class="text-xs leading-relaxed text-destructive">
-            {errorMessage(tokens.error)}
-          </p>
-        {/if}
-        {#if similarity.imageLayerError}
-          <p role="alert" class="text-xs leading-relaxed text-destructive">
-            {similarity.imageLayerError}
-          </p>
-        {/if}
-      </ImageTokenPanel>
-
-      {#if similarity.imageLayer && similarity.imageLayerDomain}
-        <ImageTokenMask
-          values={similarity.imageLayer}
-          domain={similarity.imageLayerDomain}
-          control={display.query}
-        >
-          <MaskControls domain={similarity.imageLayerDomain} control={display.query} />
-        </ImageTokenMask>
-      {/if}
-
-      <TablePanel
-        galaxy={similarity.galaxy}
-        selected={view.tableValues.value}
-        ontoggle={(index) => view.tableValues.toggle(index)}
-      />
+      {#each IMAGE_SURVEYS as survey (survey)}
+        <Observed galaxy={similarity.galaxy} {survey} kind="image">
+          {#snippet children(matched)}
+            <QueryImage {survey} {matched} />
+          {/snippet}
+        </Observed>
+      {/each}
     </div>
-
-    <SpectrumPanel
-      galaxy={similarity.galaxy}
-      map={similarity.spectrumLayer}
-      heat={similarity.spectrumLayerHeat}
-      caption={similarity.layerCaption}
-      selected={view.spectrumTokens.value}
-      ontoggle={(index) => view.spectrumTokens.toggle(index)}
-    />
-    {#if similarity.spectrumLayerError}
-      <p role="alert" class="text-xs leading-relaxed text-destructive">
-        {similarity.spectrumLayerError}
-      </p>
+    {#if display.on.value && similarity.imageLayerDomain}
+      <MaskControls
+        label="Mask threshold"
+        domain={similarity.imageLayerDomain}
+        control={display.images.query}
+      />
     {/if}
-  </div>
+  </CollapsibleGroup>
+
+  <CollapsibleGroup title="Spectra" bind:open={view.open.current.spectra}>
+    {#snippet actions()}
+      {@render controls(
+        'spectrum',
+        SPECTRUM_MODES.map((mode) => view.tokens[mode]),
+        view.spectrumAnywhere
+      )}
+    {/snippet}
+    {#each SPECTRUM_SURVEYS as survey (survey)}
+      {@const mode = spectrumMode(survey)}
+      {@const layer = similarity.layerOf(mode)}
+      <Observed galaxy={similarity.galaxy} {survey} kind="spectrum">
+        {#snippet children(matched)}
+          <SpectrumPanel
+            galaxy={similarity.galaxy}
+            {survey}
+            {matched}
+            map={layer?.values ?? null}
+            heat={layer?.heat ?? null}
+            mask={layer &&
+              similarity.maskOf(
+                layer.values,
+                similarity.spectrumLayerDomain,
+                display.spectra.query
+              )}
+            caption={similarity.layerCaption}
+            selected={view.tokens[mode].value}
+            ontoggle={(index) => view.tokens[mode].toggle(index)}
+            error={similarity.layerError(mode)}
+          />
+        {/snippet}
+      </Observed>
+    {/each}
+    {#if display.on.value && similarity.spectrumLayerDomain}
+      <MaskControls
+        label="Mask threshold"
+        domain={similarity.spectrumLayerDomain}
+        control={display.spectra.query}
+      />
+    {/if}
+  </CollapsibleGroup>
+
+  <CollapsibleGroup title="Catalogue" bind:open={view.open.current.catalogue}>
+    {#snippet actions()}
+      {@render controls('catalogue', [view.tableValues])}
+    {/snippet}
+    <TablePanel
+      galaxy={similarity.galaxy}
+      selected={view.tableValues.value}
+      ontoggle={(index) => view.tableValues.toggle(index)}
+    />
+    {#if display.on.value && similarity.tableValueDomain}
+      <MaskControls
+        label="Mask threshold"
+        domain={similarity.tableValueDomain}
+        control={display.table}
+      />
+    {/if}
+  </CollapsibleGroup>
 </div>
