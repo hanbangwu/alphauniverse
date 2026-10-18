@@ -71,14 +71,15 @@
   <div class="grid w-full items-start gap-5 md:grid-cols-2">
     {#each groups as [section, rows] (section)}
       <div class="max-h-96 overflow-y-auto rounded-lg border px-3">
-        <Table.Root class="text-xs">
+        <Table.Root class="text-xs" aria-label={SECTIONS[section].label}>
           <Table.Header>
             <Table.Row class="hover:bg-transparent">
               <Table.Head class="h-7 w-8 px-0 font-normal"
                 ><span class="sr-only">Query</span></Table.Head
               >
               <Table.Head class="h-7 px-0 font-normal text-muted-foreground uppercase">
-                {SECTIONS[section].label}
+                <span aria-hidden="true">{SECTIONS[section].label}</span>
+                <span class="sr-only">Name</span>
               </Table.Head>
               <Table.Head class="h-7 px-0 text-right font-normal">Value</Table.Head>
               {#if view.predictions.value}
