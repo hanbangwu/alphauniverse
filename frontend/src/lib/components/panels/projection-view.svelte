@@ -1,6 +1,6 @@
 <script lang="ts" module>
   import GalaxyTooltip from './galaxy-tooltip.svelte'
-  import type { DataPoint } from 'embedding-atlas'
+  import type { DataPoint, Point, Rectangle } from 'embedding-atlas'
   import { mount, unmount } from 'svelte'
 
   interface TooltipProps {
@@ -33,6 +33,7 @@
   import {
     colouringQuery,
     morphologiesQuery,
+    regionQuery,
     similarityQuery,
     valuesQuery
   } from '$lib/data/queries'
@@ -40,6 +41,7 @@
   import { COLOURINGS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import ColourLegend from './colour-legend.svelte'
+  import MapSelection from './map-selection.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
   import { mode } from 'mode-watcher'
@@ -60,6 +62,14 @@
   )
   const coloured = $derived(view.property ? (colouring.data ?? null) : null)
   const table = $derived(view.property ? (coloured?.table ?? null) : loaded)
+  const filter = $derived(coloured ? mosaic.colouredFilter : mosaic.filter)
+
+  let drawn = $state<{ points: string; value: Rectangle | Point[] } | null>(null)
+  const region = $derived(drawn && drawn.points === loaded ? drawn.value : null)
+  const selected = createQuery(() =>
+    regionQuery(mosaic, table, region, filters.morphologies.value, filters.range.value)
+  )
+  let settling: ReturnType<typeof setTimeout> | undefined
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
@@ -103,7 +113,15 @@
           ? { value: 'value', width: 'width', predicted: 'predicted' }
           : null}
         identifier="galaxy"
-        filter={coloured ? mosaic.colouredFilter : mosaic.filter}
+        {filter}
+        rangeSelectionValue={region}
+        onRangeSelection={(value: Rectangle | Point[] | null) => {
+          clearTimeout(settling)
+          settling = setTimeout(
+            () => (drawn = value && loaded ? { points: loaded, value } : null),
+            200
+          )
+        }}
         {tooltip}
         selection={highlighted}
         {width}
@@ -124,6 +142,17 @@
         }}
       />
     {/key}
+    {#if region && selected.isError}
+      <p role="alert" class="absolute top-3 right-3 text-xs text-destructive">
+        {errorMessage(selected.error)}
+      </p>
+    {:else if region && selected.data}
+      <MapSelection galaxies={selected.data} onclear={() => (drawn = null)} />
+    {:else}
+      <p class="pointer-events-none absolute top-3 right-3 text-xs text-muted-foreground">
+        Shift-drag to select a box; Shift-⌘-drag (Shift-Windows key), a lasso
+      </p>
+    {/if}
     {#if coloured}
       {#key coloured.name}
         <ColourLegend {coloured} scheme={mode.current} />

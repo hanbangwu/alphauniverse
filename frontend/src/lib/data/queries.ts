@@ -35,6 +35,7 @@ import {
   type Vector,
   tableFromIPC
 } from 'apache-arrow'
+import type { Point, Rectangle } from 'embedding-atlas'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
@@ -217,6 +218,24 @@ export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: 
               Array.from(rows, ({ galaxy, value }): [number, number | null] => [galaxy, value])
             )
           },
+    staleTime: Infinity
+  })
+}
+
+export function regionQuery(
+  mosaic: MosaicState,
+  table: string | null,
+  region: Rectangle | Point[] | null,
+  morphologies: number[],
+  range: readonly [number, number] | null
+) {
+  return queryOptions({
+    queryKey: ['region', table, region, morphologies, range] as const,
+    queryFn:
+      table === null || region === null
+        ? skipToken
+        : () => mosaic.inRegion(table, region, morphologies, range),
+    placeholderData: keepPreviousData,
     staleTime: Infinity
   })
 }
