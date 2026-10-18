@@ -18,7 +18,7 @@ paths:
   | `app/grams.py`, `app/embeddings.py`, `app/templates.py`                  | `reference.rst`, `glossary.rst`                               |
   | `app/observations.py`, `app/observed_grams.py`                           | `reference.rst`, `glossary.rst`                               |
   | `app/properties.py`                                                      | `reference.rst`, `glossary.rst`                               |
-  | `app/parametric_umap.py`                                                 | `methods/map.rst`                                             |
+  | `app/parametric_umap.py`, `app/maps.py`                                  | `methods/map.rst`, `reference.rst`                            |
   | `app/pql.py`                                                             | `methods/similarity-search.rst`, `methods/query-maps.rst`     |
   | `app/text_search.py`, `app/alignment.py`                                 | `methods/text-search.rst`                                     |
   | `app/main.py`                                                            | `reference.rst`, `using.rst`                                  |
