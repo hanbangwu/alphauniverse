@@ -23,8 +23,6 @@ export class FilterState {
       void [this.view.property.value, this.view.everywhere]
       this.range.reset()
     })
-    onDestroy(() => {
-      this.#pushRange(null)
-    })
+    onDestroy(() => this.#pushRange(null))
   }
 }

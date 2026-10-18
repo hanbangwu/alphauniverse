@@ -174,6 +174,14 @@ export function pointsQuery(mosaic: MosaicState, projection: Projection) {
   })
 }
 
+export function propertiesQuery(mosaic: MosaicState) {
+  return queryOptions({
+    queryKey: ['properties'] as const,
+    queryFn: () => mosaic.loadProperties(),
+    ...FOREVER
+  })
+}
+
 export function colouringQuery(
   mosaic: MosaicState,
   points: string | null,

@@ -1,12 +1,9 @@
 import type { Meta } from '$lib/api'
-import { propertyColors } from '$lib/color'
-import { pointsQuery } from '$lib/data/queries'
 import { FilterState } from './filter.svelte'
 import { MaskState } from './mask.svelte'
 import type { MosaicState } from './mosaic.svelte'
 import { SearchState } from './search.svelte'
 import { ViewState } from './view.svelte'
-import { mode } from 'mode-watcher'
 import { Context } from 'runed'
 
 export class AppState {
@@ -14,7 +11,6 @@ export class AppState {
   readonly search: SearchState
   readonly mask = new MaskState()
   readonly filters: FilterState
-  readonly shades: string[] | null
 
   constructor(
     readonly meta: Meta,
@@ -23,15 +19,10 @@ export class AppState {
     this.view = new ViewState()
     this.search = new SearchState()
     this.filters = new FilterState(this.mosaic, this.view)
-    this.shades = $derived(mode.current ? propertyColors(mode.current) : null)
   }
 
   get dataset(): string {
     return `${this.meta.author}/${this.meta.id}`
-  }
-
-  get shownPoints() {
-    return pointsQuery(this.mosaic, this.view.pointSet.value)
   }
 
   start(): void {
@@ -47,4 +38,3 @@ export const getMeta = (): Meta => context.get().meta
 export const getView = (): ViewState => context.get().view
 export const getSearch = (): SearchState => context.get().search
 export const getMask = (): MaskState => context.get().mask
-export const getFilters = (): FilterState => context.get().filters
