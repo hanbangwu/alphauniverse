@@ -1,64 +1,29 @@
-import type { Meta } from '$lib/api'
-import { MORPHOLOGIES } from '$lib/labels'
 import { Field } from './field.svelte'
-import { IndexListField } from './fields.svelte'
 import type { MosaicState } from './mosaic.svelte'
 import type { ViewState } from './view.svelte'
-import { clauseInterval, clausePoints } from '@uwdata/mosaic-core'
+import { clauseInterval } from '@uwdata/mosaic-core'
 import { column } from '@uwdata/mosaic-sql'
 import { onDestroy } from 'svelte'
 
-export interface MorphologyClass {
-  index: number
-  label: string
-  count: number
-}
-
 export class FilterState {
-  readonly morphologies = new IndexListField()
   readonly range = new Field<[number, number] | null>(null)
 
   constructor(
-    private readonly meta: Meta,
     private readonly mosaic: MosaicState,
     private readonly view: ViewState
   ) {}
 
-  get classes(): MorphologyClass[] {
-    return this.meta.morphologies.map((count, index) => ({
-      index,
-      label: MORPHOLOGIES[index],
-      count
-    }))
-  }
-
-  get active(): boolean {
-    return this.morphologies.value.length > 0
-  }
-
-  #push(indices: number[]): void {
-    this.mosaic.filter.update(
-      clausePoints([column('category')], indices.length ? indices.map((index) => [index]) : null, {
-        source: this
-      })
-    )
-  }
-
   #pushRange(range: [number, number] | null): void {
-    this.mosaic.colouredFilter.update(
-      clauseInterval(column('value'), range, { source: this.range })
-    )
+    this.mosaic.filter.update(clauseInterval(column('value'), range, { source: this.range }))
   }
 
   start(): void {
-    $effect(() => this.#push(this.morphologies.value))
     $effect(() => this.#pushRange(this.range.value))
     $effect(() => {
-      void [this.view.property, this.view.everywhere]
+      void [this.view.property.value, this.view.everywhere]
       this.range.reset()
     })
     onDestroy(() => {
-      this.#push([])
       this.#pushRange(null)
     })
   }

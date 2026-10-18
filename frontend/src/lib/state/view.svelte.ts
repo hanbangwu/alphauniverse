@@ -1,10 +1,9 @@
 import { byMode } from '$lib/data/modes'
 import type { ModeName, SearchQuery } from '$lib/data/similarity'
 import {
-  COLOURINGS,
-  type Colouring,
   POINT_SETS,
   PREDICTABLE,
+  PROPERTIES,
   type PointSet,
   type Property,
   SOURCES,
@@ -16,7 +15,7 @@ import { PersistedState } from 'runed'
 
 export class ViewState {
   readonly pointSet: EnumField<PointSet>
-  readonly colouring: EnumField<Colouring> = new EnumField(COLOURINGS)
+  readonly property: EnumField<Property> = new EnumField(PROPERTIES)
   readonly source: EnumField<Source> = new EnumField(SOURCES)
   readonly galaxy = new Field<number | null>(null)
   readonly tokens = byMode(() => new IndexListField())
@@ -38,13 +37,8 @@ export class ViewState {
     this.pointSet = new EnumField(POINT_SETS)
   }
 
-  get property(): Property | null {
-    const colouring = this.colouring.value
-    return colouring === 'morphology' ? null : colouring
-  }
-
   get predictable(): boolean {
-    return this.property !== null && PREDICTABLE.includes(this.property)
+    return PREDICTABLE.includes(this.property.value)
   }
 
   get everywhere(): boolean {

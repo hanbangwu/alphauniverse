@@ -2,7 +2,6 @@ import { must } from './invariant'
 import { rgb } from 'd3-color'
 import { scaleSequential } from 'd3-scale'
 import { interpolateViridis, schemeObservable10 } from 'd3-scale-chromatic'
-import { defaultCategoryColors } from 'embedding-atlas'
 
 export type RGB = [number, number, number]
 export type Scheme = 'light' | 'dark'
@@ -44,10 +43,6 @@ export function tokenColors(values: ArrayLike<number>): (value: number) => RGB {
 export const NO_VALUE = { light: '#52525b', dark: '#d4d4d8' }
 
 const BACKGROUND = { light: '#ffffff', dark: '#18181b' }
-
-export function morphologyColors(classes: number, scheme: Scheme): string[] {
-  return [...defaultCategoryColors(classes), NO_VALUE[scheme]]
-}
 
 export const BINS = 32
 

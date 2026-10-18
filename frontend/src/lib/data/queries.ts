@@ -26,7 +26,7 @@ import {
 } from './similarity'
 import type { Spectrum } from './spectra'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
-import { Query, column, eq, isIn, literal } from '@uwdata/mosaic-sql'
+import { Query, column, isIn } from '@uwdata/mosaic-sql'
 import {
   type Float32,
   type Int32,
@@ -226,59 +226,13 @@ export function regionQuery(
   mosaic: MosaicState,
   table: string | null,
   region: Rectangle | Point[] | null,
-  morphologies: number[],
   range: readonly [number, number] | null
 ) {
   return queryOptions({
-    queryKey: ['region', table, region, morphologies, range] as const,
+    queryKey: ['region', table, region, range] as const,
     queryFn:
-      table === null || region === null
-        ? skipToken
-        : () => mosaic.inRegion(table, region, morphologies, range),
+      table === null || region === null ? skipToken : () => mosaic.inRegion(table, region, range),
     placeholderData: keepPreviousData,
-    staleTime: Infinity
-  })
-}
-
-export function morphologyQuery(mosaic: MosaicState, table: string | null, galaxy: number | null) {
-  return queryOptions({
-    queryKey: ['morphology', table, galaxy] as const,
-    queryFn:
-      table === null || galaxy === null
-        ? skipToken
-        : async () => {
-            const rows = await mosaic.coordinator.query(
-              Query.from(table)
-                .select('category')
-                .where(eq(column('galaxy'), literal(galaxy)))
-            )
-            const category = rows.get(0)?.category
-            return category == null ? null : Number(category)
-          },
-    ...FOREVER
-  })
-}
-
-export function morphologiesQuery(
-  mosaic: MosaicState,
-  table: string | null,
-  galaxies: number[] | null
-) {
-  return queryOptions({
-    queryKey: ['morphologies', table, galaxies] as const,
-    queryFn:
-      table === null || galaxies === null
-        ? skipToken
-        : async () => {
-            const rows = await mosaic.coordinator.query(
-              Query.from(table)
-                .select('galaxy', 'category')
-                .where(isIn(column('galaxy'), galaxies))
-            )
-            return new Map(
-              Array.from(rows, ({ galaxy, category }): [number, number] => [galaxy, category])
-            )
-          },
     staleTime: Infinity
   })
 }

@@ -2,10 +2,7 @@
   import type { TextMatches } from '$lib/api'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
-  import { morphologyQuery } from '$lib/data/queries'
-  import { MORPHOLOGIES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
-  import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
     galaxy: number
@@ -15,11 +12,7 @@
 
   let { galaxy, modality, score }: Props = $props()
 
-  const app = getApp()
-  const { view, mosaic } = app
-
-  const points = createQuery(() => app.shownPoints)
-  const morphology = createQuery(() => morphologyQuery(mosaic, points.data ?? null, galaxy))
+  const { view } = getApp()
 </script>
 
 <button
@@ -34,9 +27,7 @@
   <div class="flex flex-col gap-1">
     <span class="text-sm font-medium">#{galaxy}</span>
     <span class="text-xs text-muted-foreground tabular-nums">
-      {modality} &bull; cos sim {score.toFixed(3)} &bull; {(morphology.data == null
-        ? null
-        : MORPHOLOGIES[morphology.data]) ?? '-'}
+      {modality} &bull; cos sim {score.toFixed(3)}
     </span>
   </div>
 </button>

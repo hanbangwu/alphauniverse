@@ -1,12 +1,11 @@
 <script lang="ts">
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
-  import { MORPHOLOGIES, UNLABELLED } from '$lib/labels'
   import type { DataPoint } from 'embedding-atlas'
 
   interface Props {
     tooltip: DataPoint
-    label: string | null
+    label: string
   }
 
   let { tooltip, label }: Props = $props()
@@ -21,7 +20,7 @@
     <GalaxyThumb {galaxy} />
   </PanelFrame>
   <span class="text-sm font-medium">#{galaxy}</span>
-  {#if label && tooltip.fields}
+  {#if tooltip.fields}
     {@const { value, width, predicted } = tooltip.fields}
     <span class="text-xs">
       {label}:
@@ -29,8 +28,5 @@
         ? 'no value'
         : `${value.toPrecision(3)}${predicted ? `${width === null ? '' : ` ± ${width.toPrecision(2)}`} (AION)` : ''}`}
     </span>
-  {:else}
-    <span class="text-muted-foreground text-xs">{MORPHOLOGIES[tooltip.category ?? UNLABELLED]}</span
-    >
   {/if}
 </div>

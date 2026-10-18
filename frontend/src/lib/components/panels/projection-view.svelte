@@ -5,7 +5,7 @@
 
   interface TooltipProps {
     tooltip: DataPoint
-    label: string | null
+    label: string
   }
 
   class Tooltip {
@@ -30,15 +30,9 @@
 
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
-  import {
-    colouringQuery,
-    morphologiesQuery,
-    regionQuery,
-    similarityQuery,
-    valuesQuery
-  } from '$lib/data/queries'
+  import { colouringQuery, regionQuery, similarityQuery, valuesQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
-  import { COLOURINGS } from '$lib/labels'
+  import { PROPERTIES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import ColourLegend from './colour-legend.svelte'
   import MapSelection from './map-selection.svelte'
@@ -57,16 +51,14 @@
 
   const loaded = $derived(shown.data ?? null)
   const colouring = createQuery(() =>
-    colouringQuery(mosaic, loaded, view.property, view.everywhere)
+    colouringQuery(mosaic, loaded, view.property.value, view.everywhere)
   )
-  const coloured = $derived(view.property ? (colouring.data ?? null) : null)
-  const table = $derived(view.property ? (coloured?.table ?? null) : loaded)
-  const filter = $derived(coloured ? mosaic.colouredFilter : mosaic.filter)
+  const coloured = $derived(colouring.data ?? null)
 
   let drawn = $state<{ points: string; value: Rectangle | Point[] } | null>(null)
   const region = $derived(drawn && drawn.points === loaded ? drawn.value : null)
   const selected = createQuery(() =>
-    regionQuery(mosaic, table, region, filters.morphologies.value, filters.range.value)
+    regionQuery(mosaic, coloured?.table ?? null, region, filters.range.value)
   )
   let settling: ReturnType<typeof setTimeout> | undefined
 
@@ -76,43 +68,33 @@
     search.data && !search.isPlaceholderData ? Array.from(search.data.galaxies) : null
   )
   const circled = $derived(view.galaxy.value === null ? null : (results ?? [view.galaxy.value]))
-  const morphologies = createQuery(() => morphologiesQuery(mosaic, loaded, circled))
   const values = createQuery(() =>
-    valuesQuery(mosaic, filters.range.value && coloured ? coloured.name : null, circled)
+    valuesQuery(mosaic, filters.range.value ? (coloured?.name ?? null) : null, circled)
   )
 
   function inRange(galaxy: number): boolean {
     const range = filters.range.value
-    if (!range || !coloured) return true
+    if (!range) return true
     const value = values.data?.get(galaxy)
     return value != null && value >= range[0] && value <= range[1]
   }
 
-  let highlighted = $derived(
-    circled?.filter(
-      (galaxy) =>
-        (!filters.active ||
-          filters.morphologies.value.some((index) => index === morphologies.data?.get(galaxy))) &&
-        inRange(galaxy)
-    )
-  )
+  let highlighted = $derived(circled?.filter(inRange))
 </script>
 
 <div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
-  {#if table && app.swatches && app.shades && mode.current && width > 0 && height > 0}
-    {#key table}
+  {#if coloured && app.shades && mode.current && width > 0 && height > 0}
+    {#key coloured.table}
       <EmbeddingViewMosaic
         coordinator={mosaic.coordinator}
-        {table}
+        table={coloured.table}
         x="x"
         y="y"
-        category={coloured ? 'colour' : 'category'}
-        categoryColors={coloured ? app.shades : app.swatches}
-        additionalFields={coloured
-          ? { value: 'value', width: 'width', predicted: 'predicted' }
-          : null}
+        category="colour"
+        categoryColors={app.shades}
+        additionalFields={{ value: 'value', width: 'width', predicted: 'predicted' }}
         identifier="galaxy"
-        {filter}
+        filter={mosaic.filter}
         rangeSelectionValue={region}
         onRangeSelection={(value: Rectangle | Point[] | null) => {
           clearTimeout(settling)
@@ -129,7 +111,7 @@
         theme={{ statusBar: false }}
         customTooltip={{
           class: Tooltip,
-          props: { label: coloured ? COLOURINGS[coloured.property].label : null }
+          props: { label: PROPERTIES[coloured.property].label }
         }}
         onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
@@ -152,12 +134,10 @@
         Shift-drag to select a box; Shift-⌘-drag (Shift-Windows key), a lasso
       </p>
     {/if}
-    {#if coloured}
-      {#key coloured.name}
-        <ColourLegend {coloured} scheme={mode.current} />
-      {/key}
-    {/if}
-  {:else if shown.isError || (view.property && colouring.isError)}
+    {#key coloured.name}
+      <ColourLegend {coloured} scheme={mode.current} />
+    {/key}
+  {:else if shown.isError || colouring.isError}
     <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">
       {errorMessage(shown.error ?? colouring.error)}
     </p>

@@ -3,7 +3,7 @@
   import { Button } from '$lib/components/ui/button'
   import { Slider } from '$lib/components/ui/slider'
   import { withinQuery } from '$lib/data/queries'
-  import { COLOURINGS, UNITS } from '$lib/labels'
+  import { PROPERTIES, UNITS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import type { Coloured } from '$lib/state/mosaic.svelte'
   import { createQuery } from '@tanstack/svelte-query'
@@ -52,10 +52,10 @@
 
 <figure
   class="pointer-events-none absolute bottom-3 left-3 flex w-56 flex-col gap-1.5 rounded-md border bg-popover/90 p-2 text-xs"
-  aria-label="{COLOURINGS[coloured.property].label} colour scale"
+  aria-label="{PROPERTIES[coloured.property].label} colour scale"
 >
   <figcaption class="flex justify-between font-medium">
-    <span>{COLOURINGS[coloured.property].label}</span>
+    <span>{PROPERTIES[coloured.property].label}</span>
     <span class="text-muted-foreground">{UNITS[coloured.property]}</span>
   </figcaption>
   <div class="flex justify-between font-mono tabular-nums">

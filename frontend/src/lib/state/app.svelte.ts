@@ -1,5 +1,5 @@
 import type { Meta } from '$lib/api'
-import { morphologyColors, propertyColors } from '$lib/color'
+import { propertyColors } from '$lib/color'
 import { pointsQuery } from '$lib/data/queries'
 import { FilterState } from './filter.svelte'
 import { MaskState } from './mask.svelte'
@@ -14,7 +14,6 @@ export class AppState {
   readonly search: SearchState
   readonly mask = new MaskState()
   readonly filters: FilterState
-  readonly swatches: string[] | null
   readonly shades: string[] | null
 
   constructor(
@@ -23,10 +22,7 @@ export class AppState {
   ) {
     this.view = new ViewState()
     this.search = new SearchState()
-    this.filters = new FilterState(meta, this.mosaic, this.view)
-    this.swatches = $derived(
-      mode.current ? morphologyColors(meta.morphologies.length - 1, mode.current) : null
-    )
+    this.filters = new FilterState(this.mosaic, this.view)
     this.shades = $derived(mode.current ? propertyColors(mode.current) : null)
   }
 
