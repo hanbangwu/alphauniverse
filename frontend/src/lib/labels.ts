@@ -1,5 +1,6 @@
 import type { Galaxy, TableRow } from '$lib/api'
 import type { Projection } from '$lib/client'
+import type { ModeName } from '$lib/data/similarity'
 
 export interface Label {
   label: string
@@ -27,9 +28,24 @@ export const SURVEYS: Labels<keyof Galaxy> = {
   provabgs: { label: 'PROVABGS' }
 }
 
-export const SECTIONS: Labels<TableRow['section']> = {
+export const MODES: Labels<ModeName> = {
+  ls_image: { label: 'Legacy Survey image' },
+  hsc_image: { label: 'HSC image' },
+  desi_spectrum: { label: 'DESI spectrum' },
+  sdss_spectrum: { label: 'SDSS spectrum' },
   redshift: { label: 'Redshift' },
-  ...SURVEYS
+  ls_table: { label: 'Legacy Survey catalogue' },
+  hsc_table: { label: 'HSC catalogue' }
+}
+
+export const SECTIONS: Labels<TableRow['section']> = {
+  ls: SURVEYS.ls,
+  hsc: SURVEYS.hsc,
+  desi: SURVEYS.desi,
+  sdss: SURVEYS.sdss,
+  redshift: { label: 'Redshift' },
+  provabgs: SURVEYS.provabgs,
+  gz10: SURVEYS.gz10
 }
 
 export const POINT_SETS = {
