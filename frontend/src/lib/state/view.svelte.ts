@@ -1,5 +1,5 @@
 import { byMode } from '$lib/data/modes'
-import type { SimilarityQuery } from '$lib/data/similarity'
+import type { ModeName, SearchQuery } from '$lib/data/similarity'
 import {
   COLOURINGS,
   type Colouring,
@@ -11,7 +11,7 @@ import {
   type Source
 } from '$lib/labels'
 import { Field } from './field.svelte'
-import { EnumField, IndexListField } from './fields.svelte'
+import { EnumField, IndexListField, ListField } from './fields.svelte'
 import { PersistedState } from 'runed'
 
 export class ViewState {
@@ -23,7 +23,9 @@ export class ViewState {
   readonly tableValues = new IndexListField()
   readonly imageAnywhere = new Field(false)
   readonly spectrumAnywhere = new Field(false)
-  readonly searched = new Field<SimilarityQuery | null>(null)
+  readonly wholeModes = new Field(false)
+  readonly modes = new ListField<ModeName>()
+  readonly searched = new Field<SearchQuery | null>(null)
   readonly explorer = new Field(false)
   readonly predictions = new Field(false)
   readonly open = new PersistedState('open-groups', {
@@ -57,6 +59,7 @@ export class ViewState {
     if (galaxy !== this.galaxy.value) {
       for (const field of Object.values(this.tokens)) field.reset()
       this.tableValues.reset()
+      this.modes.reset()
       this.searched.reset()
     }
     this.galaxy.value = galaxy
