@@ -52,7 +52,6 @@
   let width = $state(0)
   let height = $state(0)
 
-  const mean = createQuery(() => app.meanPoints)
   const shown = createQuery(() => app.shownPoints)
   const search = createQuery(() => similarityQuery(view.searched.value))
 
@@ -74,10 +73,10 @@
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
   const results = $derived(
-    search.data && !search.isPlaceholderData && !view.full ? Array.from(search.data.galaxies) : null
+    search.data && !search.isPlaceholderData ? Array.from(search.data.galaxies) : null
   )
   const circled = $derived(view.galaxy.value === null ? null : (results ?? [view.galaxy.value]))
-  const morphologies = createQuery(() => morphologiesQuery(mosaic, mean.data ?? null, circled))
+  const morphologies = createQuery(() => morphologiesQuery(mosaic, loaded, circled))
   const values = createQuery(() =>
     valuesQuery(mosaic, filters.range.value && coloured ? coloured.name : null, circled)
   )
