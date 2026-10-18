@@ -4,23 +4,14 @@
   import PredictionsSwitch from '$lib/components/common/predictions-switch.svelte'
   import SimilarityDialog from '$lib/components/similarity/similarity-dialog.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { Spinner } from '$lib/components/ui/spinner'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS } from '$lib/data/modes'
-  import { morphologyQuery } from '$lib/data/queries'
-  import { MORPHOLOGIES, SURVEYS } from '$lib/labels'
+  import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import CoverageTable from './coverage-table.svelte'
   import DetailImage from './detail-image.svelte'
   import DetailSpectrum from './detail-spectrum.svelte'
-  import { createQuery } from '@tanstack/svelte-query'
 
-  const app = getApp()
-  const { view, mosaic } = app
-
-  const points = createQuery(() => app.shownPoints)
-  const morphology = createQuery(() =>
-    morphologyQuery(mosaic, points.data ?? null, view.galaxy.value)
-  )
+  const { view } = getApp()
 </script>
 
 <div class="flex h-full flex-col bg-card">
@@ -33,16 +24,7 @@
       <p class="text-sm leading-relaxed text-muted-foreground">No galaxy selected.</p>
     {:else}
       {@const galaxy = view.galaxy.value}
-      <div class="flex items-baseline justify-between text-sm">
-        <span class="font-medium">#{galaxy}</span>
-        {#if morphology.isPending}
-          <Spinner class="size-3 self-center text-muted-foreground" />
-        {:else}
-          <span class="text-xs text-muted-foreground">
-            {(morphology.data == null ? null : MORPHOLOGIES[morphology.data]) ?? '-'}
-          </span>
-        {/if}
-      </div>
+      <span class="text-sm font-medium">#{galaxy}</span>
 
       <PredictionsSwitch />
 

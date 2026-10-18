@@ -5,7 +5,6 @@
   import ColourControl from './colour-control.svelte'
   import DatasetFooter from './dataset-footer.svelte'
   import DownloadArtifact from './download-artifact.svelte'
-  import MorphologyFilter from './morphology-filter.svelte'
 
   const view = getView()
 </script>
@@ -21,8 +20,6 @@
     <Segmented field={view.pointSet} />
 
     <ColourControl />
-
-    <MorphologyFilter />
 
     <DownloadArtifact />
   </div>

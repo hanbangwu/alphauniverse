@@ -55,8 +55,7 @@ export const POINT_SETS = {
 
 export type PointSet = keyof typeof POINT_SETS
 
-export const COLOURINGS = {
-  morphology: { label: 'Morphology' },
+export const PROPERTIES = {
   redshift: { label: 'Redshift' },
   mass: { label: 'Stellar mass' },
   sfr: { label: 'SFR' },
@@ -64,9 +63,7 @@ export const COLOURINGS = {
   g_r: { label: 'g − r' }
 } satisfies Labels<string>
 
-export type Colouring = keyof typeof COLOURINGS
-
-export type Property = Exclude<Colouring, 'morphology'>
+export type Property = keyof typeof PROPERTIES
 
 export const PREDICTABLE: readonly Property[] = ['redshift', 'mass', 'sfr', 'ssfr']
 
@@ -84,19 +81,3 @@ export const SOURCES = {
 } satisfies Labels<string>
 
 export type Source = keyof typeof SOURCES
-
-export const MORPHOLOGIES: readonly string[] = [
-  'Disturbed Galaxies',
-  'Merging Galaxies',
-  'Round Smooth Galaxies',
-  'In-between Round Smooth Galaxies',
-  'Cigar Shaped Smooth Galaxies',
-  'Barred Spiral Galaxies',
-  'Unbarred Tight Spiral Galaxies',
-  'Unbarred Loose Spiral Galaxies',
-  'Edge-on Galaxies without Bulge',
-  'Edge-on Galaxies with Bulge',
-  'No label'
-]
-
-export const UNLABELLED: number = MORPHOLOGIES.length - 1

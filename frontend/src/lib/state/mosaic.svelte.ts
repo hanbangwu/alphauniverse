@@ -1,6 +1,6 @@
 import { type Projection, downloadUrl, projectionUrl } from '$lib/client'
 import { BINS } from '$lib/color'
-import { PREDICTABLE, type Property, UNLABELLED } from '$lib/labels'
+import { PREDICTABLE, type Property } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
 import { Query, column, count, isBetween, isIn, loadParquet } from '@uwdata/mosaic-sql'
 import type { Point, Rectangle } from 'embedding-atlas'
@@ -46,7 +46,6 @@ export interface Coloured extends Values {
 export class MosaicState {
   readonly coordinator = new Coordinator()
   readonly filter = Selection.intersect()
-  readonly colouredFilter = Selection.intersect({ include: this.filter })
 
   #connected = false
   #properties: Promise<unknown> | null = null
@@ -63,17 +62,12 @@ export class MosaicState {
   async load(projection: Projection): Promise<string> {
     const table = `${projection}_points`
     const database = this.connect()
-    await database.exec(
-      loadParquet(table, projectionUrl(projection), {
-        replace: true,
-        select: ['* EXCLUDE (category)', `coalesce(category, ${UNLABELLED})::UTINYINT AS category`]
-      })
-    )
+    await database.exec(loadParquet(table, projectionUrl(projection), { replace: true }))
     database.clear({ clients: false, cache: true })
     return table
   }
 
-  #loadProperties(): Promise<unknown> {
+  loadProperties(): Promise<unknown> {
     this.#properties ??= this.connect()
       .exec(loadParquet('properties', downloadUrl('properties'), { replace: true }))
       .catch((error: unknown) => {
@@ -93,7 +87,7 @@ export class MosaicState {
   }
 
   async #build(name: string, property: Property, everywhere: boolean): Promise<Values> {
-    await this.#loadProperties()
+    await this.loadProperties()
     const database = this.connect()
     const predictable = PREDICTABLE.includes(property)
     const measured = predictable ? `${property}_measured` : property
@@ -143,7 +137,7 @@ export class MosaicState {
     const table = `${points}_${values.name}`
     await this.connect().exec(`
       CREATE OR REPLACE VIEW ${table} AS
-      SELECT p.galaxy, p.x, p.y, p.category, c.value, c.width, c.predicted, c.colour
+      SELECT p.galaxy, p.x, p.y, c.value, c.width, c.predicted, c.colour
       FROM ${points} p LEFT JOIN ${values.name} c USING (galaxy)`)
     return { ...values, table }
   }
@@ -160,14 +154,12 @@ export class MosaicState {
   async inRegion(
     table: string,
     region: Rectangle | Point[],
-    morphologies: number[],
     range: readonly [number, number] | null
   ): Promise<number[]> {
     const box = 'xMin' in region ? region : bounds(region)
     const where = [
       isBetween(column('x'), [box.xMin, box.xMax]),
       isBetween(column('y'), [box.yMin, box.yMax]),
-      ...(morphologies.length ? [isIn(column('category'), morphologies)] : []),
       ...(range ? [isBetween(column('value'), [...range])] : [])
     ]
     const rows = await this.connect().query(
@@ -181,7 +173,7 @@ export class MosaicState {
   }
 
   async csv(galaxies: number[]): Promise<string> {
-    await this.#loadProperties()
+    await this.loadProperties()
     const rows = await this.connect().query(
       Query.from('properties')
         .select('*')
