@@ -27,8 +27,13 @@ export const SURVEYS: Labels<keyof Galaxy> = {
 }
 
 export const SECTIONS: Labels<TableRow['section']> = {
+  ls: SURVEYS.ls,
+  hsc: SURVEYS.hsc,
+  desi: SURVEYS.desi,
+  sdss: SURVEYS.sdss,
   redshift: { label: 'Redshift' },
-  ...SURVEYS
+  provabgs: SURVEYS.provabgs,
+  gz10: SURVEYS.gz10
 }
 
 export const POINT_SETS = {
