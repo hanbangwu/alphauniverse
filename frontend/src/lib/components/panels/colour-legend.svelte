@@ -1,7 +1,12 @@
 <script lang="ts">
   import { NO_VALUE, SHADES, type Scheme, fadedShades } from '$lib/color'
+  import { Button } from '$lib/components/ui/button'
+  import { Slider } from '$lib/components/ui/slider'
+  import { withinQuery } from '$lib/data/queries'
   import { COLOURINGS, UNITS } from '$lib/labels'
+  import { getApp } from '$lib/state/app.svelte'
   import type { Coloured } from '$lib/state/mosaic.svelte'
+  import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
     coloured: Coloured
@@ -10,7 +15,28 @@
 
   let { coloured, scheme }: Props = $props()
 
+  const { filters, mosaic } = getApp()
+
   const format = (value: number) => value.toPrecision(3)
+  const STEPS = 200
+  const span = $derived(coloured.high - coloured.low)
+  const at = (step: number) =>
+    step === 0
+      ? coloured.least
+      : step === STEPS
+        ? coloured.most
+        : coloured.low + (span * step) / STEPS
+  const stepOf = (value: number) =>
+    value <= coloured.least
+      ? 0
+      : value >= coloured.most
+        ? STEPS
+        : Math.min(STEPS - 1, Math.max(1, Math.round(((value - coloured.low) / span) * STEPS)))
+  const committed = $derived((filters.range.value ?? [coloured.least, coloured.most]).map(stepOf))
+  let dragged = $state<number[] | null>(null)
+  const steps = $derived(dragged ?? committed)
+  const shown = $derived(steps.map(at))
+  const within = createQuery(() => withinQuery(mosaic, coloured.name, filters.range.value))
 </script>
 
 {#snippet bar(shades: string[], label: string)}
@@ -42,6 +68,26 @@
   {#if coloured.predicted}
     {@render bar(coloured.faded ? fadedShades(scheme) : SHADES, `AION: ${coloured.predicted}`)}
   {/if}
+  <div class="pointer-events-auto flex flex-col gap-1.5 pt-1">
+    <Slider
+      type="multiple"
+      value={steps}
+      onValueChange={(value) => (dragged = value)}
+      onValueCommit={([low, high]) => {
+        filters.range.value = low === 0 && high === STEPS ? null : [at(low), at(high)]
+        dragged = null
+      }}
+      max={STEPS}
+      disabled={span === 0}
+    />
+    <span class="font-mono tabular-nums">{format(shown[0])} to {format(shown[1])}</span>
+    {#if filters.range.value}
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-muted-foreground">{within.data ?? '…'} galaxies in range</span>
+        <Button variant="ghost" size="xs" onclick={() => filters.range.reset()}>Reset</Button>
+      </div>
+    {/if}
+  </div>
   {#if coloured.missing}
     <span class="flex items-center gap-1.5 text-muted-foreground">
       <span class="size-2 rounded-sm" style:background={NO_VALUE[scheme]}></span>

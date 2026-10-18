@@ -2,7 +2,7 @@ import { type Projection, downloadUrl, projectionUrl } from '$lib/client'
 import { BINS } from '$lib/color'
 import { PREDICTABLE, type Property, UNLABELLED } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
-import { loadParquet } from '@uwdata/mosaic-sql'
+import { Query, column, count, isBetween, loadParquet } from '@uwdata/mosaic-sql'
 
 export interface Values {
   name: string
@@ -10,6 +10,8 @@ export interface Values {
   faded: boolean
   low: number
   high: number
+  least: number
+  most: number
   measured: number
   predicted: number
   missing: number
@@ -22,6 +24,7 @@ export interface Coloured extends Values {
 export class MosaicState {
   readonly coordinator = new Coordinator()
   readonly filter = Selection.intersect()
+  readonly colouredFilter = Selection.intersect({ include: this.filter })
 
   #connected = false
   #properties: Promise<unknown> | null = null
@@ -81,6 +84,7 @@ export class MosaicState {
     const summary = (
       await database.query(`
         SELECT quantile_cont(value, 0.01) AS low, quantile_cont(value, 0.99) AS high,
+          min(value) AS least, max(value) AS most,
           count(value) FILTER (WHERE NOT predicted) AS measured,
           count(value) FILTER (WHERE predicted) AS predicted,
           count(*) - count(value) AS missing
@@ -104,6 +108,8 @@ export class MosaicState {
       faded,
       low,
       high,
+      least: Number(summary.least),
+      most: Number(summary.most),
       measured: Number(summary.measured),
       predicted: Number(summary.predicted),
       missing: Number(summary.missing)
@@ -118,6 +124,15 @@ export class MosaicState {
       SELECT p.galaxy, p.x, p.y, p.category, c.value, c.width, c.predicted, c.colour
       FROM ${points} p LEFT JOIN ${values.name} c USING (galaxy)`)
     return { ...values, table }
+  }
+
+  async within(name: string, [low, high]: readonly [number, number]): Promise<number> {
+    const counted = await this.connect().query(
+      Query.from(name)
+        .select({ count: count() })
+        .where(isBetween(column('value'), [low, high]))
+    )
+    return Number(counted.get(0).count)
   }
 
   destroy(): void {

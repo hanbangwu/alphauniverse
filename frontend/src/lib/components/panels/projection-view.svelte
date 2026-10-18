@@ -30,7 +30,12 @@
 
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner'
-  import { colouringQuery, morphologiesQuery, similarityQuery } from '$lib/data/queries'
+  import {
+    colouringQuery,
+    morphologiesQuery,
+    similarityQuery,
+    valuesQuery
+  } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { COLOURINGS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
@@ -63,12 +68,23 @@
   )
   const circled = $derived(view.galaxy.value === null ? null : (results ?? [view.galaxy.value]))
   const morphologies = createQuery(() => morphologiesQuery(mosaic, mean.data ?? null, circled))
+  const values = createQuery(() =>
+    valuesQuery(mosaic, filters.range.value && coloured ? coloured.name : null, circled)
+  )
+
+  function inRange(galaxy: number): boolean {
+    const range = filters.range.value
+    if (!range || !coloured) return true
+    const value = values.data?.get(galaxy)
+    return value != null && value >= range[0] && value <= range[1]
+  }
 
   let highlighted = $derived(
     circled?.filter(
       (galaxy) =>
-        !filters.active ||
-        filters.morphologies.value.some((index) => index === morphologies.data?.get(galaxy))
+        (!filters.active ||
+          filters.morphologies.value.some((index) => index === morphologies.data?.get(galaxy))) &&
+        inRange(galaxy)
     )
   )
 </script>
@@ -87,7 +103,7 @@
           ? { value: 'value', width: 'width', predicted: 'predicted' }
           : null}
         identifier="galaxy"
-        filter={mosaic.filter}
+        filter={coloured ? mosaic.colouredFilter : mosaic.filter}
         {tooltip}
         selection={highlighted}
         {width}
@@ -109,7 +125,9 @@
       />
     {/key}
     {#if coloured}
-      <ColourLegend {coloured} scheme={mode.current} />
+      {#key coloured.name}
+        <ColourLegend {coloured} scheme={mode.current} />
+      {/key}
     {/if}
   {:else if view.property && colouring.isError}
     <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">

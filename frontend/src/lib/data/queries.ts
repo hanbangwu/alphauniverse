@@ -190,6 +190,38 @@ export function colouringQuery(
   })
 }
 
+export function withinQuery(
+  mosaic: MosaicState,
+  name: string,
+  range: readonly [number, number] | null
+) {
+  return queryOptions({
+    queryKey: ['within', name, range] as const,
+    queryFn: range === null ? skipToken : () => mosaic.within(name, range),
+    staleTime: Infinity
+  })
+}
+
+export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: number[] | null) {
+  return queryOptions({
+    queryKey: ['values', name, galaxies] as const,
+    queryFn:
+      name === null || galaxies === null
+        ? skipToken
+        : async () => {
+            const rows = await mosaic.coordinator.query(
+              Query.from(name)
+                .select('galaxy', 'value')
+                .where(isIn(column('galaxy'), galaxies))
+            )
+            return new Map(
+              Array.from(rows, ({ galaxy, value }): [number, number | null] => [galaxy, value])
+            )
+          },
+    staleTime: Infinity
+  })
+}
+
 export function morphologyQuery(mosaic: MosaicState, table: string | null, galaxy: number | null) {
   return queryOptions({
     queryKey: ['morphology', table, galaxy] as const,

@@ -6,7 +6,7 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 
 ## Features
 
-- **Embedding map**: every galaxy on a parametric UMAP projection of AION's embeddings, one point per galaxy or per token, coloured by morphology or by redshift, stellar mass, star formation rate, specific star formation rate or g − r colour, measured or predicted.
+- **Embedding map**: every galaxy on a parametric UMAP projection of AION's embeddings, one point per galaxy or per token, coloured by morphology or by redshift, stellar mass, star formation rate, specific star formation rate or g − r colour, measured or predicted, and filtered to a range of it.
 - **Galaxy view**: morphology, crossmatches, and Legacy Survey and HSC images and DESI and SDSS spectra in groups that collapse.
 - **AION predictions**: a switch shows what AION predicts for any galaxy in every survey, observed or not: images in place of the observed ones, spectra over them and catalogue values beside them.
 - **Similarity search**: pick image regions, wavelengths and catalogue values of a galaxy in any of its surveys, with the pointer or the keyboard or by dragging the mouse across many at once; galaxies rank by predictive query likelihood over AION's predictions, at the same place or any position, or over whole modes with each mode's contribution, with maps of where they agree that a threshold can mask; the map circles the matches the morphology filter shows, and each can start a new search.
