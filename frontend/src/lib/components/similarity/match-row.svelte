@@ -1,8 +1,8 @@
 <script lang="ts">
+  import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
   import { OBSERVATIONS, SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
-  import GalaxyTile from './galaxy-tile.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
@@ -23,7 +23,14 @@
 
 <div class="flex flex-col gap-5 pt-6">
   <div class="flex flex-col gap-2">
-    <span class="text-sm font-medium">#{galaxy}: {similarity.score(score)}</span>
+    <button
+      type="button"
+      onclick={() => view.select(galaxy)}
+      aria-label="#{galaxy}: {similarity.score(score)}, search from this galaxy"
+      class="w-fit cursor-pointer rounded-sm text-left text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
+      #{galaxy}: {similarity.score(score)}
+    </button>
     {#if view.open.current.images}
       <div class="grid max-w-2xl gap-5 md:grid-cols-2">
         {#each IMAGE_SURVEYS as survey (survey)}
@@ -31,7 +38,7 @@
             {@const mode = imageMode(survey)}
             {@const values = similarity.mapAt(mode, index)}
             <div class="flex flex-col gap-5">
-              <GalaxyTile {galaxy} {survey} onselect={() => view.select(galaxy)} />
+              <DetailImage {galaxy} {survey} />
               <ImageTokenPanel
                 label={SURVEYS[survey].label}
                 {values}

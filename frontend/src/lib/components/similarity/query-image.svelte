@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ImageSurvey } from '$lib/client'
   import { tokenAlpha, tokenColors } from '$lib/color'
+  import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { imageMode } from '$lib/data/modes'
   import { tokensQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
@@ -30,6 +31,7 @@
 </script>
 
 <div class="flex flex-col gap-5">
+  <DetailImage galaxy={similarity.galaxy} {survey} />
   <ImageTokenPanel
     label={SURVEYS[survey].label}
     values={layer?.values ?? tokens.data ?? null}

@@ -13,7 +13,6 @@
   import { getApp } from '$lib/state/app.svelte'
   import type { Field } from '$lib/state/field.svelte'
   import type { IndexListField } from '$lib/state/fields.svelte'
-  import GalaxyTile from './galaxy-tile.svelte'
   import MaskControls from './mask-controls.svelte'
   import QueryImage from './query-image.svelte'
   import { getSimilarity } from './similarity.svelte'
@@ -60,10 +59,7 @@
         {#each IMAGE_SURVEYS as survey (survey)}
           <Observed galaxy={similarity.galaxy} {survey} kind="image">
             {#snippet children(matched)}
-              <div class="flex flex-col gap-5">
-                <GalaxyTile galaxy={similarity.galaxy} {survey} />
-                <QueryImage {survey} {matched} />
-              </div>
+              <QueryImage {survey} {matched} />
             {/snippet}
           </Observed>
         {/each}

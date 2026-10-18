@@ -37,7 +37,7 @@ Start a search from the selected galaxy and pick what to compare: cells of its L
 - for each match, its similarity from 0 to 1, a note when it lacks a selected observation and was matched on AION's prediction, and for each image and spectrum it has, or every one with AION predictions on, a map of where it agrees with the query;
 - **Mask**, under which image cells, spectrum windows and catalogue values that score below a threshold lose their colour. Images and spectra each have a threshold for the query and one for the matches, and the catalogue one for the query, each by default the middle of the range of the maps it applies to; **Invert** keeps the colour on what scores below instead.
 
-Click a match's image to search from it: it becomes the selected galaxy, with an empty selection. After a search, the **Mean** map circles whichever of the query galaxy and its matches the morphology filter shows, until another galaxy is selected or another search runs; **Full** circles only the selected galaxy's tokens.
+Click a match's number to search from it: it becomes the selected galaxy, with an empty selection. After a search, the **Mean** map circles whichever of the query galaxy and its matches the morphology filter shows, until another galaxy is selected or another search runs; **Full** circles only the selected galaxy's tokens.
 
 Before or after a search, the **This galaxy** and **Population** maps shade the query galaxy's own slots by how they relate to the selection; see :doc:`methods/query-maps`.
 
