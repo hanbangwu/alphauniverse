@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ImageSurvey } from '$lib/client'
   import { tokenAlpha, tokenColors } from '$lib/color'
+  import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { imageMode } from '$lib/data/modes'
   import { tokensQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
@@ -29,7 +30,8 @@
   let hovered = $state(false)
 </script>
 
-<div class="flex flex-col gap-5">
+<div class="grid items-end gap-5 md:grid-cols-2">
+  <DetailImage galaxy={similarity.galaxy} {survey} />
   <ImageTokenPanel
     label={SURVEYS[survey].label}
     values={layer?.values ?? tokens.data ?? null}

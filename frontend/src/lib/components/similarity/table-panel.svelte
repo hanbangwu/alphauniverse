@@ -25,7 +25,13 @@
   const view = getView()
   const table = createQuery(() => tableQuery(galaxy))
 
-  const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.section)])
+  const order = Object.keys(SECTIONS)
+  const groups = $derived(
+    [...Map.groupBy(table.data ?? [], (row) => row.section)].sort(
+      ([first], [second]) => order.indexOf(first) - order.indexOf(second)
+    )
+  )
+
   const mask = $derived(
     similarity.tableValueMap &&
       similarity.maskOf(similarity.tableValueMap, similarity.tableValueDomain, display.table)
@@ -54,7 +60,9 @@
       heat && !Number.isNaN(score)
         ? paint(heat(score), mask?.[row.table_value] === 0 ? 0 : 1)
         : paint(palette(row.token), tokenAlpha(picked))
-    return picked ? `${style}; outline: 1px solid ${SELECTED}; outline-offset: -1px` : style
+    return picked && !view.wholeModes.value
+      ? `${style}; outline: 1px solid ${SELECTED}; outline-offset: -1px`
+      : style
   }
 
   function format(value: TableRow['value']): string {
@@ -64,21 +72,18 @@
   }
 </script>
 
-<div class="max-h-96 w-full overflow-y-auto rounded-lg border px-3 md:max-w-2xl">
-  {#if table.isPending}
-    <Spinner class="my-3 size-4 text-muted-foreground" />
-  {:else if table.isError}
-    <p role="alert" class="py-3 text-xs leading-relaxed text-destructive">
-      {errorMessage(table.error)}
-    </p>
-  {:else}
-    <Table.Root class="text-xs">
+{#snippet sectionTable(section: TableRow['section'], rows: TableRow[])}
+  <div class="max-h-96 overflow-y-auto rounded-lg border px-3">
+    <Table.Root class="text-xs" aria-label={SECTIONS[section].label}>
       <Table.Header>
         <Table.Row class="hover:bg-transparent">
           <Table.Head class="h-7 w-8 px-0 font-normal"
             ><span class="sr-only">Query</span></Table.Head
           >
-          <Table.Head class="h-7 px-0 font-normal">Name</Table.Head>
+          <Table.Head class="h-7 px-0 font-normal text-muted-foreground uppercase">
+            <span aria-hidden="true">{SECTIONS[section].label}</span>
+            <span class="sr-only">Name</span>
+          </Table.Head>
           <Table.Head class="h-7 px-0 text-right font-normal">Value</Table.Head>
           {#if view.predictions.value}
             <Table.Head class="h-7 pr-0 pl-3 text-right font-normal">AION</Table.Head>
@@ -86,68 +91,72 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each groups as [section, rows] (section)}
-          <Table.Row class="hover:bg-transparent">
-            <Table.Cell
-              colspan={view.predictions.value ? 4 : 3}
-              class="px-0 pt-3 pb-1 text-muted-foreground uppercase"
-            >
-              {@const mode = TABLE_MODES[section]}
-              {#if mode}
-                <WholeMode {mode}>{SECTIONS[section].label}</WholeMode>
-              {:else}
-                {SECTIONS[section].label}
+        {#each rows as row (row.column)}
+          <Table.Row
+            class={[
+              'transition-none last:border-0',
+              ((row.table_value !== null && row.token === null) || row.excluded !== null) &&
+                'cursor-not-allowed',
+              row.excluded !== null && 'text-muted-foreground italic'
+            ]}
+            style={fill(row)}
+          >
+            <Table.Cell class="px-0 py-1.5">
+              {#if row.table_value !== null}
+                {@const tableValue = row.table_value}
+                <input
+                  type="checkbox"
+                  class="accent-primary disabled:cursor-not-allowed"
+                  checked={chosen(row)}
+                  disabled={row.token === null || view.wholeModes.value}
+                  onchange={() => ontoggle(tableValue)}
+                  aria-label={`Query ${row.column}`}
+                />
+              {:else if row.excluded !== null}
+                <input
+                  type="checkbox"
+                  class="disabled:cursor-not-allowed"
+                  disabled
+                  aria-label={`Query ${row.column}: ${row.excluded}`}
+                />
               {/if}
             </Table.Cell>
-          </Table.Row>
-          {#each rows as row (row.column)}
-            <Table.Row
-              class={[
-                'transition-none last:border-0',
-                ((row.table_value !== null && row.token === null) || row.excluded !== null) &&
-                  'cursor-not-allowed',
-                row.excluded !== null && 'text-muted-foreground italic'
-              ]}
-              style={fill(row)}
-            >
-              <Table.Cell class="px-0 py-1.5">
-                {#if row.table_value !== null}
-                  {@const tableValue = row.table_value}
-                  <input
-                    type="checkbox"
-                    class="accent-primary disabled:cursor-not-allowed"
-                    checked={chosen(row)}
-                    disabled={row.token === null || view.wholeModes.value}
-                    onchange={() => ontoggle(tableValue)}
-                    aria-label={`Query ${row.column}`}
-                  />
-                {:else if row.excluded !== null}
-                  <input
-                    type="checkbox"
-                    class="disabled:cursor-not-allowed"
-                    disabled
-                    aria-label={`Query ${row.column}: ${row.excluded}`}
-                  />
-                {/if}
-              </Table.Cell>
-              <Table.Cell class="px-0 py-1.5 font-mono">
-                {row.column}
-                {#if row.excluded !== null}
-                  <span class="block font-sans text-[10px]">{row.excluded}</span>
-                {/if}
-              </Table.Cell>
-              <Table.Cell class="px-0 py-1.5 text-right font-mono tabular-nums">
-                {format(row.value)}
-              </Table.Cell>
-              {#if view.predictions.value}
-                <Table.Cell class="py-1.5 pr-0 pl-3 text-right font-mono tabular-nums">
-                  {format(row.template)}
-                </Table.Cell>
+            <Table.Cell class="px-0 py-1.5 font-mono">
+              {row.column}
+              {#if row.excluded !== null}
+                <span class="block font-sans text-[10px]">{row.excluded}</span>
               {/if}
-            </Table.Row>
-          {/each}
+            </Table.Cell>
+            <Table.Cell class="px-0 py-1.5 text-right font-mono tabular-nums">
+              {format(row.value)}
+            </Table.Cell>
+            {#if view.predictions.value}
+              <Table.Cell class="py-1.5 pr-0 pl-3 text-right font-mono tabular-nums">
+                {format(row.template)}
+              </Table.Cell>
+            {/if}
+          </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>
-  {/if}
-</div>
+  </div>
+{/snippet}
+
+{#if table.isPending}
+  <Spinner class="my-3 size-4 text-muted-foreground" />
+{:else if table.isError}
+  <p role="alert" class="py-3 text-xs leading-relaxed text-destructive">
+    {errorMessage(table.error)}
+  </p>
+{:else}
+  <div class="grid w-full items-start gap-5 md:grid-cols-2">
+    {#each groups as [section, rows] (section)}
+      {@const mode = TABLE_MODES[section]}
+      {#if mode}
+        <WholeMode {mode}>{@render sectionTable(section, rows)}</WholeMode>
+      {:else}
+        {@render sectionTable(section, rows)}
+      {/if}
+    {/each}
+  </div>
+{/if}
