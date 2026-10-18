@@ -54,15 +54,20 @@
         view.imageAnywhere
       )}
     {/snippet}
-    <div class="grid max-w-5xl gap-5 md:grid-cols-3">
-      <GalaxyTile galaxy={similarity.galaxy} />
-      {#each IMAGE_SURVEYS as survey (survey)}
-        <Observed galaxy={similarity.galaxy} {survey} kind="image">
-          {#snippet children(matched)}
-            <QueryImage {survey} {matched} />
-          {/snippet}
-        </Observed>
-      {/each}
+    <div class="flex flex-col gap-2">
+      <span class="text-sm font-medium">#{similarity.galaxy}</span>
+      <div class="grid max-w-2xl gap-5 md:grid-cols-2">
+        {#each IMAGE_SURVEYS as survey (survey)}
+          <Observed galaxy={similarity.galaxy} {survey} kind="image">
+            {#snippet children(matched)}
+              <div class="flex flex-col gap-5">
+                <GalaxyTile galaxy={similarity.galaxy} {survey} />
+                <QueryImage {survey} {matched} />
+              </div>
+            {/snippet}
+          </Observed>
+        {/each}
+      </div>
     </div>
     {#if display.on.value && similarity.imageLayerDomain}
       <MaskControls

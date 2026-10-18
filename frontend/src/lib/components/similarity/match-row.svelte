@@ -22,30 +22,31 @@
 </script>
 
 <div class="flex flex-col gap-5 pt-6">
-  {#if view.open.current.images}
-    <div class="grid max-w-5xl gap-5 md:grid-cols-3">
-      <GalaxyTile {galaxy} {score} onselect={() => view.select(galaxy)} />
-      {#each IMAGE_SURVEYS as survey (survey)}
-        {#if similarity.shows(survey, index)}
-          {@const mode = imageMode(survey)}
-          {@const values = similarity.mapAt(mode, index)}
-          <div class="flex flex-col gap-5">
-            <ImageTokenPanel
-              label={SURVEYS[survey].label}
-              {values}
-              grid={similarity.grid}
-              color={similarity.scales?.[mode]?.heat ?? null}
-              mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
-              title={similarity.score}
-              selected={similarity.outlinesAt(mode, index)}
-            />
-          </div>
-        {/if}
-      {/each}
-    </div>
-  {:else}
+  <div class="flex flex-col gap-2">
     <span class="text-sm font-medium">#{galaxy}: {similarity.score(score)}</span>
-  {/if}
+    {#if view.open.current.images}
+      <div class="grid max-w-2xl gap-5 md:grid-cols-2">
+        {#each IMAGE_SURVEYS as survey (survey)}
+          {#if similarity.shows(survey, index)}
+            {@const mode = imageMode(survey)}
+            {@const values = similarity.mapAt(mode, index)}
+            <div class="flex flex-col gap-5">
+              <GalaxyTile {galaxy} {survey} onselect={() => view.select(galaxy)} />
+              <ImageTokenPanel
+                label={SURVEYS[survey].label}
+                {values}
+                grid={similarity.grid}
+                color={similarity.scales?.[mode]?.heat ?? null}
+                mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
+                title={similarity.score}
+                selected={similarity.outlinesAt(mode, index)}
+              />
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {/if}
+  </div>
   {#if predicted.length}
     <p class="text-xs text-muted-foreground">
       No {predicted.join(', ')}: matched on AION's prediction
