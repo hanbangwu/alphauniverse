@@ -54,6 +54,36 @@ export const POINT_SETS = {
 
 export type PointSet = keyof typeof POINT_SETS
 
+export const COLOURINGS = {
+  morphology: { label: 'Morphology' },
+  redshift: { label: 'Redshift' },
+  mass: { label: 'Stellar mass' },
+  sfr: { label: 'SFR' },
+  ssfr: { label: 'sSFR' },
+  g_r: { label: 'g − r' }
+} satisfies Labels<string>
+
+export type Colouring = keyof typeof COLOURINGS
+
+export type Property = Exclude<Colouring, 'morphology'>
+
+export const PREDICTABLE: readonly Property[] = ['redshift', 'mass', 'sfr', 'ssfr']
+
+export const UNITS: Record<Property, string> = {
+  redshift: 'z',
+  mass: 'log M☉',
+  sfr: 'log M☉ yr⁻¹',
+  ssfr: 'log yr⁻¹',
+  g_r: 'mag'
+}
+
+export const SOURCES = {
+  measured: { label: 'Measured first' },
+  predicted: { label: 'Predicted' }
+} satisfies Labels<string>
+
+export type Source = keyof typeof SOURCES
+
 export const MORPHOLOGIES: readonly string[] = [
   'Disturbed Galaxies',
   'Merging Galaxies',
