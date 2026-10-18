@@ -177,15 +177,12 @@ export function pointsQuery(mosaic: MosaicState, projection: Projection) {
 export function colouringQuery(
   mosaic: MosaicState,
   points: string | null,
-  property: Property | null,
+  property: Property,
   everywhere: boolean
 ) {
   return queryOptions({
     queryKey: ['colouring', points, property, everywhere] as const,
-    queryFn:
-      points === null || property === null
-        ? skipToken
-        : () => mosaic.colour(points, property, everywhere),
+    queryFn: points === null ? skipToken : () => mosaic.colour(points, property, everywhere),
     ...FOREVER
   })
 }
