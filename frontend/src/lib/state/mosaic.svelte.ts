@@ -67,7 +67,7 @@ export class MosaicState {
     return table
   }
 
-  #loadProperties(): Promise<unknown> {
+  loadProperties(): Promise<unknown> {
     this.#properties ??= this.connect()
       .exec(loadParquet('properties', downloadUrl('properties'), { replace: true }))
       .catch((error: unknown) => {
@@ -87,7 +87,7 @@ export class MosaicState {
   }
 
   async #build(name: string, property: Property, everywhere: boolean): Promise<Values> {
-    await this.#loadProperties()
+    await this.loadProperties()
     const database = this.connect()
     const predictable = PREDICTABLE.includes(property)
     const measured = predictable ? `${property}_measured` : property
@@ -173,7 +173,7 @@ export class MosaicState {
   }
 
   async csv(galaxies: number[]): Promise<string> {
-    await this.#loadProperties()
+    await this.loadProperties()
     const rows = await this.connect().query(
       Query.from('properties')
         .select('*')

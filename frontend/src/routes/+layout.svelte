@@ -4,7 +4,7 @@
   import AppRoot from '$lib/components/app-root.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
-  import { metaQuery, pointsQuery } from '$lib/data/queries'
+  import { metaQuery, pointsQuery, propertiesQuery } from '$lib/data/queries'
   import { POINT_SETS, type PointSet } from '$lib/labels'
   import { MosaicState } from '$lib/state/mosaic.svelte'
   import './layout.css'
@@ -26,6 +26,10 @@
 
   createQuery(
     () => pointsQuery(mosaic, Object.keys(POINT_SETS)[0] as PointSet),
+    () => queries
+  )
+  createQuery(
+    () => propertiesQuery(mosaic),
     () => queries
   )
   onDestroy(() => mosaic.destroy())

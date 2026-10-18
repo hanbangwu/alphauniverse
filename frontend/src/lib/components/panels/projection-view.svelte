@@ -29,8 +29,15 @@
 </script>
 
 <script lang="ts">
+  import { propertyColors } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
-  import { colouringQuery, regionQuery, similarityQuery, valuesQuery } from '$lib/data/queries'
+  import {
+    colouringQuery,
+    pointsQuery,
+    regionQuery,
+    similarityQuery,
+    valuesQuery
+  } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { PROPERTIES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
@@ -40,13 +47,13 @@
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
   import { mode } from 'mode-watcher'
 
-  const app = getApp()
-  const { view, mosaic, filters } = app
+  const { view, mosaic, filters } = getApp()
 
   let width = $state(0)
   let height = $state(0)
 
-  const shown = createQuery(() => app.shownPoints)
+  const shown = createQuery(() => pointsQuery(mosaic, view.pointSet.value))
+  const shades = $derived(mode.current ? propertyColors(mode.current) : null)
   const search = createQuery(() => similarityQuery(view.searched.value))
 
   const loaded = $derived(shown.data ?? null)
@@ -83,7 +90,7 @@
 </script>
 
 <div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
-  {#if coloured && app.shades && mode.current && width > 0 && height > 0}
+  {#if coloured && shades && mode.current && width > 0 && height > 0}
     {#key coloured.table}
       <EmbeddingViewMosaic
         coordinator={mosaic.coordinator}
@@ -91,7 +98,7 @@
         x="x"
         y="y"
         category="colour"
-        categoryColors={app.shades}
+        categoryColors={shades}
         additionalFields={{ value: 'value', width: 'width', predicted: 'predicted' }}
         identifier="galaxy"
         filter={mosaic.filter}
