@@ -1,18 +1,20 @@
 import type { Galaxy } from '$lib/api'
 import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, surveyOf } from '$lib/data/modes'
+import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, isTokenMode, surveyOf } from '$lib/data/modes'
 import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
-import type {
-  Extent,
-  SaliencyResult,
-  SimilarityQuery,
-  SimilarityResult
+import {
+  type Extent,
+  type ModeName,
+  type SaliencyResult,
+  type SearchQuery,
+  type SimilarityResult,
+  isModeQuery
 } from '$lib/data/similarity'
 import { errorMessage } from '$lib/errors'
 import { must } from '$lib/invariant'
-import { SIMILARITY } from '$lib/labels'
+import { MODES, OBSERVATIONS, SIMILARITY } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
 import { DECIMALS, type Threshold } from '$lib/state/mask.svelte'
 import { type CreateQueryResult, createQuery } from '@tanstack/svelte-query'
@@ -85,7 +87,7 @@ export class Similarity {
 
   layer: Layer = $state('galaxy')
 
-  readonly draft: SimilarityQuery | null
+  readonly draft: SearchQuery | null
 
   readonly galaxies: Int32Array
   readonly scales: Record<CosineMode, Scale | null> | null
@@ -94,24 +96,46 @@ export class Similarity {
   readonly tableValueMap: Float32Array | null
   readonly tableValueDomain: Extent | null
   readonly tableValueHeat: Heat | null
+  readonly contributionModes: ModeName[]
+  readonly contributionLimit: number
+  readonly modes: ModeName[]
 
   constructor(galaxy: number) {
     const { view, search } = this.#app
     this.galaxy = galaxy
     this.grid = this.#app.meta.grid
 
+    const whole = $derived(view.wholeModes.value)
     const selections = $derived(byMode((mode) => view.tokens[mode].value))
     const selection = $derived(
-      search.selection(
-        galaxy,
-        selections,
-        view.tableValues.value,
-        view.imageAnywhere.value,
-        view.spectrumAnywhere.value
-      )
+      whole
+        ? null
+        : search.selection(
+            galaxy,
+            selections,
+            view.tableValues.value,
+            view.imageAnywhere.value,
+            view.spectrumAnywhere.value
+          )
     )
     this.#selected = $derived(selection !== null)
-    this.draft = $derived(search.request(selection))
+    this.modes = $derived(
+      (Object.keys(MODES) as ModeName[]).filter(
+        (mode) => view.modes.has(mode) && (!isTokenMode(mode) || this.#shown(mode))
+      )
+    )
+    this.draft = $derived(
+      search.request(
+        whole
+          ? search.modeSelection(
+              galaxy,
+              this.modes,
+              view.imageAnywhere.value,
+              view.spectrumAnywhere.value
+            )
+          : selection
+      )
+    )
     this.#result = createQuery(() => similarityQuery(view.searched.value))
     this.#coverage = createQuery(() => coverageQuery(galaxy))
     const own = $derived(this.layer === 'galaxy')
@@ -122,7 +146,7 @@ export class Similarity {
         new ModeLayer(
           mode,
           galaxy,
-          () => view.tokens[mode].value,
+          () => this.tokensOf(mode),
           () => own,
           () => saliency
         )
@@ -149,6 +173,29 @@ export class Similarity {
     this.tableValueMap = $derived(saliency ? saliency.tableValues : (result?.tableValueMap ?? null))
     this.tableValueDomain = $derived(this.tableValueMap && extent(this.tableValueMap))
     this.tableValueHeat = $derived(this.tableValueDomain && continuous(this.tableValueDomain))
+    const contributions = $derived(result?.contributions ?? {})
+    this.contributionModes = $derived(
+      (Object.keys(MODES) as ModeName[]).filter((mode) => mode in contributions)
+    )
+    this.contributionLimit = $derived(
+      Object.values(contributions).reduce(
+        (limit, values) =>
+          values.subarray(1).reduce((most, value) => Math.max(most, Math.abs(value)), limit),
+        0
+      )
+    )
+  }
+
+  tokensOf(mode: CosineMode): number[] {
+    const { view } = this.#app
+    return view.wholeModes.value ? [] : view.tokens[mode].value
+  }
+
+  toggler(mode: CosineMode, matched: boolean): ((index: number) => void) | undefined {
+    const { view } = this.#app
+    return matched && !view.wholeModes.value
+      ? (index) => view.tokens[mode].toggle(index)
+      : undefined
   }
 
   get error(): string | null {
@@ -172,17 +219,18 @@ export class Similarity {
     return this.#layerDomain(SPECTRUM_MODES)
   }
 
+  #shown(mode: CosineMode): boolean {
+    const survey = surveyOf(mode)
+    return (
+      this.#app.view.predictions.value ||
+      survey === ANCHOR ||
+      (this.#coverage.data?.[survey] ?? false)
+    )
+  }
+
   #layerDomain(modes: readonly CosineMode[]): Extent | null {
-    const coverage = this.#coverage.data
     return union(
-      modes
-        .filter(
-          (mode) =>
-            this.#app.view.predictions.value ||
-            surveyOf(mode) === ANCHOR ||
-            coverage?.[surveyOf(mode)]
-        )
-        .map((mode) => this.layerOf(mode)?.domain)
+      modes.filter((mode) => this.#shown(mode)).map((mode) => this.layerOf(mode)?.domain)
     )
   }
 
@@ -196,7 +244,8 @@ export class Similarity {
 
   outlinesAt(mode: CosineMode, index: number): number[] {
     const data = this.#result.data
-    return data?.positions[mode][index] ?? data?.request[mode] ?? []
+    if (!data || isModeQuery(data.request)) return []
+    return data.positions[mode]?.[index] ?? data.request[mode] ?? []
   }
 
   observes(survey: string, index: number): boolean {
@@ -230,8 +279,16 @@ export class Similarity {
     }))
   }
 
+  get wholeResult(): boolean {
+    const request = this.#result.data?.request
+    return request !== undefined && isModeQuery(request)
+  }
+
   readonly score = (value: number): string =>
     `${SIMILARITY.short} ${Math.min(1, value).toFixed(DECIMALS)}`
+
+  readonly total = (value: number): string =>
+    this.wholeResult ? `score ${value.toFixed(DECIMALS)}` : this.score(value)
 
   readonly cosine: Caption = (value) => `cosine ${value.toFixed(DECIMALS)}`
 
@@ -244,11 +301,15 @@ export class Similarity {
   readonly caption: Caption = (value) => `token ${value}`
 
   predictedAt(index: number): string[] {
-    return this.#result.data?.predicted[index] ?? []
+    return (this.#result.data?.predicted[index] ?? []).map((column) => OBSERVATIONS[column])
   }
 
   scoreAt(index: number): number {
-    return this.#result.data?.similarities[index] ?? 0
+    return this.#result.data?.scores[index] ?? 0
+  }
+
+  contributionAt(mode: ModeName, index: number): number {
+    return must(this.#result.data?.contributions[mode], `${mode}'s contributions`)[index]
   }
 
   mapAt(mode: CosineMode, index: number): Float32Array {
