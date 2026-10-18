@@ -34,10 +34,6 @@ export class AppState {
     return `${this.meta.author}/${this.meta.id}`
   }
 
-  get meanPoints() {
-    return pointsQuery(this.mosaic, 'mean')
-  }
-
   get shownPoints() {
     return pointsQuery(this.mosaic, this.view.pointSet.value)
   }

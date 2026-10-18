@@ -17,7 +17,7 @@
   const app = getApp()
   const { view, mosaic } = app
 
-  const points = createQuery(() => app.meanPoints)
+  const points = createQuery(() => app.shownPoints)
   const morphology = createQuery(() =>
     morphologyQuery(mosaic, points.data ?? null, view.galaxy.value)
   )

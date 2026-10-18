@@ -38,10 +38,6 @@ export class ViewState {
     this.pointSet = new EnumField(POINT_SETS)
   }
 
-  get full(): boolean {
-    return this.pointSet.value === 'full'
-  }
-
   get property(): Property | null {
     const colouring = this.colouring.value
     return colouring === 'morphology' ? null : colouring

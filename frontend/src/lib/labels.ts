@@ -49,11 +49,9 @@ export const SECTIONS: Labels<TableRow['section']> = {
 }
 
 export const POINT_SETS = {
-  same_place: { label: 'Same place' },
   any_position: { label: 'Any position' },
-  mean: { label: 'Mean' },
-  full: { label: 'Full' }
-} satisfies Labels<Projection>
+  same_place: { label: 'Same place' }
+} satisfies Partial<Labels<Projection>>
 
 export type PointSet = keyof typeof POINT_SETS
 

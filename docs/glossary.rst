@@ -59,7 +59,7 @@ Glossary
       One kind of observation from one survey: the Legacy Survey or HSC image, the DESI or SDSS spectrum, the Legacy Survey or HSC catalogue values, or the redshift. Similarity search scores each mode separately.
 
    parametric UMAP
-      A small network trained to place embeddings on a two-dimensional map so that embeddings that are neighbours in 768 dimensions stay neighbours. See :doc:`methods/map`.
+      A small network trained to place embeddings on a two-dimensional map so that embeddings that are neighbours in 768 dimensions stay neighbours :cite:p:`sainburg2021parametric`. ``generate_projections`` trains one for ``mean_points`` and ``full_points`` (:doc:`reference`).
 
    partial correlation
       The correlation between two quantities after removing, from each, the part a third quantity explains linearly. See :doc:`methods/query-maps`.

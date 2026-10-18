@@ -24,13 +24,10 @@
   )
   const mosaic = new MosaicState()
 
-  const shown = Object.keys(POINT_SETS)[0] as PointSet
-  for (const projection of new Set<PointSet>(['mean', shown])) {
-    createQuery(
-      () => pointsQuery(mosaic, projection),
-      () => queries
-    )
-  }
+  createQuery(
+    () => pointsQuery(mosaic, Object.keys(POINT_SETS)[0] as PointSet),
+    () => queries
+  )
   onDestroy(() => mosaic.destroy())
 </script>
 
