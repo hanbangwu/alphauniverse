@@ -11,13 +11,23 @@
 
   const images = $derived(IMAGE_MODES.some((mode) => similarity.anywhere(mode)))
   const spectra = $derived(SPECTRUM_MODES.some((mode) => similarity.anywhere(mode)))
+  const predicted = $derived(similarity.predictedAt(0))
 </script>
 
 <span class="text-sm font-medium">Whole dataset</span>
 <p class="text-xs text-muted-foreground">
   Image matches are compared {images ? 'anywhere in the image' : 'at the same place in the image'};
   spectrum matches {spectra ? 'at any wavelength' : 'at the same observed wavelength'}.
+  {#if similarity.wholeResult}
+    Each match's score is the mean over the chosen modes of its standardised score in each; the bars
+    show each mode's share. Maps compare each slot at the same place.
+  {/if}
 </p>
+{#if similarity.wholeResult && predicted.length}
+  <p class="text-xs text-muted-foreground">
+    #{similarity.galaxy} has no {predicted.join(', ')}: searched with AION's prediction
+  </p>
+{/if}
 
 {#if similarity.error}
   <p role="alert" class="text-sm text-destructive">{similarity.error}</p>
