@@ -55,7 +55,7 @@
     {/snippet}
     <div class="flex flex-col gap-2">
       <span class="text-sm font-medium">#{similarity.galaxy}</span>
-      <div class="grid max-w-2xl gap-5 md:grid-cols-2">
+      <div class="flex max-w-2xl flex-col gap-5">
         {#each IMAGE_SURVEYS as survey (survey)}
           <Observed galaxy={similarity.galaxy} {survey} kind="image">
             {#snippet children(matched)}

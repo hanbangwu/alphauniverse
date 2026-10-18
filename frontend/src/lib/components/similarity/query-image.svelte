@@ -30,7 +30,7 @@
   let hovered = $state(false)
 </script>
 
-<div class="flex flex-col gap-5">
+<div class="grid items-end gap-5 md:grid-cols-2">
   <DetailImage galaxy={similarity.galaxy} {survey} />
   <ImageTokenPanel
     label={SURVEYS[survey].label}

@@ -32,12 +32,12 @@
       #{galaxy}: {similarity.score(score)}
     </button>
     {#if view.open.current.images}
-      <div class="grid max-w-2xl gap-5 md:grid-cols-2">
+      <div class="flex max-w-2xl flex-col gap-5">
         {#each IMAGE_SURVEYS as survey (survey)}
           {#if similarity.shows(survey, index)}
             {@const mode = imageMode(survey)}
             {@const values = similarity.mapAt(mode, index)}
-            <div class="flex flex-col gap-5">
+            <div class="grid items-end gap-5 md:grid-cols-2">
               <DetailImage {galaxy} {survey} />
               <ImageTokenPanel
                 label={SURVEYS[survey].label}
