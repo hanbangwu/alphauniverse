@@ -18,25 +18,27 @@ export class EnumField<T extends string> extends Field<T> {
   }
 }
 
-export class IndexListField extends Field<number[]> {
+export class ListField<T> extends Field<T[]> {
   constructor() {
     super([])
   }
 
+  has(entry: T): boolean {
+    return this.value.includes(entry)
+  }
+
+  toggle(entry: T): void {
+    this.value = this.has(entry)
+      ? this.value.filter((other) => other !== entry)
+      : [...this.value, entry]
+  }
+}
+
+export class IndexListField extends ListField<number> {
   protected normalise(value: number[]): number[] {
     const sorted = value
       .filter((entry) => Number.isInteger(entry) && entry >= 0)
       .sort((a, b) => a - b)
     return sorted.filter((entry, index) => index === 0 || entry !== sorted[index - 1])
-  }
-
-  has(index: number): boolean {
-    return this.value.includes(index)
-  }
-
-  toggle(index: number): void {
-    this.value = this.has(index)
-      ? this.value.filter((entry) => entry !== index)
-      : [...this.value, index]
   }
 }
