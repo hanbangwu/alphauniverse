@@ -19,7 +19,7 @@
   let { survey, matched }: Props = $props()
 
   const similarity = getSimilarity()
-  const { view, mask: display } = getApp()
+  const { mask: display } = getApp()
 
   const mode = $derived(imageMode(survey))
   const tokens = createQuery(() => tokensQuery(matched ? similarity.galaxy : null, survey))
@@ -43,8 +43,8 @@
     galaxy={similarity.galaxy}
     {survey}
     title={layer ? similarity.layerCaption : similarity.caption}
-    selected={view.tokens[mode].value}
-    ontoggle={matched ? (index) => view.tokens[mode].toggle(index) : undefined}
+    selected={similarity.tokensOf(mode)}
+    ontoggle={similarity.toggler(mode, matched)}
     busy={matched && !tokens.data && !tokens.isError}
     onhover={(value) => (hovered = value)}
     imageOpacity={layer || hovered || !matched ? undefined : tokenAlpha(false)}

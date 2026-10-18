@@ -1,8 +1,9 @@
 <script lang="ts">
   import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
-  import { OBSERVATIONS, SURVEYS } from '$lib/labels'
+  import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
+  import ContributionBars from './contribution-bars.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
@@ -18,7 +19,7 @@
   const { view, mask: display } = getApp()
 
   const score = $derived(similarity.scoreAt(index))
-  const predicted = $derived(similarity.predictedAt(index).map((column) => OBSERVATIONS[column]))
+  const predicted = $derived(similarity.predictedAt(index))
 </script>
 
 <div class="flex flex-col gap-5 pt-6">
@@ -26,10 +27,10 @@
     <button
       type="button"
       onclick={() => view.select(galaxy)}
-      aria-label="#{galaxy}: {similarity.score(score)}, search from this galaxy"
+      aria-label="#{galaxy}: {similarity.total(score)}, search from this galaxy"
       class="w-fit cursor-pointer rounded-sm text-left text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
     >
-      #{galaxy}: {similarity.score(score)}
+      #{galaxy}: {similarity.total(score)}
     </button>
     {#if view.open.current.images}
       <div class="flex max-w-2xl flex-col gap-5">
@@ -54,6 +55,9 @@
       </div>
     {/if}
   </div>
+  {#if similarity.wholeResult}
+    <ContributionBars {index} />
+  {/if}
   {#if predicted.length}
     <p class="text-xs text-muted-foreground">
       No {predicted.join(', ')}: matched on AION's prediction
