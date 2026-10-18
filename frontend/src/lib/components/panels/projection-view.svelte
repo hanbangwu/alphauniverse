@@ -51,10 +51,10 @@
   let height = $state(0)
 
   const mean = createQuery(() => app.meanPoints)
-  const full = createQuery(() => app.fullPoints)
+  const shown = createQuery(() => app.shownPoints)
   const search = createQuery(() => similarityQuery(view.searched.value))
 
-  const loaded = $derived((view.full ? full.data : mean.data) ?? null)
+  const loaded = $derived(shown.data ?? null)
   const colouring = createQuery(() =>
     colouringQuery(mosaic, loaded, view.property, view.everywhere)
   )
@@ -129,9 +129,9 @@
         <ColourLegend {coloured} scheme={mode.current} />
       {/key}
     {/if}
-  {:else if view.property && colouring.isError}
+  {:else if shown.isError || (view.property && colouring.isError)}
     <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">
-      {errorMessage(colouring.error)}
+      {errorMessage(shown.error ?? colouring.error)}
     </p>
   {:else}
     <div class="absolute inset-0 grid place-content-center">

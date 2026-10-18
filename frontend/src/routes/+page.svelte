@@ -19,7 +19,7 @@
       <Tabs.List
         class="absolute top-3 left-1/2 z-10 -translate-x-1/2 border bg-background/50 shadow-lg backdrop-blur-xl backdrop-saturate-150"
       >
-        <Tabs.Trigger value="umap">Parametric UMAP</Tabs.Trigger>
+        <Tabs.Trigger value="umap">Map</Tabs.Trigger>
         <Tabs.Trigger value="text">Text Search</Tabs.Trigger>
       </Tabs.List>
       <Tabs.Content value="umap" class="min-h-0">

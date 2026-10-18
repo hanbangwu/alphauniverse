@@ -1,4 +1,5 @@
 import type { Galaxy, TableRow } from '$lib/api'
+import type { Projection } from '$lib/client'
 import type { ModeName } from '$lib/data/similarity'
 
 export interface Label {
@@ -48,9 +49,11 @@ export const SECTIONS: Labels<TableRow['section']> = {
 }
 
 export const POINT_SETS = {
+  same_place: { label: 'Same place' },
+  any_position: { label: 'Any position' },
   mean: { label: 'Mean' },
   full: { label: 'Full' }
-} satisfies Labels<string>
+} satisfies Labels<Projection>
 
 export type PointSet = keyof typeof POINT_SETS
 

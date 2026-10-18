@@ -165,11 +165,10 @@ export function cosinesQuery(galaxy: number | null, mode: CosineMode) {
   })
 }
 
-export function pointsQuery(mosaic: MosaicState, projection: Projection, enabled = true) {
+export function pointsQuery(mosaic: MosaicState, projection: Projection) {
   return queryOptions({
     queryKey: ['points', projection] as const,
     queryFn: () => mosaic.load(projection),
-    enabled,
     ...FOREVER
   })
 }

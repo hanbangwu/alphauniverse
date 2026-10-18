@@ -1,4 +1,5 @@
 import io
+from typing import get_args
 
 import numpy as np
 import pyarrow as pa
@@ -26,6 +27,7 @@ from app.config import (
     SPECTRUM_SURVEYS,
     TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
+    Projection,
     artifact,
 )
 from app.dataset import table_columns
@@ -58,8 +60,9 @@ def test_meta_reports_a_count_per_morphology_without_the_dataset(
     assert len(response.json()["morphologies"]) == N_MORPHOLOGIES + 1
 
 
-def test_projection_head_is_served(client: TestClient) -> None:
-    assert client.head("/projections/mean").status_code == 200
+@pytest.mark.parametrize("projection", get_args(Projection))
+def test_projection_head_is_served(client: TestClient, projection: str) -> None:
+    assert client.head(f"/projections/{projection}").status_code == 200
 
 
 @pytest.mark.parametrize("url", ["/projections/mean", "/galaxy/0"])

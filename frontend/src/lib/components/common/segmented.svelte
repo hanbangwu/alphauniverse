@@ -9,10 +9,7 @@
   let { field }: Props = $props()
 </script>
 
-<div
-  class="grid gap-1"
-  style:grid-template-columns={`repeat(${field.choices.length}, minmax(0, 1fr))`}
->
+<div class="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-1">
   {#each field.choices as { value, label } (value)}
     <Button
       variant={field.value === value ? 'secondary' : 'ghost'}

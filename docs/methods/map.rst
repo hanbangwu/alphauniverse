@@ -1,7 +1,7 @@
 The map
 =======
 
-The map places each embedding in two dimensions so that embeddings that are neighbours in 768 dimensions stay neighbours on the screen. **Mean** shows one point per galaxy, its :term:`mean embedding`; **full** shows one point per token embedding, every mode in the same space.
+The map places galaxies in two dimensions so that neighbours stay neighbours on the screen. **Same place** and **Any position**, one point per galaxy, take each galaxy's neighbours under search (below). **Mean** shows one point per galaxy, its :term:`mean embedding`; **Full** shows one point per token embedding, every mode in the same space; both project AION's embeddings, neighbours in 768 dimensions.
 
 Only closeness on the map carries meaning. The axes have no units, and the distance between two clusters far apart says little about how different they are; a projection to two dimensions cannot keep every distance, and this one is built to keep neighbours :cite:p:`mcinnes2018umap`. :doc:`/benchmarks` measures how many neighbours it keeps.
 

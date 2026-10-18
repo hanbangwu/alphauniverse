@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
   import { metaQuery, pointsQuery } from '$lib/data/queries'
+  import { POINT_SETS, type PointSet } from '$lib/labels'
   import { MosaicState } from '$lib/state/mosaic.svelte'
   import './layout.css'
   import XIcon from '@lucide/svelte/icons/x'
@@ -23,10 +24,13 @@
   )
   const mosaic = new MosaicState()
 
-  createQuery(
-    () => pointsQuery(mosaic, 'mean', browser),
-    () => queries
-  )
+  const shown = Object.keys(POINT_SETS)[0] as PointSet
+  for (const projection of new Set<PointSet>(['mean', shown])) {
+    createQuery(
+      () => pointsQuery(mosaic, projection),
+      () => queries
+    )
+  }
   onDestroy(() => mosaic.destroy())
 </script>
 

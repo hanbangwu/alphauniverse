@@ -142,7 +142,6 @@ GEMMA_DIM = 768
 TextModality = Literal["image", "spectrum"]
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
-Projection = Literal["mean", "full"]
 Download = Literal["encoded", "codebook", "tokens", "properties"]
 
 
@@ -216,6 +215,7 @@ MAPS: dict[str, frozenset[str]] = {
     "same_place": frozenset(),
     "any_position": frozenset(get_args(TokenMode)),
 }
+Projection = Literal[*MAPS, "mean", "full"]
 TOKEN_EMBEDDING_RANK = 1024
 SEARCH_RANK = 256
 
