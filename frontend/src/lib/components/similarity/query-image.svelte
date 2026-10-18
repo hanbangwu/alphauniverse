@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ImageSurvey } from '$lib/client'
   import { tokenAlpha, tokenColors } from '$lib/color'
+  import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { imageMode } from '$lib/data/modes'
   import { tokensQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
@@ -18,7 +19,7 @@
   let { survey, matched }: Props = $props()
 
   const similarity = getSimilarity()
-  const { view, mask: display } = getApp()
+  const { mask: display } = getApp()
 
   const mode = $derived(imageMode(survey))
   const tokens = createQuery(() => tokensQuery(matched ? similarity.galaxy : null, survey))
@@ -29,7 +30,8 @@
   let hovered = $state(false)
 </script>
 
-<div class="flex flex-col gap-5">
+<div class="grid items-end gap-5 md:grid-cols-2">
+  <DetailImage galaxy={similarity.galaxy} {survey} />
   <ImageTokenPanel
     label={SURVEYS[survey].label}
     values={layer?.values ?? tokens.data ?? null}
@@ -41,8 +43,8 @@
     galaxy={similarity.galaxy}
     {survey}
     title={layer ? similarity.layerCaption : similarity.caption}
-    selected={view.tokens[mode].value}
-    ontoggle={matched ? (index) => view.tokens[mode].toggle(index) : undefined}
+    selected={similarity.tokensOf(mode)}
+    ontoggle={similarity.toggler(mode, matched)}
     busy={matched && !tokens.data && !tokens.isError}
     onhover={(value) => (hovered = value)}
     imageOpacity={layer || hovered || !matched ? undefined : tokenAlpha(false)}

@@ -3,6 +3,7 @@ import {
   getGalaxy,
   getImageTokens,
   getMeta,
+  getModeSearch,
   getSaliency,
   getSearch,
   getSpectrum,
@@ -16,7 +17,13 @@ import type { Property } from '$lib/labels'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { byMode } from './modes'
 import { matchMean } from './scores'
-import type { SaliencyQuery, SaliencyResult, SimilarityQuery, SimilarityResult } from './similarity'
+import {
+  type SaliencyQuery,
+  type SaliencyResult,
+  type SearchQuery,
+  type SimilarityResult,
+  isModeQuery
+} from './similarity'
 import type { Spectrum } from './spectra'
 import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-query'
 import { Query, column, eq, isIn, literal } from '@uwdata/mosaic-sql'
@@ -268,21 +275,32 @@ function maps(table: Table, mode: string): Float32Array {
   return table.getChild(mode)!.getChildAt<Float32>(0)!.toArray()
 }
 
-export function similarityQuery(request: SimilarityQuery | null) {
+export function similarityQuery(request: SearchQuery | null) {
   return queryOptions({
     queryKey: ['similarity', request] as const,
     queryFn:
       request === null
         ? skipToken
         : async ({ signal }): Promise<SimilarityResult> => {
-            const { data } = await getSearch({ query: request, signal, throwOnError: true })
+            const whole = isModeQuery(request)
+            const { data } = whole
+              ? await getModeSearch({ query: request, signal, throwOnError: true })
+              : await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
             return {
               request,
               galaxies: table.getChild('galaxy')!.toArray(),
-              similarities: table.getChild('similarity')!.toArray(),
+              scores: table.getChild(whole ? 'score' : 'similarity')!.toArray(),
+              contributions: whole
+                ? Object.fromEntries(
+                    request.modes.map((mode) => [
+                      mode,
+                      table.getChild(`${mode}_contribution`)!.toArray()
+                    ])
+                  )
+                : {},
               maps: byMode((mode) => maps(table, mode)),
-              positions: byMode((mode) => positions(table, mode)),
+              positions: whole ? {} : byMode((mode) => positions(table, mode)),
               tableValueMap: matchMean(maps(table, 'table_values'), table.numRows),
               observed: Object.fromEntries(
                 table.schema.fields

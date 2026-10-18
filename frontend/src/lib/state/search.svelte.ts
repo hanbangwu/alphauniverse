@@ -1,6 +1,6 @@
 import type { CosineMode } from '$lib/client'
-import { IMAGE_MODES, SPECTRUM_MODES, TOKEN_MODES } from '$lib/data/modes'
-import type { SaliencyQuery, SimilarityQuery } from '$lib/data/similarity'
+import { TOKEN_MODES, anywhereModes } from '$lib/data/modes'
+import type { ModeName, ModeQuery, SaliencyQuery } from '$lib/data/similarity'
 import { Field } from './field.svelte'
 import { rangeOf } from './schema'
 
@@ -27,14 +27,25 @@ export class SearchState {
       galaxy,
       ...tokens,
       table_values: tableValues,
-      anywhere: [
-        ...(imageAnywhere ? IMAGE_MODES : []),
-        ...(spectrumAnywhere ? SPECTRUM_MODES : [])
-      ].filter((mode) => tokens[mode].length)
+      anywhere: anywhereModes(
+        TOKEN_MODES.filter((mode) => tokens[mode].length),
+        imageAnywhere,
+        spectrumAnywhere
+      )
     }
   }
 
-  request(selection: SaliencyQuery | null): SimilarityQuery | null {
+  modeSelection(
+    galaxy: number | null,
+    modes: ModeName[],
+    imageAnywhere: boolean,
+    spectrumAnywhere: boolean
+  ): Omit<ModeQuery, 'matches'> | null {
+    if (galaxy === null || !modes.length) return null
+    return { galaxy, modes, anywhere: anywhereModes(modes, imageAnywhere, spectrumAnywhere) }
+  }
+
+  request<T extends object>(selection: T | null): (T & { matches: number }) | null {
     const matches = this.count
     return selection && matches !== null ? { ...selection, matches } : null
   }
