@@ -53,4 +53,4 @@ Describe a galaxy in up to 500 characters. The site returns the 32 image or spec
 Download the embeddings
 -----------------------
 
-The encoded embeddings, the codebook embeddings and the tokens of every galaxy can be downloaded. :doc:`reference` gives their layout.
+The encoded embeddings, the codebook embeddings, the tokens and the properties (redshift, stellar mass, star formation rates and g − r colour, measured and predicted) of every galaxy can be downloaded. :doc:`reference` gives their layout.

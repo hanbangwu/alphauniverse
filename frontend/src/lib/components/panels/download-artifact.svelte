@@ -12,4 +12,5 @@
     >Download codebook embeddings</Button
   >
   <Button href={downloadUrl('tokens')} variant="ghost" size="sm">Download tokens</Button>
+  <Button href={downloadUrl('properties')} variant="ghost" size="sm">Download properties</Button>
 </div>

@@ -143,7 +143,7 @@ TextModality = Literal["image", "spectrum"]
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
 Projection = Literal["mean", "full"]
-Download = Literal["encoded", "codebook", "tokens"]
+Download = Literal["encoded", "codebook", "tokens", "properties"]
 
 
 STORES = ("encoded", "codebook", "tokens")
