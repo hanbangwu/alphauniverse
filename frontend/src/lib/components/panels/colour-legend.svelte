@@ -20,12 +20,9 @@
   const format = (value: number) => value.toPrecision(3)
   const STEPS = 200
   const span = $derived(coloured.high - coloured.low)
-  const at = (step: number) =>
-    step === 0
-      ? coloured.least
-      : step === STEPS
-        ? coloured.most
-        : coloured.low + (span * step) / STEPS
+  const at = (step: number) => coloured.low + (span * step) / STEPS
+  const bound = (step: number) =>
+    step === 0 ? coloured.least : step === STEPS ? coloured.most : at(step)
   const stepOf = (value: number) =>
     value <= coloured.least
       ? 0
@@ -35,7 +32,12 @@
   const committed = $derived((filters.range.value ?? [coloured.least, coloured.most]).map(stepOf))
   let dragged = $state<number[] | null>(null)
   const steps = $derived(dragged ?? committed)
-  const shown = $derived(steps.map(at))
+  const readout = $derived.by(() => {
+    const [low, high] = steps.map((step) => format(at(step)))
+    if (steps[0] === 0 && steps[1] !== STEPS) return `≤ ${high}`
+    if (steps[0] !== 0 && steps[1] === STEPS) return `≥ ${low}`
+    return `${low} to ${high}`
+  })
   const within = createQuery(() => withinQuery(mosaic, coloured.name, filters.range.value))
 </script>
 
@@ -74,13 +76,13 @@
       value={steps}
       onValueChange={(value) => (dragged = value)}
       onValueCommit={([low, high]) => {
-        filters.range.value = low === 0 && high === STEPS ? null : [at(low), at(high)]
+        filters.range.value = low === 0 && high === STEPS ? null : [bound(low), bound(high)]
         dragged = null
       }}
       max={STEPS}
       disabled={span === 0}
     />
-    <span class="font-mono tabular-nums">{format(shown[0])} to {format(shown[1])}</span>
+    <span class="font-mono tabular-nums">{readout}</span>
     {#if filters.range.value}
       <div class="flex items-center justify-between gap-2">
         <span class="text-muted-foreground">{within.data ?? '…'} galaxies in range</span>
