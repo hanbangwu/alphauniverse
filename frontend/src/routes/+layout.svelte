@@ -1,5 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment'
+  import markDark from '$lib/assets/alphauniverse-mark-dark.svg'
+  import markLight from '$lib/assets/alphauniverse-mark-light.svg'
   import favicon from '$lib/assets/favicon.svg'
   import AppRoot from '$lib/components/app-root.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -16,6 +18,8 @@
 
   let { children } = $props()
   const showDisclaimer = new PersistedState('show-disclaimer', true)
+  const disclaimer =
+    "This is a research prototype. We don't guarantee accuracy nor reliability (for now)."
 
   const queries = new QueryClient({ defaultOptions: { queries: { enabled: browser } } })
   const meta = createQuery(
@@ -47,11 +51,9 @@
 
 <QueryClientProvider client={queries}>
   <div class="flex h-dvh flex-col overflow-hidden">
-    {#if showDisclaimer.current}
+    {#if showDisclaimer.current && !meta.isPending}
       <div class="flex items-center border-b bg-muted px-4 py-1 text-xs text-muted-foreground">
-        <p class="flex-1 text-center">
-          This is a research prototype. We don't guarantee accuracy nor reliability (for now).
-        </p>
+        <p class="flex-1 text-center">{disclaimer}</p>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -72,8 +74,16 @@
           The server is unavailable. Reload the page to try again.
         </p>
       {:else}
-        <div class="grid h-full place-content-center">
-          <Spinner class="size-8" />
+        <div class="flex h-full flex-col items-center p-4">
+          <div class="flex flex-1 flex-col items-center justify-center gap-6">
+            <h1 class="flex items-center gap-3 text-2xl tracking-wide">
+              <img src={markLight} alt="" class="size-12 dark:hidden" />
+              <img src={markDark} alt="" class="hidden size-12 dark:block" />
+              alphaUniverse
+            </h1>
+            <Spinner class="size-8" />
+          </div>
+          <p class="text-center text-xs text-muted-foreground">{disclaimer}</p>
         </div>
       {/if}
     </div>
