@@ -58,6 +58,13 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "furo"
+html_static_path = ["_static"]
+html_favicon = "_static/favicon.svg"
+html_theme_options = {
+    "light_logo": "alphauniverse-lockup-light.svg",
+    "dark_logo": "alphauniverse-lockup-dark.svg",
+    "sidebar_hide_name": True,
+}
 mathjax_path = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
 
 

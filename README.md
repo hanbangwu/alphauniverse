@@ -1,6 +1,9 @@
 # alphaUniverse
 
-The embedding-based virtual astronomical observatory.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/alphauniverse-header-dark.svg" />
+  <img src="docs/_static/alphauniverse-header-light.svg" alt="alphaUniverse: the embedding-based virtual astronomical observatory" />
+</picture>
 
 alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's foundation model for astronomy, in a web interface over the galaxies of the COSMOS field.
 

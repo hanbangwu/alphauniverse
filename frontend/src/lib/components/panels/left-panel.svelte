@@ -1,4 +1,6 @@
 <script lang="ts">
+  import markDark from '$lib/assets/alphauniverse-mark-dark.svg'
+  import markLight from '$lib/assets/alphauniverse-mark-light.svg'
   import Segmented from '$lib/components/common/segmented.svelte'
   import ThemeToggleButton from '$lib/components/theme-toggle-button.svelte'
   import { getView } from '$lib/state/app.svelte'
@@ -11,7 +13,11 @@
 
 <div class="flex h-full flex-col bg-card">
   <header class="flex shrink-0 items-start justify-between gap-2 p-4 pb-3">
-    <h1 class="text-base tracking-wide">alphaUniverse</h1>
+    <h1 class="flex items-center gap-2 text-base tracking-wide">
+      <img src={markLight} alt="" class="size-6 dark:hidden" />
+      <img src={markDark} alt="" class="hidden size-6 dark:block" />
+      alphaUniverse
+    </h1>
     <ThemeToggleButton />
   </header>
 
