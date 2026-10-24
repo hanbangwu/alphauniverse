@@ -1034,6 +1034,18 @@
     "schemas": {
       "Galaxy": {
         "properties": {
+          "object_id": {
+            "type": "string",
+            "title": "Object Id"
+          },
+          "ra": {
+            "type": "number",
+            "title": "Ra"
+          },
+          "dec": {
+            "type": "number",
+            "title": "Dec"
+          },
           "ls": {
             "type": "boolean",
             "title": "Ls"
@@ -1061,6 +1073,9 @@
         },
         "type": "object",
         "required": [
+          "object_id",
+          "ra",
+          "dec",
           "ls",
           "hsc",
           "desi",

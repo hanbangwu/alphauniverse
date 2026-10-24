@@ -41,7 +41,6 @@
   import { errorMessage } from '$lib/errors'
   import { PROPERTIES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
-  import ColourLegend from './colour-legend.svelte'
   import MapSelection from './map-selection.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
@@ -115,7 +114,6 @@
         {width}
         {height}
         config={{ colorScheme: mode.current, autoLabelEnabled: false }}
-        theme={{ statusBar: false }}
         customTooltip={{
           class: Tooltip,
           props: { label: PROPERTIES[coloured.property].label }
@@ -135,15 +133,8 @@
         {errorMessage(selected.error)}
       </p>
     {:else if region && selected.data}
-      <MapSelection galaxies={selected.data} onclear={() => (drawn = null)} />
-    {:else}
-      <p class="pointer-events-none absolute top-3 right-3 text-xs text-muted-foreground">
-        Shift-drag to select a box; Shift-⌘-drag (Shift-Windows key), a lasso
-      </p>
+      <MapSelection galaxies={selected.data} loading={selected.isFetching} />
     {/if}
-    {#key coloured.name}
-      <ColourLegend {coloured} scheme={mode.current} />
-    {/key}
   {:else if shown.isError || colouring.isError}
     <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">
       {errorMessage(shown.error ?? colouring.error)}

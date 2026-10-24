@@ -2,7 +2,9 @@
   import type { GetImageData, GetImageTemplateData } from '$lib/api'
   import { type ImageSurvey, client } from '$lib/client'
   import { Spinner } from '$lib/components/ui/spinner'
+  import { coverageQuery } from '$lib/data/queries'
   import { SURVEYS } from '$lib/labels'
+  import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
     galaxy: number
@@ -14,6 +16,8 @@
 
   let loaded = $state<string | null>(null)
   let failed = $state<string | null>(null)
+
+  const coverage = createQuery(() => coverageQuery(galaxy))
 
   const src = $derived(
     client.buildUrl<GetImageData | GetImageTemplateData>({
@@ -28,7 +32,7 @@
 {#if failed !== src}
   <img
     {src}
-    alt={`${predicted ? "AION's predicted " : ''}${SURVEYS[survey].label} image of galaxy ${galaxy}`}
+    alt={`${predicted ? "AION's predicted " : ''}${SURVEYS[survey].label} image of galaxy ${coverage.data?.object_id ?? ''}`}
     loading="lazy"
     onload={() => (loaded = src)}
     onerror={() => (failed = src)}

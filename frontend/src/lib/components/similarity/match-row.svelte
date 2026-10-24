@@ -1,4 +1,5 @@
 <script lang="ts">
+  import GalaxyName from '$lib/components/galaxy-name.svelte'
   import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
   import { SURVEYS } from '$lib/labels'
@@ -27,10 +28,11 @@
     <button
       type="button"
       onclick={() => view.select(galaxy)}
-      aria-label="#{galaxy}: {similarity.total(score)}, search from this galaxy"
       class="w-fit cursor-pointer rounded-sm text-left text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
     >
-      #{galaxy}: {similarity.total(score)}
+      <GalaxyName {galaxy} />: {similarity.total(score)}<span class="sr-only"
+        >, search from this galaxy</span
+      >
     </button>
     {#if view.open.current.images}
       <div class="flex max-w-2xl flex-col gap-5">

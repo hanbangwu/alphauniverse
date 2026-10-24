@@ -1,4 +1,5 @@
 <script lang="ts">
+  import GalaxyName from '$lib/components/galaxy-name.svelte'
   import { Spinner } from '$lib/components/ui/spinner'
   import { IMAGE_MODES, SPECTRUM_MODES } from '$lib/data/modes'
   import { getApp } from '$lib/state/app.svelte'
@@ -25,7 +26,8 @@
 </p>
 {#if similarity.wholeResult && predicted.length}
   <p class="text-xs text-muted-foreground">
-    #{similarity.galaxy} has no {predicted.join(', ')}: searched with AION's prediction
+    <GalaxyName galaxy={similarity.galaxy} /> has no {predicted.join(', ')}: searched with AION's
+    prediction
   </p>
 {/if}
 

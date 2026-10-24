@@ -5,13 +5,18 @@
   import SimilarityDialog from '$lib/components/similarity/similarity-dialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS } from '$lib/data/modes'
+  import { coverageQuery } from '$lib/data/queries'
   import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import CoverageTable from './coverage-table.svelte'
   import DetailImage from './detail-image.svelte'
   import DetailSpectrum from './detail-spectrum.svelte'
+  import ExternalLinkIcon from '@lucide/svelte/icons/external-link'
+  import { createQuery } from '@tanstack/svelte-query'
 
   const { view } = getApp()
+
+  const coverage = createQuery(() => coverageQuery(view.galaxy.value))
 </script>
 
 <div class="flex h-full flex-col bg-card">
@@ -24,7 +29,22 @@
       <p class="text-sm leading-relaxed text-muted-foreground">No galaxy selected.</p>
     {:else}
       {@const galaxy = view.galaxy.value}
-      <span class="text-sm font-medium">#{galaxy}</span>
+      {#if coverage.data}
+        {@const { object_id, ra, dec } = coverage.data}
+        <div class="flex flex-col gap-0.5">
+          <span class="text-sm font-medium">{object_id}</span>
+          <a
+            href="https://www.legacysurvey.org/viewer/cutout.jpg?ra={ra}&dec={dec}&layer=ls-dr10"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex w-fit items-center gap-1 text-xs text-muted-foreground tabular-nums underline-offset-4 hover:underline"
+          >
+            RA {ra.toFixed(5)}°, Dec {dec.toFixed(5)}°
+            <ExternalLinkIcon class="size-3" aria-hidden="true" />
+            <span class="sr-only">: Legacy Survey DR10 cutout, opens in a new tab</span>
+          </a>
+        </div>
+      {/if}
 
       <PredictionsSwitch />
 

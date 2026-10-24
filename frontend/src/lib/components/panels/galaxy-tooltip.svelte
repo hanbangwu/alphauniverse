@@ -1,5 +1,6 @@
 <script lang="ts">
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
+  import GalaxyName from '$lib/components/galaxy-name.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import type { DataPoint } from 'embedding-atlas'
 
@@ -19,7 +20,7 @@
   <PanelFrame>
     <GalaxyThumb {galaxy} />
   </PanelFrame>
-  <span class="text-sm font-medium">#{galaxy}</span>
+  <span class="text-sm font-medium"><GalaxyName {galaxy} /></span>
   {#if tooltip.fields}
     {@const { value, width, predicted } = tooltip.fields}
     <span class="text-xs">

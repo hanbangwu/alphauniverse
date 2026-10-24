@@ -16,6 +16,7 @@ from app.config import (
     CROP_PIXELS,
     DESI,
     FLAG_SURVEYS,
+    LS,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
@@ -43,6 +44,19 @@ def _template(mode: str) -> np.ndarray:
     return np.load(artifact(f"template_{mode}"))
 
 
+@pytest.fixture
+def identified(monkeypatch: pytest.MonkeyPatch, galaxies: int) -> Dataset:
+    rows = Dataset.from_dict(
+        {
+            f"object_id{LS}": [f"1501p020-{galaxy}" for galaxy in range(galaxies)],
+            f"ra{LS}": [150.0 + galaxy / 100 for galaxy in range(galaxies)],
+            f"dec{LS}": [2.0 - galaxy / 100 for galaxy in range(galaxies)],
+        }
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    return rows
+
+
 @pytest.mark.parametrize("role", ["encoded", "properties"])
 def test_artifact_downloads(client: TestClient, role: str) -> None:
     response = client.get(f"/downloads/{role}")
@@ -66,6 +80,7 @@ def test_projection_head_is_served(client: TestClient, projection: str) -> None:
 
 
 @pytest.mark.parametrize("url", ["/projections/mean", "/galaxy/0"])
+@pytest.mark.usefixtures("identified")
 def test_a_request_with_the_current_etag_is_not_modified(
     client: TestClient, url: str
 ) -> None:
@@ -78,6 +93,7 @@ def test_a_request_with_the_current_etag_is_not_modified(
     assert (stale.status_code, stale.content) == (200, served.content)
 
 
+@pytest.mark.usefixtures("identified")
 def test_a_weak_etag_in_a_list_is_not_modified(client: TestClient) -> None:
     etag = client.get("/galaxy/0").headers["etag"]
 
@@ -86,6 +102,7 @@ def test_a_weak_etag_in_a_list_is_not_modified(client: TestClient) -> None:
     assert response.status_code == 304
 
 
+@pytest.mark.usefixtures("identified")
 def test_successful_responses_must_be_revalidated_before_reuse(
     client: TestClient,
 ) -> None:
@@ -128,13 +145,26 @@ def test_image_template_is_a_png_of_the_crop(client: TestClient, survey: str) ->
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
+@pytest.mark.usefixtures("identified")
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:
     stored = _stored("tokens").filter(pc.field("galaxy") == galaxy)
     rows = client.get(f"/galaxy/{galaxy}").json()
 
-    assert rows.keys() == {*TOKEN_SURVEYS, *FLAG_SURVEYS}
+    assert rows.keys() == {"object_id", "ra", "dec", *TOKEN_SURVEYS, *FLAG_SURVEYS}
     for survey in TOKEN_SURVEYS:
         assert rows[survey] is stored.column(survey)[0].is_valid
+
+
+def test_galaxy_is_named_by_its_legacy_survey_object_and_position(
+    client: TestClient, identified: Dataset
+) -> None:
+    rows = client.get("/galaxy/3").json()
+
+    assert (rows["object_id"], rows["ra"], rows["dec"]) == (
+        identified[3][f"object_id{LS}"],
+        identified[3][f"ra{LS}"],
+        identified[3][f"dec{LS}"],
+    )
 
 
 def test_cosines_are_a_square_float32_table_of_the_mode_s_slots(

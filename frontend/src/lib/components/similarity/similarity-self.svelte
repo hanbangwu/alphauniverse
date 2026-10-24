@@ -1,6 +1,7 @@
 <script lang="ts">
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
   import Observed from '$lib/components/common/observed.svelte'
+  import GalaxyName from '$lib/components/galaxy-name.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Switch } from '$lib/components/ui/switch'
   import {
@@ -77,7 +78,7 @@
       )}
     {/snippet}
     <div class="flex flex-col gap-2">
-      <span class="text-sm font-medium">#{similarity.galaxy}</span>
+      <span class="text-sm font-medium"><GalaxyName galaxy={similarity.galaxy} /></span>
       <div class="flex max-w-2xl flex-col gap-5">
         {#each IMAGE_SURVEYS as survey (survey)}
           <Observed galaxy={similarity.galaxy} {survey} kind="image">

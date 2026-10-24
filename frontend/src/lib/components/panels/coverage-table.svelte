@@ -1,9 +1,8 @@
 <script lang="ts">
-  import type { Galaxy } from '$lib/api'
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
   import { coverageQuery } from '$lib/data/queries'
-  import { SURVEYS } from '$lib/labels'
+  import { SURVEYS, type Survey } from '$lib/labels'
   import CheckIcon from '@lucide/svelte/icons/check'
   import MinusIcon from '@lucide/svelte/icons/minus'
   import { createQuery } from '@tanstack/svelte-query'
@@ -39,7 +38,7 @@
             <Table.Cell class="px-0 py-1.5">{label}</Table.Cell>
             <Table.Cell class="px-0 py-1.5">
               <div class="flex justify-end">
-                {#if coverage.data[survey as keyof Galaxy]}
+                {#if coverage.data[survey as Survey]}
                   <CheckIcon class="size-3.5" aria-label="matched" />
                 {:else}
                   <MinusIcon class="size-3.5 text-muted-foreground/50" aria-label="not matched" />

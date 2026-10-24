@@ -8,6 +8,8 @@ export interface Label {
 
 export type Labels<T extends string> = Record<T, Label>
 
+export type Survey = Exclude<keyof Galaxy, 'object_id' | 'ra' | 'dec'>
+
 export type Choice<T extends string> = Label & { value: T }
 
 export const SIMILARITY = { short: 'similarity' } as const
@@ -19,7 +21,7 @@ export const OBSERVATIONS: Record<string, string> = {
   redshift: 'redshift'
 }
 
-export const SURVEYS: Labels<keyof Galaxy> = {
+export const SURVEYS: Labels<Survey> = {
   ls: { label: 'Legacy Survey DR10' },
   hsc: { label: 'HSC PDR3' },
   desi: { label: 'DESI EDR SV3' },

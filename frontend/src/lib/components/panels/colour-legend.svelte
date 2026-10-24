@@ -53,7 +53,7 @@
 {/snippet}
 
 <figure
-  class="pointer-events-none absolute bottom-3 left-3 flex w-56 flex-col gap-1.5 rounded-md border bg-popover/90 p-2 text-xs"
+  class="flex flex-col gap-1.5 text-xs"
   aria-label="{PROPERTIES[coloured.property].label} colour scale"
 >
   <figcaption class="flex justify-between font-medium">
@@ -70,7 +70,7 @@
   {#if coloured.predicted}
     {@render bar(coloured.faded ? fadedShades(scheme) : SHADES, `AION: ${coloured.predicted}`)}
   {/if}
-  <div class="pointer-events-auto flex flex-col gap-1.5 pt-1">
+  <div class="flex flex-col gap-1.5 pt-1">
     <Slider
       type="multiple"
       value={steps}

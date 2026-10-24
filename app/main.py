@@ -55,6 +55,7 @@ from .config import (
 from .dataset import (
     catalogue,
     fitted,
+    identity,
     image,
     predicted_image,
     redshift,
@@ -87,6 +88,9 @@ class Meta(BaseModel):
 
 
 class Galaxy(BaseModel):
+    object_id: str
+    ra: float
+    dec: float
     ls: bool
     hsc: bool
     desi: bool
@@ -256,6 +260,7 @@ def head_download_artifact(role: Download, request: Request) -> Response:
 def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
     table = tokens().slice(galaxy, 1)
     return Galaxy(
+        **identity(galaxy),
         **{survey: table.column(survey)[0].is_valid for survey in TOKEN_SURVEYS},
         **{survey: bool(table.column(survey)[0].as_py()) for survey in FLAG_SURVEYS},
     )

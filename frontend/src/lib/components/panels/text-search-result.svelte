@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TextMatches } from '$lib/api'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
+  import GalaxyName from '$lib/components/galaxy-name.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import { getApp } from '$lib/state/app.svelte'
 
@@ -25,7 +26,7 @@
     <GalaxyThumb {galaxy} />
   </PanelFrame>
   <div class="flex flex-col gap-1">
-    <span class="text-sm font-medium">#{galaxy}</span>
+    <span class="text-sm font-medium"><GalaxyName {galaxy} /></span>
     <span class="text-xs text-muted-foreground tabular-nums">
       {modality} &bull; cos sim {score.toFixed(3)}
     </span>

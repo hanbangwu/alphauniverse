@@ -1,15 +1,14 @@
 <script lang="ts">
-  import type { Galaxy } from '$lib/api'
   import { ANCHOR } from '$lib/data/modes'
   import { coverageQuery } from '$lib/data/queries'
-  import { SURVEYS } from '$lib/labels'
+  import { SURVEYS, type Survey } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import type { Snippet } from 'svelte'
 
   interface Props {
     galaxy: number
-    survey: keyof Galaxy
+    survey: Survey
     kind: 'image' | 'spectrum'
     children: Snippet<[boolean]>
   }

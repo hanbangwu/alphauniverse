@@ -15,6 +15,7 @@ from .config import (
     DATASET_AUTHOR,
     DATASET_NAME,
     DATASET_REVISION,
+    LS,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     RGB_COLUMN,
@@ -146,6 +147,13 @@ def table(galaxy: int) -> dict[str, float | int | bool | None]:
     return {
         column: dataset().data.column(column)[galaxy].as_py()
         for column in table_columns()
+    }
+
+
+def identity(galaxy: int) -> dict[str, str | float]:
+    return {
+        name: dataset().data.column(f"{name}{LS}")[galaxy].as_py()
+        for name in ("object_id", "ra", "dec")
     }
 
 
