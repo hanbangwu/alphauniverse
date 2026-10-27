@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Thirteen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ============================ ====================================== ==================================
 Job                          Reads                                  Writes
@@ -39,6 +39,7 @@ generate_projections         the dataset, encoded                   mean_points,
 generate_pairs               the dataset, encoded                   pairs_<modality>
 generate_alignment           pairs_<modality>                       alignment
 generate_aion_gemma_space    pairs_<modality>, alignment            aion_gemma_space
+generate_template_gemma      template_<mode>                        template_gemma_<mode>
 ============================ ====================================== ==================================
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. Each spectrum reaches the codec followed by one masked sample at wavelength 99,999 with zero flux and inverse variance, which gives the tokens of the codec on AION's ``main`` branch: it pads every spectrum with such samples, to 7,808 for DESI and 4,800 for SDSS, and only the first affects the tokens. AION 0.0.2 does not pad. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
@@ -103,6 +104,8 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
 
 ``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text maps' weights; ``alignment`` holds, for each modality, the network and the linear map the text search benchmark compares. ``aion_gemma_space`` is an ``np.savez`` of the rows of ``pairs_image`` then ``pairs_spectrum`` carried into EmbeddingGemma's space: ``vectors`` (``float32``, rows × 768, unit length), ``galaxy`` (``int32``) and ``modality`` (``image`` or ``spectrum``).
 
+``template_gemma_<mode>`` is an ``np.save`` file of EmbeddingGemma's embedding of every galaxy's :term:`template` in the mode, ``float32``, one unit-length row of 768 per galaxy, observed in the mode or not. An image template is embedded as its colour image, as the site shows it. A spectrum template is embedded as a 1680 × 384 pixel plot of its smoothed flux over the wavelengths the survey observes, 3,600 to 9,824 Å for DESI and 3,795.8 to 9,221.5 Å for SDSS, with the flux axis spanning the 0.5th to 99.5th percentiles there, padded by a tenth of that range, both axes labelled and the flux axis without ticks. The catalogue values and the redshift are embedded as text with the ``Document`` prompt, one ``name: value`` line per value to 4 significant figures.
+
 HTTP API
 --------
 
@@ -115,6 +118,6 @@ The first Same place Population map (``/saliency``) on a galaxy builds its agree
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the frontend has no tests.
+Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment`` and ``generate_aion_gemma_space`` are untested, ``generate_template_gemma`` is tested with a stand-in for EmbeddingGemma, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the frontend has no tests.
 
 Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's default environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets. Vercel builds every branch: production builds from ``main`` and calls the default app, and preview builds from every other branch call the ``dev`` app, whose URL ``PUBLIC_API_URL`` holds in each Vercel environment. The ``dev`` app runs whichever branch last ran the workflow, so previews share it.

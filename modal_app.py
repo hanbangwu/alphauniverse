@@ -251,6 +251,21 @@ def generate_aion_gemma_space() -> None:
     cache_volume.commit()
 
 
+@app.function(
+    image=build_image,
+    gpu="L4",
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=3 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_template_gemma() -> None:
+    from app.template_gemma import generate_template_gemma
+
+    generate_template_gemma()
+    cache_volume.commit()
+
+
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")

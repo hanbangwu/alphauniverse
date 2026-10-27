@@ -139,6 +139,7 @@ N_MORPHOLOGIES = 10
 
 GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
+PLOT_INCHES = (16.8, 3.84)
 TextModality = Literal["image", "spectrum"]
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
@@ -239,6 +240,7 @@ ARTIFACTS: dict[str, str] = {
     **{f"template_gram_{name}": "npy" for name in GRAM_NAMES},
     "observed_reference": "npz",
     **{f"template_embedding_{name}": "npz" for name in GRAM_NAMES},
+    **{f"template_gemma_{mode}": "npy" for mode in MODES},
     "joint_embedding": "npy",
     "properties": "parquet",
     **{f"{name}_points": "parquet" for name in MAPS},
