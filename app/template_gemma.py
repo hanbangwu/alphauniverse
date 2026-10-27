@@ -27,7 +27,7 @@ SPECTRUM_RANGES: dict[SpectrumSurvey, tuple[float, float]] = {
     "desi": (3600.0, 9824.0),
     "sdss": (3795.8, 9221.5),
 }
-FLUX_PERCENTILES = (0.5, 99.5)
+FLUX_PERCENTILES = (0.5, 99.9)
 FLUX_PADDING = 0.1
 
 
