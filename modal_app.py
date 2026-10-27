@@ -256,7 +256,7 @@ def generate_aion_gemma_space() -> None:
     gpu="L4",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
-    timeout=3 * 60 * 60,
+    timeout=4 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_template_gemma() -> None:
