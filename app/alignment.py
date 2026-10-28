@@ -13,7 +13,6 @@ from .config import (
     GEMMA_DIM,
     SEED,
     TEXT_SURVEYS,
-    VALIDATION,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
@@ -28,6 +27,7 @@ EPOCHS = 50
 HIDDEN = 2048
 LEARNING_RATE = 1e-3
 RECALL_AT = 10
+VALIDATION = 0.3
 
 
 class AlignmentMap(nn.Module):

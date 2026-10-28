@@ -1,3 +1,4 @@
+import multiprocessing
 from concurrent.futures import Executor, ProcessPoolExecutor
 from functools import cache
 from io import BytesIO
@@ -7,10 +8,9 @@ import PIL.Image
 import pyarrow as pa
 import pyarrow.parquet as pq
 from astropy.convolution import Gaussian1DKernel, convolve
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from . import pql, search, templates
+from . import alignment, pql, search, templates
 from .config import (
     GEMMA_DIM,
     IMAGE_MODES,
@@ -25,27 +25,16 @@ from .config import (
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TEXT_VIEWS,
-    VALIDATION,
+    VIEW_COMBINATIONS,
+    VIEW_KINDS,
+    VIEW_TYPES,
     SpectrumSurvey,
     artifact,
-    galaxy_count,
 )
 from .dataset import dataset, image, predicted_image, samples
 from .observations import table_values
 from .text_search import text_model
 
-KINDS = ("observed", "template", "sample")
-COMBINATIONS = {
-    "images": tuple(IMAGE_MODES),
-    "spectra": tuple(SPECTRUM_MODES),
-    "catalogues": tuple(TABLE_MODES),
-    "image_and_spectrum": ("ls_image", "desi_spectrum"),
-    "everything": MODES,
-}
-VIEW_TYPES = (
-    *((kind, mode) for mode in MODES for kind in KINDS),
-    *(("combination", name) for name in COMBINATIONS),
-)
 SAMPLE_WEIGHTS = {mode: 8 if mode in TABLE_MODES else 4 for mode in MODES}
 SMOOTHING = (1, 2, 3)
 PRECISIONS = (3, 4, 5)
@@ -77,10 +66,8 @@ PROTOTYPE_HELD_OUT = np.concatenate(
 
 
 def held_out() -> np.ndarray:
-    _, split = train_test_split(
-        np.arange(galaxy_count()), test_size=VALIDATION, random_state=SEED
-    )
-    return np.union1d(split, PROTOTYPE_HELD_OUT)
+    split = alignment.held_out(np.arange(len(dataset()))).cpu().numpy()
+    return np.union1d(np.flatnonzero(split), PROTOTYPE_HELD_OUT)
 
 
 def weights(galaxies: np.ndarray) -> np.ndarray:
@@ -98,10 +85,12 @@ def weights(galaxies: np.ndarray) -> np.ndarray:
 def rows(galaxies: np.ndarray, mode: str) -> pa.RecordBatch:
     table = pql.predictions()
     table = table.select(
-        [
+        [TABLE_MODES[mode][0]]
+        if mode in TABLE_MODES
+        else [
             name
             for name in table.column_names
-            if name.split("_")[0] == MODE_SURVEYS[mode]
+            if name.startswith(f"{MODE_SURVEYS[mode]}_")
         ]
     )
     sliced = [table.slice(galaxy, 1) for galaxy in galaxies.tolist()]
@@ -137,8 +126,11 @@ def plotted(
 ) -> PIL.Image.Image:
     low, high = SPECTRUM_RANGES[survey]
     shown = (wavelength >= low) & (wavelength <= high)
-    flux = convolve(flux, Gaussian1DKernel(sigma), preserve_nan=True)[shown]
-    bottom, top = np.nanpercentile(flux, FLUX_PERCENTILES)
+    flux = convolve(
+        flux, Gaussian1DKernel(sigma), boundary="extend", preserve_nan=True
+    )[shown]
+    finite = flux[np.isfinite(flux)]
+    bottom, top = np.percentile(finite, FLUX_PERCENTILES) if finite.size else (0, 1)
     padding = FLUX_PADDING * (top - bottom)
     canvas, axes, line = spectrum_canvas(survey)
     line.set_data(wavelength[shown], flux)
@@ -210,11 +202,13 @@ def combined(
 ) -> list[dict | str]:
     parts = []
     for mode in members:
-        kinds = rng.integers(~pql.observed(MODE_SURVEYS[mode])[galaxies], len(KINDS))
+        kinds = rng.integers(
+            ~pql.observed(MODE_SURVEYS[mode])[galaxies], len(VIEW_KINDS)
+        )
         member = [None] * len(galaxies)
         for kind in np.unique(kinds):
             chosen = np.flatnonzero(kinds == kind)
-            found = realised(mode, KINDS[kind], galaxies[chosen], rng, pool)
+            found = realised(mode, VIEW_KINDS[kind], galaxies[chosen], rng, pool)
             for position, document in zip(chosen, found):
                 member[position] = document
         parts.append(member)
@@ -229,7 +223,7 @@ def documents(
 ) -> list:
     kind, name = view_type
     if kind == "combination":
-        return combined(COMBINATIONS[name], galaxies, rng, pool)
+        return combined(VIEW_COMBINATIONS[name], galaxies, rng, pool)
     return realised(name, kind, galaxies, rng, pool)
 
 
@@ -260,13 +254,14 @@ def part(
     )
 
 
-def generate_text_views(views: int) -> None:
+def generate_text_views(parts: int) -> None:
     folder = artifact("text_views")
     folder.mkdir(exist_ok=True)
-    galaxies = np.setdiff1d(np.arange(galaxy_count()), held_out())
+    galaxies = np.setdiff1d(np.arange(len(dataset())), held_out())
     found = weights(galaxies)
-    with ProcessPoolExecutor(PLOTTERS) as pool:
-        for index in tqdm(range(views // PART), desc="text views"):
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(PLOTTERS, mp_context=context) as pool:
+        for index in tqdm(range(parts), desc="text views"):
             path = folder / f"part-{index:05d}.parquet"
             if not path.exists():
                 hidden = folder / f".{path.name}"

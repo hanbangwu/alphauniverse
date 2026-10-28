@@ -259,10 +259,10 @@ def generate_aion_gemma_space() -> None:
     timeout=24 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_text_views(views: int) -> None:
+def generate_text_views(parts: int) -> None:
     from app.text_views import generate_text_views
 
-    generate_text_views(views)
+    generate_text_views(parts)
     cache_volume.commit()
 
 

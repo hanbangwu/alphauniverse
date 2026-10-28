@@ -5,8 +5,9 @@ import numpy as np
 import PIL.Image
 import pyarrow.parquet as pq
 import pytest
+from datasets import Dataset
 
-from app import pql, text_views
+from app import alignment, pql, text_views
 from app.config import (
     GEMMA_DIM,
     IMAGE_MODES,
@@ -76,17 +77,20 @@ def test_text_views_resume_without_redrawing_the_parts_already_written(
         rendered.append(len(galaxies))
         return [f"{view_type} {galaxy} {rng.random()}" for galaxy in galaxies]
 
+    rows = Dataset.from_dict({"galaxy": list(range(galaxy_count()))})
+    monkeypatch.setattr(alignment, "dataset", lambda: rows)
+    monkeypatch.setattr(text_views, "dataset", lambda: rows)
     monkeypatch.setattr(text_views, "documents", documents)
     monkeypatch.setattr(text_views, "text_model", Encoder)
     monkeypatch.setattr(text_views, "PART", 6)
     monkeypatch.setattr(text_views, "artifact", lambda role: tmp_path / role)
     folder = tmp_path / "text_views"
 
-    text_views.generate_text_views(12)
+    text_views.generate_text_views(2)
     written = pq.read_table(folder)
     (folder / "part-00001.parquet").unlink()
     rendered.clear()
-    text_views.generate_text_views(12)
+    text_views.generate_text_views(2)
 
     assert sum(rendered) == 6
     assert pq.read_table(folder).equals(written)

@@ -141,7 +141,6 @@ GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
 TextModality = Literal["image", "spectrum"]
 PLOT_INCHES = (16.8, 3.84)
-VALIDATION = 0.3
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
 Download = Literal["encoded", "codebook", "tokens", "properties"]
@@ -216,6 +215,18 @@ OBSERVATIONS = {
 }
 
 MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+VIEW_KINDS = ("observed", "template", "sample")
+VIEW_COMBINATIONS = {
+    "images": tuple(IMAGE_MODES),
+    "spectra": tuple(SPECTRUM_MODES),
+    "catalogues": tuple(TABLE_MODES),
+    "image_and_spectrum": ("ls_image", "desi_spectrum"),
+    "everything": MODES,
+}
+VIEW_TYPES = (
+    *((kind, mode) for mode in MODES for kind in VIEW_KINDS),
+    *(("combination", name) for name in VIEW_COMBINATIONS),
+)
 ModeName = Literal[*MODES]
 TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)

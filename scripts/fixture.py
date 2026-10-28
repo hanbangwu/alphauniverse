@@ -37,6 +37,7 @@ from app.config import (
     TEXT_VIEWS,
     TOKEN_EMBEDDING_RANK,
     TOP_CODES,
+    VIEW_TYPES,
     VOCABULARY,
     artifact,
     build_dir,
@@ -61,7 +62,6 @@ from app.pql import (
 )
 from app.search import source, templates, tokens
 from app.text_search import aion_gemma_space
-from app.text_views import VIEW_TYPES
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_IMAGE_TOKENS + 12,
