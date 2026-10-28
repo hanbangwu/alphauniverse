@@ -240,7 +240,7 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
     text_flow.train_text_flow()
 
     printed = capsys.readouterr().out
-    report = json.loads(printed[printed.find("{") :])
+    report = json.loads(printed[printed.find("{\n") :])
     stored = np.load(tmp_path / "text_bases.npz")
     flow = torch.load(tmp_path / "text_flow.pt")
     assert generated == [2, 4]

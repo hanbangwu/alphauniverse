@@ -518,13 +518,12 @@ def train_text_flow() -> None:
             filled = rows.stop
             measured = identification(average.module, held, bases, everything)
             overall = measured.nanmean(dim=1)
-            run.log(
-                {"views": filled, "train/loss": float(np.mean(losses))}
-                | {
-                    f"identification/kappa {kappa:g}": value
-                    for kappa, value in zip(KAPPAS, overall.tolist(), strict=True)
-                }
-            )
+            entry = {"views": filled, "train/loss": float(np.mean(losses))} | {
+                f"identification/kappa {kappa:g}": value
+                for kappa, value in zip(KAPPAS, overall.tolist(), strict=True)
+            }
+            run.log(entry)
+            print(json.dumps(entry), flush=True)
             if overall.max().item() > best + IMPROVEMENT:
                 best, best_part, best_measured = overall.max().item(), index, measured
                 best_flow, seen = deepcopy(average.module), len(prefixes)
