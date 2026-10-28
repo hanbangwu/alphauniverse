@@ -89,7 +89,7 @@ def flattened(nested, names):
 
 def text_search_quality():
     found = report("text_search_quality")
-    if found is None or "shares" not in found:
+    if found is None:
         return missing()
     rows = flattened(found["queries"], ("query", "method", "scoring"))
     source = ColumnDataSource(

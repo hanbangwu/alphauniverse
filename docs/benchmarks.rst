@@ -50,7 +50,7 @@ with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each galaxy is a set
    \qquad w_{g,i} = \exp\left(\kappa \cos(\tilde t, \tilde e_{g,i})\right),
    \qquad \kappa = 15,
 
-over the galaxy's :math:`n_g` points, where :math:`\tilde e_{g,i}` is a point less the mean of its modality's points over all galaxies, and :math:`\tilde t` is the query less the mean of 10,080 generic queries: every combination of four framings, 14 adjectives, 15 kinds of galaxy and 12 endings, such as *an image of a dusty spiral galaxy with a dust lane*.
+over the galaxy's :math:`n_g` points, where :math:`\tilde e_{g,i}` is a point less the mean of its modality's points over all galaxies, and :math:`\tilde t` is the query less the mean of 10,080 generic queries: every combination of three framings or none, 13 adjectives or none, 15 kinds of galaxy and 11 endings or none, such as *an image of a dusty spiral galaxy with a dust lane*.
 
 The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it, with a 95% bootstrap interval over 1,000 resamples of the galaxies. *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
 

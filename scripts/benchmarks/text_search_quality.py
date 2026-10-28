@@ -6,7 +6,6 @@ from typing import Any
 
 import modal
 import numpy as np
-import pyarrow.parquet as pq
 import torch
 from scipy.special import logsumexp, softmax
 from scipy.stats import bootstrap, entropy
@@ -19,9 +18,10 @@ from app.config import (
     REDSHIFT,
     SEED,
     TEXT_SURVEYS,
-    artifact,
     galaxy_count,
 )
+from app.observations import measured_redshifts
+from app.properties import provabgs
 from app.text_search import aion_gemma_space, embed_queries
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
@@ -163,7 +163,6 @@ def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
         (relevant, score),
         average_precision_score,
         n_resamples=RESAMPLES,
-        vectorized=False,
         paired=True,
         method="percentile",
         rng=SEED,
@@ -215,14 +214,18 @@ def benchmark_text_search_quality() -> dict[str, Any]:
             space.galaxy[chosen], space.vectors[chosen], held
         )
 
-    measured = pq.read_table(artifact("properties"))
+    measured = provabgs(held) | {REDSHIFT: measured_redshifts(held)[0]}
     labelled = {}
     for query, (name, low, high) in LABELLED.items():
-        values = measured.column(f"{name}_measured").to_numpy()[held]
-        known = np.isfinite(values)
-        labelled[query] = (known, (values[known] > low) & (values[known] < high))
+        known = ~np.isnan(measured[name])
+        values = measured[name][known]
+        labelled[query] = (known, (values > low) & (values < high))
 
-    texts = [*LABELLED, *(text for rungs in LADDERS.values() for text in rungs)]
+    texts = list(
+        dict.fromkeys(
+            [*LABELLED, *(text for rungs in LADDERS.values() for text in rungs)]
+        )
+    )
     embedded = embed_queries(texts)
     generic = generic_queries()
     directions = normalize(embedded - embed_queries(generic).mean(axis=0))
