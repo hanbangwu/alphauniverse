@@ -262,8 +262,8 @@ def generate_aion_gemma_space() -> None:
 def generate_text_views(views: int) -> None:
     from app.text_views import generate_text_views
 
-    for _ in generate_text_views(views):
-        cache_volume.commit()
+    generate_text_views(views)
+    cache_volume.commit()
 
 
 serving_image = (

@@ -79,9 +79,6 @@ Glossary
    template
       A galaxy's :term:`prediction` in one :term:`mode` turned back into an observation by the mode's :term:`codec`: an image, a spectrum's shape, or a catalogue value or redshift. See :doc:`reference`.
 
-   view
-      One input to :term:`EmbeddingGemma` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`reference`.
-
    token
       The integer a :term:`codec` assigns to one piece of an observation, such as a 4 × 4 px image cell or a 25.6 Å spectral window.
 
@@ -90,6 +87,9 @@ Glossary
 
    transformer
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
+
+   view
+      One input to :term:`EmbeddingGemma` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`reference`.
 
    whole-mode search
       Search over every slot of each chosen :term:`mode`, ranked from the modes' :term:`token embeddings <token embedding>`. See :doc:`methods/similarity-search`.

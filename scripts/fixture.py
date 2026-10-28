@@ -34,6 +34,7 @@ from app.config import (
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TEXT_SURVEYS,
+    TEXT_VIEWS,
     TOKEN_EMBEDDING_RANK,
     TOP_CODES,
     VOCABULARY,
@@ -60,6 +61,7 @@ from app.pql import (
 )
 from app.search import source, templates, tokens
 from app.text_search import aion_gemma_space
+from app.text_views import VIEW_TYPES
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_IMAGE_TOKENS + 12,
@@ -217,6 +219,26 @@ def _templates(rng: np.random.Generator, galaxies: int) -> None:
         np.save(artifact(f"template_{mode}"), values.astype(np.float32))
 
 
+def _text_views(rng: np.random.Generator, galaxies: int) -> None:
+    vectors = rng.standard_normal((galaxies, GEMMA_DIM))
+    vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
+    artifact("text_views").mkdir()
+    pq.write_table(
+        pa.table(
+            {
+                "galaxy": np.arange(galaxies),
+                "view_type": rng.integers(len(VIEW_TYPES), size=galaxies),
+                "round": np.zeros(galaxies, int),
+                "embedding": pa.FixedSizeListArray.from_arrays(
+                    vectors.astype(np.float16).ravel(), GEMMA_DIM
+                ),
+            },
+            schema=TEXT_VIEWS,
+        ),
+        artifact("text_views") / "part-00000.parquet",
+    )
+
+
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
@@ -340,6 +362,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     )
     _token_embeddings(rng, galaxies)
     generate_token_search()
+    _text_views(rng, galaxies)
 
     forget()
     return target

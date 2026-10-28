@@ -1,12 +1,11 @@
-from collections.abc import Iterator
 from concurrent.futures import Executor, ProcessPoolExecutor
+from functools import cache
 from io import BytesIO
 
 import numpy as np
 import PIL.Image
 import pyarrow as pa
 import pyarrow.parquet as pq
-import torch
 from astropy.convolution import Gaussian1DKernel, convolve
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -15,7 +14,6 @@ from . import pql, search, templates
 from .config import (
     GEMMA_DIM,
     IMAGE_MODES,
-    IMAGE_VOCABULARY,
     MODE_SURVEYS,
     MODES,
     PLOT_INCHES,
@@ -27,12 +25,9 @@ from .config import (
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TEXT_VIEWS,
-    TOP_CODES,
     VALIDATION,
-    VOCABULARY,
     SpectrumSurvey,
     artifact,
-    device,
     galaxy_count,
 )
 from .dataset import dataset, image, predicted_image, samples
@@ -48,8 +43,8 @@ COMBINATIONS = {
     "everything": MODES,
 }
 VIEW_TYPES = (
-    *(f"{kind} {mode}" for mode in MODES for kind in KINDS),
-    *(f"combination {name}" for name in COMBINATIONS),
+    *((kind, mode) for mode in MODES for kind in KINDS),
+    *(("combination", name) for name in COMBINATIONS),
 )
 SAMPLE_WEIGHTS = {mode: 8 if mode in TABLE_MODES else 4 for mode in MODES}
 SMOOTHING = (1, 2, 3)
@@ -62,7 +57,6 @@ FLUX_PERCENTILES = (0.5, 99.9)
 FLUX_PADDING = 0.1
 ROUND = 40_000
 PART = 4_000
-CHUNK = 400
 PLOTTERS = 7
 PROTOTYPE_HELD_OUT = np.concatenate(
     [
@@ -90,113 +84,74 @@ def held_out() -> np.ndarray:
 
 
 def weights(galaxies: np.ndarray) -> np.ndarray:
-    count = len(galaxies)
-    columns = [
-        column
-        for mode in MODES
-        for column in (
-            pql.observed(MODE_SURVEYS[mode])[galaxies],
-            np.ones(count),
-            np.full(count, SAMPLE_WEIGHTS[mode]),
-        )
-    ]
-    columns += [np.ones(count)] * len(COMBINATIONS)
-    return np.stack(columns, axis=1).astype(np.float64)
+    columns = []
+    for kind, name in VIEW_TYPES:
+        if kind == "observed":
+            columns.append(pql.observed(MODE_SURVEYS[name])[galaxies])
+        elif kind == "sample":
+            columns.append(np.full(len(galaxies), SAMPLE_WEIGHTS[name]))
+        else:
+            columns.append(np.ones(len(galaxies)))
+    return np.stack(columns, axis=1)
 
 
-def drawn(probabilities: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    cumulative = np.cumsum(probabilities, axis=-1, dtype=np.float64)
-    cumulative /= cumulative[..., -1:]
-    return (cumulative <= rng.random(probabilities.shape[:-1])[..., None]).sum(-1)
-
-
-def rows(galaxies: np.ndarray) -> pa.RecordBatch:
-    return pql.predictions().take(pa.array(galaxies)).combine_chunks().to_batches()[0]
-
-
-def decoded(mode: str, codes: np.ndarray) -> np.ndarray:
-    codec = templates.decoder(mode)
-    vocabulary = IMAGE_VOCABULARY if mode in IMAGE_MODES else VOCABULARY
-    codes = torch.from_numpy(codes.astype(np.int64)).to(device())
-    latents = templates.codebook(codec, vocabulary)[codes].transpose(1, 2)
-    if mode in IMAGE_MODES:
-        return templates.decoded_images(codec, latents, IMAGE_MODES[mode])
-    return templates.decoded_spectra(codec, latents)
-
-
-def sampled_image_codes(
-    found: pa.RecordBatch, mode: str, rng: np.random.Generator
-) -> np.ndarray:
-    codes, probabilities, spread = pql.query_image_tokens(
-        found, IMAGE_MODES[mode], slice(None)
+def rows(galaxies: np.ndarray, mode: str) -> pa.RecordBatch:
+    table = pql.predictions()
+    table = table.select(
+        [
+            name
+            for name in table.column_names
+            if name.split("_")[0] == MODE_SURVEYS[mode]
+        ]
     )
-    tail = spread * (IMAGE_VOCABULARY - TOP_CODES)
-    chosen = drawn(np.concatenate((probabilities, tail[..., None]), axis=-1), rng)
-    picked = np.take_along_axis(
-        codes, np.minimum(chosen, TOP_CODES - 1)[..., None], axis=-1
-    )[..., 0]
-    rank = rng.integers(IMAGE_VOCABULARY - TOP_CODES, size=chosen.shape)
-    shifted = np.sort(codes, axis=-1) - np.arange(TOP_CODES)
-    beyond = rank + (shifted <= rank[..., None]).sum(axis=-1)
-    return np.where(chosen == TOP_CODES, beyond, picked)
-
-
-def sampled_spectrum_codes(
-    found: pa.RecordBatch, mode: str, rng: np.random.Generator
-) -> np.ndarray:
-    survey = SPECTRUM_MODES[mode]
-    mean, directions, _, _ = pql.basis()[survey]
-    coefficients = pql.spectrum_token_coefficients(found, survey, slice(None))
-    return drawn(np.clip(mean + coefficients @ directions, 0, None), rng)
-
-
-def sampled_table_values(
-    found: pa.RecordBatch, mode: str, rng: np.random.Generator
-) -> np.ndarray:
-    values = templates.bin_values(mode)
-    probabilities = pql.table_value_probabilities(found, mode)
-    chosen = drawn(np.where(np.isnan(values), 0, probabilities), rng)
-    return values[np.arange(len(values)), chosen]
+    sliced = [table.slice(galaxy, 1) for galaxy in galaxies.tolist()]
+    return pa.concat_tables(sliced).combine_chunks().to_batches()[0]
 
 
 def augmented(picture: PIL.Image.Image, rng: np.random.Generator) -> PIL.Image.Image:
-    choice = int(rng.integers(len(PIL.Image.Transpose) + 1))
-    if choice == 0:
-        return picture
-    return picture.transpose(list(PIL.Image.Transpose)[choice - 1])
+    choice = rng.integers(len(PIL.Image.Transpose) + 1)
+    return (
+        picture if choice == 0 else picture.transpose(PIL.Image.Transpose(choice - 1))
+    )
+
+
+@cache
+def spectrum_canvas(survey: SpectrumSurvey) -> tuple:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    canvas = FigureCanvasAgg(Figure(figsize=PLOT_INCHES, layout="tight"))
+    axes = canvas.figure.subplots()
+    (line,) = axes.plot([], [], color="black", linewidth=1)
+    axes.set(
+        xlim=SPECTRUM_RANGES[survey],
+        yticks=[],
+        xlabel="Observed wavelength (Å)",
+        ylabel=r"Flux density $f_\lambda$ (arbitrary units)",
+    )
+    return canvas, axes, line
 
 
 def plotted(
     wavelength: np.ndarray, flux: np.ndarray, survey: SpectrumSurvey, sigma: int
-) -> np.ndarray:
-    from matplotlib.backends.backend_agg import FigureCanvasAgg
-    from matplotlib.figure import Figure
-
+) -> PIL.Image.Image:
     low, high = SPECTRUM_RANGES[survey]
     shown = (wavelength >= low) & (wavelength <= high)
     flux = convolve(flux, Gaussian1DKernel(sigma), preserve_nan=True)[shown]
     bottom, top = np.nanpercentile(flux, FLUX_PERCENTILES)
     padding = FLUX_PADDING * (top - bottom)
-    figure = Figure(figsize=PLOT_INCHES, layout="tight")
-    canvas = FigureCanvasAgg(figure)
-    axes = figure.subplots()
-    axes.plot(wavelength[shown], flux, color="black", linewidth=1)
-    axes.set(
-        xlim=(low, high),
-        ylim=(bottom - padding, top + padding),
-        yticks=[],
-        xlabel="Observed wavelength (Å)",
-        ylabel=r"Flux density $f_\lambda$ (arbitrary units)",
-    )
+    canvas, axes, line = spectrum_canvas(survey)
+    line.set_data(wavelength[shown], flux)
+    axes.set_ylim(bottom - padding, top + padding)
     canvas.draw()
-    return np.asarray(canvas.buffer_rgba())[..., :3].copy()
+    return PIL.Image.fromarray(np.asarray(canvas.buffer_rgba())).convert("RGB")
 
 
 def catalogue_text(mode: str, values: np.ndarray, rng: np.random.Generator) -> str:
     columns = (
         (REDSHIFT,) if mode == REDSHIFT else TABLE_VALUE_SURVEYS[MODE_SURVEYS[mode]]
     )
-    precision = int(rng.choice(PRECISIONS))
+    precision = rng.choice(PRECISIONS)
     lines = [
         f"{column.partition('-')[0]}: {value:.{precision}g}"
         for column, value in zip(columns, values, strict=True)
@@ -212,45 +167,35 @@ def realised(
     rng: np.random.Generator,
     pool: Executor,
 ) -> list[PIL.Image.Image] | list[str]:
+    if kind == "template":
+        predicted = search.templates(mode)[galaxies]
+    elif kind == "sample":
+        predicted = templates.sampled(rows(galaxies, mode), mode, rng)
     if mode in IMAGE_MODES:
         survey = IMAGE_MODES[mode]
-        if kind == "observed":
-            encoded = [image(int(galaxy), survey) for galaxy in galaxies]
-        else:
-            flux = (
-                search.templates(mode)[galaxies]
-                if kind == "template"
-                else decoded(mode, sampled_image_codes(rows(galaxies), mode, rng))
-            )
-            encoded = [predicted_image(row, survey) for row in flux]
+        encoded = (
+            [image(galaxy, survey) for galaxy in galaxies.tolist()]
+            if kind == "observed"
+            else [predicted_image(flux, survey) for flux in predicted]
+        )
         return [augmented(PIL.Image.open(BytesIO(found)), rng) for found in encoded]
     if mode in SPECTRUM_MODES:
         survey = SPECTRUM_MODES[mode]
         if kind == "observed":
             cells = dataset().data.column(SPECTRUM_SURVEYS[survey])
-            spectra = [samples(cells[int(galaxy)]).values() for galaxy in galaxies]
-        else:
-            flux = (
-                search.templates(mode)[galaxies]
-                if kind == "template"
-                else decoded(mode, sampled_spectrum_codes(rows(galaxies), mode, rng))
+            wavelengths, fluxes = zip(
+                *(samples(cells[galaxy]).values() for galaxy in galaxies.tolist())
             )
-            spectra = [(SPECTRUM_GRID, row) for row in flux]
-        wavelengths, fluxes = zip(*spectra)
-        sigmas = rng.choice(SMOOTHING, len(galaxies)).tolist()
-        plots = pool.map(plotted, wavelengths, fluxes, [survey] * len(galaxies), sigmas)
-        return [PIL.Image.fromarray(found) for found in plots]
-    if kind == "observed":
-        order = np.argsort(galaxies)
-        values = table_values(mode, galaxies[order])[0][np.argsort(order)]
-    elif kind == "template":
-        values = search.templates(mode)[galaxies]
-    else:
-        values = sampled_table_values(rows(galaxies), mode, rng)
+        else:
+            wavelengths, fluxes = [SPECTRUM_GRID] * len(galaxies), predicted
+        sigmas = rng.choice(SMOOTHING, len(galaxies))
+        surveys = [survey] * len(galaxies)
+        return list(pool.map(plotted, wavelengths, fluxes, surveys, sigmas))
+    values = table_values(mode, galaxies)[0] if kind == "observed" else predicted
     return [catalogue_text(mode, row, rng) for row in values]
 
 
-def joined(documents: list[PIL.Image.Image | str]) -> dict | str:
+def joined(documents: tuple[PIL.Image.Image | str, ...]) -> dict | str:
     pictures = [found for found in documents if isinstance(found, PIL.Image.Image)]
     texts = [found for found in documents if isinstance(found, str)]
     text = "\n".join(["<|image|>"] * len(pictures) + texts)
@@ -265,27 +210,24 @@ def combined(
 ) -> list[dict | str]:
     parts = []
     for mode in members:
-        kinds = np.where(
-            pql.observed(MODE_SURVEYS[mode])[galaxies],
-            rng.integers(len(KINDS), size=len(galaxies)),
-            rng.integers(1, len(KINDS), size=len(galaxies)),
-        )
-        documents = [None] * len(galaxies)
-        for index, kind in enumerate(KINDS):
-            chosen = np.flatnonzero(kinds == index)
-            if len(chosen):
-                for position, found in zip(
-                    chosen, realised(mode, kind, galaxies[chosen], rng, pool)
-                ):
-                    documents[position] = found
-        parts.append(documents)
-    return [joined(list(documents)) for documents in zip(*parts)]
+        kinds = rng.integers(~pql.observed(MODE_SURVEYS[mode])[galaxies], len(KINDS))
+        member = [None] * len(galaxies)
+        for kind in np.unique(kinds):
+            chosen = np.flatnonzero(kinds == kind)
+            found = realised(mode, KINDS[kind], galaxies[chosen], rng, pool)
+            for position, document in zip(chosen, found):
+                member[position] = document
+        parts.append(member)
+    return [joined(found) for found in zip(*parts)]
 
 
 def documents(
-    view_type: str, galaxies: np.ndarray, rng: np.random.Generator, pool: Executor
+    view_type: tuple[str, str],
+    galaxies: np.ndarray,
+    rng: np.random.Generator,
+    pool: Executor,
 ) -> list:
-    kind, name = view_type.split(" ", 1)
+    kind, name = view_type
     if kind == "combination":
         return combined(COMBINATIONS[name], galaxies, rng, pool)
     return realised(name, kind, galaxies, rng, pool)
@@ -301,12 +243,10 @@ def part(
     embeddings = np.empty((PART, GEMMA_DIM), np.float16)
     for view_type in np.unique(view_types):
         members = np.flatnonzero(view_types == view_type)
-        for start in range(0, len(members), CHUNK):
-            batch = members[start : start + CHUNK]
-            embeddings[batch] = text_model().encode(
-                documents(VIEW_TYPES[view_type], owners[batch], rng, pool),
-                prompt_name="Document",
-            )
+        embeddings[members] = text_model().encode(
+            documents(VIEW_TYPES[view_type], owners[members], rng, pool),
+            prompt_name="Document",
+        )
     return pa.table(
         {
             "galaxy": owners,
@@ -320,7 +260,7 @@ def part(
     )
 
 
-def generate_text_views(views: int) -> Iterator[None]:
+def generate_text_views(views: int) -> None:
     folder = artifact("text_views")
     folder.mkdir(exist_ok=True)
     galaxies = np.setdiff1d(np.arange(galaxy_count()), held_out())
@@ -328,9 +268,7 @@ def generate_text_views(views: int) -> Iterator[None]:
     with ProcessPoolExecutor(PLOTTERS) as pool:
         for index in tqdm(range(views // PART), desc="text views"):
             path = folder / f"part-{index:05d}.parquet"
-            if path.exists():
-                continue
-            hidden = folder / f".{path.name}"
-            pq.write_table(part(index, galaxies, found, pool), hidden)
-            hidden.rename(path)
-            yield
+            if not path.exists():
+                hidden = folder / f".{path.name}"
+                pq.write_table(part(index, galaxies, found, pool), hidden)
+                hidden.rename(path)
