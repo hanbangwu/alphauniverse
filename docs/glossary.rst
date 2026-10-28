@@ -22,6 +22,9 @@ Glossary
    typical depth
       The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
 
+   breadth
+      How widely a text query spreads over galaxies: the exponential of the entropy of its probabilities over galaxies, divided by their number. See :doc:`benchmarks`.
+
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 
