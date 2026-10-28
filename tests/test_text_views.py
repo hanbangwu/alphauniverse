@@ -16,6 +16,7 @@ from app.config import (
     PLOT_INCHES,
     SPECTRUM_MODES,
     TEXT_VIEWS,
+    TEXT_VIEWS_HELD_OUT,
     galaxy_count,
 )
 
@@ -68,13 +69,12 @@ class Encoder:
         return np.array([[len(found)] * GEMMA_DIM for found in documents], np.float32)
 
 
-def test_text_views_resume_without_redrawing_the_parts_already_written(
-    tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    rendered = []
+@pytest.fixture
+def rendered(tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    found = []
 
     def documents(view_type, galaxies, rng, pool):
-        rendered.append(len(galaxies))
+        found.append(len(galaxies))
         return [f"{view_type} {galaxy} {rng.random()}" for galaxy in galaxies]
 
     rows = Dataset.from_dict({"galaxy": list(range(galaxy_count()))})
@@ -83,7 +83,14 @@ def test_text_views_resume_without_redrawing_the_parts_already_written(
     monkeypatch.setattr(text_views, "documents", documents)
     monkeypatch.setattr(text_views, "text_model", Encoder)
     monkeypatch.setattr(text_views, "PART", 6)
+    monkeypatch.setattr(text_views, "HELD_OUT_VIEWS", 3)
     monkeypatch.setattr(text_views, "artifact", lambda role: tmp_path / role)
+    return found
+
+
+def test_text_views_resume_without_redrawing_the_parts_already_written(
+    rendered: list[int], tmp_path: Path
+) -> None:
     folder = tmp_path / "text_views"
 
     text_views.generate_text_views(2)
@@ -96,3 +103,24 @@ def test_text_views_resume_without_redrawing_the_parts_already_written(
     assert pq.read_table(folder).equals(written)
     assert written.schema.equals(TEXT_VIEWS)
     assert not np.isin(written.column("galaxy"), text_views.held_out()).any()
+
+
+def test_held_out_views_are_every_view_type_each_chosen_held_out_galaxy_has(
+    rendered: list[int], tmp_path: Path
+) -> None:
+    text_views.generate_text_views(0)
+
+    found = pq.read_table(tmp_path / "text_views_held_out")
+    galaxies = np.unique(found.column("galaxy"))
+    available = text_views.weights(galaxies) > 0
+    pairs = zip(
+        found.column("galaxy").to_pylist(), found.column("view_type").to_pylist()
+    )
+    assert len(galaxies) == 3
+    assert np.isin(galaxies, text_views.held_out()).all()
+    assert sorted(pairs) == [
+        (galaxy, kind)
+        for galaxy, row in zip(galaxies.tolist(), available)
+        for kind in np.flatnonzero(row).tolist()
+    ]
+    assert found.schema.equals(TEXT_VIEWS_HELD_OUT)

@@ -35,6 +35,7 @@ from app.config import (
     TABLE_VALUE_SURVEYS,
     TEXT_SURVEYS,
     TEXT_VIEWS,
+    TEXT_VIEWS_HELD_OUT,
     TOKEN_EMBEDDING_RANK,
     TOP_CODES,
     VIEW_TYPES,
@@ -236,6 +237,24 @@ def _text_views(rng: np.random.Generator, galaxies: int) -> None:
             schema=TEXT_VIEWS,
         ),
         artifact("text_views") / "part-00000.parquet",
+    )
+    owners, view_types = np.divmod(
+        np.arange(galaxies * len(VIEW_TYPES)), len(VIEW_TYPES)
+    )
+    vectors = rng.standard_normal((len(owners), GEMMA_DIM))
+    vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
+    pq.write_table(
+        pa.table(
+            {
+                "galaxy": owners,
+                "view_type": view_types,
+                "embedding": pa.FixedSizeListArray.from_arrays(
+                    vectors.astype(np.float16).ravel(), GEMMA_DIM
+                ),
+            },
+            schema=TEXT_VIEWS_HELD_OUT,
+        ),
+        artifact("text_views_held_out"),
     )
 
 

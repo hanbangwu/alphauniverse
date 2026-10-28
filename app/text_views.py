@@ -1,7 +1,9 @@
 import multiprocessing
+from collections.abc import Callable
 from concurrent.futures import Executor, ProcessPoolExecutor
-from functools import cache
+from functools import cache, partial
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import PIL.Image
@@ -25,6 +27,7 @@ from .config import (
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TEXT_VIEWS,
+    TEXT_VIEWS_HELD_OUT,
     VIEW_COMBINATIONS,
     VIEW_KINDS,
     VIEW_TYPES,
@@ -47,6 +50,7 @@ FLUX_PADDING = 0.1
 ROUND = 40_000
 PART = 4_000
 PLOTTERS = 7
+HELD_OUT_VIEWS = 500
 PROTOTYPE_HELD_OUT = np.concatenate(
     [
         [110, 301, 319, 830, 1003, 1365, 1413, 1492, 1561, 1653, 1655, 1656, 1790],
@@ -66,8 +70,9 @@ PROTOTYPE_HELD_OUT = np.concatenate(
 
 
 def held_out() -> np.ndarray:
-    split = alignment.held_out(np.arange(len(dataset()))).cpu().numpy()
-    return np.union1d(np.flatnonzero(split), PROTOTYPE_HELD_OUT)
+    galaxies = np.arange(len(dataset()))
+    split = alignment.held_out(galaxies).cpu().numpy()
+    return galaxies[split | np.isin(galaxies, PROTOTYPE_HELD_OUT)]
 
 
 def weights(galaxies: np.ndarray) -> np.ndarray:
@@ -227,6 +232,22 @@ def documents(
     return realised(name, kind, galaxies, rng, pool)
 
 
+def embedded(
+    owners: np.ndarray,
+    view_types: np.ndarray,
+    rng: np.random.Generator,
+    pool: Executor,
+) -> pa.FixedSizeListArray:
+    embeddings = np.empty((len(owners), GEMMA_DIM), np.float16)
+    for view_type in np.unique(view_types):
+        members = np.flatnonzero(view_types == view_type)
+        embeddings[members] = text_model().encode(
+            documents(VIEW_TYPES[view_type], owners[members], rng, pool),
+            prompt_name="Document",
+        )
+    return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), GEMMA_DIM)
+
+
 def part(
     index: int, galaxies: np.ndarray, found: np.ndarray, pool: Executor
 ) -> pa.Table:
@@ -234,24 +255,41 @@ def part(
     chosen = rng.choice(found.size, size=PART, p=(found / found.sum()).ravel())
     owners, view_types = np.divmod(chosen, len(VIEW_TYPES))
     owners = galaxies[owners]
-    embeddings = np.empty((PART, GEMMA_DIM), np.float16)
-    for view_type in np.unique(view_types):
-        members = np.flatnonzero(view_types == view_type)
-        embeddings[members] = text_model().encode(
-            documents(VIEW_TYPES[view_type], owners[members], rng, pool),
-            prompt_name="Document",
-        )
     return pa.table(
         {
             "galaxy": owners,
             "view_type": view_types,
             "round": np.full(PART, index // (ROUND // PART)),
-            "embedding": pa.FixedSizeListArray.from_arrays(
-                embeddings.ravel(), GEMMA_DIM
-            ),
+            "embedding": embedded(owners, view_types, rng, pool),
         },
         schema=TEXT_VIEWS,
     )
+
+
+def held_out_views(pool: Executor) -> pa.Table:
+    rng = np.random.default_rng(np.random.SeedSequence(SEED).spawn(1)[0])
+    held = held_out()
+    prototype = np.intersect1d(held, PROTOTYPE_HELD_OUT)
+    others = np.setdiff1d(held, prototype)
+    chosen = rng.choice(others, HELD_OUT_VIEWS - len(prototype), replace=False)
+    galaxies = np.union1d(prototype, chosen)
+    owners, view_types = np.nonzero(weights(galaxies))
+    owners = galaxies[owners]
+    return pa.table(
+        {
+            "galaxy": owners,
+            "view_type": view_types,
+            "embedding": embedded(owners, view_types, rng, pool),
+        },
+        schema=TEXT_VIEWS_HELD_OUT,
+    )
+
+
+def written(path: Path, table: Callable[[], pa.Table]) -> None:
+    if not path.exists():
+        hidden = path.with_name(f".{path.name}")
+        pq.write_table(table(), hidden)
+        hidden.rename(path)
 
 
 def generate_text_views(parts: int) -> None:
@@ -261,9 +299,9 @@ def generate_text_views(parts: int) -> None:
     found = weights(galaxies)
     context = multiprocessing.get_context("spawn")
     with ProcessPoolExecutor(PLOTTERS, mp_context=context) as pool:
+        written(artifact("text_views_held_out"), partial(held_out_views, pool))
         for index in tqdm(range(parts), desc="text views"):
-            path = folder / f"part-{index:05d}.parquet"
-            if not path.exists():
-                hidden = folder / f".{path.name}"
-                pq.write_table(part(index, galaxies, found, pool), hidden)
-                hidden.rename(path)
+            written(
+                folder / f"part-{index:05d}.parquet",
+                partial(part, index, galaxies, found, pool),
+            )

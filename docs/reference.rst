@@ -39,7 +39,7 @@ generate_projections         the dataset, encoded                   mean_points,
 generate_pairs               the dataset, encoded                   pairs_<modality>
 generate_alignment           pairs_<modality>                       alignment
 generate_aion_gemma_space    pairs_<modality>, alignment            aion_gemma_space
-generate_text_views          the dataset, tokens, probabilities,    text_views
+generate_text_views          the dataset, tokens, probabilities,    text_views, text_views_held_out
                              probability_basis, template_<mode>
 ============================ ====================================== ==================================
 
@@ -74,6 +74,13 @@ Artifacts
 .. autodata:: app.config.TEXT_VIEWS
    :no-index:
    :no-value:
+
+``text_views_held_out`` holds the views ``train_text_flow`` checks the flow against: one of every type available to each of 500 :term:`held out` galaxies, the prototype's 143 among them, drawn from a random stream of their own:
+
+.. autodata:: app.config.TEXT_VIEWS_HELD_OUT
+   :no-index:
+   :no-value:
+
 
 ``data_gram_<mode>`` and ``data_gram_<mode>_anywhere`` are ``np.save`` files of :term:`against-data scores <against-data score>`, ``float32``, one row per galaxy and one column per galaxy observed in the mode with data on the template's pixels, in the order of ``observed_reference``'s ``<mode>_galleries``. With :math:`\mu_q` the query's :term:`template`, :math:`\mu_0` the median of all galaxies' templates, and :math:`x_g` and :math:`w_g` the gallery galaxy's data and inverse variances on the template's pixels (the central 96 × 96 px of an image; for a spectrum, the codec's grid, through the transpose of the linear interpolation to each observed wavelength; for catalogue values and the redshift, the errors of ``template_quality``):
 

@@ -185,6 +185,13 @@ TEXT_VIEWS = pa.schema(
         pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
     ]
 )
+TEXT_VIEWS_HELD_OUT = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("view_type", pa.int8()),
+        pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
+    ]
+)
 
 TOP_CODES = 64
 KEPT = 16
@@ -252,6 +259,7 @@ ARTIFACTS: dict[str, str] = {
     "alignment": "pt",
     "aion_gemma_space": "npz",
     "text_views": "parquet",
+    "text_views_held_out": "parquet",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
