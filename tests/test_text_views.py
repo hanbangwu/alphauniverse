@@ -82,8 +82,8 @@ def rendered(tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> lis
     monkeypatch.setattr(text_views, "dataset", lambda: rows)
     monkeypatch.setattr(text_views, "documents", documents)
     monkeypatch.setattr(text_views, "text_model", Encoder)
-    monkeypatch.setattr(text_views, "PART", 6)
-    monkeypatch.setattr(text_views, "HELD_OUT_VIEWS", 3)
+    monkeypatch.setattr(text_views, "VIEWS_PER_PART", 6)
+    monkeypatch.setattr(text_views, "HELD_OUT_GALAXIES", 3)
     monkeypatch.setattr(text_views, "artifact", lambda role: tmp_path / role)
     return found
 

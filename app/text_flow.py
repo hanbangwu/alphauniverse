@@ -2,6 +2,7 @@ import json
 import math
 from collections.abc import Callable
 from copy import deepcopy
+from functools import partial
 from pathlib import Path
 from typing import NamedTuple
 
@@ -9,19 +10,23 @@ import numpy as np
 import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
+from sklearn.decomposition import PCA
 from torch import nn
 from torch.func import jacfwd, vmap
 from torch.optim.swa_utils import AveragedModel
 
-from . import text_views
+from . import embeddings, text_views
 from .config import (
     DATASET_REVISION,
     GEMMA_DIM,
     GRAM_NAMES,
     MODES,
+    PARTS_PER_ROUND,
+    PROTOTYPE_HELD_OUT,
     SEED,
     TOKEN_GRAMS,
     VIEW_TYPES,
+    VIEWS_PER_PART,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
@@ -67,123 +72,96 @@ def time_features(t: torch.Tensor) -> torch.Tensor:
     return torch.cat([angles.sin(), angles.cos()], dim=-1)
 
 
-class Velocity(nn.Module):
-    def __init__(self) -> None:
+class Flow(nn.Module):
+    def __init__(self, target: int, conditions: int) -> None:
         super().__init__()
-        self.kind = nn.Embedding(len(VIEW_TYPES), KIND_WIDTH)
-        width = RANK + CONDITION + len(GRAM_NAMES) + KIND_WIDTH + 2 * FREQUENCIES
-        self.layers = nn.Sequential(
-            nn.Linear(width, HIDDEN),
-            nn.SiLU(),
-            nn.Linear(HIDDEN, HIDDEN),
-            nn.SiLU(),
-            nn.Linear(HIDDEN, HIDDEN),
-            nn.SiLU(),
-            nn.Linear(HIDDEN, RANK),
-        )
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        t: torch.Tensor,
-        condition: torch.Tensor,
-        present: torch.Tensor,
-        kind: torch.Tensor,
-    ) -> torch.Tensor:
-        return self.layers(
-            torch.cat(
-                [x, condition, present, self.kind(kind), time_features(t)], dim=-1
-            )
-        )
-
-
-class Reverse(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.first = nn.Linear(CONDITION, HIDDEN)
-        self.context_layer = nn.Linear(
-            GEMMA_DIM + 1 + 2 * FREQUENCIES, HIDDEN, bias=False
-        )
+        self.first = nn.Linear(target, HIDDEN)
+        self.context_layer = nn.Linear(conditions + 2 * FREQUENCIES, HIDDEN, bias=False)
         self.tail = nn.Sequential(
             nn.SiLU(),
             nn.Linear(HIDDEN, HIDDEN),
             nn.SiLU(),
             nn.Linear(HIDDEN, HIDDEN),
             nn.SiLU(),
-            nn.Linear(HIDDEN, CONDITION),
+            nn.Linear(HIDDEN, target),
         )
 
-    def context(
-        self, t: torch.Tensor, view: torch.Tensor, present: torch.Tensor
-    ) -> torch.Tensor:
-        return self.context_layer(
-            torch.cat([view * present, present, time_features(t)], dim=-1)
-        )
+    def context(self, t: torch.Tensor, *conditions: torch.Tensor) -> torch.Tensor:
+        return self.context_layer(torch.cat([*conditions, time_features(t)], dim=-1))
 
     def velocity(self, x: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
         return self.tail(self.first(x) + context)
 
     def forward(
-        self,
-        x: torch.Tensor,
-        t: torch.Tensor,
-        view: torch.Tensor,
-        present: torch.Tensor,
+        self, x: torch.Tensor, t: torch.Tensor, *conditions: torch.Tensor
     ) -> torch.Tensor:
-        return self.velocity(x, self.context(t, view, present))
+        return self.velocity(x, self.context(t, *conditions))
 
 
-def stored(index: int) -> Path:
-    path = artifact("text_views") / f"part-{index:05d}.parquet"
-    if not path.exists():
-        per_round = text_views.ROUND // text_views.PART
-        text_views.generate_text_views((index // per_round + 1) * per_round)
-    return path
+class Velocity(Flow):
+    def __init__(self) -> None:
+        super().__init__(RANK, CONDITION + len(GRAM_NAMES) + KIND_WIDTH)
+        self.kind = nn.Embedding(len(VIEW_TYPES), KIND_WIDTH)
+
+    def context(
+        self,
+        t: torch.Tensor,
+        condition: torch.Tensor,
+        present: torch.Tensor,
+        kind: torch.Tensor,
+    ) -> torch.Tensor:
+        return super().context(t, condition, present, self.kind(kind))
 
 
-def views(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    table = pq.read_table(path, columns=["galaxy", "view_type", "embedding"])
-    embeddings = table.column("embedding").combine_chunks().flatten().to_numpy()
+def views(paths: Path | list[Path]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    table = pq.read_table(paths, columns=["galaxy", "view_type", "embedding"])
+    embedding = table.column("embedding").combine_chunks().flatten().to_numpy()
     return (
-        table.column("galaxy").to_numpy().astype(np.int64),
-        table.column("view_type").to_numpy().astype(np.int64),
-        embeddings.astype(np.float32).reshape(len(table), GEMMA_DIM),
+        torch.tensor(table.column("galaxy").to_numpy(), device=device()).long(),
+        torch.tensor(table.column("view_type").to_numpy(), device=device()).long(),
+        torch.tensor(embedding.reshape(len(table), GEMMA_DIM), device=device()).float(),
     )
 
 
-def fitted_bases(view_types: np.ndarray, embeddings: np.ndarray) -> Bases:
-    from sklearn.decomposition import PCA
+def residuals(
+    mean: torch.Tensor, view_types: torch.Tensor, embeddings: torch.Tensor
+) -> torch.Tensor:
+    return F.normalize(embeddings - mean[view_types], dim=-1)
 
-    mean = np.stack(
-        [embeddings[view_types == kind].mean(axis=0) for kind in range(len(VIEW_TYPES))]
+
+def fitted_bases(view_types: torch.Tensor, embeddings: torch.Tensor) -> Bases:
+    mean = torch.stack(
+        [embeddings[view_types == kind].mean(dim=0) for kind in range(len(VIEW_TYPES))]
     )
-    residuals = embeddings - mean[view_types]
-    residuals /= np.linalg.norm(residuals, axis=1, keepdims=True)
+    found = residuals(mean, view_types, embeddings).cpu().numpy()
+    kinds = view_types.cpu().numpy()
     components, centre, scale = [], [], []
     for kind, (_, name) in enumerate(VIEW_TYPES):
-        fitted = view_types == kind
+        fitted = kinds == kind
         if fitted.sum() < SHARED_BASIS:
             siblings = [
                 other for other, view in enumerate(VIEW_TYPES) if view[1] == name
             ]
-            fitted = np.isin(view_types, siblings)
-        pca = PCA(RANK, random_state=SEED).fit(residuals[fitted])
+            fitted = np.isin(kinds, siblings)
+        pca = PCA(RANK, random_state=SEED).fit(found[fitted])
         components.append(pca.components_)
         centre.append(pca.mean_)
-        scale.append(pca.transform(residuals[fitted]).std(axis=0))
-    found = {
+        scale.append(pca.transform(found[fitted]).std(axis=0))
+    return {
         "mean": mean,
-        "components": np.stack(components),
-        "centre": np.stack(centre),
-        "scale": np.stack(scale),
+        "components": torch.from_numpy(np.stack(components)).to(device()),
+        "centre": torch.from_numpy(np.stack(centre)).to(device()),
+        "scale": torch.from_numpy(np.stack(scale)).to(device()),
     }
-    return {name: torch.from_numpy(value).to(device()) for name, value in found.items()}
 
 
-def residuals(
-    bases: Bases, view_types: torch.Tensor, embeddings: torch.Tensor
-) -> torch.Tensor:
-    return F.normalize(embeddings - bases["mean"][view_types], dim=-1)
+def whitening(rows: torch.Tensor) -> Bases:
+    pca = PCA(CONDITION, whiten=True, random_state=SEED).fit(rows.cpu().numpy())
+    projection = pca.components_.T / np.sqrt(pca.explained_variance_)
+    return {
+        "offset": torch.from_numpy(pca.mean_).float().to(device()),
+        "projection": torch.from_numpy(projection).float().to(device()),
+    }
 
 
 def coefficients(
@@ -197,25 +175,9 @@ def coefficients(
     return found
 
 
-def whitening(rows: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    from sklearn.decomposition import PCA
-
-    pca = PCA(CONDITION, whiten=True, random_state=SEED).fit(rows.cpu().numpy())
-    projection = pca.components_.T / np.sqrt(pca.explained_variance_)
-    return (
-        torch.from_numpy(pca.mean_).float().to(rows.device),
-        torch.from_numpy(projection).float().to(rows.device),
-    )
-
-
-def condition(
-    rows: torch.Tensor,
-    present: torch.Tensor,
-    offset: torch.Tensor,
-    projection: torch.Tensor,
-) -> torch.Tensor:
+def condition(rows: torch.Tensor, present: torch.Tensor, bases: Bases) -> torch.Tensor:
     masked = rows.unflatten(1, (len(GRAM_NAMES), -1)) * present[..., None]
-    return (masked.flatten(1) - offset) @ projection
+    return (masked.flatten(1) - bases["offset"]) @ bases["projection"]
 
 
 def masks(count: int) -> torch.Tensor:
@@ -223,15 +185,23 @@ def masks(count: int) -> torch.Tensor:
     return present * (torch.rand(count, 1, device=device()) > DROPPED)
 
 
-def averaged(network: nn.Module) -> AveragedModel:
-    return AveragedModel(
-        network,
-        avg_fn=lambda mean, current, count: (
-            mean
-            + (current - mean)
-            * (1 - torch.clamp((1 + count) / (10 + count), max=DECAY))
-        ),
+def decayed(
+    averages: list[torch.Tensor], currents: list[torch.Tensor], count: torch.Tensor
+) -> None:
+    weight = 1 - torch.clamp((1 + count) / (10 + count), max=DECAY)
+    for average, current in zip(averages, currents, strict=True):
+        average.lerp_(current, weight)
+
+
+def trainable(
+    build: Callable[[], nn.Module],
+) -> tuple[nn.Module, AveragedModel, torch.optim.Optimizer]:
+    torch.manual_seed(SEED)
+    network = build().to(device())
+    optimiser = torch.optim.AdamW(
+        network.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
+    return network, AveragedModel(network, multi_avg_fn=decayed), optimiser
 
 
 def flow_loss(
@@ -294,12 +264,11 @@ def cosines(
     return (along + (directions @ centre)[:, None, None]) / squared.sqrt()
 
 
-def identification(
-    clouds: torch.Tensor, held: HeldOut, bases: Bases, kappas: tuple[float, ...]
-) -> torch.Tensor:
-    kappa = torch.tensor(kappas, device=clouds.device)[:, None, None, None]
-    own = torch.searchsorted(held.galaxies, held.owners)
-    gains = torch.full((len(kappas), len(VIEW_TYPES)), torch.nan, device=clouds.device)
+def cloud_scores(clouds: torch.Tensor, held: HeldOut, bases: Bases) -> torch.Tensor:
+    kappa = torch.tensor(KAPPAS, device=clouds.device)[:, None, None, None]
+    scores = torch.empty(
+        len(KAPPAS), len(held.owners), len(held.galaxies), device=clouds.device
+    )
     for kind in held.view_types.unique():
         chosen = held.view_types == kind
         found = cosines(
@@ -308,24 +277,38 @@ def identification(
             bases["components"][kind],
             bases["centre"][kind],
         )
-        scores = torch.logsumexp(kappa * found, dim=-1) - math.log(POINTS)
-        ranked = scores[:, torch.arange(len(found), device=found.device), own[chosen]]
-        gains[:, kind] = (ranked - torch.logsumexp(scores, dim=-1)).mean(dim=1)
-    return gains + math.log(len(held.galaxies))
+        scores[:, chosen] = torch.logsumexp(kappa * found, dim=-1)
+    return scores
+
+
+def gains(scores: torch.Tensor, held: HeldOut) -> torch.Tensor:
+    own = torch.searchsorted(held.galaxies, held.owners)
+    rows = torch.arange(len(own), device=own.device)
+    found = scores.log_softmax(dim=-1)[..., rows, own] + math.log(len(held.galaxies))
+    sums = found.new_zeros(*found.shape[:-1], len(VIEW_TYPES))
+    sums.index_add_(-1, held.view_types, found)
+    return sums / torch.bincount(held.view_types, minlength=len(VIEW_TYPES))
+
+
+def identification(
+    network: Velocity, held: HeldOut, bases: Bases, present: torch.Tensor
+) -> torch.Tensor:
+    present = present.expand(len(held.galaxies), -1)
+    found = clouds(
+        network, condition(held.rows, present, bases), present, bases["scale"]
+    )
+    return gains(cloud_scores(found, held, bases), held)
 
 
 def evaluated(joint: torch.Tensor, bases: Bases) -> HeldOut:
-    owners, view_types, embeddings = (
-        torch.from_numpy(found).to(device())
-        for found in views(artifact("text_views_held_out"))
-    )
+    owners, view_types, found = views(artifact("text_views_held_out"))
     galaxies = owners.unique()
     return HeldOut(
         galaxies,
         joint[galaxies],
         owners,
         view_types,
-        residuals(bases, view_types, embeddings),
+        residuals(bases["mean"], view_types, found),
     )
 
 
@@ -339,21 +322,6 @@ def subset(held: HeldOut, galaxies: torch.Tensor) -> HeldOut:
         held.view_types[chosen],
         held.directions[chosen],
     )
-
-
-def gains(
-    network: Velocity,
-    held: HeldOut,
-    bases: Bases,
-    whitened: tuple[torch.Tensor, torch.Tensor],
-    kappas: tuple[float, ...],
-    present: torch.Tensor,
-) -> torch.Tensor:
-    present = present.expand(len(held.galaxies), -1)
-    found = clouds(
-        network, condition(held.rows, present, *whitened), present, bases["scale"]
-    )
-    return identification(found, held, bases, kappas)
 
 
 def patterns() -> dict[str, torch.Tensor]:
@@ -371,23 +339,24 @@ def patterns() -> dict[str, torch.Tensor]:
 
 @torch.no_grad()
 def log_density(
-    network: Reverse,
-    points: torch.Tensor,
-    embedded: torch.Tensor,
-    present: torch.Tensor,
+    network: Flow, points: torch.Tensor, *conditions: torch.Tensor
 ) -> torch.Tensor:
     x = points
     divergence = torch.zeros(len(x), device=x.device)
-    jacobian = vmap(
-        jacfwd(lambda row, context: network.velocity(row[None], context[None])[0])
-    )
+    jacobian = vmap(jacfwd(network.velocity))
     for step in range(EULER, 0, -1):
         t = torch.full((len(x), 1), step / EULER, device=x.device)
-        context = network.context(t, embedded, present)
+        context = network.context(t, *conditions)
         divergence += jacobian(x, context).diagonal(dim1=-2, dim2=-1).sum(-1) / EULER
         x = x - network.velocity(x, context) / EULER
-    normal = -0.5 * (x**2).sum(-1) - 0.5 * CONDITION * math.log(2 * math.pi)
+    normal = -0.5 * (x**2).sum(-1) - 0.5 * x.shape[-1] * math.log(2 * math.pi)
     return normal - divergence
+
+
+def reverse_conditions(
+    directions: torch.Tensor, present: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    return directions * math.sqrt(GEMMA_DIM) * present, present
 
 
 def reverse_trained(
@@ -395,18 +364,13 @@ def reverse_trained(
     owners: torch.Tensor,
     contexts: torch.Tensor,
     targets: torch.Tensor,
-) -> Reverse:
-    torch.manual_seed(SEED)
-    network = Reverse().to(device())
-    average = averaged(network)
-    optimiser = torch.optim.AdamW(
-        network.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
-    )
+) -> Flow:
+    network, average, optimiser = trainable(partial(Flow, CONDITION, GEMMA_DIM + 1))
 
     def inputs(batch: torch.Tensor) -> tuple[torch.Tensor, ...]:
         present = (torch.rand(BATCH, 1, device=device()) > DROPPED).float()
-        view = contexts[batch].float() * math.sqrt(GEMMA_DIM)
-        return targets[owners[batch]], view, present
+        found = reverse_conditions(contexts[batch].float(), present)
+        return targets[owners[batch]], *found
 
     for count in prefixes:
         stepped(network, average, optimiser, count, inputs)
@@ -414,34 +378,27 @@ def reverse_trained(
 
 
 def reverse_identification(
-    network: Reverse, held: HeldOut, targets: torch.Tensor
+    network: Flow, held: HeldOut, targets: torch.Tensor
 ) -> torch.Tensor:
     count = len(held.galaxies)
+    absent = torch.zeros(count, 1, device=device())
     prior = log_density(
         network,
         targets,
-        torch.zeros(count, GEMMA_DIM, device=device()),
-        torch.zeros(count, 1, device=device()),
+        *reverse_conditions(torch.zeros(count, GEMMA_DIM, device=device()), absent),
     )
-    contexts = held.directions * math.sqrt(GEMMA_DIM)
-    ratios = torch.empty(len(contexts), count, device=device())
+    ratios = torch.empty(len(held.owners), count, device=device())
     per = max(1, PAIRS // count)
-    for start in range(0, len(contexts), per):
-        chunk = contexts[start : start + per]
+    for start in range(0, len(held.owners), per):
+        chunk = held.directions[start : start + per]
+        present = torch.ones(len(chunk) * count, 1, device=device())
         found = log_density(
             network,
             targets.repeat(len(chunk), 1),
-            chunk.repeat_interleave(count, dim=0),
-            torch.ones(len(chunk) * count, 1, device=device()),
+            *reverse_conditions(chunk.repeat_interleave(count, dim=0), present),
         )
         ratios[start : start + per] = found.view(len(chunk), count) - prior
-    rows = torch.arange(len(ratios), device=ratios.device)
-    own = ratios[rows, torch.searchsorted(held.galaxies, held.owners)]
-    gain = own - torch.logsumexp(ratios, dim=-1) + math.log(count)
-    found = torch.full((len(VIEW_TYPES),), torch.nan, device=device())
-    for kind in held.view_types.unique():
-        found[kind] = gain[held.view_types == kind].mean()
-    return found
+    return gains(ratios, held)
 
 
 def per_type(found: torch.Tensor) -> dict[str, float]:
@@ -453,40 +410,58 @@ def per_type(found: torch.Tensor) -> dict[str, float]:
     }
 
 
+def per_kappa(found: torch.Tensor) -> dict[str, dict[str, float]]:
+    return {
+        f"kappa {kappa:g}": per_type(row)
+        for kappa, row in zip(KAPPAS, found, strict=True)
+    }
+
+
+def report(
+    flow: Velocity, measured: torch.Tensor, held: HeldOut, bases: Bases, reverse: Flow
+) -> dict:
+    choice = int(measured.nanmean(dim=1).argmax())
+    everything = torch.ones(1, len(GRAM_NAMES), device=device())
+    prototype = subset(held, torch.from_numpy(PROTOTYPE_HELD_OUT).to(device()))
+    return {
+        "kappa": KAPPAS[choice],
+        "identification": per_kappa(measured),
+        "prototype identification": per_kappa(
+            identification(flow, prototype, bases, everything)
+        ),
+        "masked": {
+            name: per_type(identification(flow, held, bases, present[None])[choice])
+            for name, present in patterns().items()
+        },
+        "reverse": per_type(
+            reverse_identification(
+                reverse, held, condition(held.rows, everything, bases)
+            )
+        ),
+    }
+
+
 def train_text_flow() -> None:
     import wandb
 
-    joint = torch.from_numpy(np.load(artifact("joint_embedding"))).to(device())
-    training = np.setdiff1d(np.arange(len(joint)), text_views.held_out())
-    whitened = whitening(joint[training])
-    per_round = text_views.ROUND // text_views.PART
-    view_types, embeddings = (
-        np.concatenate(found)
-        for found in zip(*(views(stored(index))[1:] for index in range(per_round)))
+    text_views.generate_text_views(PARTS_PER_ROUND)
+    joint = embeddings.loaded("joint_embedding", torch.float32)
+    first_round = [text_views.part_path(index) for index in range(PARTS_PER_ROUND)]
+    bases = fitted_bases(*views(first_round)[1:]) | whitening(
+        joint[text_views.training()]
     )
-    bases = fitted_bases(view_types, embeddings)
     held = evaluated(joint, bases)
     everything = torch.ones(1, len(GRAM_NAMES), device=device())
     targets = torch.empty(CAP, RANK, device=device())
     owners = torch.empty(CAP, dtype=torch.long, device=device())
     kinds = torch.empty(CAP, dtype=torch.long, device=device())
     contexts = torch.empty(CAP, GEMMA_DIM, dtype=torch.float16, device=device())
-    torch.manual_seed(SEED)
-    network = Velocity().to(device())
-    average = averaged(network)
-    optimiser = torch.optim.AdamW(
-        network.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
-    )
+    network, average, optimiser = trainable(Velocity)
 
     def inputs(batch: torch.Tensor) -> tuple[torch.Tensor, ...]:
         present = masks(BATCH)
         rows = joint[owners[batch]]
-        return (
-            targets[batch],
-            condition(rows, present, *whitened),
-            present,
-            kinds[batch],
-        )
+        return targets[batch], condition(rows, present, bases), present, kinds[batch]
 
     with wandb.init(
         entity=WANDB_ENTITY,
@@ -512,12 +487,12 @@ def train_text_flow() -> None:
         },
     ) as run:
         prefixes, filled, best, best_part = [], 0, -math.inf, 0
-        for index in range(CAP // text_views.PART):
-            galaxy, view_type, embedding = (
-                torch.from_numpy(found).to(device()) for found in views(stored(index))
-            )
+        for index in range(CAP // VIEWS_PER_PART):
+            if not text_views.part_path(index).exists():
+                text_views.generate_text_views(index + PARTS_PER_ROUND)
+            galaxy, view_type, embedding = views(text_views.part_path(index))
             rows = slice(filled, filled + len(galaxy))
-            directions = residuals(bases, view_type, embedding)
+            directions = residuals(bases["mean"], view_type, embedding)
             targets[rows] = coefficients(bases, view_type, directions)
             owners[rows], kinds[rows], contexts[rows] = galaxy, view_type, directions
             losses = []
@@ -527,8 +502,8 @@ def train_text_flow() -> None:
                     stepped(network, average, optimiser, prefixes[-1], inputs)
                 )
             filled = rows.stop
-            found = gains(average.module, held, bases, whitened, KAPPAS, everything)
-            overall = found.nanmean(dim=1)
+            measured = identification(average.module, held, bases, everything)
+            overall = measured.nanmean(dim=1)
             run.log(
                 {"views": filled, "train/loss": float(np.mean(losses))}
                 | {
@@ -537,56 +512,21 @@ def train_text_flow() -> None:
                 }
             )
             if overall.max().item() > best + IMPROVEMENT:
-                best, best_part, best_gains = overall.max().item(), index, found
-                state, seen = deepcopy(average.module.state_dict()), len(prefixes)
+                best, best_part, best_measured = overall.max().item(), index, measured
+                best_flow, seen = deepcopy(average.module), len(prefixes)
             if index - best_part >= PATIENCE:
                 break
-        network.load_state_dict(state)
-        network.eval()
-        kappa = KAPPAS[int(best_gains.nanmean(dim=1).argmax())]
-        prototype = subset(
-            held, torch.from_numpy(text_views.PROTOTYPE_HELD_OUT).to(device())
-        )
         reverse = reverse_trained(
-            prefixes[:seen],
-            owners,
-            contexts,
-            condition(joint, everything, *whitened),
+            prefixes[:seen], owners, contexts, condition(joint, everything, bases)
         )
-        report = {
-            "views": prefixes[seen - 1],
-            "kappa": kappa,
-            "identification": {
-                f"kappa {value:g}": per_type(row)
-                for value, row in zip(KAPPAS, best_gains, strict=True)
-            },
-            "prototype identification": {
-                f"kappa {value:g}": per_type(row)
-                for value, row in zip(
-                    KAPPAS,
-                    gains(network, prototype, bases, whitened, KAPPAS, everything),
-                    strict=True,
-                )
-            },
-            "masked": {
-                name: per_type(
-                    gains(network, held, bases, whitened, (kappa,), present[None])[0]
-                )
-                for name, present in patterns().items()
-            },
-            "reverse": per_type(
-                reverse_identification(
-                    reverse, held, condition(held.rows, everything, *whitened)
-                )
-            ),
-        }
-        run.summary.update(report)
-        print(json.dumps(report, indent=1))
-    torch.save(state, artifact("text_flow"))
+        found = {"views": prefixes[seen - 1]} | report(
+            best_flow, best_measured, held, bases, reverse
+        )
+        run.summary.update(found)
+        print(json.dumps(found, indent=1))
+    torch.save(best_flow.state_dict(), artifact("text_flow"))
     np.savez(
         artifact("text_bases"),
         **{name: value.cpu().numpy() for name, value in bases.items()},
-        offset=whitened[0].cpu().numpy(),
-        projection=whitened[1].cpu().numpy(),
-        kappa=np.float32(kappa),
+        kappa=np.float32(found["kappa"]),
     )

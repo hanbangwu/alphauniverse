@@ -21,6 +21,7 @@ paths:
   | `app/parametric_umap.py`, `app/maps.py`                                  | `methods/map.rst`, `reference.rst`                            |
   | `app/pql.py`                                                             | `methods/similarity-search.rst`, `methods/query-maps.rst`     |
   | `app/text_search.py`, `app/alignment.py`                                 | `methods/text-search.rst`                                     |
+  | `app/text_views.py`, `app/text_flow.py`                                  | `reference.rst`, `glossary.rst`                               |
   | `app/main.py`                                                            | `reference.rst`, `using.rst`                                  |
   | `app/dataset.py`, `scripts/alphauniverse_cosmos.py`                      | `index.rst`                                                   |
   | `modal_app.py`                                                           | `reference.rst`, `how-to.rst`                                 |

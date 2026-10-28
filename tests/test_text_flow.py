@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from app import text_views
+from app import embeddings, text_views
 from app.config import (
     ARTIFACTS,
     GEMMA_DIM,
@@ -42,22 +42,18 @@ def test_a_point_s_cosine_from_its_coefficients_is_that_of_the_document_it_stand
     torch.testing.assert_close(found, expected)
 
 
-def held_out_set(directions: torch.Tensor) -> "text_flow.HeldOut":
-    count = len(directions)
-    return text_flow.HeldOut(
-        torch.arange(count),
-        torch.zeros(count, len(GRAM_NAMES)),
-        torch.arange(count),
-        torch.zeros(count, dtype=torch.long),
+def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero_for_alike_clouds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(text_flow, "KAPPAS", (1000.0,))
+    directions = torch.eye(3)
+    held = text_flow.HeldOut(
+        torch.arange(3),
+        torch.zeros(3, len(GRAM_NAMES)),
+        torch.arange(3),
+        torch.zeros(3, dtype=torch.long),
         directions,
     )
-
-
-def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero_for_alike_clouds() -> (
-    None
-):
-    directions = torch.eye(3)
-    held = held_out_set(directions)
     bases = {
         "components": torch.eye(3).expand(len(VIEW_TYPES), -1, -1),
         "centre": torch.zeros(len(VIEW_TYPES), 3),
@@ -65,8 +61,8 @@ def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero
     own = directions[:, None, None].expand(-1, len(VIEW_TYPES), 2, -1)
     alike = torch.ones(3, len(VIEW_TYPES), 2, 3)
 
-    separate = text_flow.identification(own, held, bases, (1000.0,))
-    same = text_flow.identification(alike, held, bases, (1000.0,))
+    separate = text_flow.gains(text_flow.cloud_scores(own, held, bases), held)
+    same = text_flow.gains(text_flow.cloud_scores(alike, held, bases), held)
 
     assert separate[0, 0].item() == pytest.approx(math.log(3))
     assert same[0, 0].item() == pytest.approx(0.0, abs=1e-4)
@@ -76,25 +72,27 @@ def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero
 def test_a_masked_block_does_not_reach_the_condition() -> None:
     generator = torch.Generator().manual_seed(0)
     rows = torch.randn(4, len(GRAM_NAMES) * 3, generator=generator)
-    whitened = (torch.randn(rows.shape[1]), torch.randn(rows.shape[1], 5))
+    bases = {
+        "offset": torch.randn(rows.shape[1]),
+        "projection": torch.randn(rows.shape[1], 5),
+    }
     present = torch.ones(4, len(GRAM_NAMES))
     present[:, 2] = 0
     changed = rows.clone()
     changed[:, 6:9] = torch.randn(4, 3, generator=generator)
 
     torch.testing.assert_close(
-        text_flow.condition(rows, present, *whitened),
-        text_flow.condition(changed, present, *whitened),
+        text_flow.condition(rows, present, bases),
+        text_flow.condition(changed, present, bases),
     )
 
 
 def test_a_view_type_too_rare_for_its_own_basis_gets_its_mode_s() -> None:
-    rng = np.random.default_rng(0)
-    counts = np.full(len(VIEW_TYPES), 40)
+    counts = torch.full((len(VIEW_TYPES),), 40)
     rare = VIEW_TYPES.index(("observed", "sdss_spectrum"))
     counts[rare] = 3
-    view_types = np.repeat(np.arange(len(VIEW_TYPES)), counts)
-    embeddings = rng.standard_normal((len(view_types), GEMMA_DIM)).astype(np.float32)
+    view_types = torch.repeat_interleave(torch.arange(len(VIEW_TYPES)), counts)
+    embeddings = torch.randn(len(view_types), GEMMA_DIM)
 
     bases = text_flow.fitted_bases(view_types, embeddings)
 
@@ -103,19 +101,18 @@ def test_a_view_type_too_rare_for_its_own_basis_gets_its_mode_s() -> None:
         components @ components.T, torch.eye(text_flow.RANK), atol=1e-4, rtol=0
     )
     torch.testing.assert_close(
-        bases["mean"][rare],
-        torch.from_numpy(embeddings[view_types == rare].mean(axis=0)),
+        bases["mean"][rare], embeddings[view_types == rare].mean(dim=0)
     )
 
 
 def test_the_log_density_of_a_linear_flow_follows_its_divergence() -> None:
-    network = text_flow.Reverse()
+    network = text_flow.Flow(text_flow.CONDITION, 1)
     rate = 0.3
     network.velocity = lambda x, context: rate * x
-    network.context = lambda t, embedded, present: torch.zeros(len(t), 1)
+    network.context = lambda t, *conditions: torch.zeros(len(t), 1)
     points = torch.randn(5, text_flow.CONDITION)
 
-    found = text_flow.log_density(network, points, None, None)
+    found = text_flow.log_density(network, points)
 
     start = points * (1 - rate / text_flow.EULER) ** text_flow.EULER
     normal = -0.5 * (start**2).sum(-1) - 0.5 * text_flow.CONDITION * math.log(
@@ -186,17 +183,17 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
 
     measured = iter([0.1, 0.5, 0.505, 0.4, 0.45])
 
-    def identification(clouds, held, bases, kappas):
-        found = torch.full((len(kappas), len(VIEW_TYPES)), next(measured, 0.0))
-        return found + torch.arange(len(kappas))[:, None] / 1000
+    def identification(network, held, bases, present):
+        kappas = len(text_flow.KAPPAS)
+        found = torch.full((kappas, len(VIEW_TYPES)), next(measured, 0.0))
+        return found + torch.arange(kappas)[:, None] / 1000
 
-    monkeypatch.setattr(
-        text_flow, "artifact", lambda role: tmp_path / f"{role}.{ARTIFACTS[role]}"
-    )
-    monkeypatch.setattr(text_views, "held_out", lambda: held)
+    for module in (text_flow, text_views, embeddings):
+        monkeypatch.setattr(
+            module, "artifact", lambda role: tmp_path / f"{role}.{ARTIFACTS[role]}"
+        )
+    monkeypatch.setattr(text_views, "training", lambda: training)
     monkeypatch.setattr(text_views, "generate_text_views", generate_text_views)
-    monkeypatch.setattr(text_views, "PART", 2 * len(VIEW_TYPES))
-    monkeypatch.setattr(text_views, "ROUND", 4 * len(VIEW_TYPES))
     monkeypatch.setattr(text_flow, "identification", identification)
     for name, value in {
         "RANK": 3,
@@ -210,6 +207,8 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
         "EULER": 2,
         "KAPPAS": (1.0, 2.0, 3.0),
         "CAP": 10 * 2 * len(VIEW_TYPES),
+        "VIEWS_PER_PART": 2 * len(VIEW_TYPES),
+        "PARTS_PER_ROUND": 2,
     }.items():
         monkeypatch.setattr(text_flow, name, value)
 
@@ -220,7 +219,7 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
     stored = np.load(tmp_path / "text_bases.npz")
     flow = text_flow.Velocity()
     flow.load_state_dict(torch.load(tmp_path / "text_flow.pt"))
-    assert generated == [4]
+    assert generated == [2, 4]
     assert report["views"] == 2 * 2 * len(VIEW_TYPES)
     assert stored["kappa"] == 3.0
     assert stored["components"].shape == (len(VIEW_TYPES), 3, GEMMA_DIM)
