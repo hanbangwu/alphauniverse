@@ -8,9 +8,10 @@ import modal
 import numpy as np
 import pyarrow.parquet as pq
 import torch
-from scipy.special import softmax
-from scipy.stats import entropy
+from scipy.special import logsumexp, softmax
+from scipy.stats import bootstrap, entropy
 from sklearn.metrics import average_precision_score
+from sklearn.preprocessing import normalize
 
 from app.alignment import held_out, pairs
 from app.config import (
@@ -83,7 +84,6 @@ SUBJECTS = (
     "lenticular galaxy",
     "barred spiral galaxy",
     "pair of merging galaxies",
-    "compact galaxy",
     "edge-on galaxy",
     "face-on spiral galaxy",
     "starburst galaxy",
@@ -105,15 +105,11 @@ SUFFIXES = (
     " with a close companion",
     " with an active nucleus",
 )
-KAPPAS = (15, 20)
+KAPPA = 15
+BREADTH_KAPPAS = (KAPPA, 20)
 TOP = (10, 100)
 RESAMPLES = 1000
 REPORT = Path("docs/benchmarks/text_search_quality.json")
-
-
-def unit(vectors: np.ndarray) -> np.ndarray:
-    vectors = np.asarray(vectors, dtype=np.float64)
-    return vectors / np.linalg.norm(vectors, axis=-1, keepdims=True)
 
 
 def generic_queries() -> list[str]:
@@ -122,64 +118,56 @@ def generic_queries() -> list[str]:
         for adjective, subject in product(ADJECTIVES, SUBJECTS)
     )
     nouns = [("an " if phrase[0] in "aeiou" else "a ") + phrase for phrase in phrases]
-    return list(
-        dict.fromkeys(
-            frame.format(noun + suffix)
-            for frame, noun, suffix in product(FRAMES, nouns, SUFFIXES)
-        )
-    )
+    return [
+        frame.format(noun + suffix)
+        for frame, noun, suffix in product(FRAMES, nouns, SUFFIXES)
+    ]
 
 
 def points(
-    rows: dict[str, tuple[np.ndarray, np.ndarray]], held: np.ndarray
-) -> dict[str, np.ndarray]:
-    parts = []
-    for mode, (galaxy, vectors) in enumerate(rows.values()):
-        kept = np.isin(galaxy, held)
-        parts.append(
-            (
-                np.searchsorted(held, galaxy[kept]),
-                np.full(kept.sum(), mode),
-                vectors[kept],
-                unit(vectors[kept] - vectors.mean(axis=0)),
-            )
-        )
-    owner, mode, raw, centred = (np.concatenate(column) for column in zip(*parts))
-    order = np.argsort(owner, kind="stable")
-    return {
-        "owner": owner[order],
-        "mode": mode[order],
-        "raw": raw[order],
-        "centred": centred[order],
-        "starts": np.flatnonzero(np.diff(owner[order], prepend=-1)),
-    }
-
-
-def best_cosine(
-    found: dict[str, np.ndarray], query: np.ndarray
+    galaxy: np.ndarray, vectors: np.ndarray, held: np.ndarray
 ) -> tuple[np.ndarray, ...]:
-    cosine = found["raw"] @ query
-    score = np.maximum.reduceat(cosine, found["starts"])
-    chosen = (cosine == score[found["owner"]]).astype(np.float64)
-    return score, chosen / np.add.reduceat(chosen, found["starts"])[found["owner"]]
+    kept = np.isin(galaxy, held)
+    return (
+        np.searchsorted(held, galaxy[kept]),
+        vectors[kept],
+        normalize(vectors[kept] - vectors.mean(axis=0)),
+    )
 
 
-def likelihood(
-    found: dict[str, np.ndarray], direction: np.ndarray, kappa: float
-) -> tuple[np.ndarray, ...]:
-    logits = kappa * (found["centred"] @ direction)
-    peak = np.maximum.reduceat(logits, found["starts"])
-    weights = np.exp(logits - peak[found["owner"]])
-    total = np.add.reduceat(weights, found["starts"])
-    counts = np.diff(found["starts"], append=len(logits))
-    return peak + np.log(total / counts), weights / total[found["owner"]]
+def cosine_tables(
+    found: dict[str, tuple[np.ndarray, ...]],
+    query: np.ndarray,
+    direction: np.ndarray,
+    count: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    raw, centred = np.full((2, count, len(found)), -np.inf)
+    for column, (position, vectors, centred_vectors) in enumerate(found.values()):
+        raw[position, column] = vectors @ query
+        centred[position, column] = centred_vectors @ direction
+    return raw, centred
 
 
-def precision(
-    relevant: np.ndarray, score: np.ndarray, draws: np.ndarray
-) -> dict[str, float]:
-    resampled = [average_precision_score(relevant[draw], score[draw]) for draw in draws]
-    low, high = np.percentile(resampled, [2.5, 97.5])
+def best_cosine(table: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    return table.max(axis=1), np.eye(table.shape[1])[table.argmax(axis=1)]
+
+
+def likelihood(table: np.ndarray, kappa: float) -> tuple[np.ndarray, np.ndarray]:
+    logits = kappa * table
+    counts = np.isfinite(table).sum(axis=1)
+    return logsumexp(logits, axis=1) - np.log(counts), softmax(logits, axis=1)
+
+
+def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
+    low, high = bootstrap(
+        (relevant, score),
+        average_precision_score,
+        n_resamples=RESAMPLES,
+        vectorized=False,
+        paired=True,
+        method="percentile",
+        rng=SEED,
+    ).confidence_interval
     order = np.argsort(-score)
     return {
         "base_rate": round(float(relevant.mean()), 4),
@@ -192,17 +180,14 @@ def precision(
 
 
 def shares(
-    found: dict[str, np.ndarray], score: np.ndarray, weights: np.ndarray
-) -> dict[str, dict[str, float]]:
+    modes: list[str], score: np.ndarray, weights: np.ndarray
+) -> dict[str, float]:
     order = np.argsort(-score)
-    summed = {}
-    for top in TOP:
-        members = np.isin(found["owner"], order[:top])
-        totals = np.bincount(
-            found["mode"][members], weights[members], minlength=len(TEXT_SURVEYS)
-        )
-        summed[f"top{top}"] = dict(zip(TEXT_SURVEYS, (totals / top).round(4).tolist()))
-    return summed
+    return {
+        f"{mode}@{top}": round(float(share), 4)
+        for top in TOP
+        for mode, share in zip(modes, weights[order[:top]].mean(axis=0))
+    }
 
 
 def breadth(score: np.ndarray) -> float:
@@ -219,85 +204,67 @@ def breadth(score: np.ndarray) -> float:
 )
 def benchmark_text_search_quality() -> dict[str, Any]:
     held = np.flatnonzero(held_out(np.arange(galaxy_count())).cpu().numpy())
-    observed = {}
-    for modality in TEXT_SURVEYS:
-        galaxy, _, gemma = pairs(modality)
-        observed[modality] = (galaxy, gemma.cpu().numpy())
     space = aion_gemma_space()
-    methods = {
-        "gemma": points(observed, held),
-        "maps": points(
-            {
-                modality: (
-                    space.galaxy[space.modality == modality],
-                    space.vectors[space.modality == modality],
-                )
-                for modality in TEXT_SURVEYS
-            },
-            held,
-        ),
-    }
+    methods = {"gemma": {}, "maps": {}}
+    for modality, survey in TEXT_SURVEYS.items():
+        mode = f"{survey}_{modality}"
+        galaxy, _, gemma = pairs(modality)
+        methods["gemma"][mode] = points(galaxy, gemma.cpu().numpy(), held)
+        chosen = space.modality == modality
+        methods["maps"][mode] = points(
+            space.galaxy[chosen], space.vectors[chosen], held
+        )
 
-    measured = pq.read_table(
-        artifact("properties"),
-        columns=[f"{name}_measured" for name in ("mass", "ssfr", REDSHIFT)],
-    )
+    measured = pq.read_table(artifact("properties"))
     labelled = {}
     for query, (name, low, high) in LABELLED.items():
         values = measured.column(f"{name}_measured").to_numpy()[held]
-        known = np.flatnonzero(np.isfinite(values))
-        draws = np.random.default_rng(SEED).integers(
-            len(known), size=(RESAMPLES, len(known))
-        )
-        labelled[query] = (known, (values[known] > low) & (values[known] < high), draws)
+        known = np.isfinite(values)
+        labelled[query] = (known, (values[known] > low) & (values[known] < high))
 
-    texts = list(
-        dict.fromkeys(
-            [*LABELLED, *(text for rungs in LADDERS.values() for text in rungs)]
-        )
-    )
-    queries = dict(zip(texts, embed_queries(texts)))
+    texts = [*LABELLED, *(text for rungs in LADDERS.values() for text in rungs)]
+    embedded = embed_queries(texts)
     generic = generic_queries()
-    bank = embed_queries(generic).mean(axis=0)
-    directions = {text: unit(query - bank) for text, query in queries.items()}
+    directions = normalize(embedded - embed_queries(generic).mean(axis=0))
+    tables = {
+        text: {
+            name: cosine_tables(found, query, direction, len(held))
+            for name, found in methods.items()
+        }
+        for text, query, direction in zip(texts, embedded, directions)
+    }
     rankings = {
-        (text, name, scoring): ranked
-        for text in texts
-        for name, found in methods.items()
-        for scoring, ranked in (
-            ("raw", best_cosine(found, queries[text])),
-            ("likelihood", likelihood(found, directions[text], KAPPAS[0])),
-        )
+        text: {
+            name: {"raw": best_cosine(raw), "likelihood": likelihood(centred, KAPPA)}
+            for name, (raw, centred) in found.items()
+        }
+        for text, found in tables.items()
     }
 
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name(),
         "galaxies": len(held),
-        "kappa": KAPPAS[0],
+        "kappa": KAPPA,
         "generic_queries": len(generic),
         "queries": {
             query: {
                 name: {
-                    scoring: precision(
-                        relevant, rankings[query, name, scoring][0][known], draws
-                    )
-                    for scoring in ("raw", "likelihood")
+                    scoring: precision(relevant, score[known])
+                    for scoring, (score, _) in scored.items()
                 }
-                for name in methods
+                for name, scored in rankings[query].items()
             }
-            for query, (known, relevant, draws) in labelled.items()
+            for query, (known, relevant) in labelled.items()
         },
         "breadth": {
             ladder: {
                 text: {
                     name: {
-                        str(kappa): breadth(
-                            likelihood(found, directions[text], kappa)[0]
-                        )
-                        for kappa in KAPPAS
+                        f"kappa = {kappa}": breadth(likelihood(centred, kappa)[0])
+                        for kappa in BREADTH_KAPPAS
                     }
-                    for name, found in methods.items()
+                    for name, (_, centred) in tables[text].items()
                 }
                 for text in rungs
             }
@@ -306,12 +273,12 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         "shares": {
             text: {
                 name: {
-                    scoring: shares(found, *rankings[text, name, scoring])
-                    for scoring in ("raw", "likelihood")
+                    scoring: shares(list(methods[name]), *ranked)
+                    for scoring, ranked in scored.items()
                 }
-                for name, found in methods.items()
+                for name, scored in found.items()
             }
-            for text in texts
+            for text, found in rankings.items()
         },
         "memory": memory(),
     }

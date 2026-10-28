@@ -42,20 +42,21 @@ a distant galaxy at high redshift                 :math:`z > 0.5`
 a nearby galaxy at low redshift                   :math:`z < 0.1`
 ================================================= ================================
 
-with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each galaxy is a set of points in :term:`EmbeddingGemma`'s space, one per modality it has: EmbeddingGemma's embeddings of its colour image and DESI spectrum plot (*gemma*), or AION's embeddings carried there by the site's networks (*maps*). A query :math:`t` scores galaxy :math:`g` in two ways. *Raw* is the highest cosine between :math:`t` and the galaxy's points, as the site ranks now. *Likelihood* is
+with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each galaxy is a set of points :math:`e_{g,i}` in :term:`EmbeddingGemma`'s space, one per modality it has: EmbeddingGemma's embeddings of its colour image and DESI spectrum plot (*gemma*), or AION's embeddings carried there by the site's networks (*maps*). A query :math:`t` scores galaxy :math:`g` in two ways. *Raw* is :math:`\max_i \cos(t, e_{g,i})`, as the site ranks. *Likelihood* is
 
 .. math::
 
-   s(g \mid t) = \log \frac{1}{n_g} \sum_{i=1}^{n_g} \exp\left(\kappa \cos(\tilde t, \tilde e_{g,i})\right),
+   s(g \mid t) = \log \frac{1}{n_g} \sum_{i=1}^{n_g} w_{g,i},
+   \qquad w_{g,i} = \exp\left(\kappa \cos(\tilde t, \tilde e_{g,i})\right),
    \qquad \kappa = 15,
 
-over the galaxy's :math:`n_g` points :math:`e_{g,i}`, where :math:`\tilde e_{g,i}` is a point less the mean of its modality's points over all galaxies, and :math:`\tilde t` is the query less the mean of 10,704 generic queries: every distinct combination of four framings, 14 adjectives, 16 kinds of galaxy and 12 endings, such as *an image of a dusty spiral galaxy with a dust lane*.
+over the galaxy's :math:`n_g` points, where :math:`\tilde e_{g,i}` is a point less the mean of its modality's points over all galaxies, and :math:`\tilde t` is the query less the mean of 10,080 generic queries: every combination of four framings, 14 adjectives, 15 kinds of galaxy and 12 endings, such as *an image of a dusty spiral galaxy with a dust lane*.
 
-The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it; its 95% interval spans the middle 95% of its values over 1,000 resamples of the galaxies. *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
+The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it, with a 95% bootstrap interval over 1,000 resamples of the galaxies. *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
 
-A query's :term:`breadth` is :math:`\exp(H)/N`, with :math:`H` the entropy of :math:`p(g \mid t) \propto \exp s(g \mid t)` over the :math:`N` galaxies, at :math:`\kappa` = 15 and 20. It is measured along three ladders, each query more specific than the last: from *a galaxy* to *a red barred spiral galaxy with a ring*, from *a galaxy* to *a giant round red elliptical galaxy with a bright core*, and from *a galaxy spectrum* to *a spectrum with strong H-alpha and [OIII] emission lines at redshift 0.1*.
+A query's :term:`breadth` is :math:`\exp(H)/N`, with :math:`H` the entropy of :math:`p(g \mid t) \propto \exp s(g \mid t)` over the :math:`N` galaxies, at :math:`\kappa` = 15 and 20. It is measured along three ladders of queries, each more specific than the last.
 
-A modality's *share* of the top 10 or top 100 is, under *raw*, the fraction of those galaxies whose highest cosine is that modality's, and under *likelihood*, the mean over them of :math:`\sum_{i \in \text{modality}} \exp(\kappa \cos(\tilde t, \tilde e_{g,i})) \big/ \sum_i \exp(\kappa \cos(\tilde t, \tilde e_{g,i}))`.
+A modality's *share* of the top 10 or top 100 is, under *raw*, the fraction of those galaxies whose highest cosine is that modality's, and under *likelihood*, the mean over them of :math:`\sum_{i \in \text{modality}} w_{g,i} \big/ \sum_i w_{g,i}`.
 
 .. bokeh-plot::
    :source-position: none

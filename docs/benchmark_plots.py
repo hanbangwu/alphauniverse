@@ -77,31 +77,35 @@ def projection_quality():
     )
 
 
+def flattened(nested, names):
+    if not names:
+        return [nested]
+    return [
+        {names[0]: key} | row
+        for key, value in nested.items()
+        for row in flattened(value, names[1:])
+    ]
+
+
 def text_search_quality():
     found = report("text_search_quality")
-    if found is None:
+    if found is None or "shares" not in found:
         return missing()
-    rows = [
-        {"query": query, "method": method, "scoring": scoring} | figures
-        for query, methods in found["queries"].items()
-        for method, scorings in methods.items()
-        for scoring, figures in scorings.items()
-    ]
+    rows = flattened(found["queries"], ("query", "method", "scoring"))
     source = ColumnDataSource(
         {
             "factor": [
                 (row["query"], f"{row['method']}, {row['scoring']}") for row in rows
             ],
-            "average_precision": [row["average_precision"] for row in rows],
-            "low": [
-                row.get("average_precision_low", row["average_precision"])
-                for row in rows
-            ],
-            "high": [
-                row.get("average_precision_high", row["average_precision"])
-                for row in rows
-            ],
-            "base_rate": [row["base_rate"] for row in rows],
+        }
+        | {
+            name: [row[name] for row in rows]
+            for name in (
+                "average_precision",
+                "average_precision_low",
+                "average_precision_high",
+                "base_rate",
+            )
         }
     )
     chart = figure(
@@ -111,7 +115,7 @@ def text_search_quality():
         title="Average precision (bars, 95% interval) against the base rate (ticks)",
         tooltips=[
             ("average precision", "@average_precision"),
-            ("95% interval", "@low to @high"),
+            ("95% interval", "@average_precision_low to @average_precision_high"),
             ("base rate", "@base_rate"),
         ],
         **WIDTH,
@@ -119,7 +123,11 @@ def text_search_quality():
     chart.hbar(y="factor", right="average_precision", height=0.8, source=source)
     chart.add_layout(
         Whisker(
-            source=source, base="factor", lower="low", upper="high", dimension="width"
+            source=source,
+            base="factor",
+            lower="average_precision_low",
+            upper="average_precision_high",
+            dimension="width",
         )
     )
     chart.scatter(
@@ -131,34 +139,16 @@ def text_search_quality():
         color="black",
         source=source,
     )
-    parts = [
+    breadth = flattened(found["breadth"], ("ladder", "query", "method"))
+    shares = flattened(found["shares"], ("query", "method", "scoring"))
+    return column(
         heading(found, f"{found['galaxies']:,} held-out galaxies", cpus(found)),
         chart,
-        table(rows, list(rows[0]), height=400),
-    ]
-    if "breadth" in found:
-        breadth = [
-            {"ladder": ladder, "query": query, "method": method}
-            | {f"breadth, κ = {kappa}": value for kappa, value in kappas.items()}
-            for ladder, queries in found["breadth"].items()
-            for query, methods in queries.items()
-            for method, kappas in methods.items()
-        ]
-        parts.append(table(breadth, list(breadth[0])))
-    if "shares" in found:
-        shares = [
-            {"query": query, "method": method, "scoring": scoring}
-            | {
-                f"{mode}, {top}": share
-                for top, modes in tops.items()
-                for mode, share in modes.items()
-            }
-            for query, methods in found["shares"].items()
-            for method, scorings in methods.items()
-            for scoring, tops in scorings.items()
-        ]
-        parts.append(table(shares, list(shares[0]), height=400))
-    return column(*parts, **WIDTH)
+        table(rows, rows[0], height=400),
+        table(breadth, breadth[0]),
+        table(shares, shares[0], height=400),
+        **WIDTH,
+    )
 
 
 def search_quality():
