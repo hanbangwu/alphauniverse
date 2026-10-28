@@ -17,6 +17,7 @@ from app.config import (
     TEXT_VIEWS,
     TEXT_VIEWS_HELD_OUT,
     VIEW_TYPES,
+    galaxy_count,
 )
 
 torch = pytest.importorskip("torch")
@@ -125,6 +126,16 @@ def test_a_view_type_too_rare_for_its_own_basis_gets_its_mode_s() -> None:
     torch.testing.assert_close(
         bases["mean"][rare], embeddings[view_types == rare].mean(dim=0)
     )
+
+
+def test_training_draws_every_view_type_a_galaxy_has_equally_often(
+    tree: Path,
+) -> None:
+    drawn = text_views.weights(np.arange(galaxy_count()))
+
+    found = drawn * text_flow.training_weights(torch.arange(len(VIEW_TYPES))).numpy()
+
+    np.testing.assert_allclose(found[drawn > 0], 1)
 
 
 def test_the_log_density_of_a_linear_flow_follows_its_divergence() -> None:

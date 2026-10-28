@@ -36,7 +36,7 @@ from .config import (
 
 RANK = 32
 CONDITION = 64
-HIDDEN = 256
+HIDDEN = 512
 KIND_WIDTH = 16
 FREQUENCIES = 8
 BATCH = 512
@@ -47,7 +47,7 @@ STEPS = 60
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-3
 DECAY = 0.999
-PATIENCE = 5
+PATIENCE = 10
 IMPROVEMENT = 0.01
 POINTS = 16
 EULER = 32
@@ -191,6 +191,17 @@ def condition(rows: torch.Tensor, present: torch.Tensor, bases: Bases) -> torch.
     return (masked.flatten(1) - bases["offset"]) @ bases["projection"]
 
 
+def training_weights(view_types: torch.Tensor) -> torch.Tensor:
+    draws = torch.tensor(
+        [
+            text_views.SAMPLE_WEIGHTS[name] if kind == "sample" else 1
+            for kind, name in VIEW_TYPES
+        ],
+        device=view_types.device,
+    )
+    return 1 / draws[view_types]
+
+
 def masks(count: int) -> torch.Tensor:
     present = (torch.rand(count, len(GRAM_NAMES), device=device()) > MASKED).float()
     return present * (torch.rand(count, 1, device=device()) > DROPPED)
@@ -228,13 +239,13 @@ def stepped(
     network: nn.Module,
     average: AveragedModel,
     optimiser: torch.optim.Optimizer,
-    count: int,
+    weights: torch.Tensor,
     inputs: Callable[[torch.Tensor], tuple[torch.Tensor, ...]],
 ) -> float:
     losses = []
     for _ in range(STEPS):
         loss = flow_loss(
-            network, *inputs(torch.randint(count, (BATCH,), device=device()))
+            network, *inputs(torch.multinomial(weights, BATCH, replacement=True))
         )
         optimiser.zero_grad()
         loss.backward()
@@ -372,6 +383,7 @@ def reverse_conditions(
 
 def reverse_trained(
     prefixes: list[int],
+    weights: torch.Tensor,
     owners: torch.Tensor,
     contexts: torch.Tensor,
     targets: torch.Tensor,
@@ -384,7 +396,7 @@ def reverse_trained(
         return targets[owners[batch]], *found
 
     for count in prefixes:
-        stepped(network, average, optimiser, count, inputs)
+        stepped(network, average, optimiser, weights[:count], inputs)
     return average.module
 
 
@@ -512,9 +524,8 @@ def train_text_flow() -> None:
             losses = []
             for start in range(filled, rows.stop, CHUNK):
                 prefixes.append(min(start + CHUNK, rows.stop))
-                losses.append(
-                    stepped(network, average, optimiser, prefixes[-1], inputs)
-                )
+                weights = training_weights(kinds[: prefixes[-1]])
+                losses.append(stepped(network, average, optimiser, weights, inputs))
             filled = rows.stop
             measured = identification(average.module, held, bases, everything)
             overall = measured.nanmean(dim=1)
@@ -530,7 +541,11 @@ def train_text_flow() -> None:
             if index - best_part >= PATIENCE:
                 break
         reverse = reverse_trained(
-            prefixes[:seen], owners, contexts, condition(joint, everything, bases)
+            prefixes[:seen],
+            training_weights(kinds[:filled]),
+            owners,
+            contexts,
+            condition(joint, everything, bases),
         )
         found = {"views": prefixes[seen - 1]} | report(
             best_flow, best_measured, held, bases, reverse
