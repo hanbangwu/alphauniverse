@@ -52,6 +52,7 @@ IMPROVEMENT = 0.01
 POINTS = 16
 EULER = 32
 KAPPAS = (5.0, 10.0, 15.0, 20.0, 30.0, 40.0)
+BETAS = (0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0)
 SHARED_BASIS = 128
 CAP = 1_000_000
 PAIRS = 8192
@@ -113,14 +114,24 @@ class Velocity(Flow):
         return super().context(t, condition, present, self.kind(kind))
 
 
-def views(paths: Path | list[Path]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    table = pq.read_table(paths, columns=["galaxy", "view_type", "embedding"])
+def views(path: Path) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    table = pq.read_table(path, columns=["galaxy", "view_type", "embedding"])
     embedding = table.column("embedding").combine_chunks().flatten().to_numpy()
     return (
         torch.tensor(table.column("galaxy").to_numpy(), device=device()).long(),
         torch.tensor(table.column("view_type").to_numpy(), device=device()).long(),
         torch.tensor(embedding.reshape(len(table), GEMMA_DIM), device=device()).float(),
     )
+
+
+def first_round() -> tuple[torch.Tensor, torch.Tensor]:
+    count = PARTS_PER_ROUND * VIEWS_PER_PART
+    view_types = torch.empty(count, dtype=torch.long, device=device())
+    embeddings = torch.empty(count, GEMMA_DIM, device=device())
+    for index in range(PARTS_PER_ROUND):
+        rows = slice(index * VIEWS_PER_PART, (index + 1) * VIEWS_PER_PART)
+        _, view_types[rows], embeddings[rows] = views(text_views.part_path(index))
+    return view_types, embeddings
 
 
 def residuals(
@@ -159,8 +170,8 @@ def whitening(rows: torch.Tensor) -> Bases:
     pca = PCA(CONDITION, whiten=True, random_state=SEED).fit(rows.cpu().numpy())
     projection = pca.components_.T / np.sqrt(pca.explained_variance_)
     return {
-        "offset": torch.from_numpy(pca.mean_).float().to(device()),
-        "projection": torch.from_numpy(projection).float().to(device()),
+        "offset": torch.from_numpy(pca.mean_).to(device()),
+        "projection": torch.from_numpy(projection).to(device()),
     }
 
 
@@ -388,7 +399,7 @@ def reverse_identification(
         *reverse_conditions(torch.zeros(count, GEMMA_DIM, device=device()), absent),
     )
     ratios = torch.empty(len(held.owners), count, device=device())
-    per = max(1, PAIRS // count)
+    per = PAIRS // count
     for start in range(0, len(held.owners), per):
         chunk = held.directions[start : start + per]
         present = torch.ones(len(chunk) * count, 1, device=device())
@@ -398,7 +409,8 @@ def reverse_identification(
             *reverse_conditions(chunk.repeat_interleave(count, dim=0), present),
         )
         ratios[start : start + per] = found.view(len(chunk), count) - prior
-    return gains(ratios, held)
+    beta = torch.tensor(BETAS, device=device())[:, None, None]
+    return gains(beta * ratios, held)
 
 
 def per_type(found: torch.Tensor) -> dict[str, float]:
@@ -410,10 +422,12 @@ def per_type(found: torch.Tensor) -> dict[str, float]:
     }
 
 
-def per_kappa(found: torch.Tensor) -> dict[str, dict[str, float]]:
+def labelled(
+    name: str, values: tuple[float, ...], found: torch.Tensor
+) -> dict[str, dict[str, float]]:
     return {
-        f"kappa {kappa:g}": per_type(row)
-        for kappa, row in zip(KAPPAS, found, strict=True)
+        f"{name} {value:g}": per_type(row)
+        for value, row in zip(values, found, strict=True)
     }
 
 
@@ -425,18 +439,20 @@ def report(
     prototype = subset(held, torch.from_numpy(PROTOTYPE_HELD_OUT).to(device()))
     return {
         "kappa": KAPPAS[choice],
-        "identification": per_kappa(measured),
-        "prototype identification": per_kappa(
-            identification(flow, prototype, bases, everything)
+        "identification": labelled("kappa", KAPPAS, measured),
+        "prototype identification": labelled(
+            "kappa", KAPPAS, identification(flow, prototype, bases, everything)
         ),
         "masked": {
             name: per_type(identification(flow, held, bases, present[None])[choice])
             for name, present in patterns().items()
         },
-        "reverse": per_type(
+        "reverse": labelled(
+            "beta",
+            BETAS,
             reverse_identification(
                 reverse, held, condition(held.rows, everything, bases)
-            )
+            ),
         ),
     }
 
@@ -446,10 +462,7 @@ def train_text_flow() -> None:
 
     text_views.generate_text_views(PARTS_PER_ROUND)
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    first_round = [text_views.part_path(index) for index in range(PARTS_PER_ROUND)]
-    bases = fitted_bases(*views(first_round)[1:]) | whitening(
-        joint[text_views.training()]
-    )
+    bases = fitted_bases(*first_round()) | whitening(joint[text_views.training()])
     held = evaluated(joint, bases)
     everything = torch.ones(1, len(GRAM_NAMES), device=device())
     targets = torch.empty(CAP, RANK, device=device())
@@ -489,7 +502,8 @@ def train_text_flow() -> None:
         prefixes, filled, best, best_part = [], 0, -math.inf, 0
         for index in range(CAP // VIEWS_PER_PART):
             if not text_views.part_path(index).exists():
-                text_views.generate_text_views(index + PARTS_PER_ROUND)
+                rounds = index // PARTS_PER_ROUND + 1
+                text_views.generate_text_views(rounds * PARTS_PER_ROUND)
             galaxy, view_type, embedding = views(text_views.part_path(index))
             rows = slice(filled, filled + len(galaxy))
             directions = residuals(bases["mean"], view_type, embedding)

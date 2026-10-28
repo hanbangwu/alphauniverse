@@ -1,6 +1,7 @@
 import importlib
 import json
 import math
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -67,6 +68,27 @@ def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero
     assert separate[0, 0].item() == pytest.approx(math.log(3))
     assert same[0, 0].item() == pytest.approx(0.0, abs=1e-4)
     assert torch.isnan(separate[0, 1:]).all()
+
+
+def test_clouds_hold_each_galaxy_s_points_by_view_type_in_their_type_s_scale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in {"POINTS": 3, "RANK": 2, "EULER": 4}.items():
+        monkeypatch.setattr(text_flow, name, value)
+
+    def network(x, t, condition, present, kind):
+        return torch.stack([1000 * condition[:, 0], 1000 * kind.float()], dim=-1)
+
+    conditions = torch.arange(4.0)[:, None].expand(-1, 5)
+    present = torch.ones(4, len(GRAM_NAMES))
+    scale = torch.arange(1.0, len(VIEW_TYPES) + 1)[:, None].expand(-1, 2)
+
+    found = text_flow.clouds(network, conditions, present, scale)
+
+    galaxy, kind = (found / scale[:, None] / 1000).round().unbind(-1)
+    assert found.shape == (4, len(VIEW_TYPES), 3, 2)
+    assert (galaxy == torch.arange(4.0)[:, None, None]).all()
+    assert (kind == torch.arange(float(len(VIEW_TYPES)))[:, None]).all()
 
 
 def test_a_masked_block_does_not_reach_the_condition() -> None:
@@ -183,7 +205,10 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
 
     measured = iter([0.1, 0.5, 0.505, 0.4, 0.45])
 
+    snapshots = []
+
     def identification(network, held, bases, present):
+        snapshots.append(deepcopy(network.state_dict()))
         kappas = len(text_flow.KAPPAS)
         found = torch.full((kappas, len(VIEW_TYPES)), next(measured, 0.0))
         return found + torch.arange(kappas)[:, None] / 1000
@@ -217,10 +242,11 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
     printed = capsys.readouterr().out
     report = json.loads(printed[printed.find("{") :])
     stored = np.load(tmp_path / "text_bases.npz")
-    flow = text_flow.Velocity()
-    flow.load_state_dict(torch.load(tmp_path / "text_flow.pt"))
+    flow = torch.load(tmp_path / "text_flow.pt")
     assert generated == [2, 4]
     assert report["views"] == 2 * 2 * len(VIEW_TYPES)
     assert stored["kappa"] == 3.0
     assert stored["components"].shape == (len(VIEW_TYPES), 3, GEMMA_DIM)
     assert stored["projection"].shape == (len(GRAM_NAMES) * 2, 4)
+    assert all(torch.equal(flow[key], snapshots[1][key]) for key in flow)
+    assert not all(torch.equal(flow[key], snapshots[3][key]) for key in flow)

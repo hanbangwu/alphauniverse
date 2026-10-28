@@ -50,7 +50,7 @@ Glossary
       Left out of a network's training and used only to test it.
 
    identification gain
-      How surely a :term:`held out` galaxy's document picks it out among N held-out galaxies, in nats above chance: :math:`\log p(g \mid d) + \log N`, averaged over documents. See :doc:`reference`.
+      How surely a :term:`held out` galaxy's document picks it out among N held-out galaxies, in nats above chance: :math:`\log p(g \mid d) + \log N`, averaged over each view type's documents and then over the types. See :doc:`reference`.
 
    κ
       The sharpness of the match between a document and a galaxy's predicted points: each point counts :math:`e^{\kappa \cos}`, with cos its cosine to the document. See :doc:`reference`.
