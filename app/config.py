@@ -140,6 +140,8 @@ N_MORPHOLOGIES = 10
 GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
 TextModality = Literal["image", "spectrum"]
+PLOT_INCHES = (16.8, 3.84)
+VALIDATION = 0.3
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
 Download = Literal["encoded", "codebook", "tokens", "properties"]
@@ -175,6 +177,15 @@ PAIRS = pa.schema(
     ]
 )
 
+
+TEXT_VIEWS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("view_type", pa.int8()),
+        pa.field("round", pa.int16()),
+        pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
+    ]
+)
 
 TOP_CODES = 64
 KEPT = 16
@@ -229,6 +240,7 @@ ARTIFACTS: dict[str, str] = {
     **{f"pairs_{modality}": "parquet" for modality in TEXT_SURVEYS},
     "alignment": "pt",
     "aion_gemma_space": "npz",
+    "text_views": "parquet",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},

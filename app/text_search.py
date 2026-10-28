@@ -19,6 +19,7 @@ from .config import (
     GEMMA_DIM,
     N_SPECTRUM_TOKENS,
     PAIRS,
+    PLOT_INCHES,
     RGB_COLUMN,
     SPECTRUM_ORIGIN,
     SPECTRUM_SURVEY,
@@ -34,7 +35,6 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 BATCH = 1024
-PLOT_INCHES = (16.8, 3.84)
 
 
 class TextQuery(BaseModel):
