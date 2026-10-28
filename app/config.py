@@ -260,6 +260,8 @@ ARTIFACTS: dict[str, str] = {
     "aion_gemma_space": "npz",
     "text_views": "parquet",
     "text_views_held_out": "parquet",
+    "text_bases": "npz",
+    "text_flow": "pt",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},

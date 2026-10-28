@@ -266,6 +266,22 @@ def generate_text_views(parts: int) -> None:
     cache_volume.commit()
 
 
+@app.function(
+    image=build_image,
+    gpu="L40S",
+    cpu=8,
+    memory=(16 * 1024, 64 * 1024),
+    timeout=24 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+    secrets=[modal.Secret.from_name("wandb-secret")],
+)
+def train_text_flow() -> None:
+    from app.text_flow import train_text_flow
+
+    train_text_flow()
+    cache_volume.commit()
+
+
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")

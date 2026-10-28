@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
+import torch
 
 from app.config import (
     ANCHOR,
@@ -26,6 +27,7 @@ from app.config import (
     PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
+    SEARCH_RANK,
     SPECTRUM_GRID,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
@@ -62,6 +64,7 @@ from app.pql import (
     stored,
 )
 from app.search import source, templates, tokens
+from app.text_flow import CONDITION, RANK, Velocity
 from app.text_search import aion_gemma_space
 
 TOKENS: dict[str, int] = {
@@ -258,6 +261,25 @@ def _text_views(rng: np.random.Generator, galaxies: int) -> None:
     )
 
 
+def _text_flow(rng: np.random.Generator, galaxies: int) -> None:
+    width = len(GRAM_NAMES) * SEARCH_RANK
+    components = np.linalg.qr(
+        rng.standard_normal((len(VIEW_TYPES), GEMMA_DIM, RANK))
+    ).Q.transpose(0, 2, 1)
+    np.savez(
+        artifact("text_bases"),
+        mean=rng.standard_normal((len(VIEW_TYPES), GEMMA_DIM), np.float32),
+        components=components.astype(np.float32),
+        centre=rng.standard_normal((len(VIEW_TYPES), GEMMA_DIM), np.float32) / 10,
+        scale=rng.random((len(VIEW_TYPES), RANK), np.float32) + 0.5,
+        offset=np.zeros(width, np.float32),
+        projection=rng.standard_normal((width, CONDITION), np.float32) / np.sqrt(width),
+        kappa=np.float32(15),
+    )
+    torch.manual_seed(0)
+    torch.save(Velocity().state_dict(), artifact("text_flow"))
+
+
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
@@ -382,6 +404,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     _token_embeddings(rng, galaxies)
     generate_token_search()
     _text_views(rng, galaxies)
+    _text_flow(rng, galaxies)
 
     forget()
     return target
