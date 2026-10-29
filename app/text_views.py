@@ -1,7 +1,9 @@
 import multiprocessing
+from collections.abc import Callable
 from concurrent.futures import Executor, ProcessPoolExecutor
-from functools import cache
+from functools import cache, partial
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import PIL.Image
@@ -16,7 +18,9 @@ from .config import (
     IMAGE_MODES,
     MODE_SURVEYS,
     MODES,
+    PARTS_PER_ROUND,
     PLOT_INCHES,
+    PROTOTYPE_HELD_OUT,
     REDSHIFT,
     SEED,
     SPECTRUM_GRID,
@@ -25,9 +29,11 @@ from .config import (
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
     TEXT_VIEWS,
+    TEXT_VIEWS_HELD_OUT,
     VIEW_COMBINATIONS,
     VIEW_KINDS,
     VIEW_TYPES,
+    VIEWS_PER_PART,
     SpectrumSurvey,
     artifact,
 )
@@ -44,30 +50,18 @@ SPECTRUM_RANGES: dict[SpectrumSurvey, tuple[float, float]] = {
 }
 FLUX_PERCENTILES = (0.5, 99.9)
 FLUX_PADDING = 0.1
-ROUND = 40_000
-PART = 4_000
 PLOTTERS = 7
-PROTOTYPE_HELD_OUT = np.concatenate(
-    [
-        [110, 301, 319, 830, 1003, 1365, 1413, 1492, 1561, 1653, 1655, 1656, 1790],
-        [1843, 1918, 1988, 1989, 1991, 2006, 2026, 2027, 2092, 2173, 2219, 2247, 2414],
-        [2481, 2725, 2726, 2863, 2918, 3095, 3166, 3221, 3286, 3333, 3923, 3955, 3962],
-        [3965, 4093, 4102, 4459, 4670, 4891, 4926, 5026, 5091, 5179, 5238, 5245, 5287],
-        [5371, 5467, 5643, 5670, 5678, 5710, 5932, 6313, 6319, 6694, 6705, 7134, 7139],
-        [7184, 7190, 7493, 7520, 7650, 7666, 7810, 7896, 7938, 7983, 8081, 8087, 8123],
-        [8226, 8384, 8414, 8494, 8517, 8680, 9305, 9452, 9679, 9701, 9938, 10004],
-        [10097, 10104, 10469, 10474, 10602, 10716, 10721, 10745, 10942, 11218, 11581],
-        [12137, 12230, 12576, 12628, 12641, 12660, 12689, 12846, 12916, 12970, 13105],
-        [13190, 13455, 13471, 13540, 13545, 13592, 13989, 14103, 14113, 14268, 14308],
-        [14381, 14383, 14631, 14680, 14733, 14908, 15169, 15304, 15307, 15598, 15614],
-        [15768, 16021, 16075, 16236, 16304, 16464, 16928, 17239, 17243],
-    ]
-)
+HELD_OUT_GALAXIES = 500
 
 
 def held_out() -> np.ndarray:
-    split = alignment.held_out(np.arange(len(dataset()))).cpu().numpy()
-    return np.union1d(np.flatnonzero(split), PROTOTYPE_HELD_OUT)
+    galaxies = np.arange(len(dataset()))
+    split = alignment.held_out(galaxies).cpu().numpy()
+    return galaxies[split | np.isin(galaxies, PROTOTYPE_HELD_OUT)]
+
+
+def training() -> np.ndarray:
+    return np.setdiff1d(np.arange(len(dataset())), held_out())
 
 
 def weights(galaxies: np.ndarray) -> np.ndarray:
@@ -227,43 +221,78 @@ def documents(
     return realised(name, kind, galaxies, rng, pool)
 
 
-def part(
-    index: int, galaxies: np.ndarray, found: np.ndarray, pool: Executor
-) -> pa.Table:
-    rng = np.random.default_rng([SEED, index])
-    chosen = rng.choice(found.size, size=PART, p=(found / found.sum()).ravel())
-    owners, view_types = np.divmod(chosen, len(VIEW_TYPES))
-    owners = galaxies[owners]
-    embeddings = np.empty((PART, GEMMA_DIM), np.float16)
+def embedded(
+    owners: np.ndarray,
+    view_types: np.ndarray,
+    rng: np.random.Generator,
+    pool: Executor,
+) -> pa.FixedSizeListArray:
+    embeddings = np.empty((len(owners), GEMMA_DIM), np.float16)
     for view_type in np.unique(view_types):
         members = np.flatnonzero(view_types == view_type)
         embeddings[members] = text_model().encode(
             documents(VIEW_TYPES[view_type], owners[members], rng, pool),
             prompt_name="Document",
         )
+    return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), GEMMA_DIM)
+
+
+def part(
+    index: int, galaxies: np.ndarray, found: np.ndarray, pool: Executor
+) -> pa.Table:
+    rng = np.random.default_rng([SEED, index])
+    chosen = rng.choice(
+        found.size, size=VIEWS_PER_PART, p=(found / found.sum()).ravel()
+    )
+    owners, view_types = np.divmod(chosen, len(VIEW_TYPES))
+    owners = galaxies[owners]
     return pa.table(
         {
             "galaxy": owners,
             "view_type": view_types,
-            "round": np.full(PART, index // (ROUND // PART)),
-            "embedding": pa.FixedSizeListArray.from_arrays(
-                embeddings.ravel(), GEMMA_DIM
-            ),
+            "round": np.full(VIEWS_PER_PART, index // PARTS_PER_ROUND),
+            "embedding": embedded(owners, view_types, rng, pool),
         },
         schema=TEXT_VIEWS,
     )
 
 
+def held_out_views(pool: Executor) -> pa.Table:
+    rng = np.random.default_rng(np.random.SeedSequence(SEED).spawn(1)[0])
+    held = held_out()
+    prototype = np.intersect1d(held, PROTOTYPE_HELD_OUT)
+    others = np.setdiff1d(held, prototype)
+    chosen = rng.choice(others, HELD_OUT_GALAXIES - len(prototype), replace=False)
+    galaxies = np.union1d(prototype, chosen)
+    owners, view_types = np.nonzero(weights(galaxies))
+    owners = galaxies[owners]
+    return pa.table(
+        {
+            "galaxy": owners,
+            "view_type": view_types,
+            "embedding": embedded(owners, view_types, rng, pool),
+        },
+        schema=TEXT_VIEWS_HELD_OUT,
+    )
+
+
+def part_path(index: int) -> Path:
+    return artifact("text_views") / f"part-{index:05d}.parquet"
+
+
+def written(path: Path, table: Callable[[], pa.Table]) -> None:
+    if not path.exists():
+        hidden = path.with_name(f".{path.name}")
+        pq.write_table(table(), hidden)
+        hidden.rename(path)
+
+
 def generate_text_views(parts: int) -> None:
-    folder = artifact("text_views")
-    folder.mkdir(exist_ok=True)
-    galaxies = np.setdiff1d(np.arange(len(dataset())), held_out())
+    artifact("text_views").mkdir(exist_ok=True)
+    galaxies = training()
     found = weights(galaxies)
     context = multiprocessing.get_context("spawn")
     with ProcessPoolExecutor(PLOTTERS, mp_context=context) as pool:
+        written(artifact("text_views_held_out"), partial(held_out_views, pool))
         for index in tqdm(range(parts), desc="text views"):
-            path = folder / f"part-{index:05d}.parquet"
-            if not path.exists():
-                hidden = folder / f".{path.name}"
-                pq.write_table(part(index, galaxies, found, pool), hidden)
-                hidden.rename(path)
+            written(part_path(index), partial(part, index, galaxies, found, pool))

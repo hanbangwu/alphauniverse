@@ -52,6 +52,12 @@ Glossary
    held out
       Left out of a network's training and used only to test it.
 
+   identification gain
+      How surely a :term:`held out` galaxy's document picks it out among N held-out galaxies, in nats above chance: :math:`\log p(g \mid d) + \log N`, averaged over each view type's documents and then over the types. See :doc:`reference`.
+
+   κ
+      The sharpness of the match between a document and a galaxy's predicted points: each point counts :math:`e^{\kappa \cos}`, with cos its cosine to the document. See :doc:`reference`.
+
    joint embedding
       One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`template embeddings <template embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes: 2,816 values for the 11 blocks.
 

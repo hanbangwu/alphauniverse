@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Sixteen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ============================ ====================================== ==================================
 Job                          Reads                                  Writes
@@ -39,8 +39,12 @@ generate_projections         the dataset, encoded                   mean_points,
 generate_pairs               the dataset, encoded                   pairs_<modality>
 generate_alignment           pairs_<modality>                       alignment
 generate_aion_gemma_space    pairs_<modality>, alignment            aion_gemma_space
-generate_text_views          the dataset, tokens, probabilities,    text_views
+generate_text_views          the dataset, tokens, probabilities,    text_views, text_views_held_out
                              probability_basis, template_<mode>
+train_text_flow              the dataset, tokens, probabilities,    text_flow, text_bases, text_views,
+                             probability_basis, template_<mode>,    text_views_held_out
+                             joint_embedding, text_views,
+                             text_views_held_out
 ============================ ====================================== ==================================
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. Each spectrum reaches the codec followed by one masked sample at wavelength 99,999 with zero flux and inverse variance, which gives the tokens of the codec on AION's ``main`` branch: it pads every spectrum with such samples, to 7,808 for DESI and 4,800 for SDSS, and only the first affects the tokens. AION 0.0.2 does not pad. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
@@ -74,6 +78,14 @@ Artifacts
 .. autodata:: app.config.TEXT_VIEWS
    :no-index:
    :no-value:
+
+``text_views_held_out`` holds the views ``train_text_flow`` checks the flow against: one of every type available to each of 500 :term:`held out` galaxies, the prototype's 143 among them, drawn from a random stream of their own:
+
+.. autodata:: app.config.TEXT_VIEWS_HELD_OUT
+   :no-index:
+   :no-value:
+
+``text_bases`` is an ``np.savez`` of the coordinates ``train_text_flow`` fits on the first round of ``text_views``. Per view type, ``mean`` is the mean of its embeddings (26 × 768), and a 32-component PCA of its mean-subtracted unit embeddings gives ``components`` (26 × 32 × 768), ``centre`` (26 × 768) and ``scale`` (26 × 32), each component's standard deviation; a type with fewer than 128 views in the round takes its PCA from its mode's three types together. ``offset`` and ``projection`` whiten ``joint_embedding`` to 64 components over the training galaxies, and ``kappa`` is :term:`κ`. ``text_flow`` is a ``torch.save`` of the flow's weights: a network for the velocity that carries Gaussian noise to a view's 32 coefficients, given its type and the whitened joint embedding. In training, each of the joint embedding's 11 blocks is dropped with probability 0.3, and all of them with probability 0.1. It trains on the stored views 400 at a time, 60 steps of 512 views each, drawn so that every view type a galaxy has is as likely as any other, and keeps an exponential moving average of its weights. Every 4,000 views it measures the :term:`identification gain` of the held-out views at κ of 5, 10, 15, 20, 30 and 40, and it stops once 40,000 views have added less than 0.01 nats, keeping the weights and κ of the last check that added more; it first runs ``generate_text_views`` for the first round and the held-out views, and again for another round whenever the stored views run out, up to 1,000,000 views. Its report, which adds the gain with each mode's blocks dropped or alone and that of a flow from views to the whitened joint embedding, trained on the same views and scored by its log-density ratios scaled by each of 0.01, 0.02, 0.05, 0.1, 0.25, 0.5 and 1, goes to Weights & Biases and the job's log.
 
 ``data_gram_<mode>`` and ``data_gram_<mode>_anywhere`` are ``np.save`` files of :term:`against-data scores <against-data score>`, ``float32``, one row per galaxy and one column per galaxy observed in the mode with data on the template's pixels, in the order of ``observed_reference``'s ``<mode>_galleries``. With :math:`\mu_q` the query's :term:`template`, :math:`\mu_0` the median of all galaxies' templates, and :math:`x_g` and :math:`w_g` the gallery galaxy's data and inverse variances on the template's pixels (the central 96 × 96 px of an image; for a spectrum, the codec's grid, through the transpose of the linear interpolation to each observed wavelength; for catalogue values and the redshift, the errors of ``template_quality``):
 
