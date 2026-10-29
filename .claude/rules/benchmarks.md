@@ -1,7 +1,7 @@
 ---
 paths:
   - "scripts/benchmarks/**"
-  - "docs/benchmarks.rst"
+  - "docs/dev/benchmarks.rst"
   - "modal_app.py"
   - "docs/benchmarks/**"
   - ".github/workflows/benchmark.yml"
@@ -21,5 +21,5 @@ paths:
 - A run's report records the commits, the dataset revision, the server's CPU, memory and concurrency settings from the constants `fastapi_app` is defined with, the thread configuration, the CPU identity of each container it ran in, the date, and the peak memory and end-of-run resident split of every process that runs the measured work, except `backend_performance`'s server, which its client cannot read.
 - Compare memory with a container's limit through `resident_anonymous_mib`: pages of memory-mapped files do not count against Modal's limit.
 - Code that reads an artifact larger than one batch reads it in batches into preallocated arrays, and never holds a second copy of it.
-- `docs/benchmarks.rst` draws every figure from the reports in `docs/benchmarks/` when the docs build, and names each report's commit and date; it never types a figure. It does not show figures from code that no longer exists.
-- Committing a report is the only step that updates the page: each script's plot, a function in `docs/benchmark_plots.py` that `docs/benchmarks.rst` calls, reads only its report's keys and shows whatever the report holds. A change to a script that renames or drops a key its plot reads updates the plot in the same pull request, and the docs build in CI checks it against the committed report.
+- `docs/dev/benchmarks.rst` draws every figure from the reports in `docs/benchmarks/` when the docs build, and names each report's commit and date; it never types a figure. It does not show figures from code that no longer exists.
+- Committing a report is the only step that updates the page: each script's plot, a function in `docs/benchmark_plots.py` that `docs/dev/benchmarks.rst` calls, reads only its report's keys and shows whatever the report holds. A change to a script that renames or drops a key its plot reads updates the plot in the same pull request, and the docs build in CI checks it against the committed report.

@@ -1,7 +1,14 @@
 alphaUniverse
 =============
 
-alphaUniverse shows how AION :cite:p:`parker2025aion`, Polymathic AI's foundation model for astronomy, sees the galaxies of the COSMOS field. You can browse every galaxy on a map of AION's internal representation, ask AION which galaxies resemble one you pick in the image regions, wavelengths or catalogue values you choose, and search the field in plain English.
+alphaUniverse is a website for exploring the galaxies of the COSMOS field through AION :cite:p:`parker2025aion`, Polymathic AI's foundation model for astronomy. On it you can:
+
+- **browse a map** of every galaxy, where galaxies AION finds alike sit together, coloured by redshift, stellar mass or star formation;
+- **see what AION expects** a galaxy to look like in every survey, including surveys that never observed it;
+- **find similar galaxies** from the parts of one galaxy's image, spectrum or catalogue values you pick;
+- **search in plain English**, for example "a quiescent galaxy with no ongoing star formation".
+
+:doc:`using` shows how. :doc:`concepts` explains what AION does, assuming no machine-learning background.
 
 The data
 --------
@@ -17,31 +24,24 @@ DESI EDR SV3       spectrum 3500–10463 Å, resampled to 0.8 Å
 SDSS               spectrum 3500–10463 Å, resampled to 0.8 Å
 ================== ======== =====================================================
 
-It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test. Galaxy Zoo 10 labels are among a galaxy's catalogue values; PROVABGS stellar masses, star formation rates and redshifts are the ground truth in the text search and probe benchmarks, and its masses and star formation rates are the labels every galaxy's predicted ones are fitted to.
+It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test. Galaxy Zoo 10 labels are shown with each galaxy's catalogue values. :term:`PROVABGS` stellar masses and star formation rates are the measured values the predicted ones are fitted to.
 
 .. toctree::
-   :caption: Background
+   :caption: Guide
 
+   using
    concepts
-   glossary
-
-.. toctree::
-   :caption: Methods
-
    methods/map
    methods/similarity-search
    methods/query-maps
    methods/text-search
-
-.. toctree::
-   :caption: Using the site
-
-   using
-
-.. toctree::
-   :caption: Project
-
-   benchmarks
-   how-to
-   reference
+   glossary
    references
+
+.. toctree::
+   :caption: Developers
+
+   dev/how-to
+   dev/reference
+   dev/behaviour
+   dev/benchmarks

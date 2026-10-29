@@ -43,6 +43,24 @@ generate_aion_gemma_space    pairs_<modality>, alignment            aion_gemma_s
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. Each spectrum reaches the codec followed by one masked sample at wavelength 99,999 with zero flux and inverse variance, which gives the tokens of the codec on AION's ``main`` branch: it pads every spectrum with such samples, to 7,808 for DESI and 4,800 for SDSS, and only the first affects the tokens. AION 0.0.2 does not pad. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
 
+Features in code
+----------------
+
+=========================== ========================================
+Feature                     Code
+=========================== ========================================
+Similarity search           ``app.pql.search``
+Whole-mode search           ``app.pql.mode_search``
+This galaxy map             ``app.pql.cosines``
+Population map              ``app.pql.saliency``
+Text search                 ``app.text_search.text_search``
+The map                     ``app.maps``, run by ``generate_maps``
+=========================== ========================================
+
+A :term:`whole-mode search` ranks from the mode's :term:`token embedding`: :math:`q`'s query vector times every galaxy's gallery vector, both from ``token_search_<mode>`` at 256 components, plus the offsets, gives the mode's :term:`Gram matrix` row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardised over all galaxies, one mode's too, and averaged.
+
+``generate_maps`` scores every galaxy against every other with ``app.pql.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbour graph (:doc:`/methods/map`).
+
 Artifacts
 ---------
 
@@ -59,7 +77,7 @@ Artifacts
 
 ``probability_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``. ``generate_predictions`` fits the coefficients against it in ``float64``, and every later prediction must too; search decodes them in ``float32``.
 
-``token_gram_<mode>`` and ``token_gram_<mode>_anywhere`` are ``np.save`` files of a galaxies × galaxies ``float32`` :term:`Gram matrix`: one for each mode at the same place, and one for each image and spectrum mode at any position. Entry :math:`(q, g)` is the mode score :math:`T_m(g)` of :doc:`methods/similarity-search` with every slot of the mode selected on :math:`q` and every galaxy read as search reads the query galaxy, so a same-place matrix is symmetric up to rounding. The products run in TF32 with float32 accumulation. The app does not read them.
+``token_gram_<mode>`` and ``token_gram_<mode>_anywhere`` are ``np.save`` files of a galaxies × galaxies ``float32`` :term:`Gram matrix`: one for each mode at the same place, and one for each image and spectrum mode at any position. Entry :math:`(q, g)` is the mode score :math:`T_m(g)` of :doc:`/methods/similarity-search` with every slot of the mode selected on :math:`q` and every galaxy read as search reads the query galaxy, so a same-place matrix is symmetric up to rounding. The products run in TF32 with float32 accumulation. The app does not read them.
 
 ``token_embedding_<mode>`` and ``token_embedding_<mode>_anywhere`` are ``np.savez`` files of :term:`token embeddings <token embedding>`, one per Gram matrix :math:`K`. With :math:`K_c` the matrix less its row and column means, and :math:`s` and :math:`V` its top 1,024 singular values and right singular vectors: ``queries`` is :math:`K_c V s^{-1/2}` and ``galleries`` is :math:`V s^{1/2}`, galaxies × 1,024 ``float32`` each; ``offsets`` holds :math:`K`'s column means and ``self_scores`` its diagonal :math:`K(g, g)`, in ``float32``; ``singular_values`` holds all of :math:`K_c`'s in ``float64``, as square roots of :math:`K_c^\top K_c`'s eigenvalues, so values below about :math:`10^{-8}` of the largest are rounding error. ``queries[q] @ galleries.T + offsets`` ranks the galaxies as row :math:`q` of :math:`K` does, exactly at full rank. A new query's row :math:`k` of scores against every galaxy has the query vector :math:`(k - \bar k - o + \bar o)\, V s^{-1/2}`, with :math:`o` the offsets; for a galaxy's own row this is its stored query vector.
 
@@ -89,7 +107,7 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
    :no-index:
    :no-value:
 
-``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet, and so are ``same_place_points`` and ``any_position_points``, one row per galaxy placed by :term:`whole-mode search` over every mode (:doc:`methods/map`):
+``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet, and so are ``same_place_points`` and ``any_position_points``, one row per galaxy placed by :term:`whole-mode search` over every mode (:doc:`/methods/map`):
 
 .. autodata:: app.config.POINTS
    :no-index:
@@ -110,7 +128,7 @@ Every endpoint is ``GET``; ``/projections/{projection}`` and ``/downloads/{role}
 
 The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the last 8. An Any position map builds no matrix: it computes the rows of its sample of galaxies, described under ``/saliency`` below, and the server keeps them for the last 8 pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
 
-.. openapi:: ../frontend/openapi.json
+.. openapi:: ../../frontend/openapi.json
 
 Tests and CI
 ------------

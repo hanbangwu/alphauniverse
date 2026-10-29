@@ -5,10 +5,10 @@ Glossary
    :sorted:
 
    against-data score
-      The log-likelihood of one galaxy's data under another galaxy's :term:`template`, with the data's own errors, less its log-likelihood under the median template. See :doc:`reference`.
+      The log-likelihood of one galaxy's data under another galaxy's :term:`template`, with the data's own errors, less its log-likelihood under the median template. See :doc:`dev/reference`.
 
    predictive width
-      How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalogue value. See :doc:`reference`.
+      How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalogue value. See :doc:`dev/reference`.
 
    saturation
       A galaxy's highest possible :term:`against-data score` in a :term:`mode`: the score of a template equal to its data.
@@ -17,7 +17,7 @@ Glossary
       A galaxy's query and gallery vectors for one :term:`mode`, from the singular value decomposition of the mode's :term:`template Gram`, as for a :term:`token embedding`.
 
    template Gram
-      A :term:`mode`'s :term:`templates <template>` compared with each other at the :term:`typical depth`: minus half the squared distance between every pair. See :doc:`reference`.
+      A :term:`mode`'s :term:`templates <template>` compared with each other at the :term:`typical depth`: minus half the squared distance between every pair. See :doc:`dev/reference`.
 
    typical depth
       The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
@@ -44,7 +44,7 @@ Glossary
       A large network trained once on broad data and then used unchanged for many tasks.
 
    Gram matrix
-      A :term:`mode`'s search scores between every pair of galaxies: entry :math:`(q, g)` scores galaxy :math:`g` against query :math:`q` with every :term:`slot` of the mode selected. See :doc:`reference`.
+      A :term:`mode`'s search scores between every pair of galaxies: entry :math:`(q, g)` scores galaxy :math:`g` against query :math:`q` with every :term:`slot` of the mode selected. See :doc:`dev/reference`.
 
    held out
       Left out of a network's training and used only to test it.
@@ -59,7 +59,7 @@ Glossary
       One kind of observation from one survey: the Legacy Survey or HSC image, the DESI or SDSS spectrum, the Legacy Survey or HSC catalogue values, or the redshift. Similarity search scores each mode separately.
 
    parametric UMAP
-      A small network trained to place embeddings on a two-dimensional map so that embeddings that are neighbours in 768 dimensions stay neighbours :cite:p:`sainburg2021parametric`. ``generate_projections`` trains one for ``mean_points`` and ``full_points`` (:doc:`reference`).
+      A small network trained to place embeddings on a two-dimensional map so that embeddings that are neighbours in 768 dimensions stay neighbours :cite:p:`sainburg2021parametric`.
 
    partial correlation
       The correlation between two quantities after removing, from each, the part a third quantity explains linearly. See :doc:`methods/query-maps`.
@@ -77,7 +77,7 @@ Glossary
       Specific star formation rate: star formation rate divided by stellar mass, in yr\ :sup:`-1`.
 
    template
-      A galaxy's :term:`prediction` in one :term:`mode` turned back into an observation by the mode's :term:`codec`: an image, a spectrum's shape, or a catalogue value or redshift. See :doc:`reference`.
+      A galaxy's :term:`prediction` in one :term:`mode` turned back into an observation by the mode's :term:`codec`: an image, a spectrum's shape, or a catalogue value or redshift. See :doc:`dev/reference`.
 
    token
       The integer a :term:`codec` assigns to one piece of an observation, such as a 4 × 4 px image cell or a 25.6 Å spectral window.

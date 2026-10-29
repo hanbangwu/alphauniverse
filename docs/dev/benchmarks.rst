@@ -1,7 +1,7 @@
 Benchmarks
 ==========
 
-Every benchmark runs on Modal against the artifacts on the production volume, and writes a report to ``docs/benchmarks/<script>.json``. The charts and tables below are drawn from those reports when the documentation is built, so each shows exactly one run, named by its commit and date, and a newly committed report updates its section. Figures compare only within one run, never across runs or machines. :doc:`how-to` explains how to run them.
+Each benchmark runs on Modal against the production artifacts and writes ``docs/benchmarks/<script>.json``. Each section below is drawn from one committed report when the docs build, and names its commit and date; figures compare only within one run. :doc:`how-to` runs them.
 
 Projection quality
 ------------------
