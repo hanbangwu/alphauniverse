@@ -1,15 +1,15 @@
 <script lang="ts">
+  import type { ShareName } from '$lib/api'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
-  import type { ModeName } from '$lib/data/similarity'
-  import { MODES } from '$lib/labels'
+  import { SHARES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
 
   interface Props {
     galaxy: number
     score: number
-    shares: [ModeName | 'combined', number][]
+    shares: [ShareName, number][]
   }
 
   let { galaxy, score, shares }: Props = $props()
@@ -20,10 +20,7 @@
     shares
       .filter(([, share]) => share >= 0.1)
       .toSorted(([, first], [, second]) => second - first)
-      .map(
-        ([name, share]) =>
-          `${name === 'combined' ? 'combined views' : MODES[name].label} ${Math.round(100 * share)}%`
-      )
+      .map(([name, share]) => `${SHARES[name].label} ${Math.round(100 * share)}%`)
   )
 </script>
 

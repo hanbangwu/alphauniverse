@@ -1176,6 +1176,19 @@
         ],
         "title": "Meta"
       },
+      "ShareName": {
+        "type": "string",
+        "enum": [
+          "ls_image",
+          "hsc_image",
+          "desi_spectrum",
+          "sdss_spectrum",
+          "redshift",
+          "ls_table",
+          "hsc_table",
+          "combined"
+        ]
+      },
       "TableRow": {
         "properties": {
           "section": {
@@ -1307,16 +1320,7 @@
               "type": "array"
             },
             "propertyNames": {
-              "enum": [
-                "ls_image",
-                "hsc_image",
-                "desi_spectrum",
-                "sdss_spectrum",
-                "redshift",
-                "ls_table",
-                "hsc_table",
-                "combined"
-              ]
+              "$ref": "#/components/schemas/ShareName"
             },
             "type": "object",
             "title": "Shares"

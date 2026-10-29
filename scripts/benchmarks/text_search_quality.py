@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -7,36 +8,33 @@ import modal
 import numpy as np
 import torch
 from scipy.special import logsumexp, softmax
-from scipy.stats import bootstrap, entropy, spearmanr
+from scipy.stats import bootstrap, spearmanr
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import normalize
 
 from app.alignment import held_out, pairs
 from app.config import (
     DATASET_REVISION,
-    MODES,
     REDSHIFT,
     SEED,
     TEXT_SURVEYS,
     VIEW_TYPES,
-    device,
     galaxy_count,
 )
 from app.embeddings import loaded
 from app.observations import measured_redshifts
 from app.properties import provabgs
-from app.text_flow import galaxy_clouds, stored_flow
+from app.text_flow import generated_clouds, stored_flow
 from app.text_search import (
-    TextIndex,
+    SHARE_NAMES,
     aion_gemma_space,
-    cloud_scores,
+    breadth,
     embed_queries,
     generic_queries,
-    point_lengths,
+    indexed,
+    likelihoods,
+    mode_shares,
     text_index,
-)
-from app.text_search import (
-    shares as cloud_shares,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
@@ -74,6 +72,7 @@ LADDERS = {
 }
 KAPPA = 15
 BREADTH_KAPPAS = (KAPPA, 20)
+KINDS = list(range(len(VIEW_TYPES)))
 TOP = (10, 100)
 RESAMPLES = 1000
 REPORT = Path("docs/benchmarks/text_search_quality.json")
@@ -113,15 +112,22 @@ def likelihood(table: np.ndarray, kappa: float) -> tuple[np.ndarray, np.ndarray]
     return logsumexp(logits, axis=1) - np.log(counts), softmax(logits, axis=1)
 
 
-def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
+def interval(
+    statistic: Callable[..., float], *samples: np.ndarray
+) -> tuple[float, float]:
     low, high = bootstrap(
-        (relevant, score),
-        average_precision_score,
+        samples,
+        statistic,
         n_resamples=RESAMPLES,
         paired=True,
         method="percentile",
         rng=SEED,
     ).confidence_interval
+    return float(low), float(high)
+
+
+def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
+    low, high = interval(average_precision_score, relevant, score)
     order = np.argsort(-score)
     return {
         "base_rate": round(float(relevant.mean()), 4),
@@ -141,52 +147,12 @@ def difference(
             relevant, theirs
         )
 
-    low, high = bootstrap(
-        (relevant, ours, theirs),
-        gained,
-        n_resamples=RESAMPLES,
-        paired=True,
-        method="percentile",
-        rng=SEED,
-    ).confidence_interval
+    low, high = interval(gained, relevant, ours, theirs)
     return {
         "difference": round(float(gained(relevant, ours, theirs)), 4),
-        "difference_low": round(float(low), 4),
-        "difference_high": round(float(high), 4),
+        "difference_low": round(low, 4),
+        "difference_high": round(high, 4),
     }
-
-
-def reseeded(held: np.ndarray) -> TextIndex:
-    index = text_index()
-    network, bases = stored_flow()
-    joint = loaded("joint_embedding", torch.float32)
-    points = torch.cat(
-        [
-            galaxy_clouds(network, bases, joint, galaxies.to(device()), SEED + 1).cpu()
-            for galaxies in torch.from_numpy(held).split(1024)
-        ]
-    ).transpose(0, 1)
-    lengths = torch.stack(
-        [
-            point_lengths(points[kind], index.components[kind], index.centre[kind])
-            for kind in range(len(VIEW_TYPES))
-        ]
-    )
-    return index._replace(points=points.contiguous(), lengths=lengths)
-
-
-def cloud_ranking(
-    index: TextIndex, query: np.ndarray, kappa: float
-) -> tuple[np.ndarray, np.ndarray]:
-    direction = torch.nn.functional.normalize(
-        torch.from_numpy(query) - index.query_mean, dim=0
-    )
-    kinds = list(range(len(VIEW_TYPES)))
-    scores, logits = cloud_scores(index, direction, kinds, kappa)
-    weights = logits.softmax(dim=1).unflatten(1, (len(kinds), -1)).sum(dim=2)
-    found = cloud_shares(weights, kinds)
-    columns = np.stack([found[name].numpy() for name in (*MODES, "combined")], axis=1)
-    return scores.numpy(), columns
 
 
 def shares(
@@ -200,13 +166,9 @@ def shares(
     }
 
 
-def breadth(score: np.ndarray) -> float:
-    return round(float(np.exp(entropy(softmax(score))) / len(score)), 4)
-
-
 @app.function(
     image=image,
-    gpu="L4",
+    gpu="L40S",
     cpu=16,
     memory=(16 * 1024, 64 * 1024),
     timeout=60 * 60,
@@ -238,8 +200,8 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         )
     )
     embedded = embed_queries(texts)
-    generic = generic_queries()
-    directions = normalize(embedded - embed_queries(generic).mean(axis=0))
+    index = text_index()
+    directions = normalize(embedded - index.query_mean.numpy())
     tables = {
         text: {
             name: cosine_tables(found, query, direction, len(held))
@@ -254,28 +216,27 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         }
         for text, found in tables.items()
     }
-    index = text_index()
-    second = reseeded(held)
-    cloud_breadth = {}
+    chosen = torch.from_numpy(held)
+    network, bases = stored_flow()
+    joint = loaded("joint_embedding", torch.float32)
+    second = indexed(generated_clouds(network, bases, joint, chosen, SEED + 1))
+    cloud_breadth, seeds = {}, {}
     for text, query in zip(texts, embedded):
-        scores, columns = cloud_ranking(index, query, index.kappa)
-        rankings[text]["clouds"] = {"likelihood": (scores[held], columns[held])}
+        scores, by_kind = likelihoods(index, query, KINDS, index.kappa)
+        shares_by_mode = mode_shares(by_kind[chosen], KINDS)
+        rankings[text]["clouds"] = {
+            "likelihood": (scores[chosen].numpy(), shares_by_mode.numpy())
+        }
         cloud_breadth[text] = {
-            f"kappa = {kappa}": breadth(cloud_ranking(index, query, kappa)[0][held])
+            f"kappa = {kappa}": round(
+                breadth(likelihoods(index, query, KINDS, kappa)[0][chosen]), 4
+            )
             for kappa in BREADTH_KAPPAS
         }
-    seeds = {
-        query: round(
-            float(
-                spearmanr(
-                    rankings[query]["clouds"]["likelihood"][0],
-                    cloud_ranking(second, embedded[texts.index(query)], index.kappa)[0],
-                ).statistic
-            ),
-            4,
-        )
-        for query in LABELLED
-    }
+        if text in LABELLED:
+            reseeded = likelihoods(second, query, KINDS, index.kappa)[0]
+            agreement = spearmanr(scores[chosen], reseeded).statistic
+            seeds[text] = round(float(agreement), 4)
 
     return {
         "environment": environment(),
@@ -283,7 +244,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         "galaxies": len(held),
         "kappa": KAPPA,
         "cloud_kappa": index.kappa,
-        "generic_queries": len(generic),
+        "generic_queries": len(generic_queries()),
         "queries": {
             query: {
                 name: {
@@ -312,7 +273,9 @@ def benchmark_text_search_quality() -> dict[str, Any]:
             ladder: {
                 text: {
                     name: {
-                        f"kappa = {kappa}": breadth(likelihood(centred, kappa)[0])
+                        f"kappa = {kappa}": round(
+                            breadth(torch.from_numpy(likelihood(centred, kappa)[0])), 4
+                        )
                         for kappa in BREADTH_KAPPAS
                     }
                     for name, (_, centred) in tables[text].items()
@@ -326,9 +289,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
             text: {
                 name: {
                     scoring: shares(
-                        [*MODES, "combined"]
-                        if name == "clouds"
-                        else list(methods[name]),
+                        list(SHARE_NAMES) if name == "clouds" else list(methods[name]),
                         *ranked,
                     )
                     for scoring, ranked in scored.items()

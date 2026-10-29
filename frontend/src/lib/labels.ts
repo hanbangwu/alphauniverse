@@ -1,4 +1,4 @@
-import type { Galaxy, TableRow } from '$lib/api'
+import type { Galaxy, ShareName, TableRow } from '$lib/api'
 import type { Projection } from '$lib/client'
 import type { ModeName } from '$lib/data/similarity'
 
@@ -38,6 +38,11 @@ export const MODES: Labels<ModeName> = {
   redshift: { label: 'Redshift' },
   ls_table: { label: 'Legacy Survey catalogue' },
   hsc_table: { label: 'HSC catalogue' }
+}
+
+export const SHARES: Labels<ShareName> = {
+  ...MODES,
+  combined: { label: 'Combined views' }
 }
 
 export const SECTIONS: Labels<TableRow['section']> = {

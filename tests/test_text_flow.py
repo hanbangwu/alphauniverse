@@ -14,6 +14,7 @@ from app.config import (
     ARTIFACTS,
     GEMMA_DIM,
     GRAM_NAMES,
+    SEED,
     TEXT_VIEWS,
     TEXT_VIEWS_HELD_OUT,
     VIEW_TYPES,
@@ -22,26 +23,6 @@ from app.config import (
 
 torch = pytest.importorskip("torch")
 text_flow = importlib.import_module("app.text_flow")
-
-
-def test_a_point_s_cosine_from_its_coefficients_is_that_of_the_document_it_stands_for() -> (
-    None
-):
-    generator = torch.Generator().manual_seed(0)
-    components = torch.linalg.qr(torch.randn(12, 4, generator=generator)).Q.T
-    centre = torch.randn(12, generator=generator) / 4
-    points = torch.randn(3, 5, 4, generator=generator)
-    directions = torch.nn.functional.normalize(
-        torch.randn(7, 12, generator=generator), dim=-1
-    )
-
-    found = text_flow.cosines(points, directions, components, centre)
-
-    documents = centre + points @ components
-    expected = torch.einsum(
-        "gpd,vd->vgp", torch.nn.functional.normalize(documents, dim=-1), directions
-    )
-    torch.testing.assert_close(found, expected)
 
 
 def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero_for_alike_clouds(
@@ -284,16 +265,11 @@ def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
     rng = np.random.default_rng(0)
     kinds = len(VIEW_TYPES)
     width = len(GRAM_NAMES) * 2
-    components = np.linalg.qr(rng.standard_normal((kinds, GEMMA_DIM, 3)))[0]
     np.savez(
         tmp_path / "text_bases.npz",
-        mean=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
-        components=components.transpose(0, 2, 1).astype(np.float32),
-        centre=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
         scale=rng.uniform(0.5, 1.5, (kinds, 3)).astype(np.float32),
         offset=rng.standard_normal(width).astype(np.float32),
         projection=rng.standard_normal((width, 4)).astype(np.float32),
-        kappa=np.float32(15),
     )
     torch.save(text_flow.Velocity().state_dict(), tmp_path / "text_flow.pt")
     np.save(
@@ -309,9 +285,9 @@ def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
     stored = np.load(tmp_path / "text_clouds.npy")
     network, bases = text_flow.stored_flow()
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    alone = text_flow.galaxy_clouds(network, bases, joint, torch.tensor([3]), 42)
+    alone = text_flow.generated_clouds(network, bases, joint, torch.tensor([3]), SEED)
     assert stored.shape == (kinds, 5, 2, 3)
-    np.testing.assert_array_equal(stored[:, 3], alone[0].numpy().astype(np.float16))
+    np.testing.assert_array_equal(stored[:, 3], alone[:, 0])
     np.testing.assert_allclose(
         np.load(tmp_path / "text_query_mean.npy"), queries.mean(axis=0)
     )

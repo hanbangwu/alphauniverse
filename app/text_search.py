@@ -4,6 +4,7 @@ import math
 from collections.abc import Iterator
 from functools import cache
 from itertools import batched, product
+from threading import Lock
 from typing import TYPE_CHECKING, Annotated, Literal, NamedTuple
 
 import numpy as np
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 BATCH = 1024
+LOADING = Lock()
 FRAMES = ("{}", "an image of {}", "the spectrum of {}", "the photometry of {}")
 ADJECTIVES = (
     "",
@@ -91,7 +93,8 @@ SUFFIXES = (
     " with an active nucleus",
 )
 
-ShareName = Literal[*MODES, "combined"]
+SHARE_NAMES = (*MODES, "combined")
+type ShareName = Literal[*SHARE_NAMES]
 
 
 class TextQuery(BaseModel):
@@ -121,7 +124,7 @@ class TextResults(NamedTuple):
     galaxies: torch.Tensor
     scores: torch.Tensor
     probabilities: torch.Tensor
-    shares: dict[ShareName, torch.Tensor]
+    shares: torch.Tensor
     breadth: float
 
 
@@ -235,58 +238,71 @@ def point_lengths(
     return (squared + 2 * points @ (components @ centre)).sqrt()
 
 
-@cache
-def text_index() -> TextIndex:
+def cosines(
+    points: torch.Tensor,
+    lengths: torch.Tensor,
+    directions: torch.Tensor,
+    components: torch.Tensor,
+    centre: torch.Tensor,
+) -> torch.Tensor:
+    along = torch.einsum("gpr,...r->...gp", points, directions @ components.T)
+    return (along + (directions @ centre)[..., None, None]) / lengths
+
+
+def indexed(clouds: np.ndarray) -> TextIndex:
     with np.load(artifact("text_bases")) as stored:
         components = torch.from_numpy(stored["components"])
         centre = torch.from_numpy(stored["centre"])
         kappa = float(stored["kappa"])
-    clouds = np.load(artifact("text_clouds"), mmap_mode="r")
     points = torch.empty(clouds.shape)
     lengths = torch.empty(clouds.shape[:-1])
     for start in range(0, clouds.shape[1], BATCH):
         rows = slice(start, start + BATCH)
         points[:, rows] = torch.from_numpy(clouds[:, rows].astype(np.float32))
-        for kind in range(len(VIEW_TYPES)):
-            lengths[kind, rows] = point_lengths(
-                points[kind, rows], components[kind], centre[kind]
-            )
+        lengths[:, rows] = torch.vmap(point_lengths)(
+            points[:, rows], components, centre
+        )
     query_mean = torch.from_numpy(np.load(artifact("text_query_mean")))
     return TextIndex(points, lengths, components, centre, query_mean, kappa)
 
 
-def view_modes(kind: str, name: str) -> tuple[str, ...]:
-    return VIEW_COMBINATIONS[name] if kind == "combination" else (name,)
+@cache
+def text_index() -> TextIndex:
+    return indexed(np.load(artifact("text_clouds"), mmap_mode="r"))
 
 
-def cloud_scores(
-    index: TextIndex, direction: torch.Tensor, kinds: list[int], kappa: float
+def likelihoods(
+    index: TextIndex, embedded: np.ndarray, kinds: list[int], kappa: float
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    along = index.components @ direction
-    offsets = index.centre @ direction
-    logits = torch.stack(
+    direction = F.normalize(torch.from_numpy(embedded) - index.query_mean, dim=-1)
+    by_kind = torch.stack(
         [
-            kappa
-            * (index.points[kind] @ along[kind] + offsets[kind])
-            / index.lengths[kind]
+            torch.logsumexp(
+                kappa
+                * cosines(
+                    index.points[kind],
+                    index.lengths[kind],
+                    direction,
+                    index.components[kind],
+                    index.centre[kind],
+                ),
+                dim=-1,
+            )
             for kind in kinds
         ],
-        dim=1,
-    ).flatten(1)
-    return logits.logsumexp(dim=1) - math.log(logits.shape[1]), logits
+        dim=-1,
+    )
+    count = len(kinds) * index.points.shape[2]
+    return by_kind.logsumexp(dim=-1) - math.log(count), by_kind
 
 
-def shares(weights: torch.Tensor, kinds: list[int]) -> dict[ShareName, torch.Tensor]:
-    owners = [
-        "combined" if VIEW_TYPES[kind][0] == "combination" else VIEW_TYPES[kind][1]
-        for kind in kinds
+def mode_shares(by_kind: torch.Tensor, kinds: list[int]) -> torch.Tensor:
+    names = [VIEW_TYPES[kind][1] for kind in kinds]
+    columns = [
+        SHARE_NAMES.index(name if name in MODES else "combined") for name in names
     ]
-    return {
-        name: weights[
-            :, [column for column, owner in enumerate(owners) if owner == name]
-        ].sum(dim=1)
-        for name in (*MODES, "combined")
-    }
+    found = by_kind.new_zeros(len(by_kind), len(SHARE_NAMES))
+    return found.index_add_(1, torch.tensor(columns), by_kind.softmax(dim=1))
 
 
 def breadth(scores: torch.Tensor) -> float:
@@ -295,21 +311,21 @@ def breadth(scores: torch.Tensor) -> float:
 
 
 def text_search(query: TextQuery) -> TextResults:
-    index = text_index()
-    embedded = torch.from_numpy(embed_queries([query.text])[0])
-    direction = F.normalize(embedded - index.query_mean, dim=0)
+    with LOADING:
+        index = text_index()
     kinds = [
         kind
-        for kind, view in enumerate(VIEW_TYPES)
-        if set(view_modes(*view)) <= query.modes
+        for kind, (_, name) in enumerate(VIEW_TYPES)
+        if set(VIEW_COMBINATIONS.get(name, (name,))) <= query.modes
     ]
-    scores, logits = cloud_scores(index, direction, kinds, index.kappa)
+    scores, by_kind = likelihoods(
+        index, embed_queries([query.text])[0], kinds, index.kappa
+    )
     top = scores.topk(min(query.matches, len(scores))).indices
-    weights = logits[top].softmax(dim=1).unflatten(1, (len(kinds), -1)).sum(dim=2)
     return TextResults(
         top,
         scores[top],
         scores.softmax(dim=0)[top],
-        shares(weights, kinds),
+        mode_shares(by_kind[top], kinds),
         breadth(scores),
     )

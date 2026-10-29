@@ -69,7 +69,7 @@ from .search import (
     templates,
     tokens,
 )
-from .text_search import ShareName, TextQuery, text_search
+from .text_search import SHARE_NAMES, ShareName, TextQuery, text_search
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
@@ -599,6 +599,6 @@ def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
         galaxies=found.galaxies.tolist(),
         scores=found.scores.tolist(),
         probabilities=found.probabilities.tolist(),
-        shares={name: values.tolist() for name, values in found.shares.items()},
+        shares=dict(zip(SHARE_NAMES, found.shares.T.tolist())),
         breadth=found.breadth,
     )
