@@ -6,24 +6,115 @@ from sklearn.metrics import root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 
 from . import pql, templates
-from .config import LS, PROBED, PROPERTIES, PROVABGS, REDSHIFT, SEED, artifact
-from .observations import column_values, measured_redshifts
+from .config import (
+    ANCHOR,
+    LS,
+    LS_PROPERTIES,
+    PROPERTIES,
+    PROVABGS,
+    PROVABGS_PROPERTIES,
+    REDSHIFT,
+    SEED,
+    SPECTRAL_PROPERTIES,
+    SPECTRUM_SURVEYS,
+    ZERO_POINTS,
+    artifact,
+)
+from .observations import column_values, measured_redshifts, samples, spectra
 
 ALPHAS = np.logspace(-3, 4, 15)
 FOLDS = KFold(shuffle=True, random_state=SEED)
+HALPHA = 6564.61
+HALPHA_BANDS = ((6490.0, 6530.0), (6600.0, 6640.0), (HALPHA - 10, HALPHA + 10))
+BREAK_BANDS = ((3850.0, 3950.0), (4000.0, 4100.0))
+MINIMUM_PIXELS = 5
+MINIMUM_SIGNAL = 3
+BATCH = 256
 
 
 def provabgs(galaxies: np.ndarray) -> dict[str, np.ndarray]:
     mass = column_values(f"LOG_MSTAR{PROVABGS}", galaxies)
     with np.errstate(divide="ignore", invalid="ignore"):
         sfr = np.log10(column_values(f"AVG_SFR{PROVABGS}", galaxies))
-    return dict(zip(PROBED, (mass, sfr, sfr - mass)))
+    return dict(zip(PROVABGS_PROPERTIES, (mass, sfr, sfr - mass)))
+
+
+def magnitudes(galaxies: np.ndarray, band: str) -> np.ndarray:
+    flux = column_values(f"FLUX_{band}{LS}", galaxies)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(flux > 0, ZERO_POINTS[ANCHOR] - 2.5 * np.log10(flux), np.nan)
 
 
 def colours(galaxies: np.ndarray) -> np.ndarray:
-    green, red = (column_values(f"FLUX_{band}{LS}", galaxies) for band in "GR")
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.where((green > 0) & (red > 0), -2.5 * np.log10(green / red), np.nan)
+    return magnitudes(galaxies, "G") - magnitudes(galaxies, "R")
+
+
+def ls_properties(galaxies: np.ndarray) -> dict[str, np.ndarray]:
+    radius, first, second = (
+        column_values(f"{name}{LS}", galaxies)
+        for name in ("SHAPE_R", "SHAPE_E1", "SHAPE_E2")
+    )
+    ellipticity = np.hypot(first, second)
+    axis_ratio = np.where(
+        ellipticity > 0, (1 - ellipticity) / (1 + ellipticity), np.nan
+    )
+    return dict(zip(LS_PROPERTIES, (radius, magnitudes(galaxies, "R"), axis_ratio)))
+
+
+def band(rest: np.ndarray, low: float, high: float) -> np.ndarray | None:
+    inside = (rest >= low) & (rest <= high)
+    if inside.sum() < MINIMUM_PIXELS or rest[0] > low or rest[-1] < high:
+        return None
+    return inside
+
+
+def detected(mean: float, variances: np.ndarray) -> bool:
+    return mean > MINIMUM_SIGNAL * np.sqrt(np.sum(variances)) / len(variances)
+
+
+def halpha_ew(rest: np.ndarray, flux: np.ndarray, ivar: np.ndarray) -> float:
+    bands = [band(rest, *edges) for edges in HALPHA_BANDS]
+    if any(inside is None for inside in bands):
+        return np.nan
+    blue, red, window = bands
+    continuum = (np.median(flux[blue]) + np.median(flux[red])) / 2
+    if not detected(continuum, 1 / ivar[blue | red]):
+        return np.nan
+    return np.trapezoid(flux[window] / continuum - 1, rest[window])
+
+
+def dn4000(rest: np.ndarray, flux: np.ndarray, ivar: np.ndarray) -> float:
+    bands = [band(rest, *edges) for edges in BREAK_BANDS]
+    if any(inside is None for inside in bands):
+        return np.nan
+    blue, red = (
+        (np.mean(flux[inside] * rest[inside] ** 2), rest[inside] ** 4 / ivar[inside])
+        for inside in bands
+    )
+    if not (detected(*blue) and detected(*red)):
+        return np.nan
+    return red[0] / blue[0]
+
+
+def spectral_properties(
+    galaxies: np.ndarray, redshifts: np.ndarray, surveys: list[str | None]
+) -> dict[str, np.ndarray]:
+    found = np.full((len(SPECTRAL_PROPERTIES), len(galaxies)), np.nan)
+    for survey in SPECTRUM_SURVEYS:
+        chosen = np.flatnonzero(np.array(surveys) == survey)
+        for start in range(0, len(chosen), BATCH):
+            part = chosen[start : start + BATCH]
+            cells = spectra(survey, galaxies[part])
+            for row, position in enumerate(part):
+                if not cells[row].is_valid:
+                    continue
+                wavelength, flux, ivar = samples(cells, row)
+                rest = wavelength / (1 + redshifts[position])
+                found[:, position] = (
+                    halpha_ew(rest, flux, ivar),
+                    dn4000(rest, flux, ivar),
+                )
+    return dict(zip(SPECTRAL_PROPERTIES, found))
 
 
 def spread_quantiles(
@@ -65,14 +156,20 @@ def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]
 def generate_properties() -> None:
     features = np.load(artifact("joint_embedding"))
     galaxies = np.arange(len(features))
+    redshifts, surveys = measured_redshifts(galaxies)
     predicted, width = predicted_redshifts()
     columns = {
-        f"{REDSHIFT}_measured": measured_redshifts(galaxies)[0],
+        f"{REDSHIFT}_measured": redshifts,
         f"{REDSHIFT}_predicted": predicted,
         f"{REDSHIFT}_width": width,
         "g_r": colours(galaxies),
     }
-    for label, values in provabgs(galaxies).items():
+    measured = (
+        provabgs(galaxies)
+        | ls_properties(galaxies)
+        | spectral_properties(galaxies, redshifts, surveys)
+    )
+    for label, values in measured.items():
         predicted, width = probed(features, values)
         columns |= {
             f"{label}_measured": values,

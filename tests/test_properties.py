@@ -14,10 +14,14 @@ from app.config import (
     REDSHIFT,
     REDSHIFT_COLUMNS,
     REDSHIFT_VOCABULARY,
+    SPECTRUM_SURVEYS,
     artifact,
 )
 
 LABELLED = 30
+CONTINUUM = 2.0
+HALPHA_EW = 30.0
+LINE_REDSHIFT = 0.5
 
 
 def test_a_labelled_galaxy_s_prediction_does_not_depend_on_its_own_label() -> None:
@@ -61,9 +65,22 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
 ) -> None:
     rng = np.random.default_rng(1)
     labelled = np.arange(galaxies) % 4 != 0
-    redshift = np.where(np.arange(galaxies) % 3 == 0, 0.5, np.nan)
+    redshift = np.where(np.arange(galaxies) % 2 == 0, LINE_REDSHIFT, np.nan)
     green, red = rng.lognormal(size=galaxies), rng.lognormal(size=galaxies)
     red[2] = -1
+    radius = rng.lognormal(size=galaxies)
+    first, second = rng.normal(scale=0.2, size=(2, galaxies))
+    first[4] = second[4] = 0
+    wavelength = np.arange(3500.0, 10500.0)
+    rest = wavelength / (1 + LINE_REDSHIFT)
+    peak = HALPHA_EW / (2 * np.sqrt(2 * np.pi))
+    line = peak * np.exp(-(((rest - properties.HALPHA) / 2) ** 2) / 2)
+    spectrum = {
+        "lambda": wavelength.tolist(),
+        "flux": (CONTINUUM * (1 + line)).tolist(),
+        "ivar": [1.0] * len(wavelength),
+        "mask": [False] * len(wavelength),
+    }
     value, error, warning = REDSHIFT_COLUMNS["desi"]
     rows = Dataset.from_dict(
         {
@@ -73,6 +90,12 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
             **{column: [None] * galaxies for column in REDSHIFT_COLUMNS["sdss"]},
             f"FLUX_G{LS}": green.tolist(),
             f"FLUX_R{LS}": red.tolist(),
+            f"SHAPE_R{LS}": radius.tolist(),
+            f"SHAPE_E1{LS}": first.tolist(),
+            f"SHAPE_E2{LS}": second.tolist(),
+            SPECTRUM_SURVEYS["desi"]: [
+                None if np.isnan(z) else spectrum for z in redshift
+            ],
             f"LOG_MSTAR{PROVABGS}": [
                 float(mass) if kept else None
                 for mass, kept in zip(rng.normal(10, 1, galaxies), labelled)
@@ -108,3 +131,20 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     expected = -2.5 * np.log10(green / np.abs(red))
     expected[2] = np.nan
     np.testing.assert_allclose(found["g_r"], expected.astype(np.float32), rtol=1e-6)
+    np.testing.assert_allclose(found["radius_measured"], radius, rtol=1e-6)
+    magnitude = 22.5 - 2.5 * np.log10(np.abs(red))
+    magnitude[2] = np.nan
+    np.testing.assert_allclose(found["r_magnitude_measured"], magnitude, rtol=1e-6)
+    ellipticity = np.hypot(first, second)
+    axis_ratio = (1 - ellipticity) / (1 + ellipticity)
+    axis_ratio[4] = np.nan
+    np.testing.assert_allclose(found["axis_ratio_measured"], axis_ratio, rtol=1e-6)
+    observed = np.isfinite(redshift)
+    np.testing.assert_allclose(
+        found["halpha_ew_measured"], np.where(observed, HALPHA_EW, np.nan), rtol=1e-3
+    )
+    np.testing.assert_allclose(
+        found["dn4000_measured"],
+        np.where(observed, (4050 / 3900) ** 2, np.nan),
+        rtol=1e-5,
+    )

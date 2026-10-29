@@ -116,7 +116,7 @@ def generate_joint_embedding() -> None:
     image=build_image,
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
-    timeout=2 * 60,
+    timeout=60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_properties() -> None:

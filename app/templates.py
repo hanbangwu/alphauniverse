@@ -25,13 +25,13 @@ from .config import (
     TABLE_MODES,
     TOP_CODES,
     VOCABULARY,
+    ZERO_POINTS,
     artifact,
     device,
 )
 
 DECODED_BANDS = [*BANDS[ANCHOR], *BANDS["hsc"]]
 CENTRAL = (0.16, 0.84)
-ZERO_POINTS = {ANCHOR: 22.5, "hsc": 27.0}
 MODALITIES = {
     "ls_image": LegacySurveyImage,
     "hsc_image": HSCImage,

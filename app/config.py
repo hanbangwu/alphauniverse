@@ -52,6 +52,7 @@ DESI = "-mmu_desi_edr_sv3"
 SDSS = "-mmu_sdss_sdss"
 GZ10 = "-mmu_gz10"
 PROVABGS = "-mmu_desi_provabgs"
+ZERO_POINTS = {ANCHOR: 22.5, "hsc": 27.0}
 
 
 SpectrumSurvey = Literal["desi", "sdss"]
@@ -345,7 +346,10 @@ PREDICTIONS = pa.schema(
 )
 
 
-PROBED = ("mass", "sfr", "ssfr")
+PROVABGS_PROPERTIES = ("mass", "sfr", "ssfr")
+LS_PROPERTIES = ("radius", "r_magnitude", "axis_ratio")
+SPECTRAL_PROPERTIES = ("halpha_ew", "dn4000")
+PROBED = (*PROVABGS_PROPERTIES, *LS_PROPERTIES, *SPECTRAL_PROPERTIES)
 PROPERTIES = pa.schema(
     [
         pa.field("galaxy", pa.int32(), nullable=False),
