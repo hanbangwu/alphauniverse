@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 from functools import cache
 from itertools import batched, product
 from threading import Lock
@@ -271,10 +271,17 @@ def text_index() -> TextIndex:
     return indexed(np.load(artifact("text_clouds"), mmap_mode="r"))
 
 
+def view_kinds(modes: Collection[str]) -> list[int]:
+    return [
+        kind
+        for kind, (_, name) in enumerate(VIEW_TYPES)
+        if set(VIEW_COMBINATIONS.get(name, (name,))) <= set(modes)
+    ]
+
+
 def likelihoods(
-    index: TextIndex, embedded: np.ndarray, kinds: list[int]
+    index: TextIndex, direction: torch.Tensor, kinds: list[int]
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    direction = F.normalize(torch.from_numpy(embedded) - index.query_mean, dim=-1)
     by_kind = torch.stack(
         [
             torch.logsumexp(
@@ -314,12 +321,9 @@ def text_search(query: TextQuery) -> TextResults:
     with LOADING:
         index = text_index()
         embedded = embed_queries([query.text])[0]
-    kinds = [
-        kind
-        for kind, (_, name) in enumerate(VIEW_TYPES)
-        if set(VIEW_COMBINATIONS.get(name, (name,))) <= query.modes
-    ]
-    scores, by_kind = likelihoods(index, embedded, kinds)
+    direction = F.normalize(torch.from_numpy(embedded) - index.query_mean, dim=-1)
+    kinds = view_kinds(query.modes)
+    scores, by_kind = likelihoods(index, direction, kinds)
     top = scores.topk(min(query.matches, len(scores))).indices
     return TextResults(
         top,

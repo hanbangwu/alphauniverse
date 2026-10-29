@@ -10,8 +10,9 @@ from bokeh.models import (
     TableColumn,
     Whisker,
 )
-from bokeh.palettes import Category10_10, Category20_20
+from bokeh.palettes import Category10_10, Category20_20, RdBu11
 from bokeh.plotting import figure
+from bokeh.transform import linear_cmap
 
 REPORTS = Path(__file__).parent / "benchmarks"
 WIDTH = {"sizing_mode": "stretch_width"}
@@ -91,69 +92,71 @@ def text_search_quality():
     found = report("text_search_quality")
     if found is None:
         return missing()
-    rows = flattened(found["queries"], ("query", "method", "scoring"))
+    rows = [
+        {"pair": pair, "method": method, "side": side} | row
+        for pair, results in found["pairs"].items()
+        for method, sides in results["methods"].items()
+        for side, phrasings in sides.items()
+        for row in phrasings
+    ]
+    groups = {}
+    for row in rows:
+        groups.setdefault((row["method"], (row["pair"], row["side"])), []).append(row)
     source = ColumnDataSource(
         {
-            "factor": [
-                (row["query"], f"{row['method']}, {row['scoring']}") for row in rows
+            "method": [method for method, _ in groups],
+            "column": [column for _, column in groups],
+            "specificity": [
+                sum(row["specificity"] for row in group) / len(group)
+                for group in groups.values()
+            ],
+            "passes": [
+                f"{sum(row['passes'] for row in group)}/{len(group)}"
+                for group in groups.values()
             ],
         }
-        | {
-            name: [row[name] for row in rows]
-            for name in (
-                "average_precision",
-                "average_precision_low",
-                "average_precision_high",
-                "base_rate",
-            )
-        }
     )
+    methods = list(dict.fromkeys(method for method, _ in groups))
     chart = figure(
-        y_range=FactorRange(*reversed(source.data["factor"])),
-        x_range=(0, 1),
-        height=40 + 24 * len(rows),
-        title="Average precision (bars, 95% interval) against the base rate (ticks)",
+        x_range=FactorRange(*dict.fromkeys(column for _, column in groups)),
+        y_range=FactorRange(*reversed(methods)),
+        height=80 + 22 * len(methods),
+        x_axis_location="above",
+        title="Mean specificity (colour) and the phrasings that pass (text)",
         tooltips=[
-            ("average precision", "@average_precision"),
-            ("95% interval", "@average_precision_low to @average_precision_high"),
-            ("base rate", "@base_rate"),
+            ("method", "@method"),
+            ("specificity", "@specificity"),
+            ("passes", "@passes"),
         ],
         **WIDTH,
     )
-    chart.hbar(y="factor", right="average_precision", height=0.8, source=source)
-    chart.add_layout(
-        Whisker(
-            source=source,
-            base="factor",
-            lower="average_precision_low",
-            upper="average_precision_high",
-            dimension="width",
-        )
-    )
-    chart.scatter(
-        x="base_rate",
-        y="factor",
-        marker="dash",
-        angle=1.5708,
-        size=18,
-        color="black",
+    chart.rect(
+        x="column",
+        y="method",
+        width=1,
+        height=1,
+        line_color=None,
+        fill_color=linear_cmap("specificity", RdBu11, -0.5, 0.5),
         source=source,
     )
-    differences = flattened(found["differences"], ("query", "comparison"))
-    seeds = [
-        {"query": query, "seed agreement": agreement}
-        for query, agreement in found["seed_agreement"].items()
-    ]
-    breadth = flattened(found["breadth"], ("ladder", "query", "method"))
-    shares = flattened(found["shares"], ("query", "method", "scoring"))
+    chart.text(
+        x="column",
+        y="method",
+        text="passes",
+        text_align="center",
+        text_baseline="middle",
+        text_font_size="8pt",
+        source=source,
+    )
     return column(
-        heading(found, f"{found['galaxies']:,} held-out galaxies", cpus(found)),
+        heading(
+            found,
+            f"{found['galaxies']:,} held-out galaxies",
+            f"the {found['half']} half",
+            cpus(found),
+        ),
         chart,
-        table(rows, rows[0], height=400),
-        table(differences, differences[0], height=400),
-        table(seeds, seeds[0]),
-        table(breadth, breadth[0]),
-        table(shares, max(shares, key=len), height=400),
+        table(rows, max(rows, key=len), height=400),
         **WIDTH,
     )
 
