@@ -52,6 +52,7 @@ DESI = "-mmu_desi_edr_sv3"
 SDSS = "-mmu_sdss_sdss"
 GZ10 = "-mmu_gz10"
 PROVABGS = "-mmu_desi_provabgs"
+ZERO_POINTS = {ANCHOR: 22.5, "hsc": 27.0}
 
 
 SpectrumSurvey = Literal["desi", "sdss"]

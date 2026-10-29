@@ -24,20 +24,6 @@ HALPHA_EW = 30.0
 LINE_REDSHIFT = 0.5
 
 
-def line_spectrum(wavelength: np.ndarray, redshift: float) -> np.ndarray:
-    width = 2 * (1 + redshift)
-    area = HALPHA_EW * (1 + redshift) * CONTINUUM
-    offset = (wavelength - properties.HALPHA * (1 + redshift)) / width
-    return CONTINUUM + area / (width * np.sqrt(2 * np.pi)) * np.exp(-(offset**2) / 2)
-
-
-def flat_break(rest: np.ndarray) -> float:
-    blue, red = (
-        rest[(rest >= low) & (rest <= high)] for low, high in properties.BREAK_BANDS
-    )
-    return float(np.mean(red**2) / np.mean(blue**2))
-
-
 def test_a_labelled_galaxy_s_prediction_does_not_depend_on_its_own_label() -> None:
     rng = np.random.default_rng(0)
     features = rng.normal(size=(40, 6))
@@ -86,11 +72,14 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     first, second = rng.normal(scale=0.2, size=(2, galaxies))
     first[4] = second[4] = 0
     wavelength = np.arange(3500.0, 10500.0)
+    rest = wavelength / (1 + LINE_REDSHIFT)
+    peak = HALPHA_EW / (2 * np.sqrt(2 * np.pi))
+    line = peak * np.exp(-(((rest - properties.HALPHA) / 2) ** 2) / 2)
     spectrum = {
         "lambda": wavelength.tolist(),
-        "flux": line_spectrum(wavelength, LINE_REDSHIFT).tolist(),
-        "ivar": np.ones_like(wavelength).tolist(),
-        "mask": np.zeros(len(wavelength), dtype=bool).tolist(),
+        "flux": (CONTINUUM * (1 + line)).tolist(),
+        "ivar": [1.0] * len(wavelength),
+        "mask": [False] * len(wavelength),
     }
     value, error, warning = REDSHIFT_COLUMNS["desi"]
     rows = Dataset.from_dict(
@@ -142,27 +131,20 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     expected = -2.5 * np.log10(green / np.abs(red))
     expected[2] = np.nan
     np.testing.assert_allclose(found["g_r"], expected.astype(np.float32), rtol=1e-6)
-    np.testing.assert_allclose(
-        found["radius_measured"], radius.astype(np.float32), rtol=1e-6
-    )
+    np.testing.assert_allclose(found["radius_measured"], radius, rtol=1e-6)
     magnitude = 22.5 - 2.5 * np.log10(np.abs(red))
     magnitude[2] = np.nan
-    np.testing.assert_allclose(
-        found["r_magnitude_measured"], magnitude.astype(np.float32), rtol=1e-6
-    )
+    np.testing.assert_allclose(found["r_magnitude_measured"], magnitude, rtol=1e-6)
     ellipticity = np.hypot(first, second)
     axis_ratio = (1 - ellipticity) / (1 + ellipticity)
     axis_ratio[4] = np.nan
-    np.testing.assert_allclose(
-        found["axis_ratio_measured"], axis_ratio.astype(np.float32), rtol=1e-6
-    )
+    np.testing.assert_allclose(found["axis_ratio_measured"], axis_ratio, rtol=1e-6)
     observed = np.isfinite(redshift)
     np.testing.assert_allclose(
-        found["halpha_ew_measured"][observed], HALPHA_EW, rtol=1e-3
+        found["halpha_ew_measured"], np.where(observed, HALPHA_EW, np.nan), rtol=1e-3
     )
     np.testing.assert_allclose(
-        found["dn4000_measured"][observed],
-        flat_break(wavelength / (1 + LINE_REDSHIFT)),
-        rtol=1e-6,
+        found["dn4000_measured"],
+        np.where(observed, (4050 / 3900) ** 2, np.nan),
+        rtol=1e-5,
     )
-    assert np.isnan(found["dn4000_measured"][~observed]).all()

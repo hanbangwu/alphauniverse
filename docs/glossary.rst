@@ -44,7 +44,7 @@ Glossary
       The cosine of the angle between two vectors: 1 when they point the same way, 0 when they are perpendicular, −1 when they point opposite ways. It ignores their lengths.
 
    Dn4000
-      The strength of a spectrum's 4000 Å break: the mean flux per unit frequency from 4,000 to 4,100 Å divided by that from 3,850 to 3,950 Å, in the rest frame :cite:p:`balogh1999`. Older stellar populations have larger breaks. See :doc:`reference`.
+      The strength of a spectrum's 4000 Å break: the mean flux per unit frequency just redward of 4000 Å divided by that just blueward :cite:p:`balogh1999`. Older stellar populations have larger breaks. See :doc:`reference`.
 
    embedding
       The vector of 768 numbers AION's encoder returns for a :term:`token`. The encoded embedding depends on all of the galaxy's tokens; the codebook embedding depends only on the token's :term:`code`.
@@ -53,7 +53,7 @@ Glossary
       Google's model that places images and text in one 768-dimensional space, so that a picture and a description of it lie close together. Text search uses it. See :doc:`methods/text-search`.
 
    equivalent width
-      A spectral line's flux divided by the continuum's flux density beside it, :math:`\int (F_\lambda / F_c - 1)\, d\lambda` over the line, in Å. ``properties`` takes Hα's in the rest frame, positive for emission. See :doc:`reference`.
+      A spectral line's flux divided by the continuum's flux density beside it, :math:`\int (F_\lambda / F_c - 1)\, d\lambda` over the line, in Å. See :doc:`reference`.
 
    foundation model
       A large network trained once on broad data and then used unchanged for many tasks.

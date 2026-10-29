@@ -22,12 +22,11 @@ from app.config import (
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
     PREDICTIONS,
+    PROBED,
     PROPERTIES,
-    PROVABGS_PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
     SEARCH_RANK,
-    SPECTRAL_PROPERTIES,
     SPECTRUM_GRID,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
@@ -276,9 +275,10 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
 def _properties(
     rng: np.random.Generator, galaxies: int, provabgs: np.ndarray
 ) -> pa.Table:
-    redshift = np.array([covered(REDSHIFT, galaxy) for galaxy in range(galaxies)])
-    measured = {f"{label}_measured": provabgs for label in PROVABGS_PROPERTIES} | {
-        f"{label}_measured": redshift for label in (REDSHIFT, *SPECTRAL_PROPERTIES)
+    measured = {f"{label}_measured": provabgs for label in PROBED} | {
+        f"{REDSHIFT}_measured": np.array(
+            [covered(REDSHIFT, galaxy) for galaxy in range(galaxies)]
+        )
     }
     return pa.table(
         {"galaxy": np.arange(galaxies, dtype=np.int32)}

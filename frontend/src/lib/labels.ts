@@ -77,17 +77,9 @@ export const PROPERTIES = {
 
 export type Property = keyof typeof PROPERTIES
 
-export const PREDICTABLE: readonly Property[] = [
-  'redshift',
-  'mass',
-  'sfr',
-  'ssfr',
-  'radius',
-  'r_magnitude',
-  'axis_ratio',
-  'halpha_ew',
-  'dn4000'
-]
+export const PREDICTABLE: readonly Property[] = (Object.keys(PROPERTIES) as Property[]).filter(
+  (property) => property !== 'g_r'
+)
 
 export const UNITS: Record<Property, string> = {
   redshift: 'z',
