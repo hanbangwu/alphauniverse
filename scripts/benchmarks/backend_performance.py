@@ -14,13 +14,13 @@ from app.config import ANCHOR, DATASET_REVISION, MODES, N_IMAGE_TOKENS, SPECTRUM
 from modal_app import app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
+    LABELLED,
     elapsed,
     environment,
     git,
     server,
     summary,
 )
-from scripts.benchmarks.text_search_quality import LABELLED
 
 image = serving_image.add_local_python_source("modal_app")
 

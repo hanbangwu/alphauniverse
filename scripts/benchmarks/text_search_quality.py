@@ -37,19 +37,11 @@ from app.text_search import (
     text_index,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import environment, git, memory
+from scripts.benchmarks.common import LABELLED, environment, git, memory
 
 app = modal.App("alphauniverse-text-search")
 image = build_image.add_local_python_source("modal_app")
 
-LABELLED = {
-    "a massive galaxy": ("mass", 11, np.inf),
-    "a dwarf galaxy": ("mass", -np.inf, 9.5),
-    "a star-forming galaxy": ("ssfr", -10, np.inf),
-    "a quiescent galaxy with no ongoing star formation": ("ssfr", -np.inf, -11),
-    "a distant galaxy at high redshift": (REDSHIFT, 0.5, np.inf),
-    "a nearby galaxy at low redshift": (REDSHIFT, -np.inf, 0.1),
-}
 LADDERS = {
     "spiral": (
         "a galaxy",
