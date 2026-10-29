@@ -22,6 +22,9 @@ Glossary
    typical depth
       The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
 
+   breadth
+      How widely a text query spreads over :math:`N` galaxies: :math:`\exp(H)/N`, with :math:`H` the entropy of its probabilities over them. See :doc:`benchmarks`.
+
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 
@@ -68,7 +71,7 @@ Glossary
       The probability AION assigns to each :term:`code` at a :term:`slot`, given the galaxy's tokens. See :doc:`concepts`.
 
    PROVABGS
-      A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the text search and probe benchmarks, and in ``properties`` as the measured mass and star formation rate, to which the predicted ones are fitted.
+      A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the probe benchmark, its masses and star formation rates for the text search benchmark, and in ``properties`` as the measured mass and star formation rate, to which the predicted ones are fitted.
 
    slot
       A position a :term:`token` can occupy: one image cell, one spectral window, one catalogue value or the redshift. A galaxy has 1,722.

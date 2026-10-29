@@ -16,4 +16,4 @@ Each *modality*, image or spectrum, pairs two vectors per galaxy that has it. Fo
 
 with the GELU activation :cite:p:`hendrycks2016gelu`, trained to minimise :math:`1 - \cos(f(a_g), e_g)`. The same 30% of all galaxies are :term:`held out` of both networks' training for the benchmark. Every galaxy gets an image row :math:`f_\text{image}(a_g)` and every galaxy with a DESI spectrum also gets a spectrum row. A query is embedded by EmbeddingGemma as :math:`t`, and all rows are ranked together by their cosine to :math:`t` (``app.text_search.text_search``), so a galaxy can appear once for each modality.
 
-:doc:`/benchmarks` measures how well these rankings recover PROVABGS properties, against EmbeddingGemma's own embeddings and a linear map in place of :math:`f`.
+:doc:`/benchmarks` measures how well these rankings recover measured properties, against EmbeddingGemma's own embeddings.

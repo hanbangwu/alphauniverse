@@ -29,22 +29,34 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
 Text search quality
 -------------------
 
-Can a sentence find the right galaxies? ``text_search_quality`` uses the 30% of galaxies held out of the text maps' training, and six queries whose answers are PROVABGS cuts:
+Can a sentence find the right galaxies? ``text_search_quality`` ranks the 30% of galaxies :term:`held out` of the text maps' training with six queries whose answers are cuts on measured values, the :term:`PROVABGS` stellar mass and specific star formation rate and the spectroscopic redshift:
 
-======================================================= ==============================
-Query                                                   Answer
-======================================================= ==============================
-A massive galaxy, stellar mass above 10^11 solar masses :math:`\log M_* > 11`
-A low-mass dwarf galaxy                                 :math:`\log M_* < 9.5`
-A star-forming galaxy                                   :math:`\log \mathrm{sSFR} > -10`
-A quiescent galaxy with no ongoing star formation       :math:`\log \mathrm{sSFR} < -11`
-A distant galaxy at redshift above 0.5                  :math:`z > 0.5`
-A nearby galaxy at redshift below 0.1                   :math:`z < 0.1`
-======================================================= ==============================
+================================================= ================================
+Query                                             Answer
+================================================= ================================
+a massive galaxy                                  :math:`\log M_* > 11`
+a dwarf galaxy                                    :math:`\log M_* < 9.5`
+a star-forming galaxy                             :math:`\log \mathrm{sSFR} > -10`
+a quiescent galaxy with no ongoing star formation :math:`\log \mathrm{sSFR} < -11`
+a distant galaxy at high redshift                 :math:`z > 0.5`
+a nearby galaxy at low redshift                   :math:`z < 0.1`
+================================================= ================================
 
-with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each query ranks the galaxies that have that PROVABGS property in three spaces per modality, image or spectrum: EmbeddingGemma's own embeddings, and AION's embeddings carried into EmbeddingGemma's space by a linear map or by the network the site uses (MLP). The spectrum spaces rank only galaxies with a DESI spectrum. *Combined MLP* ranks every galaxy by the higher of its image and spectrum rows' scores, as the site ranks them. Each is ranked raw and *centred*, with the mean document and mean query subtracted first.
+with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each galaxy is a set of points :math:`e_{g,i}` in :term:`EmbeddingGemma`'s space, one per modality it has: EmbeddingGemma's embeddings of its colour image and DESI spectrum plot (*gemma*), or AION's embeddings carried there by the site's networks (*maps*). A query :math:`t` scores galaxy :math:`g` in two ways. *Raw* is :math:`\max_i \cos(t, e_{g,i})`, as the site ranks. *Likelihood* is
 
-The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it; *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
+.. math::
+
+   s(g \mid t) = \log \frac{1}{n_g} \sum_{i=1}^{n_g} w_{g,i},
+   \qquad w_{g,i} = \exp\left(\kappa \cos(\tilde t, \tilde e_{g,i})\right),
+   \qquad \kappa = 15,
+
+over the galaxy's :math:`n_g` points, where :math:`\tilde e_{g,i}` is a point less the mean of its modality's points over all galaxies, and :math:`\tilde t` is the query less the mean of 10,080 generic queries: every combination of three framings or none, 13 adjectives or none, 15 kinds of galaxy and 11 endings or none, such as *an image of a dusty spiral galaxy with a dust lane*.
+
+The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it, with a 95% bootstrap interval over 1,000 resamples of the galaxies. *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
+
+A query's :term:`breadth` is :math:`\exp(H)/N`, with :math:`H` the entropy of :math:`p(g \mid t) \propto \exp s(g \mid t)` over the :math:`N` galaxies, at :math:`\kappa` = 15 and 20. It is measured along three ladders of queries, each more specific than the last.
+
+A modality's *share* of the top 10 or top 100 is, under *raw*, the fraction of those galaxies whose highest cosine is that modality's, and under *likelihood*, the mean over them of :math:`\sum_{i \in \text{modality}} w_{g,i} \big/ \sum_i w_{g,i}`.
 
 .. bokeh-plot::
    :source-position: none

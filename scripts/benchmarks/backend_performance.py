@@ -20,13 +20,13 @@ from scripts.benchmarks.common import (
     server,
     summary,
 )
-from scripts.benchmarks.text_search_quality import CUTS
+from scripts.benchmarks.text_search_quality import LABELLED
 
 image = serving_image.add_local_python_source("modal_app")
 
 MATCHES = 32
 REPORT = Path("docs/benchmarks/backend_performance.json")
-TEXTS = tuple(text for text, _ in CUTS)
+TEXTS = tuple(LABELLED)
 
 
 def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:

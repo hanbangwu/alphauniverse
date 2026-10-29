@@ -77,36 +77,59 @@ def projection_quality():
     )
 
 
+def flattened(nested, names):
+    if not names:
+        return [nested]
+    return [
+        {names[0]: key} | row
+        for key, value in nested.items()
+        for row in flattened(value, names[1:])
+    ]
+
+
 def text_search_quality():
     found = report("text_search_quality")
     if found is None:
         return missing()
-    rows = [
-        {"query": query, "space": space, "centring": centring} | figures
-        for query, spaces in found["queries"].items()
-        for space, centrings in spaces.items()
-        for centring, figures in centrings.items()
-    ]
-    raw = [row for row in rows if row["centring"] == "raw"]
+    rows = flattened(found["queries"], ("query", "method", "scoring"))
     source = ColumnDataSource(
         {
-            "factor": [(row["query"], row["space"]) for row in raw],
-            "average_precision": [row["average_precision"] for row in raw],
-            "base_rate": [row["base_rate"] for row in raw],
+            "factor": [
+                (row["query"], f"{row['method']}, {row['scoring']}") for row in rows
+            ],
+        }
+        | {
+            name: [row[name] for row in rows]
+            for name in (
+                "average_precision",
+                "average_precision_low",
+                "average_precision_high",
+                "base_rate",
+            )
         }
     )
     chart = figure(
         y_range=FactorRange(*reversed(source.data["factor"])),
         x_range=(0, 1),
-        height=40 + 24 * len(raw),
-        title="Average precision, raw (bars) against the base rate (ticks)",
+        height=40 + 24 * len(rows),
+        title="Average precision (bars, 95% interval) against the base rate (ticks)",
         tooltips=[
             ("average precision", "@average_precision"),
+            ("95% interval", "@average_precision_low to @average_precision_high"),
             ("base rate", "@base_rate"),
         ],
         **WIDTH,
     )
     chart.hbar(y="factor", right="average_precision", height=0.8, source=source)
+    chart.add_layout(
+        Whisker(
+            source=source,
+            base="factor",
+            lower="average_precision_low",
+            upper="average_precision_high",
+            dimension="width",
+        )
+    )
     chart.scatter(
         x="base_rate",
         y="factor",
@@ -116,12 +139,14 @@ def text_search_quality():
         color="black",
         source=source,
     )
-    names = [name for name in rows[0] if name != "centring"]
-    names.insert(2, "centring")
+    breadth = flattened(found["breadth"], ("ladder", "query", "method"))
+    shares = flattened(found["shares"], ("query", "method", "scoring"))
     return column(
         heading(found, f"{found['galaxies']:,} held-out galaxies", cpus(found)),
         chart,
-        table(rows, names, height=400),
+        table(rows, rows[0], height=400),
+        table(breadth, breadth[0]),
+        table(shares, shares[0], height=400),
         **WIDTH,
     )
 
