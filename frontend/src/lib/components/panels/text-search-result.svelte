@@ -1,19 +1,27 @@
 <script lang="ts">
-  import type { TextMatches } from '$lib/api'
+  import type { ShareName } from '$lib/api'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
+  import { SHARES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
 
   interface Props {
     galaxy: number
-    modality: TextMatches['modalities'][number]
     score: number
+    shares: [ShareName, number][]
   }
 
-  let { galaxy, modality, score }: Props = $props()
+  let { galaxy, score, shares }: Props = $props()
 
   const { view } = getApp()
+
+  const leading = $derived(
+    shares
+      .filter(([, share]) => share >= 0.1)
+      .toSorted(([, first], [, second]) => second - first)
+      .map(([name, share]) => `${SHARES[name].label} ${Math.round(100 * share)}%`)
+  )
 </script>
 
 <button
@@ -28,7 +36,7 @@
   <div class="flex flex-col gap-1">
     <span class="text-sm font-medium"><GalaxyName {galaxy} /></span>
     <span class="text-xs text-muted-foreground tabular-nums">
-      {modality} &bull; cos sim {score.toFixed(3)}
+      {score.toFixed(2)} nats &bull; {leading.join(', ')}
     </span>
   </div>
 </button>

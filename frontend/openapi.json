@@ -1003,6 +1003,38 @@
               "default": 32,
               "title": "Matches"
             }
+          },
+          {
+            "name": "modes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum",
+                  "redshift",
+                  "ls_table",
+                  "hsc_table"
+                ],
+                "type": "string"
+              },
+              "minItems": 1,
+              "default": [
+                "desi_spectrum",
+                "hsc_image",
+                "hsc_table",
+                "ls_image",
+                "ls_table",
+                "redshift",
+                "sdss_spectrum"
+              ],
+              "title": "Modes"
+            }
           }
         ],
         "responses": {
@@ -1144,6 +1176,19 @@
         ],
         "title": "Meta"
       },
+      "ShareName": {
+        "type": "string",
+        "enum": [
+          "ls_image",
+          "hsc_image",
+          "desi_spectrum",
+          "sdss_spectrum",
+          "redshift",
+          "ls_table",
+          "hsc_table",
+          "combined"
+        ]
+      },
       "TableRow": {
         "properties": {
           "section": {
@@ -1253,30 +1298,45 @@
             "type": "array",
             "title": "Galaxies"
           },
-          "modalities": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "image",
-                "spectrum"
-              ]
-            },
-            "type": "array",
-            "title": "Modalities"
-          },
           "scores": {
             "items": {
               "type": "number"
             },
             "type": "array",
             "title": "Scores"
+          },
+          "probabilities": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Probabilities"
+          },
+          "shares": {
+            "additionalProperties": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/ShareName"
+            },
+            "type": "object",
+            "title": "Shares"
+          },
+          "breadth": {
+            "type": "number",
+            "title": "Breadth"
           }
         },
         "type": "object",
         "required": [
           "galaxies",
-          "modalities",
-          "scores"
+          "scores",
+          "probabilities",
+          "shares",
+          "breadth"
         ],
         "title": "TextMatches"
       },

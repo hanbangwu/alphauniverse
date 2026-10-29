@@ -1,6 +1,6 @@
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
-from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +8,7 @@ import modal
 import numpy as np
 import torch
 from scipy.special import logsumexp, softmax
-from scipy.stats import bootstrap, entropy
+from scipy.stats import bootstrap, spearmanr
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import normalize
 
@@ -18,25 +18,30 @@ from app.config import (
     REDSHIFT,
     SEED,
     TEXT_SURVEYS,
+    VIEW_TYPES,
     galaxy_count,
 )
+from app.embeddings import loaded
 from app.observations import measured_redshifts
 from app.properties import provabgs
-from app.text_search import aion_gemma_space, embed_queries
+from app.text_flow import generated_clouds, stored_flow
+from app.text_search import (
+    SHARE_NAMES,
+    aion_gemma_space,
+    breadth,
+    embed_queries,
+    generic_queries,
+    indexed,
+    likelihoods,
+    mode_shares,
+    text_index,
+)
 from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import environment, git, memory
+from scripts.benchmarks.common import LABELLED, environment, git, memory
 
 app = modal.App("alphauniverse-text-search")
 image = build_image.add_local_python_source("modal_app")
 
-LABELLED = {
-    "a massive galaxy": ("mass", 11, np.inf),
-    "a dwarf galaxy": ("mass", -np.inf, 9.5),
-    "a star-forming galaxy": ("ssfr", -10, np.inf),
-    "a quiescent galaxy with no ongoing star formation": ("ssfr", -np.inf, -11),
-    "a distant galaxy at high redshift": (REDSHIFT, 0.5, np.inf),
-    "a nearby galaxy at low redshift": (REDSHIFT, -np.inf, 0.1),
-}
 LADDERS = {
     "spiral": (
         "a galaxy",
@@ -57,71 +62,12 @@ LADDERS = {
         "a spectrum with strong H-alpha and [OIII] emission lines at redshift 0.1",
     ),
 }
-FRAMES = ("{}", "an image of {}", "the spectrum of {}", "the photometry of {}")
-ADJECTIVES = (
-    "",
-    "bright",
-    "faint",
-    "red",
-    "blue",
-    "massive",
-    "small",
-    "large",
-    "nearby",
-    "distant",
-    "dusty",
-    "star-forming",
-    "quiescent",
-    "compact",
-)
-SUBJECTS = (
-    "galaxy",
-    "spiral galaxy",
-    "elliptical galaxy",
-    "disk galaxy",
-    "irregular galaxy",
-    "dwarf galaxy",
-    "lenticular galaxy",
-    "barred spiral galaxy",
-    "pair of merging galaxies",
-    "edge-on galaxy",
-    "face-on spiral galaxy",
-    "starburst galaxy",
-    "quasar host galaxy",
-    "cluster galaxy",
-    "low surface brightness galaxy",
-)
-SUFFIXES = (
-    "",
-    " with spiral arms",
-    " with a bright bulge",
-    " with a central bar",
-    " with tidal tails",
-    " with strong emission lines",
-    " with an old stellar population",
-    " at high redshift",
-    " at low redshift",
-    " with a dust lane",
-    " with a close companion",
-    " with an active nucleus",
-)
 KAPPA = 15
 BREADTH_KAPPAS = (KAPPA, 20)
+KINDS = list(range(len(VIEW_TYPES)))
 TOP = (10, 100)
 RESAMPLES = 1000
 REPORT = Path("docs/benchmarks/text_search_quality.json")
-
-
-def generic_queries() -> list[str]:
-    phrases = (
-        f"{adjective} {subject}".strip()
-        for adjective, subject in product(ADJECTIVES, SUBJECTS)
-    )
-    nouns = [("an " if phrase[0] in "aeiou" else "a ") + phrase for phrase in phrases]
-    return [
-        frame.format(noun + suffix)
-        for frame, noun, suffix in product(FRAMES, nouns, SUFFIXES)
-    ]
 
 
 def points(
@@ -158,15 +104,22 @@ def likelihood(table: np.ndarray, kappa: float) -> tuple[np.ndarray, np.ndarray]
     return logsumexp(logits, axis=1) - np.log(counts), softmax(logits, axis=1)
 
 
-def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
+def interval(
+    statistic: Callable[..., float], *samples: np.ndarray
+) -> tuple[float, float]:
     low, high = bootstrap(
-        (relevant, score),
-        average_precision_score,
+        samples,
+        statistic,
         n_resamples=RESAMPLES,
         paired=True,
         method="percentile",
         rng=SEED,
     ).confidence_interval
+    return float(low), float(high)
+
+
+def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
+    low, high = interval(average_precision_score, relevant, score)
     order = np.argsort(-score)
     return {
         "base_rate": round(float(relevant.mean()), 4),
@@ -175,6 +128,22 @@ def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
         "average_precision_high": round(float(high), 4),
     } | {
         f"precision@{top}": round(float(relevant[order[:top]].mean()), 4) for top in TOP
+    }
+
+
+def difference(
+    relevant: np.ndarray, ours: np.ndarray, theirs: np.ndarray
+) -> dict[str, float]:
+    def gained(relevant, ours, theirs):
+        return average_precision_score(relevant, ours) - average_precision_score(
+            relevant, theirs
+        )
+
+    low, high = interval(gained, relevant, ours, theirs)
+    return {
+        "difference": round(float(gained(relevant, ours, theirs)), 4),
+        "difference_low": round(low, 4),
+        "difference_high": round(high, 4),
     }
 
 
@@ -189,13 +158,9 @@ def shares(
     }
 
 
-def breadth(score: np.ndarray) -> float:
-    return round(float(np.exp(entropy(softmax(score))) / len(score)), 4)
-
-
 @app.function(
     image=image,
-    gpu="L4",
+    gpu="L40S",
     cpu=16,
     memory=(16 * 1024, 64 * 1024),
     timeout=60 * 60,
@@ -227,8 +192,8 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         )
     )
     embedded = embed_queries(texts)
-    generic = generic_queries()
-    directions = normalize(embedded - embed_queries(generic).mean(axis=0))
+    index = text_index()
+    directions = normalize(embedded - index.query_mean.numpy())
     tables = {
         text: {
             name: cosine_tables(found, query, direction, len(held))
@@ -243,13 +208,38 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         }
         for text, found in tables.items()
     }
+    chosen = torch.from_numpy(held)
+    network, bases = stored_flow()
+    joint = loaded("joint_embedding", torch.float32)
+    second = indexed(generated_clouds(network, bases, joint, chosen, SEED + 1))
+    cloud_breadth, seeds = {}, {}
+    for text, query in zip(texts, embedded):
+        scores, by_kind = likelihoods(index, query, KINDS)
+        shares_by_mode = mode_shares(by_kind[chosen], KINDS)
+        rankings[text]["clouds"] = {
+            "likelihood": (scores[chosen].numpy(), shares_by_mode.numpy())
+        }
+        cloud_breadth[text] = {
+            f"kappa = {kappa}": round(
+                breadth(
+                    likelihoods(index._replace(kappa=kappa), query, KINDS)[0][chosen]
+                ),
+                4,
+            )
+            for kappa in BREADTH_KAPPAS
+        }
+        if text in LABELLED:
+            reseeded = likelihoods(second, query, KINDS)[0]
+            agreement = spearmanr(scores[chosen], reseeded).statistic
+            seeds[text] = round(float(agreement), 4)
 
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name(),
         "galaxies": len(held),
         "kappa": KAPPA,
-        "generic_queries": len(generic),
+        "cloud_kappa": index.kappa,
+        "generic_queries": len(generic_queries()),
         "queries": {
             query: {
                 name: {
@@ -260,15 +250,32 @@ def benchmark_text_search_quality() -> dict[str, Any]:
             }
             for query, (known, relevant) in labelled.items()
         },
+        "differences": {
+            query: {
+                f"{name}, {scoring}": difference(
+                    relevant,
+                    rankings[query]["clouds"]["likelihood"][0][known],
+                    score[known],
+                )
+                for name, scored in rankings[query].items()
+                if name != "clouds"
+                for scoring, (score, _) in scored.items()
+            }
+            for query, (known, relevant) in labelled.items()
+        },
+        "seed_agreement": seeds,
         "breadth": {
             ladder: {
                 text: {
                     name: {
-                        f"kappa = {kappa}": breadth(likelihood(centred, kappa)[0])
+                        f"kappa = {kappa}": round(
+                            breadth(torch.from_numpy(likelihood(centred, kappa)[0])), 4
+                        )
                         for kappa in BREADTH_KAPPAS
                     }
                     for name, (_, centred) in tables[text].items()
                 }
+                | {"clouds": cloud_breadth[text]}
                 for text in rungs
             }
             for ladder, rungs in LADDERS.items()
@@ -276,7 +283,10 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         "shares": {
             text: {
                 name: {
-                    scoring: shares(list(methods[name]), *ranked)
+                    scoring: shares(
+                        list(SHARE_NAMES) if name == "clouds" else list(methods[name]),
+                        *ranked,
+                    )
                     for scoring, ranked in scored.items()
                 }
                 for name, scored in found.items()

@@ -46,7 +46,6 @@ from .config import (
     ImageSurvey,
     Projection,
     SpectrumSurvey,
-    TextModality,
     TokenMode,
     artifact,
     galaxy_count,
@@ -70,7 +69,7 @@ from .search import (
     templates,
     tokens,
 )
-from .text_search import TextQuery, text_search
+from .text_search import SHARE_NAMES, ShareName, TextQuery, text_search
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine
@@ -111,8 +110,10 @@ class TableRow(BaseModel):
 
 class TextMatches(BaseModel):
     galaxies: list[int]
-    modalities: list[TextModality]
     scores: list[float]
+    probabilities: list[float]
+    shares: dict[ShareName, list[float]]
+    breadth: float
 
 
 BINARY_OCTET: dict[str, Any] = {
@@ -593,9 +594,11 @@ def get_mode_search(query: Annotated[pql.ModeQuery, Query()]) -> Response:
 
 @app.get("/search/text")
 def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
-    galaxies, modalities, scores = text_search(query)
+    found = text_search(query)
     return TextMatches(
-        galaxies=galaxies.tolist(),
-        modalities=modalities.tolist(),
-        scores=scores.tolist(),
+        galaxies=found.galaxies.tolist(),
+        scores=found.scores.tolist(),
+        probabilities=found.probabilities.tolist(),
+        shares=dict(zip(SHARE_NAMES, found.shares.T.tolist())),
+        breadth=found.breadth,
     )

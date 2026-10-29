@@ -1,19 +1,19 @@
 Text search
 ===========
 
-Text search ranks galaxies by how well they match a sentence. AION reads no text, so alphaUniverse uses a second model, :term:`EmbeddingGemma`, which places images and text in one 768-dimensional space where a picture and a description of it lie close together (`model card <https://huggingface.co/google/embeddinggemma-2>`_). EmbeddingGemma sees pictures, so alphaUniverse gives it two per galaxy, the colour image and a plot of the spectrum, and carries AION's view of each observation into EmbeddingGemma's space.
+Text search ranks galaxies by how likely a sentence is to describe them. AION reads no text, so alphaUniverse uses a second model, :term:`EmbeddingGemma`, which places images and text in one 768-dimensional space where a picture and a description of it lie close together (`model card <https://huggingface.co/google/embeddinggemma-2>`_). What EmbeddingGemma can read about a galaxy are its :term:`views <view>`: its colour images, plots of its spectra, and its catalogue values and redshift written out as text.
 
 .. raw:: html
    :file: ../figures/text-search.svg
 
-Each *modality*, image or spectrum, pairs two vectors per galaxy that has it. For the image, they are the mean of AION's encoded embeddings of the galaxy's Legacy Survey image tokens, :math:`a_g`, and EmbeddingGemma's embedding :math:`e_g` of its Legacy Survey colour image. For the spectrum, they are the mean of AION's encoded embeddings of its DESI spectrum tokens, and EmbeddingGemma's embedding of its DESI spectrum, smoothed as on the site and plotted in grey on a 1680 × 384 pixel figure with no title or axis labels. Each modality has its own small network
+A galaxy's :term:`cloud` stands in for every view it could have. Given the galaxy's :term:`joint embedding`, a flow carries Gaussian noise to 16 points for each of 26 view types, 416 in all, each the predicted EmbeddingGemma embedding of one view. The view types are the observation, the :term:`template` and a sample of AION's predictions in each of the seven modes, and five combinations of modes; a galaxy unobserved in a mode still gets that mode's observed points, the observation AION predicts for it. The flow learns from views of the galaxies outside the :term:`held out` set.
+
+A query :math:`t` is embedded by EmbeddingGemma and, less the mean embedding of 10,080 generic queries, scaled to unit length, :math:`\tilde t`. A galaxy :math:`g` with cloud :math:`C_g` scores
 
 .. math::
 
-   f(a) = \frac{W_2\, \mathrm{GELU}(W_1 a + b_1) + b_2}
-   {\lVert W_2\, \mathrm{GELU}(W_1 a + b_1) + b_2 \rVert},
-   \qquad W_1 \in \mathbb{R}^{2048 \times 768},
+   s(g \mid t) = \log \frac{1}{|C_g|} \sum_{e \in C_g} \exp\left(\kappa \cos(\tilde t, e)\right),
 
-with the GELU activation :cite:p:`hendrycks2016gelu`, trained to minimise :math:`1 - \cos(f(a_g), e_g)`. The same 30% of all galaxies are :term:`held out` of both networks' training for the benchmark. Every galaxy gets an image row :math:`f_\text{image}(a_g)` and every galaxy with a DESI spectrum also gets a spectrum row. A query is embedded by EmbeddingGemma as :math:`t`, and all rows are ranked together by their cosine to :math:`t` (``app.text_search.text_search``), so a galaxy can appear once for each modality.
+the log of the query's mean likelihood over the cloud, with :term:`κ` the value that best identifies held-out galaxies from their own views. Galaxies rank by :math:`s`, and :math:`p(g \mid t)` is its softmax over all galaxies. A mode's :term:`share` of a match is the part of the sum from that mode's points, and the five combination types share as one. Searching only some modes sums over their view types alone, a combination counting when all its modes are chosen, with :math:`|C_g|` their number of points.
 
-:doc:`/benchmarks` measures how well these rankings recover measured properties, against EmbeddingGemma's own embeddings.
+:doc:`/benchmarks` measures how well these rankings recover measured properties, against EmbeddingGemma's own embeddings of the observed image and spectrum, and the maps from AION into EmbeddingGemma's space that text search used before.

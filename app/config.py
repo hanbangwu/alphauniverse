@@ -234,6 +234,9 @@ VIEW_TYPES = (
     *((kind, mode) for mode in MODES for kind in VIEW_KINDS),
     *(("combination", name) for name in VIEW_COMBINATIONS),
 )
+TEXT_RANK = 32
+TEXT_CONDITION = 64
+TEXT_POINTS = 16
 VIEWS_PER_PART = 4_000
 PARTS_PER_ROUND = 10
 PROTOTYPE_HELD_OUT = np.concatenate(
@@ -281,6 +284,8 @@ ARTIFACTS: dict[str, str] = {
     "text_views_held_out": "parquet",
     "text_bases": "npz",
     "text_flow": "pt",
+    "text_clouds": "npy",
+    "text_query_mean": "npy",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},

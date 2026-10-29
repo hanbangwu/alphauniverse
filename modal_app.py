@@ -282,6 +282,21 @@ def train_text_flow() -> None:
     cache_volume.commit()
 
 
+@app.function(
+    image=build_image,
+    gpu="L40S",
+    cpu=4,
+    memory=(16 * 1024, 32 * 1024),
+    timeout=1 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_text_clouds() -> None:
+    from app.text_flow import generate_text_clouds
+
+    generate_text_clouds()
+    cache_volume.commit()
+
+
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")

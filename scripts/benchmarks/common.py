@@ -17,6 +17,7 @@ from app.config import (
     DESI,
     N_IMAGE_TOKENS,
     N_SPECTRUM_TOKENS,
+    REDSHIFT,
     SDSS,
     SPECTRUM_ORIGIN,
     SPECTRUM_SURVEYS,
@@ -39,6 +40,14 @@ TABLE_VALUES = 4
 COMBINED = {
     "same_place": tuple(TOKEN_GRAMS),
     "any_position": tuple(names[-1] for names in TOKEN_GRAMS.values()),
+}
+LABELLED = {
+    "a massive galaxy": ("mass", 11, np.inf),
+    "a dwarf galaxy": ("mass", -np.inf, 9.5),
+    "a star-forming galaxy": ("ssfr", -10, np.inf),
+    "a quiescent galaxy with no ongoing star formation": ("ssfr", -np.inf, -11),
+    "a distant galaxy at high redshift": (REDSHIFT, 0.5, np.inf),
+    "a nearby galaxy at low redshift": (REDSHIFT, -np.inf, 0.1),
 }
 
 
