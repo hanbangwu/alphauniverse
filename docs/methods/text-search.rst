@@ -14,6 +14,6 @@ A query :math:`t` is embedded by EmbeddingGemma and, less the mean embedding of 
 
    s(g \mid t) = \log \frac{1}{|C_g|} \sum_{e \in C_g} \exp\left(\kappa \cos(\tilde t, e)\right),
 
-the log of the query's mean likelihood over the cloud, with :term:`κ` = 15, the value that best identifies held-out galaxies from their own views. Galaxies rank by :math:`s`, and :math:`p(g \mid t)` is its softmax over all galaxies. A mode's :term:`share` of a match is the part of the sum from that mode's points, and the five combination types share as one. Searching only some modes sums over their view types alone, a combination counting when all its modes are chosen, with :math:`|C_g|` their number of points.
+the log of the query's mean likelihood over the cloud, with :term:`κ` the value that best identifies held-out galaxies from their own views. Galaxies rank by :math:`s`, and :math:`p(g \mid t)` is its softmax over all galaxies. A mode's :term:`share` of a match is the part of the sum from that mode's points, and the five combination types share as one. Searching only some modes sums over their view types alone, a combination counting when all its modes are chosen, with :math:`|C_g|` their number of points.
 
 :doc:`/benchmarks` measures how well these rankings recover measured properties, against EmbeddingGemma's own embeddings of the observed image and spectrum, and the maps from AION into EmbeddingGemma's space that text search used before.

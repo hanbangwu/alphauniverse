@@ -28,7 +28,7 @@ def heading(found, *details):
 
 
 def table(rows, names, height=None):
-    source = ColumnDataSource({name: [row[name] for row in rows] for name in names})
+    source = ColumnDataSource({name: [row.get(name) for row in rows] for name in names})
     columns = [TableColumn(field=name, title=name) for name in names]
     return DataTable(
         source=source,
@@ -139,14 +139,21 @@ def text_search_quality():
         color="black",
         source=source,
     )
+    differences = flattened(found["differences"], ("query", "comparison"))
+    seeds = [
+        {"query": query, "seed agreement": agreement}
+        for query, agreement in found["seed_agreement"].items()
+    ]
     breadth = flattened(found["breadth"], ("ladder", "query", "method"))
     shares = flattened(found["shares"], ("query", "method", "scoring"))
     return column(
         heading(found, f"{found['galaxies']:,} held-out galaxies", cpus(found)),
         chart,
         table(rows, rows[0], height=400),
+        table(differences, differences[0], height=400),
+        table(seeds, seeds[0]),
         table(breadth, breadth[0]),
-        table(shares, shares[0], height=400),
+        table(shares, max(shares, key=len), height=400),
         **WIDTH,
     )
 

@@ -272,13 +272,13 @@ def text_index() -> TextIndex:
 
 
 def likelihoods(
-    index: TextIndex, embedded: np.ndarray, kinds: list[int], kappa: float
+    index: TextIndex, embedded: np.ndarray, kinds: list[int]
 ) -> tuple[torch.Tensor, torch.Tensor]:
     direction = F.normalize(torch.from_numpy(embedded) - index.query_mean, dim=-1)
     by_kind = torch.stack(
         [
             torch.logsumexp(
-                kappa
+                index.kappa
                 * cosines(
                     index.points[kind],
                     index.lengths[kind],
@@ -313,14 +313,13 @@ def breadth(scores: torch.Tensor) -> float:
 def text_search(query: TextQuery) -> TextResults:
     with LOADING:
         index = text_index()
+        embedded = embed_queries([query.text])[0]
     kinds = [
         kind
         for kind, (_, name) in enumerate(VIEW_TYPES)
         if set(VIEW_COMBINATIONS.get(name, (name,))) <= query.modes
     ]
-    scores, by_kind = likelihoods(
-        index, embed_queries([query.text])[0], kinds, index.kappa
-    )
+    scores, by_kind = likelihoods(index, embedded, kinds)
     top = scores.topk(min(query.matches, len(scores))).indices
     return TextResults(
         top,

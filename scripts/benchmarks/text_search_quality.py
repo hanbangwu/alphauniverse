@@ -222,19 +222,22 @@ def benchmark_text_search_quality() -> dict[str, Any]:
     second = indexed(generated_clouds(network, bases, joint, chosen, SEED + 1))
     cloud_breadth, seeds = {}, {}
     for text, query in zip(texts, embedded):
-        scores, by_kind = likelihoods(index, query, KINDS, index.kappa)
+        scores, by_kind = likelihoods(index, query, KINDS)
         shares_by_mode = mode_shares(by_kind[chosen], KINDS)
         rankings[text]["clouds"] = {
             "likelihood": (scores[chosen].numpy(), shares_by_mode.numpy())
         }
         cloud_breadth[text] = {
             f"kappa = {kappa}": round(
-                breadth(likelihoods(index, query, KINDS, kappa)[0][chosen]), 4
+                breadth(
+                    likelihoods(index._replace(kappa=kappa), query, KINDS)[0][chosen]
+                ),
+                4,
             )
             for kappa in BREADTH_KAPPAS
         }
         if text in LABELLED:
-            reseeded = likelihoods(second, query, KINDS, index.kappa)[0]
+            reseeded = likelihoods(second, query, KINDS)[0]
             agreement = spearmanr(scores[chosen], reseeded).statistic
             seeds[text] = round(float(agreement), 4)
 
