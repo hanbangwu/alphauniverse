@@ -7,21 +7,37 @@ import modal
 import numpy as np
 import torch
 from scipy.special import logsumexp, softmax
-from scipy.stats import bootstrap, entropy
+from scipy.stats import bootstrap, entropy, spearmanr
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import normalize
 
 from app.alignment import held_out, pairs
 from app.config import (
     DATASET_REVISION,
+    MODES,
     REDSHIFT,
     SEED,
     TEXT_SURVEYS,
+    VIEW_TYPES,
+    device,
     galaxy_count,
 )
+from app.embeddings import loaded
 from app.observations import measured_redshifts
 from app.properties import provabgs
-from app.text_search import aion_gemma_space, embed_queries, generic_queries
+from app.text_flow import galaxy_clouds, stored_flow
+from app.text_search import (
+    TextIndex,
+    aion_gemma_space,
+    cloud_scores,
+    embed_queries,
+    generic_queries,
+    point_lengths,
+    text_index,
+)
+from app.text_search import (
+    shares as cloud_shares,
+)
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -117,6 +133,62 @@ def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
     }
 
 
+def difference(
+    relevant: np.ndarray, ours: np.ndarray, theirs: np.ndarray
+) -> dict[str, float]:
+    def gained(relevant, ours, theirs):
+        return average_precision_score(relevant, ours) - average_precision_score(
+            relevant, theirs
+        )
+
+    low, high = bootstrap(
+        (relevant, ours, theirs),
+        gained,
+        n_resamples=RESAMPLES,
+        paired=True,
+        method="percentile",
+        rng=SEED,
+    ).confidence_interval
+    return {
+        "difference": round(float(gained(relevant, ours, theirs)), 4),
+        "difference_low": round(float(low), 4),
+        "difference_high": round(float(high), 4),
+    }
+
+
+def reseeded(held: np.ndarray) -> TextIndex:
+    index = text_index()
+    network, bases = stored_flow()
+    joint = loaded("joint_embedding", torch.float32)
+    points = torch.cat(
+        [
+            galaxy_clouds(network, bases, joint, galaxies.to(device()), SEED + 1).cpu()
+            for galaxies in torch.from_numpy(held).split(1024)
+        ]
+    ).transpose(0, 1)
+    lengths = torch.stack(
+        [
+            point_lengths(points[kind], index.components[kind], index.centre[kind])
+            for kind in range(len(VIEW_TYPES))
+        ]
+    )
+    return index._replace(points=points.contiguous(), lengths=lengths)
+
+
+def cloud_ranking(
+    index: TextIndex, query: np.ndarray, kappa: float
+) -> tuple[np.ndarray, np.ndarray]:
+    direction = torch.nn.functional.normalize(
+        torch.from_numpy(query) - index.query_mean, dim=0
+    )
+    kinds = list(range(len(VIEW_TYPES)))
+    scores, logits = cloud_scores(index, direction, kinds, kappa)
+    weights = logits.softmax(dim=1).unflatten(1, (len(kinds), -1)).sum(dim=2)
+    found = cloud_shares(weights, kinds)
+    columns = np.stack([found[name].numpy() for name in (*MODES, "combined")], axis=1)
+    return scores.numpy(), columns
+
+
 def shares(
     modes: list[str], score: np.ndarray, weights: np.ndarray
 ) -> dict[str, float]:
@@ -182,12 +254,35 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         }
         for text, found in tables.items()
     }
+    index = text_index()
+    second = reseeded(held)
+    cloud_breadth = {}
+    for text, query in zip(texts, embedded):
+        scores, columns = cloud_ranking(index, query, index.kappa)
+        rankings[text]["clouds"] = {"likelihood": (scores[held], columns[held])}
+        cloud_breadth[text] = {
+            f"kappa = {kappa}": breadth(cloud_ranking(index, query, kappa)[0][held])
+            for kappa in BREADTH_KAPPAS
+        }
+    seeds = {
+        query: round(
+            float(
+                spearmanr(
+                    rankings[query]["clouds"]["likelihood"][0],
+                    cloud_ranking(second, embedded[texts.index(query)], index.kappa)[0],
+                ).statistic
+            ),
+            4,
+        )
+        for query in LABELLED
+    }
 
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name(),
         "galaxies": len(held),
         "kappa": KAPPA,
+        "cloud_kappa": index.kappa,
         "generic_queries": len(generic),
         "queries": {
             query: {
@@ -199,6 +294,20 @@ def benchmark_text_search_quality() -> dict[str, Any]:
             }
             for query, (known, relevant) in labelled.items()
         },
+        "differences": {
+            query: {
+                f"{name}, {scoring}": difference(
+                    relevant,
+                    rankings[query]["clouds"]["likelihood"][0][known],
+                    score[known],
+                )
+                for name, scored in rankings[query].items()
+                if name != "clouds"
+                for scoring, (score, _) in scored.items()
+            }
+            for query, (known, relevant) in labelled.items()
+        },
+        "seed_agreement": seeds,
         "breadth": {
             ladder: {
                 text: {
@@ -208,6 +317,7 @@ def benchmark_text_search_quality() -> dict[str, Any]:
                     }
                     for name, (_, centred) in tables[text].items()
                 }
+                | {"clouds": cloud_breadth[text]}
                 for text in rungs
             }
             for ladder, rungs in LADDERS.items()
@@ -215,7 +325,12 @@ def benchmark_text_search_quality() -> dict[str, Any]:
         "shares": {
             text: {
                 name: {
-                    scoring: shares(list(methods[name]), *ranked)
+                    scoring: shares(
+                        [*MODES, "combined"]
+                        if name == "clouds"
+                        else list(methods[name]),
+                        *ranked,
+                    )
                     for scoring, ranked in scored.items()
                 }
                 for name, scored in found.items()
