@@ -40,9 +40,9 @@ def provabgs(galaxies: np.ndarray) -> dict[str, np.ndarray]:
 
 
 def magnitudes(galaxies: np.ndarray, band: str) -> np.ndarray:
+    flux = column_values(f"FLUX_{band}{LS}", galaxies)
     with np.errstate(divide="ignore", invalid="ignore"):
-        flux = column_values(f"FLUX_{band}{LS}", galaxies)
-        return ZERO_POINTS[ANCHOR] - 2.5 * np.log10(flux)
+        return np.where(flux > 0, ZERO_POINTS[ANCHOR] - 2.5 * np.log10(flux), np.nan)
 
 
 def colours(galaxies: np.ndarray) -> np.ndarray:
@@ -68,13 +68,17 @@ def band(rest: np.ndarray, low: float, high: float) -> np.ndarray | None:
     return inside
 
 
-def halpha_ew(rest: np.ndarray, flux: np.ndarray) -> float:
+def detected(mean: float, variances: np.ndarray) -> bool:
+    return mean > MINIMUM_SIGNAL * np.sqrt(np.sum(variances)) / len(variances)
+
+
+def halpha_ew(rest: np.ndarray, flux: np.ndarray, ivar: np.ndarray) -> float:
     bands = [band(rest, *edges) for edges in HALPHA_BANDS]
     if any(inside is None for inside in bands):
         return np.nan
     blue, red, window = bands
     continuum = (np.median(flux[blue]) + np.median(flux[red])) / 2
-    if continuum <= 0:
+    if not detected(continuum, 1 / ivar[blue | red]):
         return np.nan
     return np.trapezoid(flux[window] / continuum - 1, rest[window])
 
@@ -83,9 +87,13 @@ def dn4000(rest: np.ndarray, flux: np.ndarray, ivar: np.ndarray) -> float:
     bands = [band(rest, *edges) for edges in BREAK_BANDS]
     if any(inside is None for inside in bands):
         return np.nan
-    blue, red = (np.mean(flux[inside] * rest[inside] ** 2) for inside in bands)
-    error = np.sqrt(np.sum(rest[bands[0]] ** 4 / ivar[bands[0]])) / bands[0].sum()
-    return red / blue if blue > MINIMUM_SIGNAL * error else np.nan
+    blue, red = (
+        (np.mean(flux[inside] * rest[inside] ** 2), rest[inside] ** 4 / ivar[inside])
+        for inside in bands
+    )
+    if not (detected(*blue) and detected(*red)):
+        return np.nan
+    return red[0] / blue[0]
 
 
 def spectral_properties(
@@ -102,7 +110,10 @@ def spectral_properties(
                     continue
                 wavelength, flux, ivar = samples(cells, row)
                 rest = wavelength / (1 + redshifts[position])
-                found[:, position] = halpha_ew(rest, flux), dn4000(rest, flux, ivar)
+                found[:, position] = (
+                    halpha_ew(rest, flux, ivar),
+                    dn4000(rest, flux, ivar),
+                )
     return dict(zip(SPECTRAL_PROPERTIES, found))
 
 
