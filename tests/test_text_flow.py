@@ -74,7 +74,7 @@ def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero
 def test_clouds_hold_each_galaxy_s_points_by_view_type_in_their_type_s_scale(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    for name, value in {"POINTS": 3, "RANK": 2, "EULER": 4}.items():
+    for name, value in {"TEXT_POINTS": 3, "TEXT_RANK": 2, "EULER": 4}.items():
         monkeypatch.setattr(text_flow, name, value)
 
     def network(x, t, condition, present, kind):
@@ -84,7 +84,9 @@ def test_clouds_hold_each_galaxy_s_points_by_view_type_in_their_type_s_scale(
     present = torch.ones(4, len(GRAM_NAMES))
     scale = torch.arange(1.0, len(VIEW_TYPES) + 1)[:, None].expand(-1, 2)
 
-    found = text_flow.clouds(network, conditions, present, scale)
+    start = torch.randn(4, len(VIEW_TYPES), 3, 2)
+
+    found = text_flow.clouds(network, start, conditions, present, scale)
 
     galaxy, kind = (found / scale[:, None] / 1000).round().unbind(-1)
     assert found.shape == (4, len(VIEW_TYPES), 3, 2)
@@ -121,7 +123,7 @@ def test_a_view_type_too_rare_for_its_own_basis_gets_its_mode_s() -> None:
 
     components = bases["components"][rare]
     torch.testing.assert_close(
-        components @ components.T, torch.eye(text_flow.RANK), atol=1e-4, rtol=0
+        components @ components.T, torch.eye(text_flow.TEXT_RANK), atol=1e-4, rtol=0
     )
     torch.testing.assert_close(
         bases["mean"][rare], embeddings[view_types == rare].mean(dim=0)
@@ -139,19 +141,19 @@ def test_training_draws_every_view_type_a_galaxy_has_equally_often(
 
 
 def test_the_log_density_of_a_linear_flow_follows_its_divergence() -> None:
-    network = text_flow.Flow(text_flow.CONDITION, 1)
+    network = text_flow.Flow(text_flow.TEXT_CONDITION, 1)
     rate = 0.3
     network.velocity = lambda x, context: rate * x
     network.context = lambda t, *conditions: torch.zeros(len(t), 1)
-    points = torch.randn(5, text_flow.CONDITION)
+    points = torch.randn(5, text_flow.TEXT_CONDITION)
 
     found = text_flow.log_density(network, points)
 
     start = points * (1 - rate / text_flow.EULER) ** text_flow.EULER
-    normal = -0.5 * (start**2).sum(-1) - 0.5 * text_flow.CONDITION * math.log(
+    normal = -0.5 * (start**2).sum(-1) - 0.5 * text_flow.TEXT_CONDITION * math.log(
         2 * math.pi
     )
-    torch.testing.assert_close(found, normal - rate * text_flow.CONDITION)
+    torch.testing.assert_close(found, normal - rate * text_flow.TEXT_CONDITION)
 
 
 def written_views(
@@ -232,14 +234,14 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
     monkeypatch.setattr(text_views, "generate_text_views", generate_text_views)
     monkeypatch.setattr(text_flow, "identification", identification)
     for name, value in {
-        "RANK": 3,
-        "CONDITION": 4,
+        "TEXT_RANK": 3,
+        "TEXT_CONDITION": 4,
         "HIDDEN": 8,
         "BATCH": 8,
         "CHUNK": len(VIEW_TYPES),
         "STEPS": 2,
         "PATIENCE": 2,
-        "POINTS": 2,
+        "TEXT_POINTS": 2,
         "EULER": 2,
         "KAPPAS": (1.0, 2.0, 3.0),
         "CAP": 10 * 2 * len(VIEW_TYPES),
@@ -261,3 +263,55 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
     assert stored["projection"].shape == (len(GRAM_NAMES) * 2, 4)
     assert all(torch.equal(flow[key], snapshots[1][key]) for key in flow)
     assert not all(torch.equal(flow[key], snapshots[3][key]) for key in flow)
+
+
+def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name, value in {
+        "TEXT_RANK": 3,
+        "TEXT_CONDITION": 4,
+        "TEXT_POINTS": 2,
+        "HIDDEN": 8,
+        "EULER": 2,
+        "CLOUD_GALAXIES": 2,
+    }.items():
+        monkeypatch.setattr(text_flow, name, value)
+    for module in (text_flow, embeddings):
+        monkeypatch.setattr(
+            module, "artifact", lambda role: tmp_path / f"{role}.{ARTIFACTS[role]}"
+        )
+    rng = np.random.default_rng(0)
+    kinds = len(VIEW_TYPES)
+    width = len(GRAM_NAMES) * 2
+    components = np.linalg.qr(rng.standard_normal((kinds, GEMMA_DIM, 3)))[0]
+    np.savez(
+        tmp_path / "text_bases.npz",
+        mean=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
+        components=components.transpose(0, 2, 1).astype(np.float32),
+        centre=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
+        scale=rng.uniform(0.5, 1.5, (kinds, 3)).astype(np.float32),
+        offset=rng.standard_normal(width).astype(np.float32),
+        projection=rng.standard_normal((width, 4)).astype(np.float32),
+        kappa=np.float32(15),
+    )
+    torch.save(text_flow.Velocity().state_dict(), tmp_path / "text_flow.pt")
+    np.save(
+        tmp_path / "joint_embedding.npy",
+        rng.standard_normal((5, width)).astype(np.float32),
+    )
+    queries = rng.standard_normal((4, GEMMA_DIM)).astype(np.float32)
+    monkeypatch.setattr(text_flow, "generic_queries", lambda: ["a"] * 4)
+    monkeypatch.setattr(text_flow, "embed_queries", lambda _: queries)
+
+    text_flow.generate_text_clouds()
+
+    stored = np.load(tmp_path / "text_clouds.npy")
+    network, bases = text_flow.stored_flow()
+    joint = embeddings.loaded("joint_embedding", torch.float32)
+    alone = text_flow.galaxy_clouds(network, bases, joint, torch.tensor([3]), 42)
+    assert stored.shape == (kinds, 5, 2, 3)
+    np.testing.assert_array_equal(stored[:, 3], alone[0].numpy().astype(np.float16))
+    np.testing.assert_allclose(
+        np.load(tmp_path / "text_query_mean.npy"), queries.mean(axis=0)
+    )

@@ -26,6 +26,7 @@ from app.config import (
     PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
+    SEARCH_RANK,
     SPECTRUM_GRID,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
@@ -33,6 +34,9 @@ from app.config import (
     STORE_COLUMNS,
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
+    TEXT_CONDITION,
+    TEXT_POINTS,
+    TEXT_RANK,
     TEXT_SURVEYS,
     TEXT_VIEWS,
     TOKEN_EMBEDDING_RANK,
@@ -61,7 +65,7 @@ from app.pql import (
     stored,
 )
 from app.search import source, templates, tokens
-from app.text_search import aion_gemma_space
+from app.text_search import aion_gemma_space, text_index
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_IMAGE_TOKENS + 12,
@@ -239,6 +243,31 @@ def _text_views(rng: np.random.Generator, galaxies: int) -> None:
     )
 
 
+def _text_index(rng: np.random.Generator, galaxies: int) -> None:
+    kinds = len(VIEW_TYPES)
+    width = len(GRAM_NAMES) * SEARCH_RANK
+    columns = np.linalg.qr(rng.standard_normal((kinds, GEMMA_DIM, TEXT_RANK)))[0]
+    np.savez(
+        artifact("text_bases"),
+        mean=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
+        components=columns.transpose(0, 2, 1).astype(np.float32),
+        centre=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32) / 16,
+        scale=rng.uniform(0.5, 1.5, (kinds, TEXT_RANK)).astype(np.float32),
+        offset=rng.standard_normal(width).astype(np.float32),
+        projection=rng.standard_normal((width, TEXT_CONDITION)).astype(np.float32),
+        kappa=np.float32(15),
+    )
+    np.save(
+        artifact("text_clouds"),
+        rng.standard_normal((kinds, galaxies, TEXT_POINTS, TEXT_RANK)).astype(
+            np.float16
+        ),
+    )
+    np.save(
+        artifact("text_query_mean"), rng.standard_normal(GEMMA_DIM).astype(np.float32)
+    )
+
+
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
@@ -284,6 +313,7 @@ def forget() -> None:
         tokens,
         templates,
         aion_gemma_space,
+        text_index,
         predictions,
         prediction_basis,
         basis,
@@ -363,6 +393,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     _token_embeddings(rng, galaxies)
     generate_token_search()
     _text_views(rng, galaxies)
+    _text_index(rng, galaxies)
 
     forget()
     return target

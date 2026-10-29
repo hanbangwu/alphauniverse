@@ -24,6 +24,9 @@ from .config import (
     PARTS_PER_ROUND,
     PROTOTYPE_HELD_OUT,
     SEED,
+    TEXT_CONDITION,
+    TEXT_POINTS,
+    TEXT_RANK,
     TOKEN_GRAMS,
     VIEW_TYPES,
     VIEWS_PER_PART,
@@ -33,9 +36,8 @@ from .config import (
     artifact,
     device,
 )
+from .text_search import embed_queries, generic_queries, point_lengths
 
-RANK = 32
-CONDITION = 64
 HIDDEN = 512
 KIND_WIDTH = 16
 FREQUENCIES = 8
@@ -49,13 +51,13 @@ WEIGHT_DECAY = 1e-3
 DECAY = 0.999
 PATIENCE = 10
 IMPROVEMENT = 0.01
-POINTS = 16
 EULER = 32
 KAPPAS = (5.0, 10.0, 15.0, 20.0, 30.0, 40.0)
 BETAS = (0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0)
 SHARED_BASIS = 128
 CAP = 1_000_000
 PAIRS = 8192
+CLOUD_GALAXIES = 1024
 
 Bases = dict[str, torch.Tensor]
 
@@ -101,7 +103,7 @@ class Flow(nn.Module):
 
 class Velocity(Flow):
     def __init__(self) -> None:
-        super().__init__(RANK, CONDITION + len(GRAM_NAMES) + KIND_WIDTH)
+        super().__init__(TEXT_RANK, TEXT_CONDITION + len(GRAM_NAMES) + KIND_WIDTH)
         self.kind = nn.Embedding(len(VIEW_TYPES), KIND_WIDTH)
 
     def context(
@@ -154,7 +156,7 @@ def fitted_bases(view_types: torch.Tensor, embeddings: torch.Tensor) -> Bases:
                 other for other, view in enumerate(VIEW_TYPES) if view[1] == name
             ]
             fitted = np.isin(kinds, siblings)
-        pca = PCA(RANK, random_state=SEED).fit(found[fitted])
+        pca = PCA(TEXT_RANK, random_state=SEED).fit(found[fitted])
         components.append(pca.components_)
         centre.append(pca.mean_)
         scale.append(pca.transform(found[fitted]).std(axis=0))
@@ -167,7 +169,7 @@ def fitted_bases(view_types: torch.Tensor, embeddings: torch.Tensor) -> Bases:
 
 
 def whitening(rows: torch.Tensor) -> Bases:
-    pca = PCA(CONDITION, whiten=True, random_state=SEED).fit(rows.cpu().numpy())
+    pca = PCA(TEXT_CONDITION, whiten=True, random_state=SEED).fit(rows.cpu().numpy())
     projection = pca.components_.T / np.sqrt(pca.explained_variance_)
     return {
         "offset": torch.from_numpy(pca.mean_).to(device()),
@@ -178,7 +180,7 @@ def whitening(rows: torch.Tensor) -> Bases:
 def coefficients(
     bases: Bases, view_types: torch.Tensor, directions: torch.Tensor
 ) -> torch.Tensor:
-    found = torch.empty(len(directions), RANK, device=directions.device)
+    found = torch.empty(len(directions), TEXT_RANK, device=directions.device)
     for kind in view_types.unique():
         chosen = view_types == kind
         centred = directions[chosen] - bases["centre"][kind]
@@ -258,21 +260,21 @@ def stepped(
 @torch.no_grad()
 def clouds(
     network: Velocity,
+    start: torch.Tensor,
     conditions: torch.Tensor,
     present: torch.Tensor,
     scale: torch.Tensor,
 ) -> torch.Tensor:
     kinds = len(VIEW_TYPES)
-    generator = torch.Generator(conditions.device).manual_seed(SEED)
-    kind = torch.arange(kinds, device=conditions.device).repeat_interleave(POINTS)
+    kind = torch.arange(kinds, device=start.device).repeat_interleave(TEXT_POINTS)
     kind = kind.repeat(len(conditions))
-    conditions = conditions.repeat_interleave(kinds * POINTS, dim=0)
-    present = present.repeat_interleave(kinds * POINTS, dim=0)
-    x = torch.randn(len(kind), RANK, generator=generator, device=conditions.device)
+    conditions = conditions.repeat_interleave(kinds * TEXT_POINTS, dim=0)
+    present = present.repeat_interleave(kinds * TEXT_POINTS, dim=0)
+    x = start.reshape(-1, TEXT_RANK)
     for step in range(EULER):
         t = torch.full((len(x), 1), step / EULER, device=x.device)
         x = x + network(x, t, conditions, present, kind) / EULER
-    return x.view(-1, kinds, POINTS, RANK) * scale[:, None]
+    return x.view(-1, kinds, TEXT_POINTS, TEXT_RANK) * scale[:, None]
 
 
 def cosines(
@@ -281,9 +283,9 @@ def cosines(
     components: torch.Tensor,
     centre: torch.Tensor,
 ) -> torch.Tensor:
-    squared = (points**2).sum(-1) + 2 * points @ (components @ centre) + centre @ centre
     along = torch.einsum("gpr,vr->vgp", points, directions @ components.T)
-    return (along + (directions @ centre)[:, None, None]) / squared.sqrt()
+    lengths = point_lengths(points, components, centre)
+    return (along + (directions @ centre)[:, None, None]) / lengths
 
 
 def cloud_scores(clouds: torch.Tensor, held: HeldOut, bases: Bases) -> torch.Tensor:
@@ -316,8 +318,16 @@ def identification(
     network: Velocity, held: HeldOut, bases: Bases, present: torch.Tensor
 ) -> torch.Tensor:
     present = present.expand(len(held.galaxies), -1)
+    start = torch.randn(
+        len(held.galaxies),
+        len(VIEW_TYPES),
+        TEXT_POINTS,
+        TEXT_RANK,
+        generator=torch.Generator(device()).manual_seed(SEED),
+        device=device(),
+    )
     found = clouds(
-        network, condition(held.rows, present, bases), present, bases["scale"]
+        network, start, condition(held.rows, present, bases), present, bases["scale"]
     )
     return gains(cloud_scores(found, held, bases), held)
 
@@ -388,7 +398,9 @@ def reverse_trained(
     contexts: torch.Tensor,
     targets: torch.Tensor,
 ) -> Flow:
-    network, average, optimiser = trainable(partial(Flow, CONDITION, GEMMA_DIM + 1))
+    network, average, optimiser = trainable(
+        partial(Flow, TEXT_CONDITION, GEMMA_DIM + 1)
+    )
 
     def inputs(batch: torch.Tensor) -> tuple[torch.Tensor, ...]:
         present = (torch.rand(BATCH, 1, device=device()) > DROPPED).float()
@@ -477,7 +489,7 @@ def train_text_flow() -> None:
     bases = fitted_bases(*first_round()) | whitening(joint[text_views.training()])
     held = evaluated(joint, bases)
     everything = torch.ones(1, len(GRAM_NAMES), device=device())
-    targets = torch.empty(CAP, RANK, device=device())
+    targets = torch.empty(CAP, TEXT_RANK, device=device())
     owners = torch.empty(CAP, dtype=torch.long, device=device())
     kinds = torch.empty(CAP, dtype=torch.long, device=device())
     contexts = torch.empty(CAP, GEMMA_DIM, dtype=torch.float16, device=device())
@@ -496,8 +508,8 @@ def train_text_flow() -> None:
         group=DATASET_REVISION,
         mode=WANDB_MODE,
         config={
-            "rank": RANK,
-            "condition": CONDITION,
+            "rank": TEXT_RANK,
+            "condition": TEXT_CONDITION,
             "hidden": HIDDEN,
             "batch": BATCH,
             "chunk": CHUNK,
@@ -506,7 +518,7 @@ def train_text_flow() -> None:
             "weight_decay": WEIGHT_DECAY,
             "masked": MASKED,
             "dropped": DROPPED,
-            "points": POINTS,
+            "points": TEXT_POINTS,
             "euler": EULER,
             "seed": SEED,
         },
@@ -558,3 +570,59 @@ def train_text_flow() -> None:
         **{name: value.cpu().numpy() for name, value in bases.items()},
         kappa=np.float32(found["kappa"]),
     )
+
+
+def noise(galaxies: torch.Tensor, seed: int) -> torch.Tensor:
+    shape = (len(VIEW_TYPES), TEXT_POINTS, TEXT_RANK)
+    return torch.from_numpy(
+        np.stack(
+            [
+                np.random.default_rng([seed, galaxy]).standard_normal(
+                    shape, dtype=np.float32
+                )
+                for galaxy in galaxies.tolist()
+            ]
+        )
+    ).to(device())
+
+
+def stored_flow() -> tuple[Velocity, Bases]:
+    with np.load(artifact("text_bases")) as stored:
+        bases = {
+            name: torch.from_numpy(stored[name]).to(device())
+            for name in stored.files
+            if name != "kappa"
+        }
+    network = Velocity().to(device())
+    network.load_state_dict(torch.load(artifact("text_flow"), map_location=device()))
+    return network, bases
+
+
+def galaxy_clouds(
+    network: Velocity,
+    bases: Bases,
+    joint: torch.Tensor,
+    galaxies: torch.Tensor,
+    seed: int,
+) -> torch.Tensor:
+    present = torch.ones(len(galaxies), len(GRAM_NAMES), device=device())
+    return clouds(
+        network,
+        noise(galaxies, seed),
+        condition(joint[galaxies], present, bases),
+        present,
+        bases["scale"],
+    )
+
+
+def generate_text_clouds() -> None:
+    network, bases = stored_flow()
+    joint = embeddings.loaded("joint_embedding", torch.float32)
+    points = np.empty(
+        (len(VIEW_TYPES), len(joint), TEXT_POINTS, TEXT_RANK), dtype=np.float16
+    )
+    for galaxies in torch.arange(len(joint)).split(CLOUD_GALAXIES):
+        found = galaxy_clouds(network, bases, joint, galaxies.to(device()), SEED)
+        points[:, galaxies.numpy()] = found.transpose(0, 1).cpu().numpy()
+    np.save(artifact("text_clouds"), points)
+    np.save(artifact("text_query_mean"), embed_queries(generic_queries()).mean(axis=0))

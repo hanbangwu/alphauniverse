@@ -1,6 +1,5 @@
 import json
 from datetime import UTC, datetime
-from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +21,7 @@ from app.config import (
 )
 from app.observations import measured_redshifts
 from app.properties import provabgs
-from app.text_search import aion_gemma_space, embed_queries
+from app.text_search import aion_gemma_space, embed_queries, generic_queries
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -57,71 +56,11 @@ LADDERS = {
         "a spectrum with strong H-alpha and [OIII] emission lines at redshift 0.1",
     ),
 }
-FRAMES = ("{}", "an image of {}", "the spectrum of {}", "the photometry of {}")
-ADJECTIVES = (
-    "",
-    "bright",
-    "faint",
-    "red",
-    "blue",
-    "massive",
-    "small",
-    "large",
-    "nearby",
-    "distant",
-    "dusty",
-    "star-forming",
-    "quiescent",
-    "compact",
-)
-SUBJECTS = (
-    "galaxy",
-    "spiral galaxy",
-    "elliptical galaxy",
-    "disk galaxy",
-    "irregular galaxy",
-    "dwarf galaxy",
-    "lenticular galaxy",
-    "barred spiral galaxy",
-    "pair of merging galaxies",
-    "edge-on galaxy",
-    "face-on spiral galaxy",
-    "starburst galaxy",
-    "quasar host galaxy",
-    "cluster galaxy",
-    "low surface brightness galaxy",
-)
-SUFFIXES = (
-    "",
-    " with spiral arms",
-    " with a bright bulge",
-    " with a central bar",
-    " with tidal tails",
-    " with strong emission lines",
-    " with an old stellar population",
-    " at high redshift",
-    " at low redshift",
-    " with a dust lane",
-    " with a close companion",
-    " with an active nucleus",
-)
 KAPPA = 15
 BREADTH_KAPPAS = (KAPPA, 20)
 TOP = (10, 100)
 RESAMPLES = 1000
 REPORT = Path("docs/benchmarks/text_search_quality.json")
-
-
-def generic_queries() -> list[str]:
-    phrases = (
-        f"{adjective} {subject}".strip()
-        for adjective, subject in product(ADJECTIVES, SUBJECTS)
-    )
-    nouns = [("an " if phrase[0] in "aeiou" else "a ") + phrase for phrase in phrases]
-    return [
-        frame.format(noun + suffix)
-        for frame, noun, suffix in product(FRAMES, nouns, SUFFIXES)
-    ]
 
 
 def points(
