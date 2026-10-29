@@ -22,6 +22,9 @@ Glossary
    typical depth
       The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
 
+   axis ratio
+      The ratio of a galaxy's minor to major axis, :math:`(1 - e) / (1 + e)` for the Legacy Survey model's ellipticity :math:`e = \sqrt{e_1^2 + e_2^2}`: near 1 for a round or face-on galaxy, small for an edge-on disk. See :doc:`reference`.
+
    breadth
       How widely a text query spreads over :math:`N` galaxies: :math:`\exp(H)/N`, with :math:`H` the entropy of its probabilities over them. See :doc:`benchmarks`.
 
@@ -40,17 +43,26 @@ Glossary
    cosine similarity
       The cosine of the angle between two vectors: 1 when they point the same way, 0 when they are perpendicular, −1 when they point opposite ways. It ignores their lengths.
 
+   Dn4000
+      The strength of a spectrum's 4000 Å break: the mean flux per unit frequency from 4,000 to 4,100 Å divided by that from 3,850 to 3,950 Å, in the rest frame :cite:p:`balogh1999`. Older stellar populations have larger breaks. See :doc:`reference`.
+
    embedding
       The vector of 768 numbers AION's encoder returns for a :term:`token`. The encoded embedding depends on all of the galaxy's tokens; the codebook embedding depends only on the token's :term:`code`.
 
    EmbeddingGemma
       Google's model that places images and text in one 768-dimensional space, so that a picture and a description of it lie close together. Text search uses it. See :doc:`methods/text-search`.
 
+   equivalent width
+      A spectral line's flux divided by the continuum's flux density beside it, :math:`\int (F_\lambda / F_c - 1)\, d\lambda` over the line, in Å. ``properties`` takes Hα's in the rest frame, positive for emission. See :doc:`reference`.
+
    foundation model
       A large network trained once on broad data and then used unchanged for many tasks.
 
    Gram matrix
       A :term:`mode`'s search scores between every pair of galaxies: entry :math:`(q, g)` scores galaxy :math:`g` against query :math:`q` with every :term:`slot` of the mode selected. See :doc:`reference`.
+
+   half-light radius
+      The radius enclosing half of a galaxy's light: the Legacy Survey model's ``SHAPE_R``, in arcseconds.
 
    held out
       Left out of a network's training and used only to test it.

@@ -67,19 +67,39 @@ export const PROPERTIES = {
   mass: { label: 'Stellar mass' },
   sfr: { label: 'SFR' },
   ssfr: { label: 'sSFR' },
-  g_r: { label: 'g − r' }
+  g_r: { label: 'g − r' },
+  radius: { label: 'Half-light radius' },
+  r_magnitude: { label: 'r magnitude' },
+  axis_ratio: { label: 'Axis ratio' },
+  halpha_ew: { label: 'Hα equivalent width' },
+  dn4000: { label: 'Dn4000' }
 } satisfies Labels<string>
 
 export type Property = keyof typeof PROPERTIES
 
-export const PREDICTABLE: readonly Property[] = ['redshift', 'mass', 'sfr', 'ssfr']
+export const PREDICTABLE: readonly Property[] = [
+  'redshift',
+  'mass',
+  'sfr',
+  'ssfr',
+  'radius',
+  'r_magnitude',
+  'axis_ratio',
+  'halpha_ew',
+  'dn4000'
+]
 
 export const UNITS: Record<Property, string> = {
   redshift: 'z',
   mass: 'log M☉',
   sfr: 'log M☉ yr⁻¹',
   ssfr: 'log yr⁻¹',
-  g_r: 'mag'
+  g_r: 'mag',
+  radius: 'arcsec',
+  r_magnitude: 'mag',
+  axis_ratio: 'b/a',
+  halpha_ew: 'Å',
+  dn4000: 'ratio'
 }
 
 export const SOURCES = {

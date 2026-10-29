@@ -345,7 +345,10 @@ PREDICTIONS = pa.schema(
 )
 
 
-PROBED = ("mass", "sfr", "ssfr")
+PROVABGS_PROPERTIES = ("mass", "sfr", "ssfr")
+LS_PROPERTIES = ("radius", "r_magnitude", "axis_ratio")
+SPECTRAL_PROPERTIES = ("halpha_ew", "dn4000")
+PROBED = (*PROVABGS_PROPERTIES, *LS_PROPERTIES, *SPECTRAL_PROPERTIES)
 PROPERTIES = pa.schema(
     [
         pa.field("galaxy", pa.int32(), nullable=False),
