@@ -140,6 +140,7 @@ N_MORPHOLOGIES = 10
 GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
 TextModality = Literal["image", "spectrum"]
+PLOT_INCHES = (16.8, 3.84)
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
 Download = Literal["encoded", "codebook", "tokens", "properties"]
@@ -176,6 +177,15 @@ PAIRS = pa.schema(
 )
 
 
+TEXT_VIEWS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("view_type", pa.int8()),
+        pa.field("round", pa.int16()),
+        pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
+    ]
+)
+
 TOP_CODES = 64
 KEPT = 16
 PROBABILITY_FLOOR = float(np.finfo(np.float32).tiny)
@@ -205,6 +215,18 @@ OBSERVATIONS = {
 }
 
 MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+VIEW_KINDS = ("observed", "template", "sample")
+VIEW_COMBINATIONS = {
+    "images": tuple(IMAGE_MODES),
+    "spectra": tuple(SPECTRUM_MODES),
+    "catalogues": tuple(TABLE_MODES),
+    "image_and_spectrum": ("ls_image", "desi_spectrum"),
+    "everything": MODES,
+}
+VIEW_TYPES = (
+    *((kind, mode) for mode in MODES for kind in VIEW_KINDS),
+    *(("combination", name) for name in VIEW_COMBINATIONS),
+)
 ModeName = Literal[*MODES]
 TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
@@ -229,6 +251,7 @@ ARTIFACTS: dict[str, str] = {
     **{f"pairs_{modality}": "parquet" for modality in TEXT_SURVEYS},
     "alignment": "pt",
     "aion_gemma_space": "npz",
+    "text_views": "parquet",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},

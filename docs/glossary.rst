@@ -91,5 +91,8 @@ Glossary
    transformer
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
 
+   view
+      One input to :term:`EmbeddingGemma` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`reference`.
+
    whole-mode search
       Search over every slot of each chosen :term:`mode`, ranked from the modes' :term:`token embeddings <token embedding>`. See :doc:`methods/similarity-search`.

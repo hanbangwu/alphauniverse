@@ -7,11 +7,12 @@ import pytest
 import torch
 from aion.codecs.preprocessing.image import RescaleToLegacySurvey
 
-from app import pql, predictions, templates
+from app import pql, predictions, search, templates
 from app.config import (
     BANDS,
     IMAGE_MODES,
     IMAGE_VOCABULARY,
+    MODES,
     N_IMAGE_TOKENS,
     REDSHIFT,
     SPECTRUM_MODES,
@@ -203,3 +204,49 @@ def test_widths_are_the_predicted_spread_in_every_mode(
             rtol=1e-5,
             err_msg=mode,
         )
+
+
+class Fixed:
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def random(self, shape: tuple[int, ...]) -> np.ndarray:
+        return np.full(shape, self.value)
+
+
+def test_draws_at_either_end_of_the_unit_interval_skip_entries_of_zero_probability() -> (
+    None
+):
+    probabilities = np.array([[0.0, 0.5, 0.0, 0.5], [0.3, 0.7, 0.0, 0.0]], np.float32)
+
+    for value in (0.0, np.nextafter(1.0, 0.0)):
+        found = templates.drawn(torch.from_numpy(probabilities), Fixed(value))
+
+        assert probabilities[np.arange(len(probabilities)), found.numpy()].all()
+
+
+@pytest.mark.parametrize("survey", IMAGE_MODES.values())
+def test_image_codes_drawn_from_the_tail_are_never_a_cell_s_stored_codes(
+    tree: Path, monkeypatch: pytest.MonkeyPatch, survey: str
+) -> None:
+    rows = pql.row(GALAXY)
+    codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
+    tail_only = (codes, 0 * probabilities, np.full_like(spread, 1 / IMAGE_VOCABULARY))
+    monkeypatch.setattr(pql, "query_image_tokens", lambda *_: tail_only)
+
+    found = templates.sampled_image_codes(rows, survey, np.random.default_rng(0))
+
+    found = found.cpu().numpy()
+    assert not (found[..., None] == codes).any()
+    assert found.min() >= 0 and found.max() < IMAGE_VOCABULARY
+    assert len(np.unique(found)) > codes.shape[-1]
+
+
+def test_a_sample_has_the_shape_of_the_mode_s_template(
+    tree: Path, random_weights: None
+) -> None:
+    rows = pql.predictions().slice(GALAXY, 2).to_batches()[0]
+    for mode in MODES:
+        found = templates.sampled(rows, mode, np.random.default_rng(0))
+
+        assert found.shape == search.templates(mode)[GALAXY : GALAXY + 2].shape, mode

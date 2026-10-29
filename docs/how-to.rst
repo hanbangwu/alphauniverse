@@ -43,6 +43,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_pairs
    uv run modal run modal_app.py::generate_alignment
    uv run modal run modal_app.py::generate_aion_gemma_space
+   uv run modal run modal_app.py::generate_text_views --parts 10
 
 A failed job leaves its artifacts incomplete; rerun it.
 

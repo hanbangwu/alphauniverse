@@ -23,6 +23,7 @@ from .config import (
     REDSHIFT,
     SPECTRUM_MODES,
     TABLE_MODES,
+    TOP_CODES,
     VOCABULARY,
     artifact,
     device,
@@ -117,11 +118,57 @@ def bin_values(mode: str) -> np.ndarray:
 
 
 def quantiles(
-    probabilities: np.ndarray, values: np.ndarray, share: float
+    probabilities: np.ndarray, values: np.ndarray, share: float | np.ndarray
 ) -> np.ndarray:
     cumulative = np.where(np.isnan(values), 0, probabilities).cumsum(axis=-1)
     index = (cumulative < share * cumulative[..., -1:]).sum(axis=-1)
     return values[np.arange(len(values)), index]
+
+
+def drawn(weights: torch.Tensor, rng: np.random.Generator) -> torch.Tensor:
+    cumulative = weights.double().cumsum(-1)
+    target = torch.from_numpy(rng.random(weights.shape[:-1])).to(cumulative)
+    return torch.searchsorted(
+        cumulative / cumulative[..., -1:], target[..., None], right=True
+    )[..., 0]
+
+
+def sampled_image_codes(
+    rows: pa.RecordBatch, survey: str, rng: np.random.Generator
+) -> torch.Tensor:
+    codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
+    codes = torch.from_numpy(codes.astype(np.int64)).to(device())
+    tail = spread[..., None] * (IMAGE_VOCABULARY - TOP_CODES)
+    chosen = drawn(
+        torch.from_numpy(np.concatenate((probabilities, tail), axis=-1)).to(device()),
+        rng,
+    )
+    rank = torch.from_numpy(
+        rng.integers(IMAGE_VOCABULARY - TOP_CODES, size=tuple(chosen.shape))
+    ).to(device())
+    shifted = codes.sort(dim=-1).values - torch.arange(TOP_CODES, device=device())
+    beyond = rank + (shifted <= rank[..., None]).sum(dim=-1)
+    return torch.cat((codes, beyond[..., None]), dim=-1).gather(-1, chosen[..., None])[
+        ..., 0
+    ]
+
+
+@torch.inference_mode()
+def sampled(rows: pa.RecordBatch, mode: str, rng: np.random.Generator) -> np.ndarray:
+    if mode in TABLE_MODES:
+        probabilities = pql.table_value_probabilities(rows, mode)
+        share = rng.random((*probabilities.shape[:-1], 1))
+        return quantiles(probabilities, bin_values(mode), share)
+    codec = decoder(mode)
+    if mode in IMAGE_MODES:
+        codes = sampled_image_codes(rows, IMAGE_MODES[mode], rng)
+        return decoded_images(codec, codec.quantizer.decode(codes), IMAGE_MODES[mode])
+    survey = SPECTRUM_MODES[mode]
+    coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
+    weights = torch.from_numpy(pql.distributions(mode, coefficients)).to(device())
+    return decoded_spectra(
+        codec, codec.quantizer.decode(drawn(weights.clamp(min=0), rng))
+    )
 
 
 def templates(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
