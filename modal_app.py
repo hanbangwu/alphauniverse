@@ -284,7 +284,7 @@ def train_text_flow() -> None:
 
 @app.function(
     image=build_image,
-    gpu="L4",
+    gpu="L40S",
     cpu=4,
     memory=(16 * 1024, 32 * 1024),
     timeout=1 * 60 * 60,
