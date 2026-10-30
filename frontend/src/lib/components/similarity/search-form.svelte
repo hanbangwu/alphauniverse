@@ -26,7 +26,7 @@
     Whole modes
   </label>
   {#if !view.wholeModes.value}
-    <Tabs.Root bind:value={similarity.layer}>
+    <Tabs.Root bind:value={similarity.layer.value}>
       <Tabs.List aria-label="Query map">
         <Tabs.Trigger value="galaxy">This galaxy</Tabs.Trigger>
         <Tabs.Trigger value="population">Population</Tabs.Trigger>

@@ -4,13 +4,15 @@
   import { Spinner } from '$lib/components/ui/spinner'
   import { textSearchQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
+  import { Field } from '$lib/state/field.svelte'
+  import { DEFAULTS, stored } from '$lib/state/params.svelte'
   import TextSearchResult from './text-search-result.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
-  let draft = $state('')
-  let submitted = $state<string | null>(null)
+  const submitted = new Field(DEFAULTS.text, stored('text'))
+  let draft = $state(submitted.value ?? '')
 
-  const results = createQuery(() => textSearchQuery(submitted))
+  const results = createQuery(() => textSearchQuery(submitted.value))
 </script>
 
 <div class="mx-auto flex max-w-2xl flex-col gap-4 p-4">
@@ -18,7 +20,7 @@
     class="flex items-center gap-2"
     onsubmit={(event) => {
       event.preventDefault()
-      submitted = draft.trim()
+      submitted.value = draft.trim()
     }}
   >
     <Input bind:value={draft} maxlength={500} placeholder="Describe a galaxy" />

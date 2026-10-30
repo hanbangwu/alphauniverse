@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import GalaxyTooltip from './galaxy-tooltip.svelte'
   import type { DataPoint, Point, Rectangle } from 'embedding-atlas'
-  import { mount, unmount } from 'svelte'
+  import { mount, unmount, untrack } from 'svelte'
 
   interface TooltipProps {
     tooltip: DataPoint
@@ -41,6 +41,8 @@
   import { errorMessage } from '$lib/errors'
   import { PROPERTIES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
+  import { Field } from '$lib/state/field.svelte'
+  import { DEFAULTS, stored } from '$lib/state/params.svelte'
   import MapSelection from './map-selection.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
@@ -61,10 +63,15 @@
   )
   const coloured = $derived(colouring.data ?? null)
 
-  let drawn = $state<{ points: string; value: Rectangle | Point[] } | null>(null)
-  const region = $derived(drawn && drawn.points === loaded ? drawn.value : null)
+  const region = new Field(DEFAULTS.region, stored('region'))
+  let drawnOn = view.pointSet.value
+  $effect(() => {
+    if (view.pointSet.value === drawnOn) return
+    drawnOn = view.pointSet.value
+    untrack(() => region.reset())
+  })
   const selected = createQuery(() =>
-    regionQuery(mosaic, coloured?.table ?? null, region, filters.range.value)
+    regionQuery(mosaic, coloured?.table ?? null, region.value, filters.range.value)
   )
   let settling: ReturnType<typeof setTimeout> | undefined
 
@@ -101,13 +108,10 @@
         additionalFields={{ value: 'value', width: 'width', predicted: 'predicted' }}
         identifier="galaxy"
         filter={mosaic.filter}
-        rangeSelectionValue={region}
+        rangeSelectionValue={region.value}
         onRangeSelection={(value: Rectangle | Point[] | null) => {
           clearTimeout(settling)
-          settling = setTimeout(
-            () => (drawn = value && loaded ? { points: loaded, value } : null),
-            200
-          )
+          settling = setTimeout(() => (region.value = value), 200)
         }}
         {tooltip}
         selection={highlighted}
@@ -128,14 +132,14 @@
         }}
       />
     {/key}
-    {#if region && selected.isError}
+    {#if region.value && selected.isError}
       <p
         role="alert"
         class="absolute top-3 right-[calc(var(--right-panel)+0.75rem)] text-xs text-destructive"
       >
         {errorMessage(selected.error)}
       </p>
-    {:else if region && selected.data}
+    {:else if region.value && selected.data}
       <MapSelection galaxies={selected.data} loading={selected.isFetching} />
     {/if}
   {:else if shown.isError || colouring.isError}

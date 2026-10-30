@@ -41,6 +41,11 @@ Search by text
 
 Describe a galaxy in a sentence. The site returns the 32 closest matches by image or by spectrum, so a galaxy can appear twice (:doc:`methods/text-search`).
 
+Share a view
+------------
+
+The address in the browser records what you see: the map's layout, colour, range and selection, the open galaxy, the last search and its display settings, and the text search. Copy it to return to the same view or to send it to someone.
+
 Download the data
 -----------------
 

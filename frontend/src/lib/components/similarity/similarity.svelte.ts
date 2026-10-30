@@ -16,7 +16,9 @@ import { errorMessage } from '$lib/errors'
 import { must } from '$lib/invariant'
 import { MODES, OBSERVATIONS, SIMILARITY } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
+import { Field } from '$lib/state/field.svelte'
 import { DECIMALS, type Threshold } from '$lib/state/mask.svelte'
+import { DEFAULTS, type Values, stored } from '$lib/state/params.svelte'
 import { type CreateQueryResult, createQuery } from '@tanstack/svelte-query'
 import { Context } from 'runed'
 
@@ -33,7 +35,7 @@ interface Layered extends Scale {
   values: Float32Array
 }
 
-export type Layer = 'galaxy' | 'population'
+export type Layer = Values['layer']
 
 function scale(domain: Extent): Scale {
   return { domain, heat: continuous(domain) }
@@ -85,7 +87,7 @@ export class Similarity {
   readonly #saliency: CreateQueryResult<SaliencyResult>
   readonly #selected: boolean
 
-  layer: Layer = $state('galaxy')
+  readonly layer: Field<Layer>
 
   readonly draft: SearchQuery | null
 
@@ -103,6 +105,7 @@ export class Similarity {
   constructor(galaxy: number) {
     const { view, search } = this.#app
     this.galaxy = galaxy
+    this.layer = new Field(DEFAULTS.layer, stored('layer'))
     this.grid = this.#app.meta.grid
 
     const whole = $derived(view.wholeModes.value)
@@ -138,7 +141,7 @@ export class Similarity {
     )
     this.#result = createQuery(() => similarityQuery(view.searched.value))
     this.#coverage = createQuery(() => coverageQuery(galaxy))
-    const own = $derived(this.layer === 'galaxy')
+    const own = $derived(this.layer.value === 'galaxy')
     this.#saliency = createQuery(() => saliencyQuery(own ? null : selection))
     const saliency = $derived(own || !selection ? null : (this.#saliency.data ?? null))
     this.#layers = byMode(
@@ -203,7 +206,7 @@ export class Similarity {
   }
 
   get saliencyError(): string | null {
-    if (this.layer === 'galaxy') return null
+    if (this.layer.value === 'galaxy') return null
     return this.#saliency.isError ? errorMessage(this.#saliency.error) : null
   }
 
@@ -257,7 +260,7 @@ export class Similarity {
   }
 
   get layerStale(): boolean {
-    return this.layer !== 'galaxy' && this.#selected && this.#saliency.isPlaceholderData
+    return this.layer.value !== 'galaxy' && this.#selected && this.#saliency.isPlaceholderData
   }
 
   get stale(): boolean {
@@ -295,7 +298,7 @@ export class Similarity {
   readonly correlation: Caption = (value) => `partial correlation ${value.toFixed(DECIMALS)}`
 
   get layerCaption(): Caption {
-    return this.layer === 'galaxy' ? this.cosine : this.correlation
+    return this.layer.value === 'galaxy' ? this.cosine : this.correlation
   }
 
   readonly caption: Caption = (value) => `token ${value}`

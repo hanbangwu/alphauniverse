@@ -14,6 +14,7 @@ alphaUniverse wraps [AION](https://arxiv.org/abs/2510.17960), Polymathic's found
 - **AION predictions**: a switch shows what AION predicts for any galaxy in every survey, observed or not: images in place of the observed ones, spectra over them and catalogue values beside them.
 - **Similarity search**: pick image regions, wavelengths and catalogue values of a galaxy in any of its surveys, with the pointer or the keyboard or by dragging the mouse across many at once; galaxies rank by predictive query likelihood over AION's predictions, at the same place or any position, or over whole modes with each mode's contribution, with maps of where they agree that a threshold can mask; the map circles the matches the range filter shows, and each can start a new search.
 - **Text search**: describe a galaxy in English; galaxies rank through EmbeddingGemma.
+- **Links**: the address records the view and the last search, so it can be reopened or shared.
 
 ## Running locally
 

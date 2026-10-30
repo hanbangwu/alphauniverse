@@ -10,7 +10,7 @@ Map
 - A property is coloured on 32 viridis bins from its 1st to its 99th percentile; values beyond either end take that end's colour. Redshift is the default. g − r is only measured.
 - The legend gives the range, its unit and how many galaxies have a measured value, a prediction or none.
 - The slider moves in 200 steps across the legend's range and counts the galaxies in range. A thumb left at its end also keeps the values beyond that side, and the readout then shows only the other bound. The range resets when the property or source changes. The map circles only search matches in range.
-- Box and lasso selections keep only galaxies in range, list them by object ID, each clickable, and export their ``properties`` rows as CSV. A selection belongs to the map it was drawn on, hides while another is shown and drops on a click elsewhere on the map.
+- Box and lasso selections keep only galaxies in range, list them by object ID, each clickable, and export their ``properties`` rows as CSV. A selection belongs to the map it was drawn on and drops when the layout changes or on a click elsewhere on the map.
 - Hover shows the galaxy's image and property, with the prediction's width when the value is AION's.
 
 Galaxy
@@ -31,6 +31,13 @@ Similarity search
 - Clicking a match's object ID selects it with an empty selection. After a search the map circles the query and its matches in range until another galaxy is selected or another search runs.
 - **Whole modes**: a click on an image, a spectrum or a catalogue section (Redshift, Legacy Survey, HSC) toggles that mode, outlined. **Any position** applies to the chosen images and spectra. A mode the galaxy lacks can be chosen when AION predictions show it; the search reads AION's prediction and says so. A match shows its score, one signed bar per mode for its contribution, and the same-place map of every slot. The cell, window and value selection is kept and returns when the switch is off; one search never mixes the two.
 - Each map is coloured on its own scale, from its lowest to its highest value; hover reads a value.
+
+Links
+-----
+
+- The address records the view: ``projection``, ``property``, ``source``, ``range``, ``region``, ``galaxy``, ``explorer``, ``predictions``, ``whole``, ``layer``, ``mask``, ``invert``, the five mask thresholds, ``tab`` and ``text``. A value at its default or failing validation is ignored and left out. Lists are comma-separated; ``range`` and ``region`` are JSON. The address updates on each change, a slider's on release, and adds no history entry.
+- The last similarity search is recorded in the ``/search`` or ``/search/modes`` parameters it sent. Opening the address restores its selection and runs it again. A selection changed but not searched is not recorded.
+- Collapsed groups, the theme and the disclaimer stay in the browser's storage, not the address.
 
 Text search
 -----------

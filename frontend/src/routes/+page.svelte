@@ -5,11 +5,18 @@
   import TextSearch from '$lib/components/panels/text-search.svelte'
   import * as Resizable from '$lib/components/ui/resizable'
   import * as Tabs from '$lib/components/ui/tabs'
+  import { Field } from '$lib/state/field.svelte'
+  import { DEFAULTS, stored } from '$lib/state/params.svelte'
 
+  const tab = new Field(DEFAULTS.tab, stored('tab'))
   let rightPanel = $state(20)
 </script>
 
-<Tabs.Root value="umap" class="relative h-full gap-0" style="--right-panel: {rightPanel}%">
+<Tabs.Root
+  bind:value={tab.value}
+  class="relative h-full gap-0"
+  style="--right-panel: {rightPanel}%"
+>
   <Tabs.Content value="umap" class="absolute inset-0">
     <ProjectionView />
   </Tabs.Content>

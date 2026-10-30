@@ -9,7 +9,7 @@ import { Context } from 'runed'
 export class AppState {
   readonly view: ViewState
   readonly search: SearchState
-  readonly mask = new MaskState()
+  readonly mask: MaskState
   readonly filters: FilterState
 
   constructor(
@@ -18,7 +18,13 @@ export class AppState {
   ) {
     this.view = new ViewState()
     this.search = new SearchState()
+    this.mask = new MaskState()
     this.filters = new FilterState(this.mosaic, this.view)
+    const searched = this.view.searched.value
+    if (searched) {
+      this.view.edit(searched)
+      if (searched.matches) this.search.matches.value = String(searched.matches)
+    }
   }
 
   get dataset(): string {
