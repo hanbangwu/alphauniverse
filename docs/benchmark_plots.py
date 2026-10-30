@@ -33,6 +33,7 @@ def table(rows, names, height=None):
     return DataTable(
         source=source,
         columns=columns,
+        autosize_mode="fit_columns",
         index_position=None,
         height=height or 30 + 26 * len(rows),
         **WIDTH,
