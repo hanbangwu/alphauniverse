@@ -25,12 +25,11 @@
 
 <Dialog.Root open={view.explorer.value} onOpenChange={(open) => (view.explorer.value = open)}>
   <Dialog.Content
-    bind:ref={content}
     onOpenAutoFocus={(event) => {
       event.preventDefault()
       content?.focus()
     }}
-    class="z-100 max-h-11/12 w-full overflow-y-auto sm:max-w-[90vw]"
+    class="z-100 flex max-h-11/12 w-full flex-col sm:max-w-[90vw]"
   >
     <Dialog.Header class="flex-row items-center gap-6">
       <Dialog.Title>Search from <GalaxyName {galaxy} /></Dialog.Title>
@@ -39,11 +38,17 @@
 
     <SearchForm />
 
-    <SimilaritySelf />
+    <div
+      bind:this={content}
+      tabindex="-1"
+      class="flex min-h-0 flex-col gap-6 overflow-y-auto outline-none"
+    >
+      <SimilaritySelf />
 
-    {#if similarity.searched}
-      <Separator />
-      <MatchList />
-    {/if}
+      {#if similarity.searched}
+        <Separator />
+        <MatchList />
+      {/if}
+    </div>
   </Dialog.Content>
 </Dialog.Root>

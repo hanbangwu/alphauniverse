@@ -19,7 +19,7 @@
   const coverage = createQuery(() => coverageQuery(view.galaxy.value))
 </script>
 
-<div class="flex h-full flex-col bg-card">
+<div class="glass flex h-full flex-col">
   <h2 class="shrink-0 p-4 pb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
     Details
   </h2>

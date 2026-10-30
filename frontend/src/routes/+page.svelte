@@ -5,35 +5,41 @@
   import TextSearch from '$lib/components/panels/text-search.svelte'
   import * as Resizable from '$lib/components/ui/resizable'
   import * as Tabs from '$lib/components/ui/tabs'
+
+  let rightPanel = $state(20)
 </script>
 
-<Resizable.PaneGroup direction="horizontal">
-  <Resizable.Pane defaultSize={20} minSize={16}>
-    <LeftPanel />
-  </Resizable.Pane>
+<Tabs.Root value="umap" class="relative h-full gap-0" style="--right-panel: {rightPanel}%">
+  <Tabs.Content value="umap" class="absolute inset-0">
+    <ProjectionView />
+  </Tabs.Content>
 
-  <Resizable.Handle withHandle />
+  <Resizable.PaneGroup direction="horizontal" class="pointer-events-none relative">
+    <Resizable.Pane defaultSize={20} minSize={16} class="pointer-events-auto">
+      <LeftPanel />
+    </Resizable.Pane>
 
-  <Resizable.Pane defaultSize={60} minSize={32}>
-    <Tabs.Root value="umap" class="relative h-full gap-0">
-      <Tabs.List
-        class="absolute top-3 left-1/2 z-10 -translate-x-1/2 border bg-background/50 shadow-lg backdrop-blur-xl backdrop-saturate-150"
-      >
+    <Resizable.Handle withHandle class="pointer-events-auto" />
+
+    <Resizable.Pane defaultSize={60} minSize={32} class="relative">
+      <Tabs.List class="pointer-events-auto absolute top-3 left-1/2 z-10 -translate-x-1/2">
         <Tabs.Trigger value="umap">Map</Tabs.Trigger>
         <Tabs.Trigger value="text">Text Search</Tabs.Trigger>
       </Tabs.List>
-      <Tabs.Content value="umap" class="min-h-0">
-        <ProjectionView />
-      </Tabs.Content>
-      <Tabs.Content value="text" class="min-h-0 overflow-y-auto pt-12">
+      <Tabs.Content value="text" class="pointer-events-auto h-full overflow-y-auto pt-12">
         <TextSearch />
       </Tabs.Content>
-    </Tabs.Root>
-  </Resizable.Pane>
+    </Resizable.Pane>
 
-  <Resizable.Handle withHandle />
+    <Resizable.Handle withHandle class="pointer-events-auto" />
 
-  <Resizable.Pane defaultSize={20} minSize={16}>
-    <RightPanel />
-  </Resizable.Pane>
-</Resizable.PaneGroup>
+    <Resizable.Pane
+      defaultSize={20}
+      minSize={16}
+      class="pointer-events-auto"
+      onResize={(size) => (rightPanel = size)}
+    >
+      <RightPanel />
+    </Resizable.Pane>
+  </Resizable.PaneGroup>
+</Tabs.Root>
