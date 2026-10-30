@@ -95,7 +95,11 @@
   let highlighted = $derived(circled?.filter(inRange))
 </script>
 
-<div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
+<div
+  class="relative size-full overflow-hidden [&>div:first-child>div>div:last-child]:right-(--right-panel)!"
+  bind:clientWidth={width}
+  bind:clientHeight={height}
+>
   {#if coloured && shades && mode.current && width > 0 && height > 0}
     {#key coloured.table}
       <EmbeddingViewMosaic

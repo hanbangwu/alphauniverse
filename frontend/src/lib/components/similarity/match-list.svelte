@@ -1,29 +1,61 @@
 <script lang="ts">
   import GalaxyName from '$lib/components/galaxy-name.svelte'
+  import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
-  import { IMAGE_MODES, SPECTRUM_MODES } from '$lib/data/modes'
+  import { tableQuery } from '$lib/data/queries'
+  import { galaxyRows, saveEcsv } from '$lib/download'
+  import { errorMessage } from '$lib/errors'
+  import { must } from '$lib/invariant'
   import { getApp } from '$lib/state/app.svelte'
   import MaskControls from './mask-controls.svelte'
   import MatchRow from './match-row.svelte'
+  import { searchEcsv } from './search-export'
   import { getSimilarity } from './similarity.svelte'
+  import { useQueryClient } from '@tanstack/svelte-query'
 
   const similarity = getSimilarity()
-  const { view, mask: display } = getApp()
+  const { view, mask: display, meta } = getApp()
+  const queryClient = useQueryClient()
 
-  const images = $derived(IMAGE_MODES.some((mode) => similarity.anywhere(mode)))
-  const spectra = $derived(SPECTRUM_MODES.some((mode) => similarity.anywhere(mode)))
   const predicted = $derived(similarity.predictedAt(0))
+
+  let downloadError = $state<string | null>(null)
+
+  async function download(): Promise<void> {
+    const result = must(similarity.result, 'the search result')
+    try {
+      const [identities, tableRows] = await Promise.all([
+        galaxyRows(queryClient, Array.from(result.galaxies)),
+        queryClient.fetchQuery(tableQuery(result.request.galaxy))
+      ])
+      saveEcsv(
+        'alphauniverse-search.ecsv',
+        searchEcsv(result, meta, identities, tableRows, location.href)
+      )
+      downloadError = null
+    } catch (caught) {
+      downloadError = errorMessage(caught)
+    }
+  }
 </script>
 
-<span class="text-sm font-medium">Whole dataset</span>
-<p class="text-xs text-muted-foreground">
-  Image matches are compared {images ? 'anywhere in the image' : 'at the same place in the image'};
-  spectrum matches {spectra ? 'at any wavelength' : 'at the same observed wavelength'}.
-  {#if similarity.wholeResult}
+<div class="flex items-center justify-between gap-2">
+  <span class="text-sm font-medium">Whole dataset</span>
+  {#if similarity.scales && !similarity.error}
+    <Button variant="secondary" size="sm" disabled={similarity.stale} onclick={download}
+      >Export as ECSV</Button
+    >
+  {/if}
+</div>
+{#if downloadError}
+  <p role="alert" class="text-sm text-destructive">{downloadError}</p>
+{/if}
+{#if similarity.wholeResult}
+  <p class="text-xs text-muted-foreground">
     Each match's score is the mean over the chosen modes of its standardised score in each; the bars
     show each mode's share. Maps compare each slot at the same place.
-  {/if}
-</p>
+  </p>
+{/if}
 {#if similarity.wholeResult && predicted.length}
   <p class="text-xs text-muted-foreground">
     <GalaxyName galaxy={similarity.galaxy} /> has no {predicted.join(', ')}: searched with AION's

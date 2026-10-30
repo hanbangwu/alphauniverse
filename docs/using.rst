@@ -31,6 +31,7 @@ Open a galaxy, start a search and pick what should match: image cells, spectrum 
 - Each match shows a similarity from 0 to 1 and a map of where it agrees with your galaxy. **Mask** fades the parts below a threshold.
 - A match that lacks an observation you selected is ranked on AION's prediction of it, and says so.
 - Click a match's ID to search from it.
+- **Export as ECSV** saves your galaxy and its matches as an :term:`ECSV` table: ID, position, similarity, and each map, empty where a galaxy lacks that observation. The header records what you selected and the page's address.
 - **Whole modes** compares entire observations instead: click an image, a spectrum or a group of catalogue values. Each match then shows how much each observation contributed.
 - The **This galaxy** and **Population** maps shade your galaxy to show what a selection picks out (:doc:`methods/query-maps`).
 
@@ -39,7 +40,7 @@ Open a galaxy, start a search and pick what should match: image cells, spectrum 
 Search by text
 --------------
 
-Describe a galaxy in a sentence. The site returns the 32 closest matches by image or by spectrum, so a galaxy can appear twice (:doc:`methods/text-search`).
+Describe a galaxy in a sentence. The site returns the 32 closest matches by image or by spectrum, so a galaxy can appear twice (:doc:`methods/text-search`). Export the matches as CSV with their object ID, position and cosine similarity.
 
 Share a view
 ------------

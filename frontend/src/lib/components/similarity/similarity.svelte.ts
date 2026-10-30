@@ -201,6 +201,10 @@ export class Similarity {
       : undefined
   }
 
+  get result(): SimilarityResult | undefined {
+    return this.#result.data
+  }
+
   get error(): string | null {
     return this.#result.isError ? errorMessage(this.#result.error) : null
   }
@@ -239,10 +243,6 @@ export class Similarity {
 
   layerError(mode: CosineMode): string | null {
     return this.#layers[mode].error
-  }
-
-  anywhere(mode: CosineMode): boolean {
-    return this.#result.data?.request.anywhere?.includes(mode) ?? false
   }
 
   outlinesAt(mode: CosineMode, index: number): number[] {

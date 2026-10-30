@@ -3,16 +3,33 @@
   import { Input } from '$lib/components/ui/input'
   import { Spinner } from '$lib/components/ui/spinner'
   import { textSearchQuery } from '$lib/data/queries'
+  import { galaxyRows, saveCsv } from '$lib/download'
   import { errorMessage } from '$lib/errors'
   import { Field } from '$lib/state/field.svelte'
   import { DEFAULTS, stored } from '$lib/state/params.svelte'
   import TextSearchResult from './text-search-result.svelte'
-  import { createQuery } from '@tanstack/svelte-query'
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query'
 
   const submitted = new Field(DEFAULTS.text, stored('text'))
   let draft = $state(submitted.value ?? '')
 
   const results = createQuery(() => textSearchQuery(submitted.value))
+  const queryClient = useQueryClient()
+
+  let downloadError = $state<string | null>(null)
+
+  async function download(galaxies: number[], scores: number[]): Promise<void> {
+    try {
+      const rows = await galaxyRows(queryClient, galaxies)
+      saveCsv(
+        'alphauniverse-text-search.csv',
+        rows.map((row, index) => ({ ...row, cosine_similarity: scores[index] }))
+      )
+      downloadError = null
+    } catch (caught) {
+      downloadError = errorMessage(caught)
+    }
+  }
 </script>
 
 <div class="mx-auto flex max-w-2xl flex-col gap-4 p-4">
@@ -30,12 +47,24 @@
       class="disabled:pointer-events-auto disabled:cursor-not-allowed"
       disabled={draft.trim() === ''}>Search</Button
     >
+    {#if results.data && !results.isError}
+      {@const { galaxies, scores } = results.data}
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={results.isPlaceholderData}
+        onclick={() => download(galaxies, scores)}>Export as CSV</Button
+      >
+    {/if}
   </form>
 
   {#if results.isError}
     <p role="alert" class="text-sm text-destructive">{errorMessage(results.error)}</p>
   {:else if results.data}
     {@const { galaxies, modalities, scores } = results.data}
+    {#if downloadError}
+      <p role="alert" class="text-sm text-destructive">{downloadError}</p>
+    {/if}
     <ol
       class={['flex flex-col gap-1 transition-opacity', results.isPlaceholderData && 'opacity-50']}
     >

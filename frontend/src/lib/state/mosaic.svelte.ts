@@ -2,7 +2,7 @@ import { type Projection, downloadUrl, projectionUrl } from '$lib/client'
 import { BINS } from '$lib/color'
 import { PREDICTABLE, type Property } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
-import { Query, column, count, isBetween, isIn, loadParquet } from '@uwdata/mosaic-sql'
+import { Query, column, count, isBetween, loadParquet } from '@uwdata/mosaic-sql'
 import type { Point, Rectangle } from 'embedding-atlas'
 
 function bounds(polygon: Point[]): Rectangle {
@@ -170,19 +170,6 @@ export class MosaicState {
       .map(({ galaxy }) => Number(galaxy))
       .sort((a, b) => a - b)
     return galaxies.filter((galaxy, index) => galaxy !== galaxies[index - 1])
-  }
-
-  async csv(galaxies: number[]): Promise<string> {
-    await this.loadProperties()
-    const rows = await this.connect().query(
-      Query.from('properties')
-        .select('*')
-        .where(isIn(column('galaxy'), galaxies))
-        .orderby('galaxy')
-    )
-    const names = rows.schema.fields.map(({ name }: { name: string }) => name)
-    const lines = Array.from(rows, (row) => names.map((name: string) => row[name] ?? '').join(','))
-    return [names.join(','), ...lines].join('\n')
   }
 
   destroy(): void {

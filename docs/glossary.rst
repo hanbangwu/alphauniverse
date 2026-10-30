@@ -7,6 +7,9 @@ Glossary
    against-data score
       The log-likelihood of one galaxy's data under another galaxy's :term:`template`, with the data's own errors, less its log-likelihood under the median template. See :doc:`dev/reference`.
 
+   ECSV
+      Enhanced CSV: a CSV table whose commented header records each column's type and unit and notes about the whole table. astropy and TOPCAT read it; spreadsheets show the header as extra rows.
+
    predictive width
       How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalogue value. See :doc:`dev/reference`.
 
