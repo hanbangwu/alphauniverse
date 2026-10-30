@@ -129,7 +129,10 @@
       />
     {/key}
     {#if region && selected.isError}
-      <p role="alert" class="absolute top-3 right-3 text-xs text-destructive">
+      <p
+        role="alert"
+        class="absolute top-3 right-[calc(var(--right-panel)+0.75rem)] text-xs text-destructive"
+      >
         {errorMessage(selected.error)}
       </p>
     {:else if region && selected.data}
