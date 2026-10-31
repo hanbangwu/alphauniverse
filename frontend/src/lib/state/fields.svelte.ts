@@ -39,9 +39,10 @@ export class ListField<T> extends Field<T[]> {
 
 export class IndexListField extends ListField<number> {
   protected normalise(value: number[]): number[] {
-    const sorted = value
-      .filter((entry) => Number.isInteger(entry) && entry >= 0)
+    return value
+      .filter(
+        (entry, index) => Number.isInteger(entry) && entry >= 0 && value.indexOf(entry) === index
+      )
       .sort((a, b) => a - b)
-    return sorted.filter((entry, index) => index === 0 || entry !== sorted[index - 1])
   }
 }

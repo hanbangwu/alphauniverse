@@ -47,14 +47,14 @@ from app.config import (
 )
 from app.embeddings import generate_token_search
 from app.pql import (
-    MATRICES,
-    SAMPLES,
-    SUMS,
+    agreements,
     basis,
+    basket_sum,
     observed,
     prediction_basis,
     prediction_batch,
     predictions,
+    sampled,
     save_prediction_basis,
     stored,
 )
@@ -267,11 +267,11 @@ def forget() -> None:
         basis,
         observed,
         stored,
+        agreements,
+        sampled,
+        basket_sum,
     ):
         cached.cache_clear()
-    MATRICES.clear()
-    SAMPLES.clear()
-    SUMS.clear()
 
 
 def build(galaxies: int, seed: int = 0) -> Path:

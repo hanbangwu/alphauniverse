@@ -163,13 +163,11 @@ export class MosaicState {
       ...(range ? [isBetween(column('value'), [...range])] : [])
     ]
     const rows = await this.connect().query(
-      Query.from(table).select('galaxy', 'x', 'y').where(where)
+      Query.from(table).select('galaxy', 'x', 'y').where(where).orderby('galaxy')
     )
-    const galaxies = Array.from(rows)
+    return Array.from(rows)
       .filter(({ x, y }) => 'xMin' in region || inside(x, y, region))
       .map(({ galaxy }) => Number(galaxy))
-      .sort((a, b) => a - b)
-    return galaxies.filter((galaxy, index) => galaxy !== galaxies[index - 1])
   }
 
   destroy(): void {

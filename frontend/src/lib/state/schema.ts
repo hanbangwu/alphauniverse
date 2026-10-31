@@ -10,6 +10,16 @@ export interface Range {
   default: number
 }
 
+type SurveyPath = '/galaxy/{galaxy}/image/{survey}' | '/galaxy/{galaxy}/spectrum/{survey}'
+
+export function surveysOf(path: SurveyPath): string[] {
+  const { schema } = must(
+    paths[path].get.parameters.find((parameter) => parameter.name === 'survey'),
+    `survey parameter of ${path}`
+  )
+  return must(schema.enum, `enum for survey parameter of ${path}`)
+}
+
 export function rangeOf(name: Param): Range {
   const { schema } = must(
     paths['/search'].get.parameters.find((parameter) => parameter.name === name),

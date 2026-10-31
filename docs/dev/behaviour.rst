@@ -36,7 +36,7 @@ Similarity search
 Links
 -----
 
-- The address records the view: ``projection``, ``property``, ``source``, ``range``, ``region``, ``galaxy``, ``explorer``, ``predictions``, ``whole``, ``layer``, ``mask``, ``invert``, the five mask thresholds, ``tab`` and ``text``. A value at its default or failing validation is ignored and left out. Lists are comma-separated; ``range`` and ``region`` are JSON. The address updates on each change, a slider's on release, and adds no history entry.
+- The address records the view: ``projection``, ``property``, ``source``, ``range``, ``region``, ``galaxy``, ``explorer``, ``predictions``, ``whole``, ``layer``, ``mask``, ``invert``, the five mask thresholds, ``tab`` and ``text``. A value at its default or failing validation is ignored and left out. Lists, ``range`` and ``region`` are JSON. The address updates on each change, a slider's on release, and adds no history entry.
 - The last similarity search is recorded in the ``/search`` or ``/search/modes`` parameters it sent. Opening the address restores its selection and runs it again. A selection changed but not searched is not recorded.
 - Collapsed groups, the theme and the disclaimer stay in the browser's storage, not the address.
 

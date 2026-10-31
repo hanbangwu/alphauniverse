@@ -91,7 +91,7 @@ def stage_times(query: pql.Query) -> dict[str, float]:
 
 
 def matrix_times(batch: list[pql.Query]) -> dict[str, Any]:
-    pql.MATRICES.clear()
+    pql.agreements.cache_clear()
     builds = [elapsed(partial(pql.agreements, query.galaxy)) for query in batch]
     clicks = [elapsed(partial(pql.saliency, query)) for query in batch]
     return {"agreements": summary(builds), "saliency": summary(clicks)}

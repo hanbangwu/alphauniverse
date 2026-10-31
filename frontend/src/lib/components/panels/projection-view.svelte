@@ -47,6 +47,7 @@
   import { createQuery } from '@tanstack/svelte-query'
   import { EmbeddingViewMosaic } from 'embedding-atlas/svelte'
   import { mode } from 'mode-watcher'
+  import { useDebounce } from 'runed'
 
   const { view, mosaic, filters } = getApp()
 
@@ -73,7 +74,7 @@
   const selected = createQuery(() =>
     regionQuery(mosaic, coloured?.table ?? null, region.value, filters.range.value)
   )
-  let settling: ReturnType<typeof setTimeout> | undefined
+  const settle = useDebounce((value: Rectangle | Point[] | null) => (region.value = value), 200)
 
   let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
 
@@ -113,10 +114,7 @@
         identifier="galaxy"
         filter={mosaic.filter}
         rangeSelectionValue={region.value}
-        onRangeSelection={(value: Rectangle | Point[] | null) => {
-          clearTimeout(settling)
-          settling = setTimeout(() => (region.value = value), 200)
-        }}
+        onRangeSelection={settle}
         {tooltip}
         selection={highlighted}
         {width}

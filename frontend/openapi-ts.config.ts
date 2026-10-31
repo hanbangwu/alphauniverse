@@ -8,7 +8,6 @@ export default defineConfig({
   },
   plugins: [
     ...defaultPlugins,
-    { name: '@hey-api/typescript', enums: 'javascript' },
     {
       name: '@hey-api/client-fetch',
       baseUrl: false,
