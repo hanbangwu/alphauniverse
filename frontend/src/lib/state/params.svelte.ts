@@ -67,10 +67,12 @@ export const setParams = (): Params =>
   context.set(useSearchParams(schema, { pushHistory: false, noScroll: true }))
 
 export function stored<K extends keyof Values>(key: K): Source<Values[K]> {
-  const params = context.get()
+  const params: Values = context.get()
   return {
-    get: () => params.get(key),
-    set: (next) => params.set(key, next)
+    get: () => params[key],
+    set: (next) => {
+      params[key] = next
+    }
   }
 }
 
