@@ -2,6 +2,7 @@ import importlib
 import json
 import math
 from copy import deepcopy
+from itertools import combinations
 from pathlib import Path
 
 import numpy as np
@@ -14,9 +15,11 @@ from app.config import (
     ARTIFACTS,
     GEMMA_DIM,
     GRAM_NAMES,
+    MODES,
     SEED,
     TEXT_VIEWS,
     TEXT_VIEWS_HELD_OUT,
+    VIEW_COMBINATIONS,
     VIEW_TYPES,
     galaxy_count,
 )
@@ -256,6 +259,7 @@ def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
         "HIDDEN": 8,
         "EULER": 2,
         "CLOUD_GALAXIES": 2,
+        "DRAWS": 2,
     }.items():
         monkeypatch.setattr(text_flow, name, value)
     for module in (text_flow, embeddings):
@@ -267,6 +271,8 @@ def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
     width = len(GRAM_NAMES) * 2
     np.savez(
         tmp_path / "text_bases.npz",
+        components=rng.standard_normal((kinds, 3, GEMMA_DIM)).astype(np.float32),
+        centre=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
         scale=rng.uniform(0.5, 1.5, (kinds, 3)).astype(np.float32),
         offset=rng.standard_normal(width).astype(np.float32),
         projection=rng.standard_normal((width, 4)).astype(np.float32),
@@ -280,14 +286,91 @@ def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
     monkeypatch.setattr(text_flow, "generic_queries", lambda: ["a"] * 4)
     monkeypatch.setattr(text_flow, "embed_queries", lambda _: queries)
 
-    text_flow.generate_text_clouds()
+    text_flow.generate_text_vectors()
 
-    stored = np.load(tmp_path / "text_clouds.npy")
+    stored = np.load(tmp_path / "text_vectors.npy")
     network, bases = text_flow.stored_flow()
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    alone = text_flow.generated_clouds(network, bases, joint, torch.tensor([3]), SEED)
-    assert stored.shape == (kinds, 5, 2, 3)
-    np.testing.assert_array_equal(stored[:, 3], alone[:, 0])
+    alone = sum(
+        text_flow.mode_vectors(
+            text_flow.generated_clouds(network, bases, joint, torch.tensor([3]), seed),
+            bases,
+        )
+        for seed in range(SEED, SEED + 2)
+    )
+    assert stored.shape == (5, len(MODES), GEMMA_DIM)
+    np.testing.assert_allclose(stored[3], alone[0] / 2, rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(
         np.load(tmp_path / "text_query_mean.npy"), queries.mean(axis=0)
     )
+
+
+def test_a_galaxy_s_mode_vectors_sum_to_the_mean_of_its_cloud_s_documents() -> None:
+    generator = torch.Generator().manual_seed(0)
+    kinds = len(VIEW_TYPES)
+    components = torch.linalg.qr(torch.randn(kinds, 12, 4, generator=generator)).Q
+    bases = {
+        "components": components.transpose(1, 2),
+        "centre": torch.randn(kinds, 12, generator=generator) / 4,
+    }
+    clouds = torch.randn(kinds, 2, 5, 4, generator=generator)
+
+    found = text_flow.mode_vectors(clouds.numpy(), bases)
+
+    documents = bases["centre"][:, None, None] + torch.einsum(
+        "kgpr,krd->kgpd", clouds, bases["components"]
+    )
+    expected = torch.nn.functional.normalize(documents, dim=-1).mean(dim=(0, 2))
+    np.testing.assert_allclose(
+        found.sum(axis=1), expected.numpy(), rtol=1e-5, atol=1e-6
+    )
+
+
+def test_mode_weights_give_each_mode_its_shapley_value() -> None:
+    contributions = torch.randn(
+        len(VIEW_TYPES), generator=torch.Generator().manual_seed(0)
+    )
+    required = [set(VIEW_COMBINATIONS.get(name, (name,))) for _, name in VIEW_TYPES]
+
+    def value(modes: set[str]) -> float:
+        kinds = [kind for kind, needed in enumerate(required) if needed <= modes]
+        return float(contributions[kinds].sum()) / len(VIEW_TYPES)
+
+    expected = []
+    for mode in MODES:
+        others = [other for other in MODES if other != mode]
+        expected.append(
+            sum(
+                math.factorial(size)
+                * math.factorial(len(MODES) - size - 1)
+                / math.factorial(len(MODES))
+                * (value({*chosen, mode}) - value(set(chosen)))
+                for size in range(len(MODES))
+                for chosen in combinations(others, size)
+            )
+        )
+
+    found = contributions @ text_flow.mode_weights()
+
+    np.testing.assert_allclose(found.numpy(), expected, rtol=1e-5)
+
+
+def test_a_point_s_cosine_from_its_coefficients_is_that_of_the_document_it_stands_for() -> (
+    None
+):
+    generator = torch.Generator().manual_seed(0)
+    components = torch.linalg.qr(torch.randn(12, 4, generator=generator)).Q.T
+    centre = torch.randn(12, generator=generator) / 4
+    points = torch.randn(3, 5, 4, generator=generator)
+    directions = torch.nn.functional.normalize(
+        torch.randn(7, 12, generator=generator), dim=-1
+    )
+    lengths = text_flow.point_lengths(points, components, centre)
+
+    found = text_flow.cosines(points, lengths, directions, components, centre)
+
+    documents = centre + points @ components
+    expected = torch.einsum(
+        "gpd,vd->vgp", torch.nn.functional.normalize(documents, dim=-1), directions
+    )
+    torch.testing.assert_close(found, expected)

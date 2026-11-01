@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import math
-from collections.abc import Collection, Iterator
+from collections.abc import Iterator
 from functools import cache
 from itertools import batched, product
 from threading import Lock
-from typing import TYPE_CHECKING, Annotated, Literal, NamedTuple
+from typing import TYPE_CHECKING, Annotated, NamedTuple
 
 import numpy as np
 import PIL.Image
@@ -21,7 +20,6 @@ from .config import (
     DIM,
     GEMMA,
     GEMMA_DIM,
-    MODES,
     N_SPECTRUM_TOKENS,
     PAIRS,
     PLOT_INCHES,
@@ -31,9 +29,6 @@ from .config import (
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_WIDTH,
     TEXT_SURVEYS,
-    VIEW_COMBINATIONS,
-    VIEW_TYPES,
-    ModeName,
     artifact,
     device,
 )
@@ -98,16 +93,12 @@ SUFFIXES = (
     " with an active nucleus",
 )
 
-SHARE_NAMES = (*MODES, "combined")
-type ShareName = Literal[*SHARE_NAMES]
-
 
 class TextQuery(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     text: Annotated[str, Field(min_length=1, max_length=500)]
     matches: Annotated[int, Field(ge=1, le=128)] = 32
-    modes: Annotated[frozenset[ModeName], Field(min_length=1)] = frozenset(MODES)
 
 
 class TextSpace(NamedTuple):
@@ -116,21 +107,17 @@ class TextSpace(NamedTuple):
     modality: np.ndarray
 
 
-class TextIndex(NamedTuple):
-    points: torch.Tensor
-    lengths: torch.Tensor
-    components: torch.Tensor
-    centre: torch.Tensor
+class TextVectors(NamedTuple):
+    modes: np.ndarray
+    vectors: torch.Tensor
+    baseline: torch.Tensor
     query_mean: torch.Tensor
-    kappa: float
 
 
 class TextResults(NamedTuple):
     galaxies: torch.Tensor
     scores: torch.Tensor
-    probabilities: torch.Tensor
-    shares: torch.Tensor
-    breadth: float
+    contributions: torch.Tensor
 
 
 @cache
@@ -236,108 +223,29 @@ def aion_gemma_space() -> TextSpace:
         return TextSpace(**stored)
 
 
-def point_lengths(
-    points: torch.Tensor, components: torch.Tensor, centre: torch.Tensor
-) -> torch.Tensor:
-    squared = points.square().sum(dim=-1) + centre @ centre
-    return (squared + 2 * points @ (components @ centre)).sqrt()
-
-
-def cosines(
-    points: torch.Tensor,
-    lengths: torch.Tensor,
-    directions: torch.Tensor,
-    components: torch.Tensor,
-    centre: torch.Tensor,
-) -> torch.Tensor:
-    along = torch.einsum("gpr,...r->...gp", points, directions @ components.T)
-    return (along + (directions @ centre)[..., None, None]) / lengths
-
-
-def indexed(clouds: np.ndarray) -> TextIndex:
-    with np.load(artifact("text_bases")) as stored:
-        components = torch.from_numpy(stored["components"])
-        centre = torch.from_numpy(stored["centre"])
-        kappa = float(stored["kappa"])
-    points = torch.empty(clouds.shape)
-    lengths = torch.empty(clouds.shape[:-1])
-    for start in range(0, clouds.shape[1], BATCH):
-        rows = slice(start, start + BATCH)
-        points[:, rows] = torch.from_numpy(clouds[:, rows].astype(np.float32))
-        lengths[:, rows] = torch.vmap(point_lengths)(
-            points[:, rows], components, centre
-        )
-    query_mean = torch.from_numpy(np.load(artifact("text_query_mean")))
-    return TextIndex(points, lengths, components, centre, query_mean, kappa)
-
-
 @cache
-def text_index() -> TextIndex:
-    return indexed(np.load(artifact("text_clouds"), mmap_mode="r"))
+def text_vectors() -> TextVectors:
+    modes = np.load(artifact("text_vectors"), mmap_mode="r")
+    vectors = torch.empty(len(modes), modes.shape[2])
+    baseline = torch.zeros(modes.shape[1:])
+    for start in range(0, len(modes), BATCH):
+        rows = torch.from_numpy(np.array(modes[start : start + BATCH]))
+        vectors[start : start + BATCH] = rows.sum(dim=1)
+        baseline += rows.sum(dim=0)
+    query_mean = torch.from_numpy(np.load(artifact("text_query_mean")))
+    return TextVectors(modes, vectors, baseline / len(modes), query_mean)
 
 
 def query_directions(embedded: np.ndarray, mean: torch.Tensor) -> torch.Tensor:
     return F.normalize(torch.from_numpy(embedded) - mean, dim=-1)
 
 
-def view_kinds(modes: Collection[str]) -> list[int]:
-    return [
-        kind
-        for kind, (_, name) in enumerate(VIEW_TYPES)
-        if set(VIEW_COMBINATIONS.get(name, (name,))) <= set(modes)
-    ]
-
-
-def likelihoods(
-    index: TextIndex, direction: torch.Tensor, kinds: list[int]
-) -> tuple[torch.Tensor, torch.Tensor]:
-    by_kind = torch.stack(
-        [
-            torch.logsumexp(
-                index.kappa
-                * cosines(
-                    index.points[kind],
-                    index.lengths[kind],
-                    direction,
-                    index.components[kind],
-                    index.centre[kind],
-                ),
-                dim=-1,
-            )
-            for kind in kinds
-        ],
-        dim=-1,
-    )
-    count = len(kinds) * index.points.shape[2]
-    return by_kind.logsumexp(dim=-1) - math.log(count), by_kind
-
-
-def mode_shares(by_kind: torch.Tensor, kinds: list[int]) -> torch.Tensor:
-    names = [VIEW_TYPES[kind][1] for kind in kinds]
-    columns = [
-        SHARE_NAMES.index(name if name in MODES else "combined") for name in names
-    ]
-    found = by_kind.new_zeros(len(by_kind), len(SHARE_NAMES))
-    return found.index_add_(1, torch.tensor(columns), by_kind.softmax(dim=1))
-
-
-def breadth(scores: torch.Tensor) -> float:
-    logged = scores.log_softmax(dim=0)
-    return math.exp(-(logged.exp() * logged).sum().item()) / len(scores)
-
-
 def text_search(query: TextQuery) -> TextResults:
     with LOADING:
-        index = text_index()
+        stored = text_vectors()
         embedded = embed_queries([query.text])[0]
-    direction = query_directions(embedded, index.query_mean)
-    kinds = view_kinds(query.modes)
-    scores, by_kind = likelihoods(index, direction, kinds)
+    direction = query_directions(embedded, stored.query_mean)
+    scores = stored.vectors @ direction
     top = scores.topk(min(query.matches, len(scores))).indices
-    return TextResults(
-        top,
-        scores[top],
-        scores.softmax(dim=0)[top],
-        mode_shares(by_kind[top], kinds),
-        breadth(scores),
-    )
+    modes = torch.from_numpy(stored.modes[top.numpy()])
+    return TextResults(top, scores[top], (modes - stored.baseline) @ direction)

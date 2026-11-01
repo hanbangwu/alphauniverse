@@ -28,6 +28,7 @@ from .config import (
     TEXT_POINTS,
     TEXT_RANK,
     TOKEN_GRAMS,
+    VIEW_COMBINATIONS,
     VIEW_TYPES,
     VIEWS_PER_PART,
     WANDB_ENTITY,
@@ -36,7 +37,7 @@ from .config import (
     artifact,
     device,
 )
-from .text_search import cosines, embed_queries, generic_queries, point_lengths
+from .text_search import embed_queries, generic_queries
 
 HIDDEN = 512
 KIND_WIDTH = 16
@@ -58,6 +59,7 @@ SHARED_BASIS = 128
 CAP = 1_000_000
 PAIRS = 8192
 CLOUD_GALAXIES = 1024
+DRAWS = 8
 
 Bases = dict[str, torch.Tensor]
 
@@ -275,6 +277,24 @@ def clouds(
         t = torch.full((len(x), 1), step / EULER, device=x.device)
         x = x + network(x, t, conditions, present, kind) / EULER
     return x.view(-1, kinds, TEXT_POINTS, TEXT_RANK) * scale[:, None]
+
+
+def point_lengths(
+    points: torch.Tensor, components: torch.Tensor, centre: torch.Tensor
+) -> torch.Tensor:
+    squared = points.square().sum(dim=-1) + centre @ centre
+    return (squared + 2 * points @ (components @ centre)).sqrt()
+
+
+def cosines(
+    points: torch.Tensor,
+    lengths: torch.Tensor,
+    directions: torch.Tensor,
+    components: torch.Tensor,
+    centre: torch.Tensor,
+) -> torch.Tensor:
+    along = torch.einsum("gpr,...r->...gp", points, directions @ components.T)
+    return (along + (directions @ centre)[..., None, None]) / lengths
 
 
 def cloud_scores(clouds: torch.Tensor, held: HeldOut, bases: Bases) -> torch.Tensor:
@@ -609,9 +629,39 @@ def generated_clouds(
     return points
 
 
-def generate_text_clouds() -> None:
+def mode_weights() -> torch.Tensor:
+    weights = torch.zeros(len(VIEW_TYPES), len(MODES))
+    for kind, (_, name) in enumerate(VIEW_TYPES):
+        modes = VIEW_COMBINATIONS.get(name, (name,))
+        weights[kind, [MODES.index(mode) for mode in modes]] = 1 / len(modes)
+    return weights / len(VIEW_TYPES)
+
+
+def mode_vectors(clouds: np.ndarray, bases: Bases) -> np.ndarray:
+    weights = mode_weights().to(device())
+    width = bases["components"].shape[2]
+    found = np.empty((clouds.shape[1], len(MODES), width), dtype=np.float32)
+    for start in range(0, clouds.shape[1], CLOUD_GALAXIES):
+        rows = slice(start, start + CLOUD_GALAXIES)
+        points = torch.from_numpy(clouds[:, rows].astype(np.float32)).to(device())
+        lengths = vmap(point_lengths)(points, bases["components"], bases["centre"])
+        along = torch.einsum(
+            "kgr,krd->kgd",
+            (points / lengths[..., None]).mean(dim=2),
+            bases["components"],
+        )
+        means = along + (1 / lengths).mean(dim=2)[..., None] * bases["centre"][:, None]
+        found[rows] = torch.einsum("kgd,km->gmd", means, weights).cpu().numpy()
+    return found
+
+
+def generate_text_vectors() -> None:
     network, bases = stored_flow()
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    points = generated_clouds(network, bases, joint, torch.arange(len(joint)), SEED)
-    np.save(artifact("text_clouds"), points)
+    galaxies = torch.arange(len(joint))
+    vectors = sum(
+        mode_vectors(generated_clouds(network, bases, joint, galaxies, seed), bases)
+        for seed in range(SEED, SEED + DRAWS)
+    )
+    np.save(artifact("text_vectors"), vectors / DRAWS)
     np.save(artifact("text_query_mean"), embed_queries(generic_queries()).mean(axis=0))

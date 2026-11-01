@@ -18,6 +18,7 @@ from app.config import (
     IMAGE_VOCABULARY,
     KEPT,
     MAPS,
+    MODES,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
@@ -26,7 +27,6 @@ from app.config import (
     PROPERTIES,
     REDSHIFT,
     REDSHIFT_VOCABULARY,
-    SEARCH_RANK,
     SPECTRUM_GRID,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
@@ -34,9 +34,6 @@ from app.config import (
     STORE_COLUMNS,
     TABLE_MODES,
     TABLE_VALUE_SURVEYS,
-    TEXT_CONDITION,
-    TEXT_POINTS,
-    TEXT_RANK,
     TEXT_SURVEYS,
     TEXT_VIEWS,
     TOKEN_EMBEDDING_RANK,
@@ -65,7 +62,7 @@ from app.pql import (
     stored,
 )
 from app.search import source, templates, tokens
-from app.text_search import aion_gemma_space, text_index
+from app.text_search import aion_gemma_space, text_vectors
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_IMAGE_TOKENS + 12,
@@ -243,25 +240,10 @@ def _text_views(rng: np.random.Generator, galaxies: int) -> None:
     )
 
 
-def _text_index(rng: np.random.Generator, galaxies: int) -> None:
-    kinds = len(VIEW_TYPES)
-    width = len(GRAM_NAMES) * SEARCH_RANK
-    columns = np.linalg.qr(rng.standard_normal((kinds, GEMMA_DIM, TEXT_RANK)))[0]
-    np.savez(
-        artifact("text_bases"),
-        mean=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
-        components=columns.transpose(0, 2, 1).astype(np.float32),
-        centre=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32) / 16,
-        scale=rng.uniform(0.5, 1.5, (kinds, TEXT_RANK)).astype(np.float32),
-        offset=rng.standard_normal(width).astype(np.float32),
-        projection=rng.standard_normal((width, TEXT_CONDITION)).astype(np.float32),
-        kappa=np.float32(15),
-    )
+def _text_vectors(rng: np.random.Generator, galaxies: int) -> None:
     np.save(
-        artifact("text_clouds"),
-        rng.standard_normal((kinds, galaxies, TEXT_POINTS, TEXT_RANK)).astype(
-            np.float16
-        ),
+        artifact("text_vectors"),
+        rng.standard_normal((galaxies, len(MODES), GEMMA_DIM)).astype(np.float32) / 64,
     )
     np.save(
         artifact("text_query_mean"), rng.standard_normal(GEMMA_DIM).astype(np.float32)
@@ -313,7 +295,7 @@ def forget() -> None:
         tokens,
         templates,
         aion_gemma_space,
-        text_index,
+        text_vectors,
         predictions,
         prediction_basis,
         basis,
@@ -393,7 +375,7 @@ def build(galaxies: int, seed: int = 0) -> Path:
     _token_embeddings(rng, galaxies)
     generate_token_search()
     _text_views(rng, galaxies)
-    _text_index(rng, galaxies)
+    _text_vectors(rng, galaxies)
 
     forget()
     return target
