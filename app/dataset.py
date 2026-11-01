@@ -5,7 +5,7 @@ import numpy as np
 import PIL.Image
 import pyarrow as pa
 from astropy.convolution import Gaussian1DKernel, convolve
-from datasets import Dataset, Image, load_dataset
+from datasets import Dataset, Image, load_dataset, load_from_disk
 
 from .config import (
     ANCHOR,
@@ -15,6 +15,7 @@ from .config import (
     DATASET_AUTHOR,
     DATASET_NAME,
     DATASET_REVISION,
+    LOCAL_DATASET,
     LS,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
@@ -26,6 +27,7 @@ from .config import (
     Catalogue,
     ImageSurvey,
     SpectrumSurvey,
+    build_dir,
 )
 
 RGB_SCALES = {"g": 6.0, "r": 3.4, "i": 3.0, "z": 2.2}
@@ -42,6 +44,9 @@ HSC_TO_NANOMAGGIES = 10 ** (-0.4 * (27.0 - 22.5))
 
 @cache
 def dataset() -> Dataset:
+    local = build_dir() / LOCAL_DATASET
+    if local.exists():
+        return load_from_disk(local)
     return load_dataset(
         f"{DATASET_AUTHOR}/{DATASET_NAME}", split="train", revision=DATASET_REVISION
     )

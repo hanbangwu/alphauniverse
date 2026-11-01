@@ -18,7 +18,6 @@ from app.config import (
     TOP_CODES,
     VOCABULARY,
     artifact,
-    build_dir,
 )
 
 pytest.importorskip("torch")
@@ -36,7 +35,6 @@ def store(
     tokens = artifact("tokens")
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path_factory.mktemp("store")))
-        build_dir().mkdir(parents=True)
         shutil.copy(tokens, artifact("tokens"))
         predictions_module.generate_predictions()
         table = pa.ipc.open_file(

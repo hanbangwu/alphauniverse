@@ -1,22 +1,26 @@
-import argparse
-import os
+from collections.abc import Callable
 from itertools import batched
 from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
+from datasets import Dataset, Features, Sequence, Value
+from datasets import Image as ImageFeature
 
 from app.config import (
     ANCHOR,
     BANDS,
     CROP_PIXELS,
     DIM,
+    FLAG_SURVEYS,
     GEMMA_DIM,
     GRAM_NAMES,
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     KEPT,
+    LOCAL_DATASET,
+    LS,
     MAPS,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
@@ -25,16 +29,20 @@ from app.config import (
     PROBED,
     PROPERTIES,
     REDSHIFT,
+    REDSHIFT_COLUMNS,
     REDSHIFT_VOCABULARY,
+    RGB_COLUMN,
     SPECTRUM_GRID,
     SPECTRUM_MODES,
     SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
     TABLE_MODES,
+    TABLE_VALUE_COLUMNS,
     TABLE_VALUE_SURVEYS,
     TEXT_SURVEYS,
     TOKEN_EMBEDDING_RANK,
+    TOKEN_SURVEYS,
     TOP_CODES,
     VOCABULARY,
     artifact,
@@ -45,6 +53,7 @@ from app.config import (
     store_schema,
     store_writer,
 )
+from app.dataset import dataset, predicted_image, table_columns
 from app.embeddings import generate_token_search
 from app.pql import (
     agreements,
@@ -71,6 +80,8 @@ TOKENS: dict[str, int] = {
 
 STRIDE: dict[str, int] = {ANCHOR: 1, "hsc": 2, "desi": 3, "sdss": 4, REDSHIFT: 6}
 
+GALAXIES = 12
+SEED = 42
 CLUSTERS = 64
 NOISE = 0.05
 
@@ -190,7 +201,7 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
             writer.write_batch(prediction_batch(list(chunk)))
 
 
-def _templates(rng: np.random.Generator, galaxies: int) -> None:
+def _templates(rng: np.random.Generator, galaxies: int) -> dict[str, np.ndarray]:
     centre = (CROP_PIXELS - 1) / 2
     rows, columns = np.indices((CROP_PIXELS, CROP_PIXELS))
     radius = np.hypot(rows - centre, columns - centre)
@@ -215,6 +226,108 @@ def _templates(rng: np.random.Generator, galaxies: int) -> None:
         made[mode] = rng.lognormal(size=(galaxies, count))
     for mode, values in made.items():
         np.save(artifact(f"template_{mode}"), values.astype(np.float32))
+    return made
+
+
+def _observed(
+    survey: str, galaxies: int, cell: Callable[[int], dict]
+) -> list[dict | None]:
+    return [
+        cell(galaxy) if covered(survey, galaxy) else None for galaxy in range(galaxies)
+    ]
+
+
+def _dataset(
+    rng: np.random.Generator,
+    galaxies: int,
+    made: dict[str, np.ndarray],
+    category: pa.Array,
+    provabgs: np.ndarray,
+) -> None:
+    spectrum_feature = {
+        "lambda": Sequence(Value("float32")),
+        "flux": Sequence(Value("float32")),
+        "ivar": Sequence(Value("float32")),
+        "mask": Sequence(Value("bool")),
+    }
+    hsc_bands = [band.lower() for band in BANDS["hsc"]]
+    columns = {
+        f"object_id{LS}": [f"fixture-{galaxy}" for galaxy in range(galaxies)],
+        f"ra{LS}": rng.uniform(149.5, 150.5, galaxies),
+        f"dec{LS}": rng.uniform(1.5, 2.5, galaxies),
+        RGB_COLUMN: [
+            {"bytes": predicted_image(flux, ANCHOR), "path": None}
+            for flux in made[f"{ANCHOR}_image"]
+        ],
+        TOKEN_SURVEYS["hsc"]: _observed(
+            "hsc",
+            galaxies,
+            lambda galaxy: {"band": hsc_bands, "flux": made["hsc_image"][galaxy]},
+        ),
+        **{
+            column: _observed(
+                survey,
+                galaxies,
+                lambda galaxy, survey=survey: {
+                    "lambda": SPECTRUM_GRID,
+                    "flux": rng.uniform(0.5, 5) * made[f"{survey}_spectrum"][galaxy],
+                    "ivar": np.ones(len(SPECTRUM_GRID)),
+                    "mask": np.zeros(len(SPECTRUM_GRID), dtype=bool),
+                },
+            )
+            for survey, column in SPECTRUM_SURVEYS.items()
+        },
+        **{
+            column: rng.lognormal(size=galaxies)
+            for column in TABLE_VALUE_SURVEYS[ANCHOR]
+        },
+        **{
+            column: [
+                value if covered("hsc", galaxy) else None
+                for galaxy, value in enumerate(rng.lognormal(size=galaxies))
+            ]
+            for column in TABLE_VALUE_SURVEYS["hsc"]
+        },
+        FLAG_SURVEYS["gz10"]: category.to_pylist(),
+        FLAG_SURVEYS["provabgs"]: [
+            value if measured else None
+            for value, measured in zip(rng.uniform(8, 12, galaxies), provabgs)
+        ],
+    }
+    for survey, (value, error, warning) in REDSHIFT_COLUMNS.items():
+        held = [covered(survey, galaxy) for galaxy in range(galaxies)]
+        for column, values in (
+            (value, rng.uniform(0, 1, galaxies)),
+            (error, rng.uniform(0, 1e-3, galaxies)),
+            (warning, np.zeros(galaxies, dtype=int)),
+        ):
+            columns[column] = [
+                found if has else None for found, has in zip(values, held)
+            ]
+    Dataset.from_dict(
+        columns,
+        features=Features(
+            {
+                f"object_id{LS}": Value("string"),
+                f"ra{LS}": Value("float64"),
+                f"dec{LS}": Value("float64"),
+                RGB_COLUMN: ImageFeature(),
+                TOKEN_SURVEYS["hsc"]: {
+                    "band": Sequence(Value("string")),
+                    "flux": Sequence(Sequence(Sequence(Value("float32")))),
+                },
+                **{column: spectrum_feature for column in SPECTRUM_SURVEYS.values()},
+                **{column: Value("float32") for column in TABLE_VALUE_COLUMNS},
+                FLAG_SURVEYS["gz10"]: Value("int64"),
+                FLAG_SURVEYS["provabgs"]: Value("float32"),
+                **{
+                    column: Value("int64" if column == warning else "float32")
+                    for value, error, warning in REDSHIFT_COLUMNS.values()
+                    for column in (value, error, warning)
+                },
+            }
+        ),
+    ).save_to_disk(build_dir() / LOCAL_DATASET)
 
 
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
@@ -270,15 +383,17 @@ def forget() -> None:
         agreements,
         sampled,
         basket_sum,
+        dataset,
+        table_columns,
     ):
         cached.cache_clear()
 
 
-def build(galaxies: int, seed: int = 0) -> Path:
+def build(galaxies: int) -> Path:
     target = build_dir()
     target.mkdir(parents=True, exist_ok=True)
 
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(SEED)
     centres = rng.standard_normal((CLUSTERS, DIM)).astype(np.float32)
     centres /= np.linalg.norm(centres, axis=1, keepdims=True)
 
@@ -334,7 +449,8 @@ def build(galaxies: int, seed: int = 0) -> Path:
     )
 
     _predictions(rng, galaxies)
-    _templates(rng, galaxies)
+    made = _templates(rng, galaxies)
+    _dataset(rng, galaxies, made, category, flags["provabgs"])
     pq.write_table(
         _properties(rng, galaxies, flags["provabgs"]), artifact("properties")
     )
@@ -346,21 +462,13 @@ def build(galaxies: int, seed: int = 0) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Builds a small artifact tree in the schemas that app/ serves."
-    )
-    parser.add_argument("--galaxies", type=int, default=12)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--out", type=Path, default=Path(".cache") / "fixture")
-    arguments = parser.parse_args()
+    target = build(GALAXIES)
 
-    os.environ["ALPHAUNIVERSE_CACHE"] = str(arguments.out.resolve())
-    target = build(arguments.galaxies, arguments.seed)
-
-    total = sum(path.stat().st_size for path in target.iterdir())
-    print(f"{arguments.galaxies} galaxies -> {target} ({total / 1e6:.1f} MB)")
-    for path in sorted(target.iterdir()):
-        print(f"  {path.name:24} {path.stat().st_size / 1e6:8.2f} MB")
+    files = sorted(path for path in target.rglob("*") if path.is_file())
+    total = sum(path.stat().st_size for path in files)
+    print(f"{GALAXIES} galaxies -> {target} ({total / 1e6:.1f} MB)")
+    for path in files:
+        print(f"  {path.relative_to(target)!s:24} {path.stat().st_size / 1e6:8.2f} MB")
 
 
 if __name__ == "__main__":

@@ -6,15 +6,15 @@ Every command runs from the repository root and needs `uv <https://docs.astral.s
 Run the site locally
 --------------------
 
-Serve the API from a small synthetic artifact tree in the production schemas, then the frontend, which calls ``http://127.0.0.1:8000``:
+Serve the API from a small synthetic artifact tree and dataset in the production schemas, then the frontend, which calls ``http://127.0.0.1:8000``:
 
 .. code-block:: sh
 
    uv run python -m scripts.fixture
-   ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py
+   uv run fastapi dev app/main.py
    cd frontend && bun install && bun run dev
 
-The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Images, spectra and the catalogue table read the Hugging Face dataset itself, which the first such request downloads (24.33 GB at the pinned revision); with ``HF_HUB_OFFLINE=1`` they fail unless it is cached. The first text search downloads EmbeddingGemma the same way.
+The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads EmbeddingGemma.
 
 Build the dataset and the artifacts
 -----------------------------------
