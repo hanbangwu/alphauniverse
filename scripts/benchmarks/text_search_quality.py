@@ -319,15 +319,22 @@ def mean_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
     return score
 
 
+def framed(
+    averaged: Scorer, name: str, directions: np.ndarray, galaxies: Any
+) -> dict[str, np.ndarray]:
+    return {name: averaged(directions, galaxies)[name]}
+
+
 def families(
     index: TextIndex, views: dict, maps: dict
 ) -> list[tuple[str, Scorer, str]]:
+    averaged = mean_scorer(index, MODE_SETS)
     found = [
         ("clouds", cloud_scorer(index, MODE_SETS), "plain"),
-        ("mean cosine", mean_scorer(index, MODE_SETS), "plain"),
+        ("mean cosine", averaged, "plain"),
     ]
-    for name, modes in MODE_SETS.items():
-        found.append(("mean cosine framed", mean_scorer(index, {name: modes}), name))
+    for name in MODE_SETS:
+        found.append(("mean cosine framed", partial(framed, averaged, name), name))
     modalities = {
         name: tuple(
             modality
@@ -524,7 +531,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
                 )
     return {
         "environment": environment(),
-        "device": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
+        "device": torch.cuda.get_device_name(),
         "half": half,
         "galaxies": len(held),
         "kappa": index.kappa,

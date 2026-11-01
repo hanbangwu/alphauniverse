@@ -29,7 +29,7 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
 Text search quality
 -------------------
 
-Does a query find the galaxies it describes, rather than the galaxies any query ranks high? ``text_search_quality`` ranks the galaxies :term:`held out` of the text flow's training with nine pairs of opposite descriptions. Each side's answer is a third of a measured value in ``properties`` (:doc:`reference`): the top third for the first side, the bottom third for the second.
+Does a query find the galaxies it describes, rather than the galaxies any query ranks high? ``text_search_quality`` ranks the galaxies :term:`held out` of both the text flow's and the maps' training with nine pairs of opposite descriptions. Each side's answer is a third of a measured value in ``properties`` (:doc:`reference`): the top third for the first side, the bottom third for the second.
 
 ============== ================================ =======
 Pair           Value                            Mode
