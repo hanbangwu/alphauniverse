@@ -1,7 +1,7 @@
 import json
+import math
 from collections.abc import Callable
 from datetime import UTC, datetime
-from itertools import batched
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -15,7 +15,6 @@ from sklearn.preprocessing import normalize
 from app.alignment import held_out, pairs
 from app.config import (
     DATASET_REVISION,
-    MODES,
     SEED,
     TEXT_SURVEYS,
     VIEW_COMBINATIONS,
@@ -27,11 +26,13 @@ from app.text_flow import generated_clouds, stored_flow
 from app.text_search import (
     FRAMES,
     TextIndex,
+    TextQuery,
     aion_gemma_space,
     embed_queries,
     generic_queries,
     indexed,
     likelihoods,
+    query_directions,
     text_index,
     view_kinds,
 )
@@ -232,110 +233,125 @@ PAIRS = {
     ),
 }
 HALVES = ("development", "sealed")
-SINGLE = ("images", "spectra", "catalogues")
-MODE_SETS = {"all": MODES} | {name: VIEW_COMBINATIONS[name] for name in SINGLE}
-FRAMED = dict(zip(SINGLE, FRAMES[1:]))
-MODALITIES = {
-    "all": tuple(TEXT_SURVEYS),
-    "images": ("image",),
-    "spectra": ("spectrum",),
-}
+SIDES = {"high": "low", "low": "high"}
+MODE_SETS = {name: VIEW_COMBINATIONS[name] for name in FRAMES}
 RANDOM_DIRECTIONS = 200
 EDITS = 50
-TOP = 32
+TOP = TextQuery.model_fields["matches"].default
 BATCH = 64
+GALAXIES = 1024
 REPORT = Path("docs/benchmarks/text_search_quality.json")
 
-type Scorer = Callable[[np.ndarray], np.ndarray]
+type Scorer = Callable[[np.ndarray, Any], dict[str, np.ndarray]]
 
 
-class Method(NamedTuple):
-    score: Scorer
-    again: Scorer | None
-    queries: str
-
-
-def centred(galaxy: np.ndarray, vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    return galaxy, normalize(vectors - vectors.mean(axis=0))
+def centred(vectors: np.ndarray) -> np.ndarray:
+    return normalize(vectors - vectors.mean(axis=0))
 
 
 def view_scorer(
-    found: dict[str, tuple[np.ndarray, np.ndarray]], modalities: tuple[str, ...]
+    found: dict[str, tuple[np.ndarray, np.ndarray]], sets: dict[str, tuple[str, ...]]
 ) -> Scorer:
-    count = np.zeros(galaxy_count())
-    for modality in modalities:
-        count[found[modality][0]] += 1
-
-    def score(directions: np.ndarray) -> np.ndarray:
-        total = np.zeros((len(directions), galaxy_count()))
-        for modality in modalities:
-            galaxy, vectors = found[modality]
-            total[:, galaxy] += directions @ vectors.T
-        return np.where(count > 0, total / np.maximum(count, 1), -1.0)
-
-    return score
-
-
-def likelihood_scorer(index: TextIndex, kinds: list[int]) -> Scorer:
-    def score(directions: np.ndarray) -> np.ndarray:
-        return np.concatenate(
-            [
-                likelihoods(index, torch.from_numpy(np.stack(rows)).float(), kinds)[
-                    0
-                ].numpy()
-                for rows in batched(directions, BATCH)
-            ]
-        )
+    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
+        scores = {}
+        for name, modalities in sets.items():
+            total = np.zeros((len(directions), galaxy_count()))
+            count = np.zeros(galaxy_count())
+            for modality in modalities:
+                galaxy, vectors = found[modality]
+                total[:, galaxy] += directions @ vectors.T
+                count[galaxy] += 1
+            mean = np.where(count > 0, total / np.maximum(count, 1), -1.0)
+            scores[name] = mean[:, galaxies]
+        return scores
 
     return score
 
 
-def summaries(index: TextIndex) -> torch.Tensor:
-    found = torch.empty(*index.points.shape[:2], index.points.shape[-1] + 1)
-    for kind, (points, lengths) in enumerate(zip(index.points, index.lengths)):
-        inverse = 1 / lengths
-        found[kind, :, :-1] = (points * inverse[..., None]).mean(dim=1)
-        found[kind, :, -1] = inverse.mean(dim=1)
-    return found
+def cloud_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
+    every = view_kinds(MODE_SETS["everything"])
+    columns = {
+        name: [every.index(kind) for kind in view_kinds(modes)]
+        for name, modes in sets.items()
+    }
+    points = index.points.shape[2]
 
-
-def mean_scorer(index: TextIndex, summary: torch.Tensor, kinds: list[int]) -> Scorer:
-    def score(directions: np.ndarray) -> np.ndarray:
-        chosen = torch.from_numpy(directions).float().T
-        total = sum(
-            summary[kind, :, :-1] @ (index.components[kind] @ chosen)
-            + summary[kind, :, -1:] * (index.centre[kind] @ chosen)
-            for kind in kinds
-        )
-        return (total / len(kinds)).T.numpy()
+    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
+        chosen = torch.arange(index.points.shape[1])[galaxies]
+        scores = {name: np.empty((len(directions), len(chosen))) for name in sets}
+        for start in range(0, len(chosen), GALAXIES):
+            part = chosen[start : start + GALAXIES]
+            rows = slice(start, start + GALAXIES)
+            sub = index._replace(
+                points=index.points[:, part], lengths=index.lengths[:, part]
+            )
+            for first in range(0, len(directions), BATCH):
+                batch = slice(first, first + BATCH)
+                direction = torch.from_numpy(directions[batch]).float()
+                by_kind = likelihoods(sub, direction, every)[1]
+                for name, kinds in columns.items():
+                    found = by_kind[..., kinds].logsumexp(dim=-1)
+                    scores[name][batch, rows] = found - math.log(len(kinds) * points)
+        return scores
 
     return score
 
 
-def methods(
-    index: TextIndex, second: TextIndex, views: dict, maps: dict
-) -> dict[str, Method]:
-    summary, again = summaries(index), summaries(second)
-    found = {}
-    for name, modes in MODE_SETS.items():
+def mean_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
+    means = {}
+    for name, modes in sets.items():
         kinds = view_kinds(modes)
-        found[f"clouds, {name}"] = Method(
-            likelihood_scorer(index, kinds), likelihood_scorer(second, kinds), "plain"
+        means[name] = sum(
+            (index.points[kind] / index.lengths[kind][..., None]).mean(dim=1)
+            @ index.components[kind]
+            + (1 / index.lengths[kind]).mean(dim=1, keepdim=True) * index.centre[kind]
+            for kind in kinds
+        ) / len(kinds)
+
+    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
+        direction = torch.from_numpy(directions).float()
+        return {
+            name: (direction @ found[galaxies].T).numpy()
+            for name, found in means.items()
+        }
+
+    return score
+
+
+def families(
+    index: TextIndex, views: dict, maps: dict
+) -> list[tuple[str, Scorer, str]]:
+    found = [
+        ("clouds", cloud_scorer(index, MODE_SETS), "plain"),
+        ("mean cosine", mean_scorer(index, MODE_SETS), "plain"),
+    ]
+    for name, modes in MODE_SETS.items():
+        found.append(("mean cosine framed", mean_scorer(index, {name: modes}), name))
+    modalities = {
+        name: tuple(
+            modality
+            for modality, survey in TEXT_SURVEYS.items()
+            if f"{survey}_{modality}" in modes
         )
-        averaged = Method(
-            mean_scorer(index, summary, kinds),
-            mean_scorer(second, again, kinds),
-            "plain",
-        )
-        found[f"mean cosine, {name}"] = averaged
-        if name in FRAMED:
-            found[f"mean cosine framed, {name}"] = averaged._replace(queries=name)
-        if name in MODALITIES:
-            for method, space in (("views", views), ("maps", maps)):
-                found[f"{method}, {name}"] = Method(
-                    view_scorer(space, MODALITIES[name]), None, "plain"
-                )
+        for name, modes in MODE_SETS.items()
+    }
+    observed = {name: chosen for name, chosen in modalities.items() if chosen}
+    for family, space in (("views", views), ("maps", maps)):
+        found.append((family, view_scorer(space, observed), "plain"))
     return found
+
+
+def second_tops(directions: np.ndarray) -> dict[str, list[np.ndarray]]:
+    network, bases = stored_flow()
+    joint = loaded("joint_embedding", torch.float32)
+    every = torch.arange(galaxy_count())
+    second = indexed(generated_clouds(network, bases, joint, every, SEED + 1))
+    tops = {}
+    for family, scorer in (("clouds", cloud_scorer), ("mean cosine", mean_scorer)):
+        scored = scorer(second, MODE_SETS)(directions, slice(None))
+        for name, scores in scored.items():
+            tops[f"{family}, {name}"] = [top(row) for row in scores]
+    return tops
 
 
 def sides(values: np.ndarray) -> dict[str, np.ndarray]:
@@ -343,76 +359,64 @@ def sides(values: np.ndarray) -> dict[str, np.ndarray]:
     return {"high": values > high, "low": values < low, "known": np.isfinite(values)}
 
 
-def edited(
-    rng: np.random.Generator, first: np.ndarray, second: np.ndarray
-) -> np.ndarray:
+def edited(first: np.ndarray, second: np.ndarray, steps: np.ndarray) -> np.ndarray:
     middle = (first + second) / 2
-    steps = normalize(rng.standard_normal((EDITS, len(first))))
-    steps *= np.linalg.norm(first - second) / 2
-    return np.concatenate([normalize(middle + steps), normalize(middle - steps)])
+    scaled = steps * np.linalg.norm(first - second) / 2
+    return np.concatenate([normalize(middle + scaled), normalize(middle - scaled)])
 
 
-def top(score: np.ndarray, kept: np.ndarray) -> np.ndarray:
-    order = np.argsort(-score)
-    return order[kept[order]][:TOP]
+def top(score: np.ndarray) -> np.ndarray:
+    return np.argsort(-score)[:TOP]
 
 
 def pair_rows(
-    method: Method,
-    vectors: dict[str, np.ndarray],
+    scores: dict[str, np.ndarray],
     edits: dict[tuple[str, str], np.ndarray],
+    random_scores: np.ndarray,
+    tops: dict[str, np.ndarray],
     phrasings: tuple[tuple[str, str], ...],
     labels: dict[str, np.ndarray],
     held: np.ndarray,
-    random_scores: np.ndarray,
-) -> dict[str, list[dict[str, Any]]]:
-    known = labels["known"]
-    tested = held[known[held]]
+) -> dict[str, dict[str, dict[str, Any]]]:
+    inside = labels["known"][held]
 
-    def precision(relevant: np.ndarray, score: np.ndarray) -> float:
-        return float(average_precision_score(relevant[tested], score[tested]))
+    def precision(side: str, score: np.ndarray) -> float:
+        return float(average_precision_score(labels[side][held][inside], score[inside]))
 
     nulls = {
-        side: np.quantile([precision(labels[side], row) for row in random_scores], 0.95)
-        for side in ("high", "low")
+        side: np.quantile([precision(side, row) for row in random_scores], 0.95)
+        for side in SIDES
     }
-    rows: dict[str, list[dict[str, Any]]] = {"high": [], "low": []}
-    for high, low in phrasings:
-        scores = dict(
-            zip((high, low), method.score(np.stack([vectors[high], vectors[low]])))
-        )
-        plus, minus = np.split(method.score(edits[high, low]), 2)
-        for side, own, opposite in (("high", high, low), ("low", low, high)):
-            relevant, other = labels[side], labels["low" if side == "high" else "high"]
-            own_ap = precision(relevant, scores[own])
-            opposite_ap = precision(relevant, scores[opposite])
+    rows: dict[str, dict[str, dict[str, Any]]] = {side: {} for side in SIDES}
+    for both in phrasings:
+        found = {side: scores[text] for side, text in zip(SIDES, both)}
+        plus, minus = np.split(edits[both], 2)
+        for (side, opposite), text in zip(SIDES.items(), both):
+            own = precision(side, found[side][held])
+            specificity = own - precision(side, found[opposite][held])
             edit_null = np.quantile(
                 [
-                    abs(precision(relevant, a) - precision(relevant, b))
-                    for a, b in zip(plus, minus)
+                    abs(precision(side, first) - precision(side, second))
+                    for first, second in zip(plus, minus)
                 ],
                 0.95,
             )
-            page = top(scores[own], known)
+            page = top(np.where(labels["known"], found[side], -np.inf))
             row = {
-                "phrasing": own,
-                "average_precision": round(own_ap, 4),
-                "opposite_average_precision": round(opposite_ap, 4),
-                "specificity": round(own_ap - opposite_ap, 4),
+                "average_precision": round(own, 4),
+                "specificity": round(specificity, 4),
                 "edit_null": round(float(edit_null), 4),
                 "random_null": round(float(nulls[side]), 4),
-                "passes": bool(
-                    own_ap - opposite_ap > edit_null and own_ap > nulls[side]
+                "passes": bool(specificity > edit_null and own > nulls[side]),
+                f"precision@{TOP}": round(float(labels[side][page].mean()), 4),
+                f"opposite_precision@{TOP}": round(
+                    float(labels[opposite][page].mean()), 4
                 ),
-                f"precision@{TOP}": round(float(relevant[page].mean()), 4),
-                f"opposite_precision@{TOP}": round(float(other[page].mean()), 4),
             }
-            if method.again is not None:
-                everyone = np.ones_like(known)
-                first = top(scores[own], everyone)
-                second = top(method.again(vectors[own][None])[0], everyone)
-                row[f"seed_overlap@{TOP}"] = len(np.intersect1d(first, second)) / TOP
-            rows[side].append(row)
+            if text in tops:
+                shared = np.intersect1d(top(found[side]), tops[text])
+                row[f"seed_overlap@{TOP}"] = len(shared) / TOP
+            rows[side][text] = row
     return rows
 
 
@@ -431,86 +435,83 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         name: tuple(zip(pair.high[start::2], pair.low[start::2]))
         for name, pair in PAIRS.items()
     }
-    texts = [text for found in chosen.values() for both in found for text in both]
+    phrased = [both for found in chosen.values() for both in found]
+    texts = [text for both in phrased for text in both]
 
     index = text_index()
-    bank = embed_queries(generic_queries())
-    frame_means = dict(zip(FRAMES, np.split(bank, len(FRAMES))))
-    queries = {"plain": normalize(embed_queries(texts) - index.query_mean.numpy())}
-    for name, frame in FRAMED.items():
+    generic = embed_queries(generic_queries())
+    queries = {"plain": query_directions(embed_queries(texts), index.query_mean)}
+    for (name, frame), block in zip(FRAMES.items(), np.split(generic, len(FRAMES))):
         framed = embed_queries([frame.format(text) for text in texts])
-        queries[name] = normalize(framed - frame_means[frame].mean(axis=0))
-    queries = {name: dict(zip(texts, rows)) for name, rows in queries.items()}
+        queries[name] = query_directions(framed, torch.from_numpy(block.mean(axis=0)))
+    queries = {name: rows.numpy() for name, rows in queries.items()}
     rng = np.random.default_rng(SEED)
-    edits = {
-        name: {
-            both: edited(rng, vectors[both[0]], vectors[both[1]])
-            for found in chosen.values()
-            for both in found
-        }
-        for name, vectors in queries.items()
-    }
     random_directions = normalize(
-        rng.standard_normal((RANDOM_DIRECTIONS, bank.shape[1]))
+        rng.standard_normal((RANDOM_DIRECTIONS, generic.shape[1]))
     )
+    steps = normalize(rng.standard_normal((EDITS, generic.shape[1])))
+    tops = second_tops(queries["plain"])
 
-    views = {}
+    space = aion_gemma_space()
+    views, maps = {}, {}
     for modality in TEXT_SURVEYS:
         galaxy, _, gemma = pairs(modality)
-        views[modality] = centred(galaxy, gemma.cpu().numpy())
-    space = aion_gemma_space()
-    maps = {
-        modality: centred(
-            space.galaxy[space.modality == modality],
-            space.vectors[space.modality == modality],
-        )
-        for modality in TEXT_SURVEYS
-    }
-    network, bases = stored_flow()
-    joint = loaded("joint_embedding", torch.float32)
-    every = torch.arange(galaxy_count())
-    second = indexed(generated_clouds(network, bases, joint, every, SEED + 1))
+        views[modality] = galaxy, centred(gemma.cpu().numpy())
+        rows = space.modality == modality
+        maps[modality] = space.galaxy[rows], centred(space.vectors[rows])
 
-    properties = pq.read_table(artifact("properties"))
+    properties = pq.read_table(
+        artifact("properties"), columns=[pair.label for pair in PAIRS.values()]
+    )
     labels = {
         name: sides(properties.column(pair.label).to_numpy(zero_copy_only=False))
         for name, pair in PAIRS.items()
     }
-    results: dict[str, Any] = {}
-    for name, pair in PAIRS.items():
-        tested = held[labels[name]["known"][held]]
-        results[name] = {
-            "label": pair.label,
-            "mode": pair.mode,
-            "galaxies": len(tested),
-            "base_rates": {
-                side: round(float(labels[name][side][tested].mean()), 4)
-                for side in ("high", "low")
-            },
-            "methods": {},
-        }
-    for method_name, method in methods(index, second, views, maps).items():
-        random_scores = method.score(random_directions)
-        for name in PAIRS:
-            results[name]["methods"][method_name] = pair_rows(
-                method,
-                queries[method.queries],
-                edits[method.queries],
-                chosen[name],
-                labels[name],
-                held,
-                random_scores,
+    phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
+    for family, scorer, which in families(index, views, maps):
+        vectors = dict(zip(texts, queries[which]))
+        edits = [edited(vectors[high], vectors[low], steps) for high, low in phrased]
+        scored = scorer(queries[which], slice(None))
+        nulls = scorer(np.concatenate([random_directions, *edits]), held)
+        for name, scores in scored.items():
+            method = f"{family}, {name}"
+            random_scores, *edit_scores = np.split(
+                nulls[name], np.arange(RANDOM_DIRECTIONS, len(nulls[name]), 2 * EDITS)
             )
+            for pair, found in chosen.items():
+                phrasings[pair][method] = pair_rows(
+                    dict(zip(texts, scores)),
+                    dict(zip(phrased, edit_scores)),
+                    random_scores,
+                    dict(zip(texts, tops.get(method, []))),
+                    found,
+                    labels[pair],
+                    held,
+                )
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
         "half": half,
         "galaxies": len(held),
         "kappa": index.kappa,
-        "generic_queries": len(bank),
         "random_directions": RANDOM_DIRECTIONS,
         "edits": EDITS,
-        "pairs": results,
+        "pairs": {
+            name: {
+                "label": pair.label,
+                "mode": pair.mode,
+                "galaxies": int(labels[name]["known"][held].sum()),
+            }
+            | {
+                f"{side}_base_rate": round(
+                    float(labels[name][side][held][labels[name]["known"][held]].mean()),
+                    4,
+                )
+                for side in SIDES
+            }
+            for name, pair in PAIRS.items()
+        },
+        "phrasings": phrasings,
         "memory": memory(),
     }
 

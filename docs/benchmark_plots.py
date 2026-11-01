@@ -92,13 +92,8 @@ def text_search_quality():
     found = report("text_search_quality")
     if found is None:
         return missing()
-    rows = [
-        {"pair": pair, "method": method, "side": side} | row
-        for pair, results in found["pairs"].items()
-        for method, sides in results["methods"].items()
-        for side, phrasings in sides.items()
-        for row in phrasings
-    ]
+    pairs = flattened(found["pairs"], ("pair",))
+    rows = flattened(found["phrasings"], ("pair", "method", "side", "phrasing"))
     groups = {}
     for row in rows:
         groups.setdefault((row["method"], (row["pair"], row["side"])), []).append(row)
@@ -153,8 +148,11 @@ def text_search_quality():
             found,
             f"{found['galaxies']:,} held-out galaxies",
             f"the {found['half']} half",
+            f"{found['random_directions']} random directions",
+            f"{found['edits']} edits",
             cpus(found),
         ),
+        table(pairs, max(pairs, key=len)),
         chart,
         table(rows, max(rows, key=len), height=400),
         **WIDTH,

@@ -29,41 +29,41 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
 Text search quality
 -------------------
 
-Does a query find the galaxies it describes, rather than the galaxies any query ranks high? ``text_search_quality`` ranks the 30% of galaxies :term:`held out` of the text flow's training with nine pairs of opposite descriptions. Each side's answer is a third of a measured value in ``properties`` (:doc:`reference`): the top third for the first side, the bottom third for the second.
+Does a query find the galaxies it describes, rather than the galaxies any query ranks high? ``text_search_quality`` ranks the galaxies :term:`held out` of the text flow's training with nine pairs of opposite descriptions. Each side's answer is a third of a measured value in ``properties`` (:doc:`reference`): the top third for the first side, the bottom third for the second.
 
-============== ================================ ======= =================================================
-Pair           Value                            Mode    First phrasing of each side
-============== ================================ ======= =================================================
-colour         g − r                            images  a red galaxy / a blue galaxy
-size           :term:`half-light radius`        images  a large galaxy / a small galaxy
-brightness     r magnitude                      images  a faint galaxy / a bright galaxy
-shape          :term:`axis ratio`               images  a round galaxy / an edge-on galaxy
-emission       Hα :term:`equivalent width`      spectra a galaxy with strong emission lines / an absorption-line galaxy
-break          :term:`Dn4000`                   spectra a galaxy with a strong 4000 angstrom break / a galaxy with a weak 4000 angstrom break
-redshift       redshift                                 a distant galaxy / a nearby galaxy
-star formation :term:`sSFR`                             a star-forming galaxy / a quiescent galaxy
-mass           stellar mass                             a massive galaxy / a dwarf galaxy
-============== ================================ ======= =================================================
+============== ================================ =======
+Pair           Value                            Mode
+============== ================================ =======
+colour         g − r                            images
+size           :term:`half-light radius`        images
+brightness     r magnitude                      images
+shape          :term:`axis ratio`               images
+emission       Hα :term:`equivalent width`      spectra
+break          :term:`Dn4000`                   spectra
+redshift       redshift
+star formation :term:`sSFR`
+mass           stellar mass
+============== ================================ =======
 
-Each side has six phrasings, fixed before the benchmark first ran: the first, third and fifth form the *development* half, which chooses a method, and the others the *sealed* half, which judges it once. The first six pairs describe what a mode shows; the last three are physical properties.
+Each side has six phrasings: the first, third and fifth form the *development* half, which chooses a method, and the others the *sealed* half, which judges it once. The first six pairs describe what a mode shows; the last three are physical properties.
 
-A method scores galaxy :math:`g` for a query direction :math:`\tilde t`, the query's :term:`EmbeddingGemma` embedding less the mean of 10,080 generic queries, at unit length. The generic queries are every combination of three framings or none, 13 adjectives or none, 15 kinds of galaxy and 11 endings or none, such as *an image of a dusty spiral galaxy with a dust lane*. Each method uses the view types of a chosen set of modes: *all*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift), each with its combination view.
+A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`methods/text-search`, over the view types of a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift), each with its combination view, as searching only some modes does.
 
 - *views*: the mean of :math:`\cos(\tilde t, \tilde e)` over EmbeddingGemma's embeddings :math:`e` of the galaxy's observed image and DESI spectrum plot, each less its modality's mean, at unit length.
 - *maps*: the same, with AION's embeddings carried into EmbeddingGemma's space by the maps text search used before.
-- *clouds*: :math:`s(g \mid t) = \log \frac{1}{n} \sum_i \exp\left(\kappa \cos(\tilde t, x_i)\right)` over the galaxy's :math:`n` :term:`cloud` points :math:`x_i` of those view types, at the :term:`κ` stored with them, as text search ranks now.
-- *mean cosine*: :math:`\frac{1}{n} \sum_i \cos(\tilde t, x_i)` over the same points.
-- *mean cosine framed*: the mean cosine, with the query written after "an image of", "the spectrum of" or "the photometry of" for its mode, less the mean of the generic queries with that framing.
+- *clouds*: :math:`s(g \mid t)` over the galaxy's :term:`cloud` points of those view types.
+- *mean cosine*: :math:`\frac{1}{n} \sum_i \cos(\tilde t, x_i)` over the same :math:`n` points :math:`x_i`.
+- *mean cosine framed*: the mean cosine, with the query written after its mode set's framing, none for everything, "an image of", "the spectrum of" or "the photometry of", and less the mean of the generic queries with that framing.
 
 For each side, among the held-out galaxies with the value:
 
 - *average precision* (AP) ranks them by the phrasing's score: it averages, over every galaxy in the side's third, the fraction in that third among the galaxies ranked at or above it;
 - *specificity* is that AP less the AP of the opposite side's phrasing on the same third;
-- the *edit null* is the 95th percentile of the absolute change in AP over 50 random edits of the pair's two directions, each the size of the edit from one to the other, about their midpoint;
-- the *random null* is the 95th percentile of AP over 200 random unit directions;
+- the *edit null* is the 95th percentile of the absolute change in AP over random edits of the pair's two directions, each the size of the edit from one to the other, about their midpoint;
+- the *random null* is the 95th percentile of AP over random unit directions;
 - a phrasing *passes* when its specificity exceeds the edit null and its AP the random null.
 
-Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third, and *seed overlap@32* is the fraction of its top 32 over all galaxies that clouds drawn with a second seed share.
+Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third. For clouds and mean cosine, *seed overlap@32* is the fraction of its top 32 over all galaxies that clouds drawn with a second seed share.
 
 .. bokeh-plot::
    :source-position: none

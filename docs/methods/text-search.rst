@@ -8,7 +8,7 @@ Text search ranks galaxies by how likely a sentence is to describe them. AION re
 
 A galaxy's :term:`cloud` stands in for every view it could have. Given the galaxy's :term:`joint embedding`, a flow carries Gaussian noise to 16 points for each of 26 view types, 416 in all, each the predicted EmbeddingGemma embedding of one view. The view types are the observation, the :term:`template` and a sample of AION's predictions in each of the seven modes, and five combinations of modes; a galaxy unobserved in a mode still gets that mode's observed points, the observation AION predicts for it. The flow learns from views of the galaxies outside the :term:`held out` set.
 
-A query :math:`t` is embedded by EmbeddingGemma and, less the mean embedding of 10,080 generic queries, scaled to unit length, :math:`\tilde t`. A galaxy :math:`g` with cloud :math:`C_g` scores
+A query :math:`t` is embedded by EmbeddingGemma and, less the mean embedding of 10,080 generic queries, scaled to unit length, :math:`\tilde t`. The generic queries are every combination of three framings or none, 13 adjectives or none, 15 kinds of galaxy and 11 endings or none, such as *an image of a dusty spiral galaxy with a dust lane*. A galaxy :math:`g` with cloud :math:`C_g` scores
 
 .. math::
 
