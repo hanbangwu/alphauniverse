@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Seventeen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ============================ ====================================== ==================================
 Job                          Reads                                  Writes
@@ -37,8 +37,6 @@ generate_maps                the dataset, joint_embedding,          same_place_p
 generate_projections         the dataset, encoded                   mean_points, full_points,
                                                                     parametric_umap
 generate_pairs               the dataset, encoded                   pairs_<modality>
-generate_alignment           pairs_<modality>                       alignment
-generate_aion_gemma_space    pairs_<modality>, alignment            aion_gemma_space
 generate_text_views          the dataset, tokens, probabilities,    text_views, text_views_held_out
                              probability_basis, template_<mode>
 train_text_flow              the dataset, tokens, probabilities,    text_flow, text_bases, text_views,
@@ -132,7 +130,7 @@ The redshift's prediction is the median of AION's predicted distribution, and it
    :no-index:
    :no-value:
 
-``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text maps' weights; ``alignment`` holds, for each modality, the network and a linear map fitted to the same pairs as a baseline. ``aion_gemma_space`` is an ``np.savez`` of the rows of ``pairs_image`` then ``pairs_spectrum`` carried into EmbeddingGemma's space: ``vectors`` (``float32``, rows × 768, unit length), ``galaxy`` (``int32``) and ``modality`` (``image`` or ``spectrum``).
+``parametric_umap`` is a ``torch.save`` file of the projector's weights.
 
 HTTP API
 --------

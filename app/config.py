@@ -279,8 +279,6 @@ ARTIFACTS: dict[str, str] = {
     "full_points": "parquet",
     "parametric_umap": "pt",
     **{f"pairs_{modality}": "parquet" for modality in TEXT_SURVEYS},
-    "alignment": "pt",
-    "aion_gemma_space": "npz",
     "text_views": "parquet",
     "text_views_held_out": "parquet",
     "text_bases": "npz",

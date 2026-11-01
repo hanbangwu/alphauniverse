@@ -51,7 +51,6 @@ A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :do
 
 - *search*: :math:`s(g \mid t)` from the stored vectors, over every mode, as text search ranks.
 - *views*: the mean of :math:`\cos(\tilde t, \tilde e)` over EmbeddingGemma's embeddings :math:`e` of the galaxy's observed image and DESI spectrum plot, each less its modality's mean, at unit length.
-- *maps*: the same, with AION's embeddings carried into EmbeddingGemma's space by the maps text search used before.
 - *clouds*: :math:`\log \frac{1}{n} \sum_i \exp\left(\kappa \cos(\tilde t, x_i)\right)` over the :math:`n` points :math:`x_i` of one :term:`cloud` of those view types, at the :term:`κ` ``train_text_flow`` stores.
 - *mean cosine*: :math:`\frac{1}{n} \sum_i \cos(\tilde t, x_i)` over the same points.
 - *mean cosine framed*: the mean cosine, with the query written after its mode set's framing, none for everything, "an image of", "the spectrum of" or "the photometry of", and less the mean of the generic queries with that framing.
