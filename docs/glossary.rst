@@ -25,14 +25,14 @@ Glossary
    axis ratio
       The ratio of a galaxy's minor to major axis, :math:`(1 - e) / (1 + e)` for the Legacy Survey model's ellipticity :math:`e = \sqrt{e_1^2 + e_2^2}`: near 1 for a round or face-on galaxy, small for an edge-on disk. See :doc:`reference`.
 
-   breadth
-      How widely a text query spreads over :math:`N` galaxies: :math:`\exp(H)/N`, with :math:`H` the entropy of its probabilities over them. See :doc:`benchmarks`.
-
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 
+   contribution
+      A mode's Shapley value in a text search match's lead over the average galaxy: each view type's part, split equally among the modes it needs. See :doc:`methods/text-search`.
+
    cloud
-      A galaxy's 416 points in :term:`EmbeddingGemma`'s space, 16 for each of 26 view types, each the predicted embedding of one :term:`view`; text search scores a query against them. See :doc:`methods/text-search`.
+      A galaxy's 416 points in :term:`EmbeddingGemma`'s space, 16 for each of 26 view types, each the predicted embedding of one :term:`view`; text search averages eight of them. See :doc:`methods/text-search`.
 
    code
       One entry in a :term:`codec`'s fixed vocabulary. A :term:`token` is the code of one piece of an observation.
@@ -94,8 +94,6 @@ Glossary
    PROVABGS
       A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the probe benchmark, its masses and star formation rates for the text search benchmark, and in ``properties`` as the measured mass and star formation rate, to which the predicted ones are fitted.
 
-   share
-      The part of a text search match's score that comes from one mode's points in its :term:`cloud`; the combination views share as one. See :doc:`methods/text-search`.
 
    slot
       A position a :term:`token` can occupy: one image cell, one spectral window, one catalogue value or the redshift. A galaxy has 1,722.
