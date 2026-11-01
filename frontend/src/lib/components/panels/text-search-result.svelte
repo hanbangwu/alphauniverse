@@ -19,7 +19,7 @@
   const lead = $derived(contributions.reduce((total, [, value]) => total + value, 0))
   const leading = $derived(
     contributions
-      .filter(([, value]) => value >= 0.1 * lead)
+      .filter(([, value]) => lead > 0 && value >= 0.1 * lead)
       .toSorted(([, first], [, second]) => second - first)
       .map(([name, value]) => `${MODES[name].label} ${Math.round((100 * value) / lead)}%`)
   )
