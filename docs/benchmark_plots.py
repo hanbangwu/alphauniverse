@@ -94,6 +94,9 @@ def text_search_quality():
         return missing()
     pairs = flattened(found["pairs"], ("pair",))
     rows = flattened(found["phrasings"], ("pair", "method", "side", "phrasing"))
+    crossed = flattened(
+        found["cross_pairs"], ("method", "labels", "phrasings", "phrasing")
+    )
     groups = {}
     for row in rows:
         groups.setdefault((row["method"], (row["pair"], row["side"])), []).append(row)
@@ -155,6 +158,11 @@ def text_search_quality():
         table(pairs, max(pairs, key=len)),
         chart,
         table(rows, max(rows, key=len), height=400),
+        table(
+            crossed,
+            ("method", "labels", "phrasings", "phrasing", "separation"),
+            height=400,
+        ),
         **WIDTH,
     )
 

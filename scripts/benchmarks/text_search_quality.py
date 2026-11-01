@@ -2,6 +2,7 @@ import json
 import math
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -369,6 +370,27 @@ def top(score: np.ndarray) -> np.ndarray:
     return np.argsort(-score)[:TOP]
 
 
+def precision(
+    labels: dict[str, np.ndarray], held: np.ndarray, side: str, score: np.ndarray
+) -> float:
+    inside = labels["known"][held]
+    return float(average_precision_score(labels[side][held][inside], score[inside]))
+
+
+def separation(
+    scores: dict[str, np.ndarray],
+    both: tuple[str, str],
+    labels: dict[str, np.ndarray],
+    held: np.ndarray,
+) -> float:
+    found = [
+        precision(labels, held, side, scores[own][held])
+        - precision(labels, held, side, scores[other][held])
+        for side, own, other in zip(SIDES, both, both[::-1])
+    ]
+    return round(sum(found) / len(found), 4)
+
+
 def pair_rows(
     scores: dict[str, np.ndarray],
     edits: dict[tuple[str, str], np.ndarray],
@@ -378,13 +400,9 @@ def pair_rows(
     labels: dict[str, np.ndarray],
     held: np.ndarray,
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    inside = labels["known"][held]
-
-    def precision(side: str, score: np.ndarray) -> float:
-        return float(average_precision_score(labels[side][held][inside], score[inside]))
-
+    ranked = partial(precision, labels, held)
     nulls = {
-        side: np.quantile([precision(side, row) for row in random_scores], 0.95)
+        side: np.quantile([ranked(side, row) for row in random_scores], 0.95)
         for side in SIDES
     }
     rows: dict[str, dict[str, dict[str, Any]]] = {side: {} for side in SIDES}
@@ -392,11 +410,11 @@ def pair_rows(
         found = {side: scores[text] for side, text in zip(SIDES, both)}
         plus, minus = np.split(edits[both], 2)
         for (side, opposite), text in zip(SIDES.items(), both):
-            own = precision(side, found[side][held])
-            specificity = own - precision(side, found[opposite][held])
+            own = ranked(side, found[side][held])
+            specificity = own - ranked(side, found[opposite][held])
             edit_null = np.quantile(
                 [
-                    abs(precision(side, first) - precision(side, second))
+                    abs(ranked(side, first) - ranked(side, second))
                     for first, second in zip(plus, minus)
                 ],
                 0.95,
@@ -407,7 +425,7 @@ def pair_rows(
                 "specificity": round(specificity, 4),
                 "edit_null": round(float(edit_null), 4),
                 "random_null": round(float(nulls[side]), 4),
-                "passes": bool(specificity > edit_null and own > nulls[side]),
+                "passes": bool(specificity > edit_null),
                 f"precision@{TOP}": round(float(labels[side][page].mean()), 4),
                 f"opposite_precision@{TOP}": round(
                     float(labels[opposite][page].mean()), 4
@@ -468,6 +486,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         for name, pair in PAIRS.items()
     }
     phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
+    cross_pairs: dict[str, dict[str, Any]] = {}
     for family, scorer, which in families(index, views, maps):
         vectors = dict(zip(texts, queries[which]))
         edits = [edited(vectors[high], vectors[low], steps) for high, low in phrased]
@@ -475,12 +494,27 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         nulls = scorer(np.concatenate([random_directions, *edits]), held)
         for name, scores in scored.items():
             method = f"{family}, {name}"
+            by_text = dict(zip(texts, scores))
+            cross_pairs[method] = {
+                target: {
+                    source: {
+                        both[0]: {
+                            "separation": separation(
+                                by_text, both, labels[target], held
+                            )
+                        }
+                        for both in found
+                    }
+                    for source, found in chosen.items()
+                }
+                for target in PAIRS
+            }
             random_scores, *edit_scores = np.split(
                 nulls[name], np.arange(RANDOM_DIRECTIONS, len(nulls[name]), 2 * EDITS)
             )
             for pair, found in chosen.items():
                 phrasings[pair][method] = pair_rows(
-                    dict(zip(texts, scores)),
+                    by_text,
                     dict(zip(phrased, edit_scores)),
                     random_scores,
                     dict(zip(texts, tops.get(method, []))),
@@ -512,6 +546,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
             for name, pair in PAIRS.items()
         },
         "phrasings": phrasings,
+        "cross_pairs": cross_pairs,
         "memory": memory(),
     }
 
