@@ -637,31 +637,54 @@ def mode_weights() -> torch.Tensor:
     return weights / len(VIEW_TYPES)
 
 
+def kind_means(
+    points: torch.Tensor,
+    lengths: torch.Tensor,
+    components: torch.Tensor,
+    centre: torch.Tensor,
+) -> torch.Tensor:
+    along = (
+        torch.einsum("...gpr,...rd->...gd", points / lengths[..., None], components)
+        / points.shape[-2]
+    )
+    return along + (1 / lengths).mean(dim=-1)[..., None] * centre[..., None, :]
+
+
 def mode_vectors(clouds: np.ndarray, bases: Bases) -> np.ndarray:
     weights = mode_weights().to(device())
     width = bases["components"].shape[2]
     found = np.empty((clouds.shape[1], len(MODES), width), dtype=np.float32)
     for start in range(0, clouds.shape[1], CLOUD_GALAXIES):
         rows = slice(start, start + CLOUD_GALAXIES)
-        points = torch.from_numpy(clouds[:, rows].astype(np.float32)).to(device())
+        points = torch.from_numpy(clouds[:, rows]).to(device()).float()
         lengths = vmap(point_lengths)(points, bases["components"], bases["centre"])
-        along = torch.einsum(
-            "kgr,krd->kgd",
-            (points / lengths[..., None]).mean(dim=2),
-            bases["components"],
-        )
-        means = along + (1 / lengths).mean(dim=2)[..., None] * bases["centre"][:, None]
+        means = kind_means(points, lengths, bases["components"], bases["centre"])
         found[rows] = torch.einsum("kgd,km->gmd", means, weights).cpu().numpy()
     return found
+
+
+def drawn_vectors(
+    network: Velocity,
+    bases: Bases,
+    joint: torch.Tensor,
+    galaxies: torch.Tensor,
+    seeds: range,
+) -> np.ndarray:
+    first, *others = seeds
+    vectors = mode_vectors(
+        generated_clouds(network, bases, joint, galaxies, first), bases
+    )
+    for seed in others:
+        clouds = generated_clouds(network, bases, joint, galaxies, seed)
+        vectors += mode_vectors(clouds, bases)
+    vectors /= len(seeds)
+    return vectors
 
 
 def generate_text_vectors() -> None:
     network, bases = stored_flow()
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    galaxies = torch.arange(len(joint))
-    vectors = sum(
-        mode_vectors(generated_clouds(network, bases, joint, galaxies, seed), bases)
-        for seed in range(SEED, SEED + DRAWS)
-    )
-    np.save(artifact("text_vectors"), vectors / DRAWS)
+    seeds = range(SEED, SEED + DRAWS)
+    vectors = drawn_vectors(network, bases, joint, torch.arange(len(joint)), seeds)
+    np.save(artifact("text_vectors"), vectors)
     np.save(artifact("text_query_mean"), embed_queries(generic_queries()).mean(axis=0))

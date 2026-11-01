@@ -249,7 +249,7 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
     assert not all(torch.equal(flow[key], snapshots[3][key]) for key in flow)
 
 
-def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
+def test_text_vectors_average_each_galaxy_s_draws_from_its_own_seeds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for name, value in {
@@ -291,15 +291,11 @@ def test_generated_clouds_hold_each_galaxy_s_points_from_its_own_seed(
     stored = np.load(tmp_path / "text_vectors.npy")
     network, bases = text_flow.stored_flow()
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    alone = sum(
-        text_flow.mode_vectors(
-            text_flow.generated_clouds(network, bases, joint, torch.tensor([3]), seed),
-            bases,
-        )
-        for seed in range(SEED, SEED + 2)
+    alone = text_flow.drawn_vectors(
+        network, bases, joint, torch.tensor([3]), range(SEED, SEED + 2)
     )
     assert stored.shape == (5, len(MODES), GEMMA_DIM)
-    np.testing.assert_allclose(stored[3], alone[0] / 2, rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(stored[3], alone[0], rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(
         np.load(tmp_path / "text_query_mean.npy"), queries.mean(axis=0)
     )

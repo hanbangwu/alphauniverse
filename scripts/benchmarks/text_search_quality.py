@@ -2,7 +2,7 @@ import json
 import math
 from collections.abc import Callable
 from datetime import UTC, datetime
-from functools import partial
+from functools import cache, partial
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -26,9 +26,12 @@ from app.config import (
 from app.embeddings import loaded
 from app.text_flow import (
     DRAWS,
+    Bases,
+    Velocity,
     cosines,
+    drawn_vectors,
     generated_clouds,
-    mode_vectors,
+    kind_means,
     point_lengths,
     stored_flow,
 )
@@ -277,10 +280,13 @@ def indexed(clouds: np.ndarray) -> TextIndex:
     return TextIndex(points, lengths, components, centre, query_mean, kappa)
 
 
+@cache
+def flow() -> tuple[Velocity, Bases, torch.Tensor]:
+    return *stored_flow(), loaded("joint_embedding", torch.float32)
+
+
 def flow_clouds(seed: int) -> np.ndarray:
-    network, bases = stored_flow()
-    joint = loaded("joint_embedding", torch.float32)
-    return generated_clouds(network, bases, joint, torch.arange(galaxy_count()), seed)
+    return generated_clouds(*flow(), torch.arange(galaxy_count()), seed)
 
 
 def view_kinds(modes: tuple[str, ...]) -> list[int]:
@@ -364,9 +370,12 @@ def mean_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
     for name, modes in sets.items():
         kinds = view_kinds(modes)
         means[name] = sum(
-            (index.points[kind] / index.lengths[kind][..., None]).mean(dim=1)
-            @ index.components[kind]
-            + (1 / index.lengths[kind]).mean(dim=1, keepdim=True) * index.centre[kind]
+            kind_means(
+                index.points[kind],
+                index.lengths[kind],
+                index.components[kind],
+                index.centre[kind],
+            )
             for kind in kinds
         ) / len(kinds)
 
@@ -418,24 +427,21 @@ def search_scorer(vectors: np.ndarray) -> Scorer:
     return score
 
 
+def cloud_tops(clouds: np.ndarray, directions: np.ndarray) -> dict[str, list]:
+    index = indexed(clouds)
+    return {
+        f"{family}, {name}": [top(row) for row in scores]
+        for family, scorer in (("clouds", cloud_scorer), ("mean cosine", mean_scorer))
+        for name, scores in scorer(index, MODE_SETS)(directions, slice(None)).items()
+    }
+
+
 def second_tops(directions: np.ndarray) -> dict[str, list[np.ndarray]]:
-    _, bases = stored_flow()
-    vectors = np.zeros((galaxy_count(), directions.shape[1]), dtype=np.float32)
-    tops = {}
-    for seed in range(SEED + DRAWS, SEED + 2 * DRAWS):
-        clouds = flow_clouds(seed)
-        vectors += mode_vectors(clouds, bases).sum(axis=1)
-        if seed == SEED + DRAWS:
-            second = indexed(clouds)
-            for family, scorer in (
-                ("clouds", cloud_scorer),
-                ("mean cosine", mean_scorer),
-            ):
-                scored = scorer(second, MODE_SETS)(directions, slice(None))
-                for name, scores in scored.items():
-                    tops[f"{family}, {name}"] = [top(row) for row in scores]
-    tops["search, everything"] = [top(row) for row in directions @ vectors.T]
-    return tops
+    seeds = range(SEED + DRAWS, SEED + 2 * DRAWS)
+    vectors = drawn_vectors(*flow(), torch.arange(galaxy_count()), seeds).sum(axis=1)
+    return cloud_tops(flow_clouds(SEED + 1), directions) | {
+        "search, everything": [top(row) for row in directions @ vectors.T]
+    }
 
 
 def sides(values: np.ndarray) -> dict[str, np.ndarray]:

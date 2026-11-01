@@ -28,9 +28,6 @@ Glossary
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 
-   contribution
-      A mode's Shapley value in a text search match's lead over the average galaxy: each view type's part, split equally among the modes it needs. See :doc:`methods/text-search`.
-
    cloud
       A galaxy's 416 points in :term:`EmbeddingGemma`'s space, 16 for each of 26 view types, each the predicted embedding of one :term:`view`; text search averages eight of them. See :doc:`methods/text-search`.
 
@@ -39,6 +36,9 @@ Glossary
 
    codec
       A small network that turns one kind of observation (an image, a spectrum, a catalogue value) into :term:`tokens <token>` and back. See :doc:`concepts`.
+
+   contribution
+      A mode's Shapley value in a text search match's lead over the average galaxy: each view type's part, split equally among the modes it needs. See :doc:`methods/text-search`.
 
    cosine similarity
       The cosine of the angle between two vectors: 1 when they point the same way, 0 when they are perpendicular, −1 when they point opposite ways. It ignores their lengths.
@@ -93,7 +93,6 @@ Glossary
 
    PROVABGS
       A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the probe benchmark, its masses and star formation rates for the text search benchmark, and in ``properties`` as the measured mass and star formation rate, to which the predicted ones are fitted.
-
 
    slot
       A position a :term:`token` can occupy: one image cell, one spectral window, one catalogue value or the redshift. A galaxy has 1,722.

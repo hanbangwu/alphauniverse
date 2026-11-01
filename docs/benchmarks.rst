@@ -47,7 +47,7 @@ mass           stellar mass
 
 Each side has six phrasings: the first, third and fifth form the *development* half, which chooses a method, and the others the *sealed* half, which judges it once. The first six pairs describe what a mode shows; the last three are physical properties.
 
-A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`methods/text-search`, over the view types of a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift), each with its combination view, as searching only some modes does.
+A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`methods/text-search`, over the view types of a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift), each with its combination view.
 
 - *search*: :math:`s(g \mid t)` from the stored vectors, over every mode, as text search ranks.
 - *views*: the mean of :math:`\cos(\tilde t, \tilde e)` over EmbeddingGemma's embeddings :math:`e` of the galaxy's observed image and DESI spectrum plot, each less its modality's mean, at unit length.

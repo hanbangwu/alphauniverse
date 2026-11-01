@@ -48,7 +48,7 @@ Each map is coloured on its own scale, from its lowest to its highest value; hov
 Search by text
 --------------
 
-Describe a galaxy in up to 500 characters. The site returns the 32 galaxies whose predicted views the description is closest to on average, each once, with its mean cosine and the :term:`contributions <contribution>` of the modes that carry its match; see :doc:`methods/text-search`.
+Describe a galaxy in up to 500 characters. The site returns the 32 galaxies whose predicted views the description is closest to on average, each once, with its mean cosine and, as percentages of its lead over the average galaxy, the :term:`contributions <contribution>` of the modes that carry at least a tenth of it; see :doc:`methods/text-search`.
 
 Download the embeddings
 -----------------------

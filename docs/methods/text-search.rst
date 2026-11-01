@@ -1,7 +1,7 @@
 Text search
 ===========
 
-Text search ranks galaxies by how likely a sentence is to describe them. AION reads no text, so alphaUniverse uses a second model, :term:`EmbeddingGemma`, which places images and text in one 768-dimensional space where a picture and a description of it lie close together (`model card <https://huggingface.co/google/embeddinggemma-2>`_). What EmbeddingGemma can read about a galaxy are its :term:`views <view>`: its colour images, plots of its spectra, and its catalogue values and redshift written out as text.
+Text search ranks galaxies by how close a sentence is, on average, to their predicted views. AION reads no text, so alphaUniverse uses a second model, :term:`EmbeddingGemma`, which places images and text in one 768-dimensional space where a picture and a description of it lie close together (`model card <https://huggingface.co/google/embeddinggemma-2>`_). What EmbeddingGemma can read about a galaxy are its :term:`views <view>`: its colour images, plots of its spectra, and its catalogue values and redshift written out as text.
 
 .. raw:: html
    :file: ../figures/text-search.svg
@@ -20,6 +20,6 @@ A mode's :term:`contribution` to a match is its Shapley value in the galaxy's le
 
    \phi_m(g \mid t) = \frac{1}{26} \sum_{k \ni m} \frac{(\bar e_{g,k} - \langle \bar e_k \rangle) \cdot \tilde t}{|M_k|},
 
-with :math:`M_k` the modes of view type :math:`k`, one for a single mode's type, and :math:`\langle \bar e_k \rangle` its mean over all galaxies. The contributions sum to the lead. The site shows each mode that carries at least a tenth of it, as a percentage.
+with :math:`M_k` the modes of view type :math:`k`, one for a single mode's type, and :math:`\langle \bar e_k \rangle` its mean over all galaxies. The contributions sum to the lead.
 
 :doc:`/benchmarks` measures how well these rankings recover measured properties, against EmbeddingGemma's own embeddings of the observed image and spectrum, and the maps from AION into EmbeddingGemma's space that text search used before.
