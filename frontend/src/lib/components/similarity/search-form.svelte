@@ -15,7 +15,7 @@
 </script>
 
 <form
-  class="sticky -top-6 z-10 -mx-6 -my-2 flex flex-wrap items-center gap-x-5 gap-y-2 bg-popover px-6 py-2"
+  class="flex flex-wrap items-center gap-x-5 gap-y-2"
   onsubmit={(event) => {
     event.preventDefault()
     similarity.submit()
@@ -26,7 +26,7 @@
     Whole modes
   </label>
   {#if !view.wholeModes.value}
-    <Tabs.Root bind:value={similarity.layer}>
+    <Tabs.Root bind:value={similarity.layer.value}>
       <Tabs.List aria-label="Query map">
         <Tabs.Trigger value="galaxy">This galaxy</Tabs.Trigger>
         <Tabs.Trigger value="population">Population</Tabs.Trigger>

@@ -16,7 +16,6 @@ from app.config import (
     SPECTRUM_SURVEYS,
     STORES,
     TOKEN_SURVEYS,
-    build_dir,
     store_schema,
 )
 from app.search import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, source
@@ -145,7 +144,6 @@ def test_generated_stores_have_their_schemas_and_a_vector_per_token(
         galaxy(2, hsc=False, desi=False, sdss=True),
     ]
     monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
-    build_dir().mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
     forget()
 

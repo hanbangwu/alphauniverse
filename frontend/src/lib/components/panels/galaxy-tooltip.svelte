@@ -14,9 +14,7 @@
   const galaxy = $derived(Number(tooltip.identifier))
 </script>
 
-<div
-  class="bg-popover text-popover-foreground flex w-40 flex-col gap-1.5 rounded-md border p-2 shadow-md"
->
+<div class="glass text-popover-foreground flex w-40 flex-col gap-1.5 rounded-xl p-2">
   <PanelFrame>
     <GalaxyThumb {galaxy} />
   </PanelFrame>

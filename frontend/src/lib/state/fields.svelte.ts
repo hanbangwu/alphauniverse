@@ -1,14 +1,17 @@
 import { must } from '$lib/invariant'
 import type { Choice, Labels } from '$lib/labels'
-import { Field } from './field.svelte'
+import { Field, type Source } from './field.svelte'
 
 export class EnumField<T extends string> extends Field<T> {
   readonly members: readonly T[]
   readonly choices: readonly Choice<T>[]
 
-  constructor(private readonly labels: Labels<T>) {
+  constructor(
+    private readonly labels: Labels<T>,
+    source: Source<T>
+  ) {
     const members = Object.keys(labels) as T[]
-    super(must(members[0], 'a first member to fall back to'))
+    super(must(members[0], 'a first member to fall back to'), source)
     this.members = members
     this.choices = members.map((value) => ({ value, ...labels[value] }))
   }
@@ -36,9 +39,10 @@ export class ListField<T> extends Field<T[]> {
 
 export class IndexListField extends ListField<number> {
   protected normalise(value: number[]): number[] {
-    const sorted = value
-      .filter((entry) => Number.isInteger(entry) && entry >= 0)
+    return value
+      .filter(
+        (entry, index) => Number.isInteger(entry) && entry >= 0 && value.indexOf(entry) === index
+      )
       .sort((a, b) => a - b)
-    return sorted.filter((entry, index) => index === 0 || entry !== sorted[index - 1])
   }
 }

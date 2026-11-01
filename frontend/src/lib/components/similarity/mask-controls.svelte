@@ -21,7 +21,11 @@
     <Slider
       type="single"
       value={threshold}
-      onValueChange={(value) => (control.override.value = value)}
+      onValueChange={(value) => (control.dragged = value)}
+      onValueCommit={(value) => {
+        control.override.value = value
+        control.dragged = null
+      }}
       min={domain[0]}
       max={domain[1]}
       step={(domain[1] - domain[0]) / 200 || 0.001}

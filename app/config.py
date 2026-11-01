@@ -26,6 +26,7 @@ def device() -> torch.device:
 DATASET_AUTHOR = "hanbangwu"
 DATASET_NAME = "alphauniverse-cosmos"
 DATASET_REVISION = "e250e43c35e63523ee3940c9543302c29ca56437"
+LOCAL_DATASET = "dataset"
 
 
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / ".cache"
@@ -385,12 +386,7 @@ def points(galaxy: np.ndarray, coordinates: np.ndarray, category: pa.Array) -> p
 
 
 def build_dir() -> Path:
-    return (
-        Path(os.environ.get("ALPHAUNIVERSE_CACHE", DEFAULT_CACHE))
-        / DATASET_AUTHOR
-        / DATASET_NAME
-        / DATASET_REVISION
-    )
+    return Path(os.environ.get("ALPHAUNIVERSE_CACHE", DEFAULT_CACHE))
 
 
 def artifact(role: str) -> Path:
