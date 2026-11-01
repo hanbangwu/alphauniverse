@@ -1,5 +1,6 @@
 import { must } from './invariant'
 import { rgb } from 'd3-color'
+import { interpolateRgb } from 'd3-interpolate'
 import { scaleSequential } from 'd3-scale'
 import { interpolateViridis, schemeObservable10 } from 'd3-scale-chromatic'
 
@@ -51,10 +52,7 @@ export const SHADES: string[] = Array.from({ length: BINS }, (_, bin) =>
 )
 
 function fade(color: string, scheme: Scheme): string {
-  const from = rgb(color)
-  const to = rgb(BACKGROUND[scheme])
-  const mix = (a: number, b: number) => a + (b - a) * 0.6
-  return rgb(mix(from.r, to.r), mix(from.g, to.g), mix(from.b, to.b)).formatHex()
+  return rgb(interpolateRgb(color, BACKGROUND[scheme])(0.6)).formatHex()
 }
 
 export function fadedShades(scheme: Scheme): string[] {

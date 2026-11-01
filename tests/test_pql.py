@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from pathlib import Path
 from threading import Thread
 
@@ -196,7 +195,7 @@ def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.
 def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
     table: pa.Table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pql, "SUMS", OrderedDict())
+    pql.basket_sum.cache_clear()
     monkeypatch.setattr(pql, "CHUNK", 2)
     selected = {"ls_image": (0, 17, 300), "desi_spectrum": (40, 41, 42)}
     query = pql.Query(galaxy=GALAXY, **selected, anywhere=tuple(selected))
@@ -321,7 +320,7 @@ def test_position_independent_saliency_uses_each_slot_s_best_overlap(
     table: pa.Table, query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(pql, "SALIENCY_SAMPLE", 7)
-    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
+    pql.sampled.cache_clear()
     anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
     sample = pql.saliency_sample(GALAXY)
     values = pql.agreements(GALAXY).values[sample].astype(np.float64)
@@ -338,26 +337,24 @@ def test_position_independent_saliency_uses_each_slot_s_best_overlap(
 def test_position_independent_saliency_builds_no_agreement_matrix(
     query: pql.Query, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pql, "MATRICES", OrderedDict())
-    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
+    pql.agreements.cache_clear()
+    pql.sampled.cache_clear()
 
     pql.saliency(query.model_copy(update={"anywhere": ("ls_image",)}))
 
-    assert not pql.MATRICES
+    assert not pql.agreements.cache_info().currsize
 
 
 def test_a_later_position_independent_saliency_on_the_galaxy_reuses_its_sample(
-    query: pql.Query, monkeypatch: pytest.MonkeyPatch
+    query: pql.Query,
 ) -> None:
-    monkeypatch.setattr(pql, "SAMPLES", OrderedDict())
+    pql.sampled.cache_clear()
     anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
     first = pql.saliency(anywhere)
-    monkeypatch.setattr(
-        pql, "sampled", lambda *arguments: pytest.fail("sample recomputed")
-    )
 
     np.testing.assert_array_equal(pql.saliency(anywhere), first)
     pql.saliency(anywhere.model_copy(update={"ls_image": anywhere.ls_image[:1]}))
+    assert pql.sampled.cache_info().misses == 1
 
 
 def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(

@@ -264,6 +264,7 @@ export function similarityQuery(request: SearchQuery | null) {
               ? await getModeSearch({ query: request, signal, throwOnError: true })
               : await getSearch({ query: request, signal, throwOnError: true })
             const table = tableFromIPC(new Uint8Array(await data.arrayBuffer()))
+            const tableValues = maps(table, 'table_values')
             return {
               request,
               galaxies: table.getChild('galaxy')!.toArray(),
@@ -278,7 +279,8 @@ export function similarityQuery(request: SearchQuery | null) {
                 : {},
               maps: byMode((mode) => maps(table, mode)),
               positions: whole ? {} : byMode((mode) => positions(table, mode)),
-              tableValueMap: matchMean(maps(table, 'table_values'), table.numRows),
+              tableValues,
+              tableValueMap: matchMean(tableValues, table.numRows),
               observed: Object.fromEntries(
                 table.schema.fields
                   .filter((field) => field.name.startsWith('has_'))
