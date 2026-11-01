@@ -311,7 +311,7 @@ def test_a_galaxy_s_mode_vectors_sum_to_the_mean_of_its_cloud_s_documents() -> N
     }
     clouds = torch.randn(kinds, 2, 5, 4, generator=generator)
 
-    found = text_flow.mode_vectors(clouds.numpy(), bases)
+    found = text_flow.mode_vectors(clouds, bases).numpy()
 
     documents = bases["centre"][:, None, None] + torch.einsum(
         "kgpr,krd->kgpd", clouds, bases["components"]

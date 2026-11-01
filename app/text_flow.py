@@ -604,6 +604,25 @@ def stored_flow() -> tuple[Velocity, Bases]:
     return network, bases
 
 
+def cloud_batch(
+    network: Velocity,
+    bases: Bases,
+    joint: torch.Tensor,
+    galaxies: torch.Tensor,
+    seed: int,
+) -> torch.Tensor:
+    chosen = galaxies.to(device())
+    present = torch.ones(len(chosen), len(GRAM_NAMES), device=device())
+    found = clouds(
+        network,
+        noise(chosen, seed),
+        condition(joint[chosen], present, bases),
+        present,
+        bases["scale"],
+    )
+    return found.transpose(0, 1)
+
+
 def generated_clouds(
     network: Velocity,
     bases: Bases,
@@ -616,16 +635,8 @@ def generated_clouds(
     )
     for start in range(0, len(galaxies), CLOUD_GALAXIES):
         rows = slice(start, start + CLOUD_GALAXIES)
-        chosen = galaxies[rows].to(device())
-        present = torch.ones(len(chosen), len(GRAM_NAMES), device=device())
-        found = clouds(
-            network,
-            noise(chosen, seed),
-            condition(joint[chosen], present, bases),
-            present,
-            bases["scale"],
-        )
-        points[:, rows] = found.transpose(0, 1).half().cpu().numpy()
+        batch = cloud_batch(network, bases, joint, galaxies[rows], seed)
+        points[:, rows] = batch.half().cpu().numpy()
     return points
 
 
@@ -650,17 +661,10 @@ def kind_means(
     return along + (1 / lengths).mean(dim=-1)[..., None] * centre[..., None, :]
 
 
-def mode_vectors(clouds: np.ndarray, bases: Bases) -> np.ndarray:
-    weights = mode_weights().to(device())
-    width = bases["components"].shape[2]
-    found = np.empty((clouds.shape[1], len(MODES), width), dtype=np.float32)
-    for start in range(0, clouds.shape[1], CLOUD_GALAXIES):
-        rows = slice(start, start + CLOUD_GALAXIES)
-        points = torch.from_numpy(clouds[:, rows]).to(device()).float()
-        lengths = vmap(point_lengths)(points, bases["components"], bases["centre"])
-        means = kind_means(points, lengths, bases["components"], bases["centre"])
-        found[rows] = torch.einsum("kgd,km->gmd", means, weights).cpu().numpy()
-    return found
+def mode_vectors(points: torch.Tensor, bases: Bases) -> torch.Tensor:
+    lengths = vmap(point_lengths)(points, bases["components"], bases["centre"])
+    means = kind_means(points, lengths, bases["components"], bases["centre"])
+    return torch.einsum("kgd,km->gmd", means, mode_weights().to(points.device))
 
 
 def drawn_vectors(
@@ -670,15 +674,18 @@ def drawn_vectors(
     galaxies: torch.Tensor,
     seeds: range,
 ) -> np.ndarray:
-    first, *others = seeds
-    vectors = mode_vectors(
-        generated_clouds(network, bases, joint, galaxies, first), bases
-    )
-    for seed in others:
-        clouds = generated_clouds(network, bases, joint, galaxies, seed)
-        vectors += mode_vectors(clouds, bases)
-    vectors /= len(seeds)
-    return vectors
+    width = bases["components"].shape[2]
+    found = np.empty((len(galaxies), len(MODES), width), dtype=np.float32)
+    for start in range(0, len(galaxies), CLOUD_GALAXIES):
+        rows = slice(start, start + CLOUD_GALAXIES)
+        total = sum(
+            mode_vectors(
+                cloud_batch(network, bases, joint, galaxies[rows], seed), bases
+            )
+            for seed in seeds
+        )
+        found[rows] = (total / len(seeds)).cpu().numpy()
+    return found
 
 
 def generate_text_vectors() -> None:
