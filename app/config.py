@@ -285,7 +285,7 @@ ARTIFACTS: dict[str, str] = {
     "text_views_held_out": "parquet",
     "text_bases": "npz",
     "text_flow": "pt",
-    "text_clouds": "npy",
+    "text_vectors": "npy",
     "text_query_mean": "npy",
     "probabilities": "arrow",
     "probability_basis": "npz",

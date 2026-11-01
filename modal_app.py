@@ -290,10 +290,10 @@ def train_text_flow() -> None:
     timeout=1 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_text_clouds() -> None:
-    from app.text_flow import generate_text_clouds
+def generate_text_vectors() -> None:
+    from app.text_flow import generate_text_vectors
 
-    generate_text_clouds()
+    generate_text_vectors()
     cache_volume.commit()
 
 
