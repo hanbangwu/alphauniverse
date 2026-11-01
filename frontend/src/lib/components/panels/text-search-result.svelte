@@ -1,26 +1,27 @@
 <script lang="ts">
-  import type { ShareName } from '$lib/api'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
-  import { SHARES } from '$lib/labels'
+  import type { ModeName } from '$lib/data/similarity'
+  import { MODES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
 
   interface Props {
     galaxy: number
     score: number
-    shares: [ShareName, number][]
+    contributions: [ModeName, number][]
   }
 
-  let { galaxy, score, shares }: Props = $props()
+  let { galaxy, score, contributions }: Props = $props()
 
   const { view } = getApp()
 
+  const lead = $derived(contributions.reduce((total, [, value]) => total + value, 0))
   const leading = $derived(
-    shares
-      .filter(([, share]) => share >= 0.1)
+    contributions
+      .filter(([, value]) => value >= 0.1 * lead)
       .toSorted(([, first], [, second]) => second - first)
-      .map(([name, share]) => `${SHARES[name].label} ${Math.round(100 * share)}%`)
+      .map(([name, value]) => `${MODES[name].label} ${Math.round((100 * value) / lead)}%`)
   )
 </script>
 
@@ -36,7 +37,7 @@
   <div class="flex flex-col gap-1">
     <span class="text-sm font-medium"><GalaxyName {galaxy} /></span>
     <span class="text-xs text-muted-foreground tabular-nums">
-      {score.toFixed(2)} nats &bull; {leading.join(', ')}
+      cosine {score.toFixed(3)} &bull; {leading.join(', ')}
     </span>
   </div>
 </button>
