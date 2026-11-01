@@ -14,7 +14,6 @@ from app.config import ANCHOR, DATASET_REVISION, MODES, N_IMAGE_TOKENS, SPECTRUM
 from modal_app import app, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
-    LABELLED,
     elapsed,
     environment,
     git,
@@ -26,7 +25,14 @@ image = serving_image.add_local_python_source("modal_app")
 
 MATCHES = 32
 REPORT = Path("docs/benchmarks/backend_performance.json")
-TEXTS = tuple(LABELLED)
+TEXTS = (
+    "a massive galaxy",
+    "a dwarf galaxy",
+    "a star-forming galaxy",
+    "a quiescent galaxy with no ongoing star formation",
+    "a distant galaxy at high redshift",
+    "a nearby galaxy at low redshift",
+)
 
 
 def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:

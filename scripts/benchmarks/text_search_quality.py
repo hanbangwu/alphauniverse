@@ -1,161 +1,448 @@
 import json
+import math
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import modal
 import numpy as np
+import pyarrow.parquet as pq
 import torch
-from scipy.special import logsumexp, softmax
-from scipy.stats import bootstrap, spearmanr
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import normalize
 
 from app.alignment import held_out, pairs
 from app.config import (
     DATASET_REVISION,
-    REDSHIFT,
     SEED,
     TEXT_SURVEYS,
-    VIEW_TYPES,
+    VIEW_COMBINATIONS,
+    artifact,
     galaxy_count,
 )
 from app.embeddings import loaded
-from app.observations import measured_redshifts
-from app.properties import provabgs
 from app.text_flow import generated_clouds, stored_flow
 from app.text_search import (
-    SHARE_NAMES,
+    FRAMES,
+    TextIndex,
+    TextQuery,
     aion_gemma_space,
-    breadth,
     embed_queries,
     generic_queries,
     indexed,
     likelihoods,
-    mode_shares,
+    query_directions,
     text_index,
+    view_kinds,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import LABELLED, environment, git, memory
+from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-text-search")
 image = build_image.add_local_python_source("modal_app")
 
-LADDERS = {
-    "spiral": (
-        "a galaxy",
-        "a spiral galaxy",
-        "a red spiral galaxy",
-        "a red barred spiral galaxy with a ring",
+
+class Pair(NamedTuple):
+    label: str
+    mode: str | None
+    high: tuple[str, ...]
+    low: tuple[str, ...]
+
+
+PAIRS = {
+    "colour": Pair(
+        "g_r",
+        "images",
+        (
+            "a red galaxy",
+            "a galaxy with red colours",
+            "a reddish galaxy",
+            "an orange-red galaxy",
+            "a galaxy that looks red",
+            "a galaxy with a red hue",
+        ),
+        (
+            "a blue galaxy",
+            "a galaxy with blue colours",
+            "a bluish galaxy",
+            "a blue-white galaxy",
+            "a galaxy that looks blue",
+            "a galaxy with a blue hue",
+        ),
     ),
-    "elliptical": (
-        "a galaxy",
-        "an elliptical galaxy",
-        "a round red elliptical galaxy",
-        "a giant round red elliptical galaxy with a bright core",
+    "size": Pair(
+        "radius_measured",
+        "images",
+        (
+            "a large galaxy",
+            "a big galaxy",
+            "an extended galaxy",
+            "a galaxy with a large apparent size",
+            "a galaxy that fills the frame",
+            "a sprawling galaxy",
+        ),
+        (
+            "a small galaxy",
+            "a tiny galaxy",
+            "a compact galaxy",
+            "a galaxy with a small apparent size",
+            "a galaxy that appears as a small dot",
+            "a point-like galaxy",
+        ),
     ),
-    "spectrum": (
-        "a galaxy spectrum",
-        "a galaxy spectrum with emission lines",
-        "a galaxy spectrum with strong H-alpha emission",
-        "a spectrum with strong H-alpha and [OIII] emission lines at redshift 0.1",
+    "brightness": Pair(
+        "r_magnitude_measured",
+        "images",
+        (
+            "a faint galaxy",
+            "a very faint galaxy",
+            "a dim galaxy",
+            "a galaxy that appears faint",
+            "a barely visible galaxy",
+            "a faint, dim smudge",
+        ),
+        (
+            "a bright galaxy",
+            "a very bright galaxy",
+            "a brilliant galaxy",
+            "a galaxy that appears bright",
+            "a galaxy that shines brightly",
+            "a bright, prominent galaxy",
+        ),
+    ),
+    "shape": Pair(
+        "axis_ratio_measured",
+        "images",
+        (
+            "a round galaxy",
+            "a face-on galaxy",
+            "a circular galaxy",
+            "a galaxy seen face-on",
+            "a galaxy with a round shape",
+            "a galaxy that looks circular",
+        ),
+        (
+            "an edge-on galaxy",
+            "an edge-on disk galaxy",
+            "a thin, elongated galaxy",
+            "a galaxy seen edge-on",
+            "a cigar-shaped galaxy",
+            "a needle-like galaxy",
+        ),
+    ),
+    "emission": Pair(
+        "halpha_ew_measured",
+        "spectra",
+        (
+            "a galaxy with strong emission lines",
+            "an emission-line galaxy",
+            "a galaxy with strong H-alpha emission",
+            "a galaxy with bright, narrow emission lines",
+            "a galaxy with prominent emission lines",
+            "a galaxy with strong [OII] and H-alpha lines",
+        ),
+        (
+            "an absorption-line galaxy",
+            "a galaxy with strong absorption lines",
+            "a galaxy with weak emission lines",
+            "a galaxy dominated by absorption lines",
+            "a galaxy with deep absorption features",
+            "a galaxy with very weak emission lines",
+        ),
+    ),
+    "break": Pair(
+        "dn4000_measured",
+        "spectra",
+        (
+            "a galaxy with a strong 4000 angstrom break",
+            "a galaxy with an old stellar population",
+            "a galaxy made of old stars",
+            "a galaxy with a large break near 4000 angstroms",
+            "an old, evolved galaxy",
+            "a galaxy with an aged stellar population",
+        ),
+        (
+            "a galaxy with a weak 4000 angstrom break",
+            "a galaxy with a young stellar population",
+            "a galaxy made of young stars",
+            "a galaxy with a small break near 4000 angstroms",
+            "a young galaxy",
+            "a galaxy with a youthful stellar population",
+        ),
+    ),
+    "redshift": Pair(
+        "redshift_measured",
+        None,
+        (
+            "a distant galaxy",
+            "a galaxy at high redshift",
+            "a faraway galaxy",
+            "a high-redshift galaxy",
+            "a very distant galaxy",
+            "a remote galaxy",
+        ),
+        (
+            "a nearby galaxy",
+            "a galaxy at low redshift",
+            "a local galaxy",
+            "a low-redshift galaxy",
+            "a very nearby galaxy",
+            "a galaxy close to us",
+        ),
+    ),
+    "star formation": Pair(
+        "ssfr_measured",
+        None,
+        (
+            "a star-forming galaxy",
+            "a galaxy actively forming stars",
+            "a galaxy with a high star formation rate",
+            "a galaxy with ongoing star formation",
+            "a galaxy forming many new stars",
+            "a galaxy with vigorous star formation",
+        ),
+        (
+            "a quiescent galaxy",
+            "a passive galaxy",
+            "a galaxy that has stopped forming stars",
+            "a red and dead galaxy",
+            "a quenched galaxy",
+            "a galaxy with a low star formation rate",
+        ),
+    ),
+    "mass": Pair(
+        "mass_measured",
+        None,
+        (
+            "a massive galaxy",
+            "a very massive galaxy",
+            "a galaxy with a high stellar mass",
+            "a giant galaxy",
+            "a galaxy with a large stellar mass",
+            "a giant, massive galaxy",
+        ),
+        (
+            "a dwarf galaxy",
+            "a low-mass galaxy",
+            "a galaxy with a low stellar mass",
+            "a small, low-mass galaxy",
+            "a galaxy with a small stellar mass",
+            "a lightweight galaxy",
+        ),
     ),
 }
-KAPPA = 15
-BREADTH_KAPPAS = (KAPPA, 20)
-KINDS = list(range(len(VIEW_TYPES)))
-TOP = (10, 100)
-RESAMPLES = 1000
+HALVES = ("development", "sealed")
+SIDES = {"high": "low", "low": "high"}
+MODE_SETS = {name: VIEW_COMBINATIONS[name] for name in FRAMES}
+RANDOM_DIRECTIONS = 200
+EDITS = 50
+TOP = TextQuery.model_fields["matches"].default
+BATCH = 64
+GALAXIES = 1024
 REPORT = Path("docs/benchmarks/text_search_quality.json")
 
-
-def points(
-    galaxy: np.ndarray, vectors: np.ndarray, held: np.ndarray
-) -> tuple[np.ndarray, ...]:
-    kept = np.isin(galaxy, held)
-    return (
-        np.searchsorted(held, galaxy[kept]),
-        vectors[kept],
-        normalize(vectors[kept] - vectors.mean(axis=0)),
-    )
+type Scorer = Callable[[np.ndarray, Any], dict[str, np.ndarray]]
 
 
-def cosine_tables(
-    found: dict[str, tuple[np.ndarray, ...]],
-    query: np.ndarray,
-    direction: np.ndarray,
-    count: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    raw, centred = np.full((2, count, len(found)), -np.inf)
-    for column, (position, vectors, centred_vectors) in enumerate(found.values()):
-        raw[position, column] = vectors @ query
-        centred[position, column] = centred_vectors @ direction
-    return raw, centred
+def centred(vectors: np.ndarray) -> np.ndarray:
+    return normalize(vectors - vectors.mean(axis=0))
 
 
-def best_cosine(table: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    return table.max(axis=1), np.eye(table.shape[1])[table.argmax(axis=1)]
+def view_scorer(
+    found: dict[str, tuple[np.ndarray, np.ndarray]], sets: dict[str, tuple[str, ...]]
+) -> Scorer:
+    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
+        scores = {}
+        for name, modalities in sets.items():
+            total = np.zeros((len(directions), galaxy_count()))
+            count = np.zeros(galaxy_count())
+            for modality in modalities:
+                galaxy, vectors = found[modality]
+                total[:, galaxy] += directions @ vectors.T
+                count[galaxy] += 1
+            mean = np.where(count > 0, total / np.maximum(count, 1), -1.0)
+            scores[name] = mean[:, galaxies]
+        return scores
+
+    return score
 
 
-def likelihood(table: np.ndarray, kappa: float) -> tuple[np.ndarray, np.ndarray]:
-    logits = kappa * table
-    counts = np.isfinite(table).sum(axis=1)
-    return logsumexp(logits, axis=1) - np.log(counts), softmax(logits, axis=1)
-
-
-def interval(
-    statistic: Callable[..., float], *samples: np.ndarray
-) -> tuple[float, float]:
-    low, high = bootstrap(
-        samples,
-        statistic,
-        n_resamples=RESAMPLES,
-        paired=True,
-        method="percentile",
-        rng=SEED,
-    ).confidence_interval
-    return float(low), float(high)
-
-
-def precision(relevant: np.ndarray, score: np.ndarray) -> dict[str, float]:
-    low, high = interval(average_precision_score, relevant, score)
-    order = np.argsort(-score)
-    return {
-        "base_rate": round(float(relevant.mean()), 4),
-        "average_precision": round(float(average_precision_score(relevant, score)), 4),
-        "average_precision_low": round(float(low), 4),
-        "average_precision_high": round(float(high), 4),
-    } | {
-        f"precision@{top}": round(float(relevant[order[:top]].mean()), 4) for top in TOP
+def cloud_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
+    every = view_kinds(MODE_SETS["everything"])
+    columns = {
+        name: [every.index(kind) for kind in view_kinds(modes)]
+        for name, modes in sets.items()
     }
+    points = index.points.shape[2]
+
+    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
+        chosen = torch.arange(index.points.shape[1])[galaxies]
+        scores = {name: np.empty((len(directions), len(chosen))) for name in sets}
+        for start in range(0, len(chosen), GALAXIES):
+            part = chosen[start : start + GALAXIES]
+            rows = slice(start, start + GALAXIES)
+            sub = index._replace(
+                points=index.points[:, part], lengths=index.lengths[:, part]
+            )
+            for first in range(0, len(directions), BATCH):
+                batch = slice(first, first + BATCH)
+                direction = torch.from_numpy(directions[batch]).float()
+                by_kind = likelihoods(sub, direction, every)[1]
+                for name, kinds in columns.items():
+                    found = by_kind[..., kinds].logsumexp(dim=-1)
+                    scores[name][batch, rows] = found - math.log(len(kinds) * points)
+        return scores
+
+    return score
 
 
-def difference(
-    relevant: np.ndarray, ours: np.ndarray, theirs: np.ndarray
-) -> dict[str, float]:
-    def gained(relevant, ours, theirs):
-        return average_precision_score(relevant, ours) - average_precision_score(
-            relevant, theirs
+def mean_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
+    means = {}
+    for name, modes in sets.items():
+        kinds = view_kinds(modes)
+        means[name] = sum(
+            (index.points[kind] / index.lengths[kind][..., None]).mean(dim=1)
+            @ index.components[kind]
+            + (1 / index.lengths[kind]).mean(dim=1, keepdim=True) * index.centre[kind]
+            for kind in kinds
+        ) / len(kinds)
+
+    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
+        direction = torch.from_numpy(directions).float()
+        return {
+            name: (direction @ found[galaxies].T).numpy()
+            for name, found in means.items()
+        }
+
+    return score
+
+
+def framed(
+    averaged: Scorer, name: str, directions: np.ndarray, galaxies: Any
+) -> dict[str, np.ndarray]:
+    return {name: averaged(directions, galaxies)[name]}
+
+
+def families(
+    index: TextIndex, views: dict, maps: dict
+) -> list[tuple[str, Scorer, str]]:
+    averaged = mean_scorer(index, MODE_SETS)
+    found = [
+        ("clouds", cloud_scorer(index, MODE_SETS), "plain"),
+        ("mean cosine", averaged, "plain"),
+    ]
+    for name in MODE_SETS:
+        found.append(("mean cosine framed", partial(framed, averaged, name), name))
+    modalities = {
+        name: tuple(
+            modality
+            for modality, survey in TEXT_SURVEYS.items()
+            if f"{survey}_{modality}" in modes
         )
-
-    low, high = interval(gained, relevant, ours, theirs)
-    return {
-        "difference": round(float(gained(relevant, ours, theirs)), 4),
-        "difference_low": round(low, 4),
-        "difference_high": round(high, 4),
+        for name, modes in MODE_SETS.items()
     }
+    observed = {name: chosen for name, chosen in modalities.items() if chosen}
+    for family, space in (("views", views), ("maps", maps)):
+        found.append((family, view_scorer(space, observed), "plain"))
+    return found
 
 
-def shares(
-    modes: list[str], score: np.ndarray, weights: np.ndarray
-) -> dict[str, float]:
-    order = np.argsort(-score)
-    return {
-        f"{mode}@{top}": round(float(share), 4)
-        for top in TOP
-        for mode, share in zip(modes, weights[order[:top]].mean(axis=0))
+def second_tops(directions: np.ndarray) -> dict[str, list[np.ndarray]]:
+    network, bases = stored_flow()
+    joint = loaded("joint_embedding", torch.float32)
+    every = torch.arange(galaxy_count())
+    second = indexed(generated_clouds(network, bases, joint, every, SEED + 1))
+    tops = {}
+    for family, scorer in (("clouds", cloud_scorer), ("mean cosine", mean_scorer)):
+        scored = scorer(second, MODE_SETS)(directions, slice(None))
+        for name, scores in scored.items():
+            tops[f"{family}, {name}"] = [top(row) for row in scores]
+    return tops
+
+
+def sides(values: np.ndarray) -> dict[str, np.ndarray]:
+    low, high = np.nanquantile(values, [1 / 3, 2 / 3])
+    return {"high": values > high, "low": values < low, "known": np.isfinite(values)}
+
+
+def edited(first: np.ndarray, second: np.ndarray, steps: np.ndarray) -> np.ndarray:
+    middle = (first + second) / 2
+    scaled = steps * np.linalg.norm(first - second) / 2
+    return np.concatenate([normalize(middle + scaled), normalize(middle - scaled)])
+
+
+def top(score: np.ndarray) -> np.ndarray:
+    return np.argsort(-score)[:TOP]
+
+
+def precision(
+    labels: dict[str, np.ndarray], held: np.ndarray, side: str, score: np.ndarray
+) -> float:
+    inside = labels["known"][held]
+    return float(average_precision_score(labels[side][held][inside], score[inside]))
+
+
+def separation(
+    scores: dict[str, np.ndarray],
+    both: tuple[str, str],
+    labels: dict[str, np.ndarray],
+    held: np.ndarray,
+) -> float:
+    found = [
+        precision(labels, held, side, scores[own][held])
+        - precision(labels, held, side, scores[other][held])
+        for side, own, other in zip(SIDES, both, both[::-1])
+    ]
+    return round(sum(found) / len(found), 4)
+
+
+def pair_rows(
+    scores: dict[str, np.ndarray],
+    edits: dict[tuple[str, str], np.ndarray],
+    random_scores: np.ndarray,
+    tops: dict[str, np.ndarray],
+    phrasings: tuple[tuple[str, str], ...],
+    labels: dict[str, np.ndarray],
+    held: np.ndarray,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    ranked = partial(precision, labels, held)
+    nulls = {
+        side: np.quantile([ranked(side, row) for row in random_scores], 0.95)
+        for side in SIDES
     }
+    rows: dict[str, dict[str, dict[str, Any]]] = {side: {} for side in SIDES}
+    for both in phrasings:
+        found = {side: scores[text] for side, text in zip(SIDES, both)}
+        plus, minus = np.split(edits[both], 2)
+        for (side, opposite), text in zip(SIDES.items(), both):
+            own = ranked(side, found[side][held])
+            specificity = own - ranked(side, found[opposite][held])
+            edit_null = np.quantile(
+                [
+                    abs(ranked(side, first) - ranked(side, second))
+                    for first, second in zip(plus, minus)
+                ],
+                0.95,
+            )
+            page = top(np.where(labels["known"], found[side], -np.inf))
+            row = {
+                "average_precision": round(own, 4),
+                "specificity": round(specificity, 4),
+                "edit_null": round(float(edit_null), 4),
+                "random_null": round(float(nulls[side]), 4),
+                "passes": bool(specificity > edit_null),
+                f"precision@{TOP}": round(float(labels[side][page].mean()), 4),
+                f"opposite_precision@{TOP}": round(
+                    float(labels[opposite][page].mean()), 4
+                ),
+            }
+            if text in tops:
+                shared = np.intersect1d(top(found[side]), tops[text])
+                row[f"seed_overlap@{TOP}"] = len(shared) / TOP
+            rows[side][text] = row
+    return rows
 
 
 @app.function(
@@ -163,147 +450,121 @@ def shares(
     gpu="L40S",
     cpu=16,
     memory=(16 * 1024, 64 * 1024),
-    timeout=60 * 60,
+    timeout=2 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def benchmark_text_search_quality() -> dict[str, Any]:
+def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     held = np.flatnonzero(held_out(np.arange(galaxy_count())).cpu().numpy())
-    space = aion_gemma_space()
-    methods = {"gemma": {}, "maps": {}}
-    for modality, survey in TEXT_SURVEYS.items():
-        mode = f"{survey}_{modality}"
-        galaxy, _, gemma = pairs(modality)
-        methods["gemma"][mode] = points(galaxy, gemma.cpu().numpy(), held)
-        chosen = space.modality == modality
-        methods["maps"][mode] = points(
-            space.galaxy[chosen], space.vectors[chosen], held
-        )
+    start = HALVES.index(half)
+    chosen = {
+        name: tuple(zip(pair.high[start::2], pair.low[start::2]))
+        for name, pair in PAIRS.items()
+    }
+    phrased = [both for found in chosen.values() for both in found]
+    texts = [text for both in phrased for text in both]
 
-    measured = provabgs(held) | {REDSHIFT: measured_redshifts(held)[0]}
-    labelled = {}
-    for query, (name, low, high) in LABELLED.items():
-        known = ~np.isnan(measured[name])
-        values = measured[name][known]
-        labelled[query] = (known, (values > low) & (values < high))
-
-    texts = list(
-        dict.fromkeys(
-            [*LABELLED, *(text for rungs in LADDERS.values() for text in rungs)]
-        )
-    )
-    embedded = embed_queries(texts)
     index = text_index()
-    directions = normalize(embedded - index.query_mean.numpy())
-    tables = {
-        text: {
-            name: cosine_tables(found, query, direction, len(held))
-            for name, found in methods.items()
-        }
-        for text, query, direction in zip(texts, embedded, directions)
-    }
-    rankings = {
-        text: {
-            name: {"raw": best_cosine(raw), "likelihood": likelihood(centred, KAPPA)}
-            for name, (raw, centred) in found.items()
-        }
-        for text, found in tables.items()
-    }
-    chosen = torch.from_numpy(held)
-    network, bases = stored_flow()
-    joint = loaded("joint_embedding", torch.float32)
-    second = indexed(generated_clouds(network, bases, joint, chosen, SEED + 1))
-    cloud_breadth, seeds = {}, {}
-    for text, query in zip(texts, embedded):
-        scores, by_kind = likelihoods(index, query, KINDS)
-        shares_by_mode = mode_shares(by_kind[chosen], KINDS)
-        rankings[text]["clouds"] = {
-            "likelihood": (scores[chosen].numpy(), shares_by_mode.numpy())
-        }
-        cloud_breadth[text] = {
-            f"kappa = {kappa}": round(
-                breadth(
-                    likelihoods(index._replace(kappa=kappa), query, KINDS)[0][chosen]
-                ),
-                4,
-            )
-            for kappa in BREADTH_KAPPAS
-        }
-        if text in LABELLED:
-            reseeded = likelihoods(second, query, KINDS)[0]
-            agreement = spearmanr(scores[chosen], reseeded).statistic
-            seeds[text] = round(float(agreement), 4)
+    generic = embed_queries(generic_queries())
+    queries = {"plain": query_directions(embed_queries(texts), index.query_mean)}
+    for (name, frame), block in zip(FRAMES.items(), np.split(generic, len(FRAMES))):
+        framed = embed_queries([frame.format(text) for text in texts])
+        queries[name] = query_directions(framed, torch.from_numpy(block.mean(axis=0)))
+    queries = {name: rows.numpy() for name, rows in queries.items()}
+    rng = np.random.default_rng(SEED)
+    random_directions = normalize(
+        rng.standard_normal((RANDOM_DIRECTIONS, generic.shape[1]))
+    )
+    steps = normalize(rng.standard_normal((EDITS, generic.shape[1])))
+    tops = second_tops(queries["plain"])
 
+    space = aion_gemma_space()
+    views, maps = {}, {}
+    for modality in TEXT_SURVEYS:
+        galaxy, _, gemma = pairs(modality)
+        views[modality] = galaxy, centred(gemma.cpu().numpy())
+        rows = space.modality == modality
+        maps[modality] = space.galaxy[rows], centred(space.vectors[rows])
+
+    properties = pq.read_table(
+        artifact("properties"), columns=[pair.label for pair in PAIRS.values()]
+    )
+    labels = {
+        name: sides(properties.column(pair.label).to_numpy(zero_copy_only=False))
+        for name, pair in PAIRS.items()
+    }
+    phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
+    cross_pairs: dict[str, dict[str, Any]] = {}
+    for family, scorer, which in families(index, views, maps):
+        vectors = dict(zip(texts, queries[which]))
+        edits = [edited(vectors[high], vectors[low], steps) for high, low in phrased]
+        scored = scorer(queries[which], slice(None))
+        nulls = scorer(np.concatenate([random_directions, *edits]), held)
+        for name, scores in scored.items():
+            method = f"{family}, {name}"
+            by_text = dict(zip(texts, scores))
+            cross_pairs[method] = {
+                target: {
+                    source: {
+                        both[0]: {
+                            "separation": separation(
+                                by_text, both, labels[target], held
+                            )
+                        }
+                        for both in found
+                    }
+                    for source, found in chosen.items()
+                }
+                for target in PAIRS
+            }
+            random_scores, *edit_scores = np.split(
+                nulls[name], np.arange(RANDOM_DIRECTIONS, len(nulls[name]), 2 * EDITS)
+            )
+            for pair, found in chosen.items():
+                phrasings[pair][method] = pair_rows(
+                    by_text,
+                    dict(zip(phrased, edit_scores)),
+                    random_scores,
+                    dict(zip(texts, tops.get(method, []))),
+                    found,
+                    labels[pair],
+                    held,
+                )
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name(),
+        "half": half,
         "galaxies": len(held),
-        "kappa": KAPPA,
-        "cloud_kappa": index.kappa,
-        "generic_queries": len(generic_queries()),
-        "queries": {
-            query: {
-                name: {
-                    scoring: precision(relevant, score[known])
-                    for scoring, (score, _) in scored.items()
-                }
-                for name, scored in rankings[query].items()
+        "kappa": index.kappa,
+        "random_directions": RANDOM_DIRECTIONS,
+        "edits": EDITS,
+        "pairs": {
+            name: {
+                "label": pair.label,
+                "mode": pair.mode,
+                "galaxies": int(labels[name]["known"][held].sum()),
             }
-            for query, (known, relevant) in labelled.items()
-        },
-        "differences": {
-            query: {
-                f"{name}, {scoring}": difference(
-                    relevant,
-                    rankings[query]["clouds"]["likelihood"][0][known],
-                    score[known],
+            | {
+                f"{side}_base_rate": round(
+                    float(labels[name][side][held][labels[name]["known"][held]].mean()),
+                    4,
                 )
-                for name, scored in rankings[query].items()
-                if name != "clouds"
-                for scoring, (score, _) in scored.items()
+                for side in SIDES
             }
-            for query, (known, relevant) in labelled.items()
+            for name, pair in PAIRS.items()
         },
-        "seed_agreement": seeds,
-        "breadth": {
-            ladder: {
-                text: {
-                    name: {
-                        f"kappa = {kappa}": round(
-                            breadth(torch.from_numpy(likelihood(centred, kappa)[0])), 4
-                        )
-                        for kappa in BREADTH_KAPPAS
-                    }
-                    for name, (_, centred) in tables[text].items()
-                }
-                | {"clouds": cloud_breadth[text]}
-                for text in rungs
-            }
-            for ladder, rungs in LADDERS.items()
-        },
-        "shares": {
-            text: {
-                name: {
-                    scoring: shares(
-                        list(SHARE_NAMES) if name == "clouds" else list(methods[name]),
-                        *ranked,
-                    )
-                    for scoring, ranked in scored.items()
-                }
-                for name, scored in found.items()
-            }
-            for text, found in rankings.items()
-        },
+        "phrasings": phrasings,
+        "cross_pairs": cross_pairs,
         "memory": memory(),
     }
 
 
 @app.local_entrypoint()
-def main() -> None:
+def main(half: str = HALVES[0]) -> None:
     report = {
         "commit": git("describe", "--always", "--dirty"),
         "revision": DATASET_REVISION,
         "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        **benchmark_text_search_quality.remote(),
+        **benchmark_text_search_quality.remote(half),
     }
     REPORT.parent.mkdir(exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + "\n")
