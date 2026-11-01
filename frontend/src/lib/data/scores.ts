@@ -1,12 +1,8 @@
 import type { Extent } from './similarity'
+import { extent as bounds } from 'd3-array'
 
-export function extent(values: ArrayLike<number>): Extent {
-  let low = Infinity
-  let high = -Infinity
-  for (let i = 0; i < values.length; i++) {
-    if (values[i] < low) low = values[i]
-    if (values[i] > high) high = values[i]
-  }
+export function extent(values: Iterable<number>): Extent {
+  const [low = Infinity, high = -Infinity] = bounds(values)
   return [low, high]
 }
 

@@ -1,8 +1,7 @@
 import math
-from collections import OrderedDict
-from collections.abc import Callable, Collection, Hashable, Iterable, Iterator
+from collections.abc import Callable, Collection, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from functools import cache, partial
+from functools import cache, lru_cache, partial
 from itertools import accumulate
 from threading import Lock
 from typing import Annotated, NamedTuple, Self, get_args
@@ -69,9 +68,6 @@ BATCH = 256
 CHUNK = 16
 BLOCK = 8192
 BUILDING = Lock()
-MATRICES = OrderedDict()
-SAMPLES = OrderedDict()
-SUMS = OrderedDict()
 THREADS = pa.cpu_count()
 
 ImageTokens = Annotated[
@@ -465,32 +461,19 @@ def basket_maps(
 
 def basket_sums(galaxy: int, selected: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {
-        mode: cached(
-            SUMS,
-            (galaxy, mode, *slots.tolist()),
-            partial(basket_sum, galaxy, mode, slots),
-        )
+        mode: basket_sum(galaxy, mode, tuple(slots.tolist()))
         for mode, slots in selected.items()
     }
 
 
-def cached[T](store: OrderedDict, key: Hashable, compute: Callable[[], T]) -> T:
-    if (found := store.get(key)) is not None:
-        return found
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
     with BUILDING:
-        if key not in store:
-            store[key] = compute()
-            if len(store) > AGREEMENT_GALAXIES:
-                store.popitem(last=False)
-        return store[key]
-
-
-def basket_sum(galaxy: int, mode: str, slots: np.ndarray) -> np.ndarray:
-    form = query_forms(row(galaxy), {mode: slots})[mode]
-    return threaded(
-        lambda rows: best_log_overlaps(rows, mode, form).sum(axis=1),
-        predictions().to_batches(),
-    )
+        form = query_forms(row(galaxy), {mode: np.array(slots)})[mode]
+        return threaded(
+            lambda rows: best_log_overlaps(rows, mode, form).sum(axis=1),
+            predictions().to_batches(),
+        )
 
 
 def distributions(mode: str, form: np.ndarray) -> np.ndarray:
@@ -547,8 +530,10 @@ def cosines(galaxy: int, mode: str) -> np.ndarray:
     return (unit @ unit.T).astype(np.float32, copy=False)
 
 
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
 def agreements(galaxy: int) -> Agreements:
-    return cached(MATRICES, galaxy, partial(built, galaxy))
+    with BUILDING:
+        return built(galaxy)
 
 
 def agreement_rows(rows: pa.RecordBatch, forms: dict[str, np.ndarray]) -> np.ndarray:
@@ -638,10 +623,7 @@ def maps(
 
 def saliency(query: Selection) -> np.ndarray:
     if query.anywhere:
-        modes = frozenset(query.anywhere)
-        found = cached(
-            SAMPLES, (query.galaxy, modes), partial(sampled, query.galaxy, modes)
-        )
+        found = sampled(query.galaxy, frozenset(query.anywhere))
         others = np.ones(len(found.values), bool)
     else:
         found = agreements(query.galaxy)
@@ -658,15 +640,19 @@ def saliency_sample(galaxy: int) -> np.ndarray:
     )
 
 
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
 def sampled(galaxy: int, anywhere: frozenset[str]) -> Agreements:
-    forms = galaxy_forms(galaxy)
-    parts = slices(gathered(saliency_sample(galaxy)))
-    values = threaded(partial(agreement_rows, forms=forms), parts).astype(np.float64)
-    for mode in anywhere:
-        values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = threaded(
-            partial(best_log_overlaps, mode=mode, form=forms[mode]), parts
+    with BUILDING:
+        forms = galaxy_forms(galaxy)
+        parts = slices(gathered(saliency_sample(galaxy)))
+        values = threaded(partial(agreement_rows, forms=forms), parts).astype(
+            np.float64
         )
-    return Agreements(values, values.std(axis=0), values.sum(axis=1))
+        for mode in anywhere:
+            values[:, OFFSETS[mode] : OFFSETS[mode] + WIDTHS[mode]] = threaded(
+                partial(best_log_overlaps, mode=mode, form=forms[mode]), parts
+            )
+        return Agreements(values, values.std(axis=0), values.sum(axis=1))
 
 
 def partial_correlations(

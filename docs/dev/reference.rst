@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, under ``$ALPHAUNIVERSE_CACHE/<author>/<name>/<revision>/``, so changing ``DATASET_REVISION`` switches trees rather than overwriting one. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, directly in ``$ALPHAUNIVERSE_CACHE``, so changing ``DATASET_REVISION`` overwrites them. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ============================ ====================================== ==================================
 Job                          Reads                                  Writes
@@ -49,6 +49,24 @@ generate_text_vectors        text_flow, text_bases,                 text_vectors
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. Each spectrum reaches the codec followed by one masked sample at wavelength 99,999 with zero flux and inverse variance, which gives the tokens of the codec on AION's ``main`` branch: it pads every spectrum with such samples, to 7,808 for DESI and 4,800 for SDSS, and only the first affects the tokens. AION 0.0.2 does not pad. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
 
+Features in code
+----------------
+
+=========================== ========================================
+Feature                     Code
+=========================== ========================================
+Similarity search           ``app.pql.search``
+Whole-mode search           ``app.pql.mode_search``
+This galaxy map             ``app.pql.cosines``
+Population map              ``app.pql.saliency``
+Text search                 ``app.text_search.text_search``
+The map                     ``app.maps``, run by ``generate_maps``
+=========================== ========================================
+
+A :term:`whole-mode search` ranks from the mode's :term:`token embedding`: :math:`q`'s query vector times every galaxy's gallery vector, both from ``token_search_<mode>`` at 256 components, plus the offsets, gives the mode's :term:`Gram matrix` row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardised over all galaxies, one mode's too, and averaged.
+
+``generate_maps`` scores every galaxy against every other with ``app.pql.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbour graph (:doc:`/methods/map`).
+
 Artifacts
 ---------
 
@@ -65,7 +83,7 @@ Artifacts
 
 ``probability_basis`` is an ``np.savez`` of each spectrum survey's mean (``float64``, 1024) and top 256 eigenvectors (``float64``, 256 × 1024) of the spectrum token probabilities; a token's distribution is ``mean + coefficients @ directions``. ``generate_predictions`` fits the coefficients against it in ``float64``, and every later prediction must too; search decodes them in ``float32``.
 
-``token_gram_<mode>`` and ``token_gram_<mode>_anywhere`` are ``np.save`` files of a galaxies × galaxies ``float32`` :term:`Gram matrix`: one for each mode at the same place, and one for each image and spectrum mode at any position. Entry :math:`(q, g)` is the mode score :math:`T_m(g)` of :doc:`methods/similarity-search` with every slot of the mode selected on :math:`q` and every galaxy read as search reads the query galaxy, so a same-place matrix is symmetric up to rounding. The products run in TF32 with float32 accumulation. The app does not read them.
+``token_gram_<mode>`` and ``token_gram_<mode>_anywhere`` are ``np.save`` files of a galaxies × galaxies ``float32`` :term:`Gram matrix`: one for each mode at the same place, and one for each image and spectrum mode at any position. Entry :math:`(q, g)` is the mode score :math:`T_m(g)` of :doc:`/methods/similarity-search` with every slot of the mode selected on :math:`q` and every galaxy read as search reads the query galaxy, so a same-place matrix is symmetric up to rounding. The products run in TF32 with float32 accumulation. The app does not read them.
 
 ``token_embedding_<mode>`` and ``token_embedding_<mode>_anywhere`` are ``np.savez`` files of :term:`token embeddings <token embedding>`, one per Gram matrix :math:`K`. With :math:`K_c` the matrix less its row and column means, and :math:`s` and :math:`V` its top 1,024 singular values and right singular vectors: ``queries`` is :math:`K_c V s^{-1/2}` and ``galleries`` is :math:`V s^{1/2}`, galaxies × 1,024 ``float32`` each; ``offsets`` holds :math:`K`'s column means and ``self_scores`` its diagonal :math:`K(g, g)`, in ``float32``; ``singular_values`` holds all of :math:`K_c`'s in ``float64``, as square roots of :math:`K_c^\top K_c`'s eigenvalues, so values below about :math:`10^{-8}` of the largest are rounding error. ``queries[q] @ galleries.T + offsets`` ranks the galaxies as row :math:`q` of :math:`K` does, exactly at full rank. A new query's row :math:`k` of scores against every galaxy has the query vector :math:`(k - \bar k - o + \bar o)\, V s^{-1/2}`, with :math:`o` the offsets; for a galaxy's own row this is its stored query vector.
 
@@ -87,7 +105,7 @@ Artifacts
 
 ``text_bases`` is an ``np.savez`` of the coordinates ``train_text_flow`` fits on the first round of ``text_views``. Per view type, ``mean`` is the mean of its embeddings (26 × 768), and a 32-component PCA of its mean-subtracted unit embeddings gives ``components`` (26 × 32 × 768), ``centre`` (26 × 768) and ``scale`` (26 × 32), each component's standard deviation; a type with fewer than 128 views in the round takes its PCA from its mode's three types together. ``offset`` and ``projection`` whiten ``joint_embedding`` to 64 components over the training galaxies, and ``kappa`` is :term:`κ`. ``text_flow`` is a ``torch.save`` of the flow's weights: a network for the velocity that carries Gaussian noise to a view's 32 coefficients, given its type and the whitened joint embedding. In training, each of the joint embedding's 11 blocks is dropped with probability 0.3, and all of them with probability 0.1. It trains on the stored views 400 at a time, 60 steps of 512 views each, drawn so that every view type a galaxy has is as likely as any other, and keeps an exponential moving average of its weights. Every 4,000 views it measures the :term:`identification gain` of the held-out views at κ of 5, 10, 15, 20, 30 and 40, and it stops once 40,000 views have added less than 0.01 nats, keeping the weights and κ of the last check that added more; it first runs ``generate_text_views`` for the first round and the held-out views, and again for another round whenever the stored views run out, up to 1,000,000 views. Its report, which adds the gain with each mode's blocks dropped or alone and that of a flow from views to the whitened joint embedding, trained on the same views and scored by its log-density ratios scaled by each of 0.01, 0.02, 0.05, 0.1, 0.25, 0.5 and 1, goes to Weights & Biases and the job's log.
 
-``text_vectors`` is an ``np.save`` file, ``float32``, galaxies × 7 modes × 768: for each galaxy and mode, the sum over view types :math:`k` that need the mode of :math:`\bar e_{g,k} / (26\,|M_k|)` (:doc:`methods/text-search`), averaged over eight :term:`clouds <cloud>`, each 16 points per type after 32 Euler steps of ``text_flow`` from noise seeded by the galaxy and the draw, with every block of its joint embedding present. Summed over modes, a galaxy's row is its mean unit point; the app sums it in batches on the first text search and reads the matches' rows for their contributions. ``text_query_mean`` is an ``np.save`` file of the mean EmbeddingGemma embedding of the 10,080 generic queries (``float32``, 768), which every query has subtracted before scoring.
+``text_vectors`` is an ``np.save`` file, ``float32``, galaxies × 7 modes × 768: for each galaxy and mode, the sum over view types :math:`k` that need the mode of :math:`\bar e_{g,k} / (26\,|M_k|)` (:doc:`/methods/text-search`), averaged over eight :term:`clouds <cloud>`, each 16 points per type after 32 Euler steps of ``text_flow`` from noise seeded by the galaxy and the draw, with every block of its joint embedding present. Summed over modes, a galaxy's row is its mean unit point; the app sums it in batches on the first text search and reads the matches' rows for their contributions. ``text_query_mean`` is an ``np.save`` file of the mean EmbeddingGemma embedding of the 10,080 generic queries (``float32``, 768), which every query has subtracted before scoring.
 
 ``data_gram_<mode>`` and ``data_gram_<mode>_anywhere`` are ``np.save`` files of :term:`against-data scores <against-data score>`, ``float32``, one row per galaxy and one column per galaxy observed in the mode with data on the template's pixels, in the order of ``observed_reference``'s ``<mode>_galleries``. With :math:`\mu_q` the query's :term:`template`, :math:`\mu_0` the median of all galaxies' templates, and :math:`x_g` and :math:`w_g` the gallery galaxy's data and inverse variances on the template's pixels (the central 96 × 96 px of an image; for a spectrum, the codec's grid, through the transpose of the linear interpolation to each observed wavelength; for catalogue values and the redshift, the errors of ``template_quality``):
 
@@ -118,7 +136,7 @@ The redshift's prediction is the median of AION's predicted distribution, and it
    :no-index:
    :no-value:
 
-``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet, and so are ``same_place_points`` and ``any_position_points``, one row per galaxy placed by :term:`whole-mode search` over every mode (:doc:`methods/map`):
+``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet, and so are ``same_place_points`` and ``any_position_points``, one row per galaxy placed by :term:`whole-mode search` over every mode (:doc:`/methods/map`):
 
 .. autodata:: app.config.POINTS
    :no-index:
@@ -137,13 +155,13 @@ HTTP API
 
 Every endpoint is ``GET``; ``/projections/{projection}`` and ``/downloads/{role}`` also answer ``HEAD``. A request whose ``If-None-Match`` matches the response's ETag gets ``304 Not Modified``. Artifact files carry Starlette's ETag, from size and modification time; every other response's ETag is an MD5 of its body. Every response carries ``Cache-Control: no-cache``.
 
-The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the last 8. An Any position map builds no matrix: it computes the rows of its sample of galaxies, described under ``/saliency`` below, and the server keeps them for the last 8 pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
+The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the 8 most recently used. An Any position map builds no matrix: it computes the rows of its sample of galaxies, described under ``/saliency`` below, and the server keeps them for the 8 most recently used pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
 
-.. openapi:: ../frontend/openapi.json
+.. openapi:: ../../frontend/openapi.json
 
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment``, ``generate_aion_gemma_space`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the frontend has no tests.
+Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, EmbeddingGemma, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the frontend has no tests.
 
 Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's default environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets. Vercel builds every branch: production builds from ``main`` and calls the default app, and preview builds from every other branch call the ``dev`` app, whose URL ``PUBLIC_API_URL`` holds in each Vercel environment. The ``dev`` app runs whichever branch last ran the workflow, so previews share it.

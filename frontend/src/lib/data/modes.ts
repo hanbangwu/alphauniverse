@@ -1,10 +1,13 @@
 import type { TableRow } from '$lib/api'
 import type { CosineMode, ImageSurvey, SpectrumSurvey } from '$lib/client'
+import { surveysOf } from '$lib/state/schema'
 import type { ModeName } from './similarity'
 
 export const ANCHOR: ImageSurvey = 'ls'
-export const IMAGE_SURVEYS: readonly ImageSurvey[] = [ANCHOR, 'hsc']
-export const SPECTRUM_SURVEYS: readonly SpectrumSurvey[] = ['desi', 'sdss']
+export const IMAGE_SURVEYS = surveysOf('/galaxy/{galaxy}/image/{survey}') as readonly ImageSurvey[]
+export const SPECTRUM_SURVEYS = surveysOf(
+  '/galaxy/{galaxy}/spectrum/{survey}'
+) as readonly SpectrumSurvey[]
 
 export const imageMode = (survey: ImageSurvey) => `${survey}_image` as const
 export const spectrumMode = (survey: SpectrumSurvey) => `${survey}_spectrum` as const

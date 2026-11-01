@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button/index.js'
   import { cn, type WithoutChildrenOrChild } from '$lib/utils.js'
+  import DialogOverlay from './dialog-overlay.svelte'
   import DialogPortal from './dialog-portal.svelte'
-  import * as Dialog from './index.js'
   import XIcon from '@lucide/svelte/icons/x'
   import { Dialog as DialogPrimitive } from 'bits-ui'
   import type { Snippet } from 'svelte'
@@ -23,12 +23,12 @@
 </script>
 
 <DialogPortal {...portalProps}>
-  <Dialog.Overlay />
+  <DialogOverlay />
   <DialogPrimitive.Content
     bind:ref
     data-slot="dialog-content"
     class={cn(
-      'bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 ring-foreground/5 dark:ring-foreground/10 grid max-w-[calc(100%_-_2rem)] gap-6 rounded-[min(var(--radius-4xl),24px)] p-6 text-sm shadow-xl ring-1 duration-100 sm:max-w-md fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none',
+      'glass text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 grid max-w-[calc(100%_-_2rem)] gap-6 rounded-[min(var(--radius-4xl),24px)] p-6 text-sm duration-100 sm:max-w-md fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none',
       className
     )}
     {...restProps}

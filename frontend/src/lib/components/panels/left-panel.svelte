@@ -11,7 +11,7 @@
   const view = getView()
 </script>
 
-<div class="flex h-full flex-col bg-card">
+<div class="glass flex h-full flex-col">
   <header class="flex shrink-0 items-start justify-between gap-2 p-4 pb-3">
     <h1 class="flex items-center gap-2 text-base tracking-wide">
       <img src={markLight} alt="" class="size-6 dark:hidden" />
