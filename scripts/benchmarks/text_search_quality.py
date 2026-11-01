@@ -38,7 +38,6 @@ from app.text_flow import (
 from app.text_search import (
     FRAMES,
     TextQuery,
-    aion_gemma_space,
     embed_queries,
     generic_queries,
     query_directions,
@@ -395,9 +394,7 @@ def framed(
     return {name: averaged(directions, galaxies)[name]}
 
 
-def families(
-    index: TextIndex, views: dict, maps: dict
-) -> list[tuple[str, Scorer, str]]:
+def families(index: TextIndex, views: dict) -> list[tuple[str, Scorer, str]]:
     averaged = mean_scorer(index, MODE_SETS)
     found = [
         ("search", search_scorer(text_vectors().vectors.numpy()), "plain"),
@@ -415,8 +412,7 @@ def families(
         for name, modes in MODE_SETS.items()
     }
     observed = {name: chosen for name, chosen in modalities.items() if chosen}
-    for family, space in (("views", views), ("maps", maps)):
-        found.append((family, view_scorer(space, observed), "plain"))
+    found.append(("views", view_scorer(views, observed), "plain"))
     return found
 
 
@@ -559,13 +555,10 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     steps = normalize(rng.standard_normal((EDITS, generic.shape[1])))
     tops = second_tops(queries["plain"])
 
-    space = aion_gemma_space()
-    views, maps = {}, {}
+    views = {}
     for modality in TEXT_SURVEYS:
         galaxy, _, gemma = pairs(modality)
         views[modality] = galaxy, centred(gemma.cpu().numpy())
-        rows = space.modality == modality
-        maps[modality] = space.galaxy[rows], centred(space.vectors[rows])
 
     properties = pq.read_table(
         artifact("properties"), columns=[pair.label for pair in PAIRS.values()]
@@ -576,7 +569,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     }
     phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
     cross_pairs: dict[str, dict[str, Any]] = {}
-    for family, scorer, which in families(index, views, maps):
+    for family, scorer, which in families(index, views):
         vectors = dict(zip(texts, queries[which]))
         edits = [edited(vectors[high], vectors[low], steps) for high, low in phrased]
         scored = scorer(queries[which], slice(None))

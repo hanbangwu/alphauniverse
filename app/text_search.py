@@ -101,12 +101,6 @@ class TextQuery(BaseModel):
     matches: Annotated[int, Field(ge=1, le=128)] = 32
 
 
-class TextSpace(NamedTuple):
-    vectors: np.ndarray
-    galaxy: np.ndarray
-    modality: np.ndarray
-
-
 class TextVectors(NamedTuple):
     modes: np.ndarray
     vectors: torch.Tensor
@@ -215,12 +209,6 @@ def generate_pairs() -> None:
             artifact(f"pairs_{modality}"),
             compression="zstd",
         )
-
-
-@cache
-def aion_gemma_space() -> TextSpace:
-    with np.load(artifact("aion_gemma_space")) as stored:
-        return TextSpace(**stored)
 
 
 @cache

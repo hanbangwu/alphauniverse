@@ -22,4 +22,4 @@ A mode's :term:`contribution` to a match is its Shapley value in the galaxy's le
 
 with :math:`M_k` the modes of view type :math:`k`, one for a single mode's type, and :math:`\langle \bar e_k \rangle` its mean over all galaxies. The contributions sum to the lead.
 
-:doc:`/dev/benchmarks` measures how well these rankings recover measured properties, against EmbeddingGemma's own embeddings of the observed image and spectrum, and the maps from AION into EmbeddingGemma's space that text search used before.
+:doc:`/dev/benchmarks` measures how well these rankings recover measured properties, against EmbeddingGemma's own embeddings of the observed image and spectrum.

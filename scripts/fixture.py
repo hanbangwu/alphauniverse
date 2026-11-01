@@ -41,7 +41,6 @@ from app.config import (
     TABLE_MODES,
     TABLE_VALUE_COLUMNS,
     TABLE_VALUE_SURVEYS,
-    TEXT_SURVEYS,
     TEXT_VIEWS,
     TOKEN_EMBEDDING_RANK,
     TOKEN_SURVEYS,
@@ -71,7 +70,7 @@ from app.pql import (
     stored,
 )
 from app.search import source, templates, tokens
-from app.text_search import aion_gemma_space, text_vectors
+from app.text_search import text_vectors
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_IMAGE_TOKENS + 12,
@@ -407,7 +406,6 @@ def forget() -> None:
         source,
         tokens,
         templates,
-        aion_gemma_space,
         text_vectors,
         predictions,
         prediction_basis,
@@ -467,19 +465,6 @@ def build(galaxies: int) -> Path:
         points(owner, _project(basis, anchors.reshape(-1, DIM)), category.take(owner)),
         artifact("full_points"),
         compression="zstd",
-    )
-
-    held = {
-        modality: rows[[covered(survey, galaxy) for galaxy in rows]]
-        for modality, survey in TEXT_SURVEYS.items()
-    }
-    galaxy = np.concatenate(list(held.values())).astype(np.int32)
-    vectors = rng.standard_normal((len(galaxy), GEMMA_DIM)).astype(np.float32)
-    np.savez(
-        artifact("aion_gemma_space"),
-        vectors=vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
-        galaxy=galaxy,
-        modality=np.repeat(list(held), [len(members) for members in held.values()]),
     )
 
     _predictions(rng, galaxies)

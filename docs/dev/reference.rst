@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Seventeen Modal jobs write artifacts to a volume mounted at ``/cache``, directly in ``$ALPHAUNIVERSE_CACHE``, so changing ``DATASET_REVISION`` overwrites them. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, directly in ``$ALPHAUNIVERSE_CACHE``, so changing ``DATASET_REVISION`` overwrites them. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 ============================ ====================================== ==================================
 Job                          Reads                                  Writes
@@ -37,8 +37,6 @@ generate_maps                the dataset, joint_embedding,          same_place_p
 generate_projections         the dataset, encoded                   mean_points, full_points,
                                                                     parametric_umap
 generate_pairs               the dataset, encoded                   pairs_<modality>
-generate_alignment           pairs_<modality>                       alignment
-generate_aion_gemma_space    pairs_<modality>, alignment            aion_gemma_space
 generate_text_views          the dataset, tokens, probabilities,    text_views, text_views_held_out
                              probability_basis, template_<mode>
 train_text_flow              the dataset, tokens, probabilities,    text_flow, text_bases, text_views,
@@ -150,7 +148,7 @@ The redshift's prediction is the median of AION's predicted distribution, and it
    :no-index:
    :no-value:
 
-``parametric_umap`` and ``alignment`` are ``torch.save`` files of the projector's and the text maps' weights; ``alignment`` holds, for each modality, the network and a linear map fitted to the same pairs as a baseline. ``aion_gemma_space`` is an ``np.savez`` of the rows of ``pairs_image`` then ``pairs_spectrum`` carried into EmbeddingGemma's space: ``vectors`` (``float32``, rows × 768, unit length), ``galaxy`` (``int32``) and ``modality`` (``image`` or ``spectrum``).
+``parametric_umap`` is a ``torch.save`` file of the projector's weights.
 
 HTTP API
 --------
@@ -164,6 +162,6 @@ The first Same place Population map (``/saliency``) on a galaxy builds its agree
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, EmbeddingGemma, ``generate_pairs``, ``generate_alignment``, ``generate_aion_gemma_space`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the frontend has no tests.
+Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, EmbeddingGemma, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the frontend has no tests.
 
 Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's default environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets. Vercel builds every branch: production builds from ``main`` and calls the default app, and preview builds from every other branch call the ``dev`` app, whose URL ``PUBLIC_API_URL`` holds in each Vercel environment. The ``dev`` app runs whichever branch last ran the workflow, so previews share it.
