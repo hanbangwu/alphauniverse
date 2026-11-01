@@ -10,6 +10,7 @@ paths:
 # Benchmarks
 
 - Every benchmark runs on Modal, never locally, and measures only the production artifacts on the volume.
+- `text_search_quality` chooses methods on its development half; its sealed half runs once, when a maintainer asks.
 - If the code under test needs artifacts the volume does not hold yet, name the `generate_*` jobs that build them, in order, and wait for a maintainer to ask for that build: they write to the volume the deployed app serves from.
 - A run times the `search()` stages of the checked-out commit, and the stored report's best version when its code differs, in one container, so they compare on the same host. Compare versions only within one report, and loads only round by round, since they depend on which version loaded the artifacts first. Request latency is timed for the checked-out commit only.
 - A pull request whose goals list a run posts it on the pull request: the workflow run's link and the comparison of its versions in the description, the report in a collapsed comment. It commits no report. After a round of such pull requests, one docs pull request reruns the scripts on `main` and replaces the reports.

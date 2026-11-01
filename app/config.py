@@ -53,6 +53,7 @@ DESI = "-mmu_desi_edr_sv3"
 SDSS = "-mmu_sdss_sdss"
 GZ10 = "-mmu_gz10"
 PROVABGS = "-mmu_desi_provabgs"
+ZERO_POINTS = {ANCHOR: 22.5, "hsc": 27.0}
 
 
 SpectrumSurvey = Literal["desi", "sdss"]
@@ -141,6 +142,7 @@ N_MORPHOLOGIES = 10
 GEMMA = "google/embeddinggemma-2"
 GEMMA_DIM = 768
 TextModality = Literal["image", "spectrum"]
+PLOT_INCHES = (16.8, 3.84)
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
 
 Download = Literal["encoded", "codebook", "tokens", "properties"]
@@ -177,6 +179,22 @@ PAIRS = pa.schema(
 )
 
 
+TEXT_VIEWS = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("view_type", pa.int8()),
+        pa.field("round", pa.int16()),
+        pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
+    ]
+)
+TEXT_VIEWS_HELD_OUT = pa.schema(
+    [
+        pa.field("galaxy", pa.int32()),
+        pa.field("view_type", pa.int8()),
+        pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
+    ]
+)
+
 TOP_CODES = 64
 KEPT = 16
 PROBABILITY_FLOOR = float(np.finfo(np.float32).tiny)
@@ -206,6 +224,40 @@ OBSERVATIONS = {
 }
 
 MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+VIEW_KINDS = ("observed", "template", "sample")
+VIEW_COMBINATIONS = {
+    "images": tuple(IMAGE_MODES),
+    "spectra": tuple(SPECTRUM_MODES),
+    "catalogues": tuple(TABLE_MODES),
+    "image_and_spectrum": ("ls_image", "desi_spectrum"),
+    "everything": MODES,
+}
+VIEW_TYPES = (
+    *((kind, mode) for mode in MODES for kind in VIEW_KINDS),
+    *(("combination", name) for name in VIEW_COMBINATIONS),
+)
+TEXT_RANK = 32
+TEXT_CONDITION = 64
+TEXT_POINTS = 16
+VIEWS_PER_PART = 4_000
+PARTS_PER_ROUND = 10
+PROTOTYPE_HELD_OUT = np.concatenate(
+    [
+        [110, 301, 319, 830, 1003, 1365, 1413, 1492, 1561, 1653, 1655, 1656, 1790],
+        [1843, 1918, 1988, 1989, 1991, 2006, 2026, 2027, 2092, 2173, 2219, 2247, 2414],
+        [2481, 2725, 2726, 2863, 2918, 3095, 3166, 3221, 3286, 3333, 3923, 3955, 3962],
+        [3965, 4093, 4102, 4459, 4670, 4891, 4926, 5026, 5091, 5179, 5238, 5245, 5287],
+        [5371, 5467, 5643, 5670, 5678, 5710, 5932, 6313, 6319, 6694, 6705, 7134, 7139],
+        [7184, 7190, 7493, 7520, 7650, 7666, 7810, 7896, 7938, 7983, 8081, 8087, 8123],
+        [8226, 8384, 8414, 8494, 8517, 8680, 9305, 9452, 9679, 9701, 9938, 10004],
+        [10097, 10104, 10469, 10474, 10602, 10716, 10721, 10745, 10942, 11218, 11581],
+        [12137, 12230, 12576, 12628, 12641, 12660, 12689, 12846, 12916, 12970, 13105],
+        [13190, 13455, 13471, 13540, 13545, 13592, 13989, 14103, 14113, 14268, 14308],
+        [14381, 14383, 14631, 14680, 14733, 14908, 15169, 15304, 15307, 15598, 15614],
+        [15768, 16021, 16075, 16236, 16304, 16464, 16928, 17239, 17243],
+    ]
+)
+
 ModeName = Literal[*MODES]
 TOKEN_GRAMS = {
     mode: (mode, f"{mode}_anywhere") if mode in get_args(TokenMode) else (mode,)
@@ -228,8 +280,12 @@ ARTIFACTS: dict[str, str] = {
     "full_points": "parquet",
     "parametric_umap": "pt",
     **{f"pairs_{modality}": "parquet" for modality in TEXT_SURVEYS},
-    "alignment": "pt",
-    "aion_gemma_space": "npz",
+    "text_views": "parquet",
+    "text_views_held_out": "parquet",
+    "text_bases": "npz",
+    "text_flow": "pt",
+    "text_vectors": "npy",
+    "text_query_mean": "npy",
     "probabilities": "arrow",
     "probability_basis": "npz",
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
@@ -289,7 +345,10 @@ PREDICTIONS = pa.schema(
 )
 
 
-PROBED = ("mass", "sfr", "ssfr")
+PROVABGS_PROPERTIES = ("mass", "sfr", "ssfr")
+LS_PROPERTIES = ("radius", "r_magnitude", "axis_ratio")
+SPECTRAL_PROPERTIES = ("halpha_ew", "dn4000")
+PROBED = (*PROVABGS_PROPERTIES, *LS_PROPERTIES, *SPECTRAL_PROPERTIES)
 PROPERTIES = pa.schema(
     [
         pa.field("galaxy", pa.int32(), nullable=False),

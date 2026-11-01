@@ -28,12 +28,12 @@ def observed(mode: str) -> np.ndarray:
 
 
 def covering(column: pa.ChunkedArray, galaxies: np.ndarray) -> pa.Array:
-    first = int(galaxies[0])
-    return column.slice(first, int(galaxies[-1]) + 1 - first).combine_chunks()
+    first = int(galaxies.min())
+    return column.slice(first, int(galaxies.max()) + 1 - first).combine_chunks()
 
 
 def taken(column: pa.ChunkedArray, galaxies: np.ndarray) -> pa.Array:
-    return covering(column, galaxies).take(pa.array(galaxies - galaxies[0]))
+    return covering(column, galaxies).take(pa.array(galaxies - galaxies.min()))
 
 
 def column_values(column: str, galaxies: np.ndarray) -> np.ndarray:

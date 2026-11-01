@@ -9,11 +9,11 @@
 
 ## Features
 
-- **Map**: every galaxy placed by its neighbours under whole-mode search, at any position or the same place; coloured by redshift, stellar mass, star formation rate, specific star formation rate or g − r colour, measured or predicted, and filtered to a range of it.
+- **Map**: every galaxy placed by its neighbours under whole-mode search, at any position or the same place; coloured by redshift, stellar mass, star formation rate, specific star formation rate, g − r colour, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000, measured or predicted, and filtered to a range of it.
 - **Galaxy view**: crossmatches, and Legacy Survey and HSC images and DESI and SDSS spectra in groups that collapse.
 - **AION predictions**: shows what AION predicts for any galaxy in every survey, observed or not.
 - **Similarity search**: pick image regions, wavelengths, and catalogue values of a galaxy in any of its surveys, and search with predictive query likelihood over AION's predictions.
-- **Text search**: search galaxies using natural language.
+- **Text search**: search galaxies using natural language, with each mode's contribution to each match.
 - **Export**: Export any search results through CSV or [ECSV](https://docs.astropy.org/en/stable/io/ascii/ecsv.html).
 
 ## Running locally

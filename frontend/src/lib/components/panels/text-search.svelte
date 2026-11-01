@@ -3,6 +3,7 @@
   import { Input } from '$lib/components/ui/input'
   import { Spinner } from '$lib/components/ui/spinner'
   import { textSearchQuery } from '$lib/data/queries'
+  import type { ModeName } from '$lib/data/similarity'
   import { galaxyRows, saveCsv } from '$lib/download'
   import { errorMessage } from '$lib/errors'
   import { Field } from '$lib/state/field.svelte'
@@ -61,16 +62,21 @@
   {#if results.isError}
     <p role="alert" class="text-sm text-destructive">{errorMessage(results.error)}</p>
   {:else if results.data}
-    {@const { galaxies, modalities, scores } = results.data}
+    {@const { galaxies, scores, contributions } = results.data}
+    {@const named = Object.entries(contributions) as [ModeName, number[]][]}
     {#if downloadError}
       <p role="alert" class="text-sm text-destructive">{downloadError}</p>
     {/if}
     <ol
       class={['flex flex-col gap-1 transition-opacity', results.isPlaceholderData && 'opacity-50']}
     >
-      {#each galaxies as galaxy, index (`${galaxy}-${modalities[index]}`)}
+      {#each galaxies as galaxy, index (galaxy)}
         <li>
-          <TextSearchResult {galaxy} modality={modalities[index]} score={scores[index]} />
+          <TextSearchResult
+            {galaxy}
+            score={scores[index]}
+            contributions={named.map(([name, values]) => [name, values[index]])}
+          />
         </li>
       {/each}
     </ol>

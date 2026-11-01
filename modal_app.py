@@ -116,7 +116,7 @@ def generate_joint_embedding() -> None:
     image=build_image,
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
-    timeout=2 * 60,
+    timeout=60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_properties() -> None:
@@ -222,32 +222,47 @@ def generate_pairs() -> None:
 
 @app.function(
     image=build_image,
-    gpu="L4",
-    cpu=4,
-    memory=(32 * 1024, 64 * 1024),
-    timeout=3 * 60 * 60,
+    gpu="L40S",
+    cpu=8,
+    memory=(16 * 1024, 64 * 1024),
+    timeout=24 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
-    secrets=[modal.Secret.from_name("wandb-secret")],
 )
-def generate_alignment() -> None:
-    from app.alignment import generate_alignment
+def generate_text_views(parts: int) -> None:
+    from app.text_views import generate_text_views
 
-    generate_alignment()
+    generate_text_views(parts)
     cache_volume.commit()
 
 
 @app.function(
     image=build_image,
-    gpu="L4",
+    gpu="L40S",
+    cpu=8,
+    memory=(16 * 1024, 64 * 1024),
+    timeout=24 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+    secrets=[modal.Secret.from_name("wandb-secret")],
+)
+def train_text_flow() -> None:
+    from app.text_flow import train_text_flow
+
+    train_text_flow()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="L40S",
     cpu=4,
-    memory=(32 * 1024, 64 * 1024),
+    memory=(16 * 1024, 32 * 1024),
     timeout=1 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_aion_gemma_space() -> None:
-    from app.alignment import generate_aion_gemma_space
+def generate_text_vectors() -> None:
+    from app.text_flow import generate_text_vectors
 
-    generate_aion_gemma_space()
+    generate_text_vectors()
     cache_volume.commit()
 
 

@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import cache
-from itertools import batched
+from itertools import batched, product
+from threading import Lock
 from typing import TYPE_CHECKING, Annotated, NamedTuple
 
 import numpy as np
 import PIL.Image
 import pyarrow as pa
 import pyarrow.parquet as pq
+import torch
+import torch.nn.functional as F
 from datasets import Image
 from pydantic import BaseModel, ConfigDict, Field
 from tqdm import tqdm
@@ -19,6 +22,7 @@ from .config import (
     GEMMA_DIM,
     N_SPECTRUM_TOKENS,
     PAIRS,
+    PLOT_INCHES,
     RGB_COLUMN,
     SPECTRUM_ORIGIN,
     SPECTRUM_SURVEY,
@@ -34,7 +38,60 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 BATCH = 1024
-PLOT_INCHES = (16.8, 3.84)
+LOADING = Lock()
+FRAMES = {
+    "everything": "{}",
+    "images": "an image of {}",
+    "spectra": "the spectrum of {}",
+    "catalogues": "the photometry of {}",
+}
+ADJECTIVES = (
+    "",
+    "bright",
+    "faint",
+    "red",
+    "blue",
+    "massive",
+    "small",
+    "large",
+    "nearby",
+    "distant",
+    "dusty",
+    "star-forming",
+    "quiescent",
+    "compact",
+)
+SUBJECTS = (
+    "galaxy",
+    "spiral galaxy",
+    "elliptical galaxy",
+    "disk galaxy",
+    "irregular galaxy",
+    "dwarf galaxy",
+    "lenticular galaxy",
+    "barred spiral galaxy",
+    "pair of merging galaxies",
+    "edge-on galaxy",
+    "face-on spiral galaxy",
+    "starburst galaxy",
+    "quasar host galaxy",
+    "cluster galaxy",
+    "low surface brightness galaxy",
+)
+SUFFIXES = (
+    "",
+    " with spiral arms",
+    " with a bright bulge",
+    " with a central bar",
+    " with tidal tails",
+    " with strong emission lines",
+    " with an old stellar population",
+    " at high redshift",
+    " at low redshift",
+    " with a dust lane",
+    " with a close companion",
+    " with an active nucleus",
+)
 
 
 class TextQuery(BaseModel):
@@ -44,10 +101,17 @@ class TextQuery(BaseModel):
     matches: Annotated[int, Field(ge=1, le=128)] = 32
 
 
-class TextSpace(NamedTuple):
-    vectors: np.ndarray
-    galaxy: np.ndarray
-    modality: np.ndarray
+class TextVectors(NamedTuple):
+    modes: np.ndarray
+    vectors: torch.Tensor
+    baseline: torch.Tensor
+    query_mean: torch.Tensor
+
+
+class TextResults(NamedTuple):
+    galaxies: torch.Tensor
+    scores: torch.Tensor
+    contributions: torch.Tensor
 
 
 @cache
@@ -59,6 +123,18 @@ def text_model() -> SentenceTransformer:
 
 def embed_queries(texts: list[str]) -> np.ndarray:
     return text_model().encode(texts, prompt_name="SearchQuery")
+
+
+def generic_queries() -> list[str]:
+    phrases = (
+        f"{adjective} {subject}".strip()
+        for adjective, subject in product(ADJECTIVES, SUBJECTS)
+    )
+    nouns = [("an " if phrase[0] in "aeiou" else "a ") + phrase for phrase in phrases]
+    return [
+        frame.format(noun + suffix)
+        for frame, noun, suffix in product(FRAMES.values(), nouns, SUFFIXES)
+    ]
 
 
 def spectrum_plot(spectrum: dict[str, np.ndarray]) -> PIL.Image.Image:
@@ -136,15 +212,28 @@ def generate_pairs() -> None:
 
 
 @cache
-def aion_gemma_space() -> TextSpace:
-    with np.load(artifact("aion_gemma_space")) as stored:
-        return TextSpace(**stored)
+def text_vectors() -> TextVectors:
+    modes = np.load(artifact("text_vectors"), mmap_mode="r")
+    vectors = torch.empty(len(modes), modes.shape[2])
+    baseline = torch.zeros(modes.shape[1:])
+    for start in range(0, len(modes), BATCH):
+        rows = torch.from_numpy(np.array(modes[start : start + BATCH]))
+        vectors[start : start + BATCH] = rows.sum(dim=1)
+        baseline += rows.sum(dim=0)
+    query_mean = torch.from_numpy(np.load(artifact("text_query_mean")))
+    return TextVectors(modes, vectors, baseline / len(modes), query_mean)
 
 
-def text_search(query: TextQuery) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    space = aion_gemma_space()
-    scores = space.vectors @ embed_queries([query.text])[0]
-    count = min(query.matches, len(scores))
-    top = np.argpartition(-scores, count - 1)[:count]
-    order = top[np.argsort(-scores[top], kind="stable")]
-    return space.galaxy[order], space.modality[order], scores[order]
+def query_directions(embedded: np.ndarray, mean: torch.Tensor) -> torch.Tensor:
+    return F.normalize(torch.from_numpy(embedded) - mean, dim=-1)
+
+
+def text_search(query: TextQuery) -> TextResults:
+    with LOADING:
+        stored = text_vectors()
+        embedded = embed_queries([query.text])[0]
+    direction = query_directions(embedded, stored.query_mean)
+    scores = stored.vectors @ direction
+    top = scores.topk(min(query.matches, len(scores))).indices
+    modes = torch.from_numpy(stored.modes[top.numpy()])
+    return TextResults(top, scores[top], (modes - stored.baseline) @ direction)

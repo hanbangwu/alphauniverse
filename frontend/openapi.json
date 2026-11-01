@@ -1253,30 +1253,40 @@
             "type": "array",
             "title": "Galaxies"
           },
-          "modalities": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "image",
-                "spectrum"
-              ]
-            },
-            "type": "array",
-            "title": "Modalities"
-          },
           "scores": {
             "items": {
               "type": "number"
             },
             "type": "array",
             "title": "Scores"
+          },
+          "contributions": {
+            "additionalProperties": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "ls_image",
+                "hsc_image",
+                "desi_spectrum",
+                "sdss_spectrum",
+                "redshift",
+                "ls_table",
+                "hsc_table"
+              ]
+            },
+            "type": "object",
+            "title": "Contributions"
           }
         },
         "type": "object",
         "required": [
           "galaxies",
-          "modalities",
-          "scores"
+          "scores",
+          "contributions"
         ],
         "title": "TextMatches"
       },

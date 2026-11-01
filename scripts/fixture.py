@@ -22,6 +22,7 @@ from app.config import (
     LOCAL_DATASET,
     LS,
     MAPS,
+    MODES,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
@@ -40,10 +41,11 @@ from app.config import (
     TABLE_MODES,
     TABLE_VALUE_COLUMNS,
     TABLE_VALUE_SURVEYS,
-    TEXT_SURVEYS,
+    TEXT_VIEWS,
     TOKEN_EMBEDDING_RANK,
     TOKEN_SURVEYS,
     TOP_CODES,
+    VIEW_TYPES,
     VOCABULARY,
     artifact,
     build_dir,
@@ -68,7 +70,7 @@ from app.pql import (
     stored,
 )
 from app.search import source, templates, tokens
-from app.text_search import aion_gemma_space
+from app.text_search import text_vectors
 
 TOKENS: dict[str, int] = {
     ANCHOR: N_IMAGE_TOKENS + 12,
@@ -330,6 +332,36 @@ def _dataset(
     ).save_to_disk(build_dir() / LOCAL_DATASET)
 
 
+def _text_views(rng: np.random.Generator, galaxies: int) -> None:
+    vectors = rng.standard_normal((galaxies, GEMMA_DIM))
+    vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
+    artifact("text_views").mkdir()
+    pq.write_table(
+        pa.table(
+            {
+                "galaxy": np.arange(galaxies),
+                "view_type": rng.integers(len(VIEW_TYPES), size=galaxies),
+                "round": np.zeros(galaxies, int),
+                "embedding": pa.FixedSizeListArray.from_arrays(
+                    vectors.astype(np.float16).ravel(), GEMMA_DIM
+                ),
+            },
+            schema=TEXT_VIEWS,
+        ),
+        artifact("text_views") / "part-00000.parquet",
+    )
+
+
+def _text_vectors(rng: np.random.Generator, galaxies: int) -> None:
+    np.save(
+        artifact("text_vectors"),
+        rng.standard_normal((galaxies, len(MODES), GEMMA_DIM)).astype(np.float32) / 64,
+    )
+    np.save(
+        artifact("text_query_mean"), rng.standard_normal(GEMMA_DIM).astype(np.float32)
+    )
+
+
 def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
@@ -374,7 +406,7 @@ def forget() -> None:
         source,
         tokens,
         templates,
-        aion_gemma_space,
+        text_vectors,
         predictions,
         prediction_basis,
         basis,
@@ -435,19 +467,6 @@ def build(galaxies: int) -> Path:
         compression="zstd",
     )
 
-    held = {
-        modality: rows[[covered(survey, galaxy) for galaxy in rows]]
-        for modality, survey in TEXT_SURVEYS.items()
-    }
-    galaxy = np.concatenate(list(held.values())).astype(np.int32)
-    vectors = rng.standard_normal((len(galaxy), GEMMA_DIM)).astype(np.float32)
-    np.savez(
-        artifact("aion_gemma_space"),
-        vectors=vectors / np.linalg.norm(vectors, axis=1, keepdims=True),
-        galaxy=galaxy,
-        modality=np.repeat(list(held), [len(members) for members in held.values()]),
-    )
-
     _predictions(rng, galaxies)
     made = _templates(rng, galaxies)
     _dataset(rng, galaxies, made, category, flags["provabgs"])
@@ -456,6 +475,8 @@ def build(galaxies: int) -> Path:
     )
     _token_embeddings(rng, galaxies)
     generate_token_search()
+    _text_views(rng, galaxies)
+    _text_vectors(rng, galaxies)
 
     forget()
     return target

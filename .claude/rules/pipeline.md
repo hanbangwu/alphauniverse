@@ -13,6 +13,8 @@ paths:
   - "app/search.py"
   - "app/text_search.py"
   - "app/alignment.py"
+  - "app/text_views.py"
+  - "app/text_flow.py"
   - "modal_app.py"
   - "pyproject.toml"
   - "scripts/alphauniverse_cosmos.py"

@@ -2,50 +2,30 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
-from app.text_search import TextQuery, aion_gemma_space, text_search
+from app.config import artifact
+from app.text_search import TextQuery, text_search
 
 
-def test_text_search_ranks_the_row_nearest_the_query_first(
+def test_galaxies_rank_by_their_mean_cosine_and_each_mode_s_contribution_sums_to_its_lead(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    space = aion_gemma_space()
-    monkeypatch.setattr(
-        "app.text_search.embed_queries", lambda _: 2 * space.vectors[3:4]
+    query = np.random.default_rng(0).standard_normal(768).astype(np.float32)
+    monkeypatch.setattr("app.text_search.embed_queries", lambda _: query[None])
+
+    found = text_search(TextQuery(text="a galaxy", matches=5))
+
+    modes = np.load(artifact("text_vectors")).astype(np.float64)
+    direction = query - np.load(artifact("text_query_mean"))
+    direction /= np.linalg.norm(direction)
+    expected = modes.sum(axis=1) @ direction
+    order = np.argsort(-expected)[:5]
+    np.testing.assert_array_equal(found.galaxies.numpy(), order)
+    np.testing.assert_allclose(found.scores.numpy(), expected[order], rtol=1e-4)
+    torch.testing.assert_close(
+        found.contributions.sum(dim=1),
+        found.scores - float(expected.mean()),
+        rtol=1e-4,
+        atol=1e-5,
     )
-
-    galaxies, modalities, scores = text_search(TextQuery(text="a galaxy", matches=5))
-
-    assert len(galaxies) == 5
-    assert (galaxies[0], modalities[0]) == (space.galaxy[3], space.modality[3])
-    assert np.all(np.diff(scores) <= 0)
-
-
-def test_text_search_returns_a_galaxy_once_per_matching_modality(
-    tree: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    space = aion_gemma_space()
-    spectrum = np.flatnonzero(space.modality == "spectrum")[0]
-    image = np.flatnonzero(
-        (space.modality == "image") & (space.galaxy == space.galaxy[spectrum])
-    )[0]
-    monkeypatch.setattr(
-        "app.text_search.embed_queries",
-        lambda _: space.vectors[[image]] + space.vectors[[spectrum]],
-    )
-
-    galaxies, modalities, _ = text_search(TextQuery(text="a galaxy", matches=2))
-
-    assert galaxies.tolist() == [space.galaxy[spectrum]] * 2
-    assert sorted(modalities.tolist()) == ["image", "spectrum"]
-
-
-def test_text_search_returns_every_row_when_asked_for_more(
-    tree: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    space = aion_gemma_space()
-    monkeypatch.setattr("app.text_search.embed_queries", lambda _: space.vectors[:1])
-
-    found, _, _ = text_search(TextQuery(text="a galaxy", matches=128))
-
-    assert sorted(found.tolist()) == sorted(space.galaxy.tolist())

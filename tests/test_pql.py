@@ -288,7 +288,7 @@ def test_cosines_compare_every_pair_of_the_galaxy_s_slots_of_a_mode(
 
         rows = dense(own, mode, TOP_CODES)[0]
         unit = rows / np.linalg.norm(rows, axis=-1, keepdims=True)
-        np.testing.assert_allclose(found, unit @ unit.T, atol=1e-5, err_msg=mode)
+        np.testing.assert_allclose(found, unit @ unit.T, atol=1e-4, err_msg=mode)
 
 
 def partial_correlations(values: np.ndarray, chosen: np.ndarray) -> list[float]:

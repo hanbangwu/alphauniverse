@@ -7,7 +7,7 @@ Browse the map
 Each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
 
 - **Any position** groups galaxies whose features match wherever they sit in the image or spectrum. **Same place** groups them only when the features are in the same place.
-- Colour the points by redshift, stellar mass, star formation rate, specific star formation rate or g − r colour. **Measured first** uses the measured value where there is one and AION's prediction, faded, elsewhere. **Predicted** uses AION's prediction for every galaxy.
+- Colour the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r colour, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. **Measured first** uses the measured value where there is one and AION's prediction, faded, elsewhere. **Predicted** uses AION's prediction for every galaxy.
 - Drag the legend's slider to show only the galaxies in a range, for example 0.3 < z < 0.5.
 - Draw a box or a lasso to select galaxies, then open any of them or export the selection as CSV.
 - Hover over a point to preview the galaxy. Click it to open it.
@@ -40,7 +40,7 @@ Open a galaxy, start a search and pick what should match: image cells, spectrum 
 Search by text
 --------------
 
-Describe a galaxy in a sentence. The site returns the 32 closest matches by image or by spectrum, so a galaxy can appear twice (:doc:`methods/text-search`). Export the matches as CSV with their object ID, position and cosine similarity.
+Describe a galaxy in a sentence. The site returns the 32 galaxies whose predicted views the description is closest to on average, each with its mean cosine and, as percentages of its lead over the average galaxy, the :term:`contributions <contribution>` of the modes that carry at least a tenth of it (:doc:`methods/text-search`). Export the matches as CSV with their object ID, position and mean cosine.
 
 Share a view
 ------------
@@ -50,4 +50,4 @@ The address in the browser records what you see: the map's layout, colour, range
 Download the data
 -----------------
 
-Every galaxy's AION embeddings, tokens and properties (redshift, stellar mass, star formation rates and g − r colour, measured and predicted) can be downloaded. :doc:`dev/reference` describes the files.
+Every galaxy's AION embeddings, tokens and properties (redshift, stellar mass, star formation rates, g − r colour, size, brightness, shape, Hα equivalent width and Dn4000, measured and predicted) can be downloaded. :doc:`dev/reference` describes the files.
