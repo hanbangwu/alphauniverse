@@ -233,6 +233,7 @@ def embedded(
 ) -> pa.FixedSizeListArray:
     embeddings = np.empty((len(owners), GEMMA_DIM), np.float16)
     members = [np.flatnonzero(view_types == kind) for kind in np.unique(view_types)]
+    model = text_model()
     with ThreadPoolExecutor(1) as renderer:
         rendering = [
             renderer.submit(
@@ -241,7 +242,7 @@ def embedded(
             for chosen in members
         ]
         for chosen, found in zip(members, rendering):
-            embeddings[chosen] = text_model().encode_document(
+            embeddings[chosen] = model.encode_document(
                 found.result(), normalize_embeddings=True
             )
     return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), GEMMA_DIM)
