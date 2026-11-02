@@ -28,6 +28,7 @@ dev = [
 ]
 build = [
   "flash-linear-attention>=0.6.0",
+  "kernels>=0.17.0,<0.18.0",
   "matplotlib>=3.11.2",
   "polymathic-aion[torch]>=0.0.2",
   "scikit-learn>=1.9.1",

@@ -223,7 +223,7 @@ def generate_pairs() -> None:
 @app.function(
     image=build_image,
     gpu="L40S",
-    cpu=8,
+    cpu=16,
     memory=(16 * 1024, 64 * 1024),
     timeout=24 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
@@ -238,7 +238,7 @@ def generate_text_views(parts: int) -> None:
 @app.function(
     image=build_image,
     gpu="L40S",
-    cpu=8,
+    cpu=16,
     memory=(16 * 1024, 64 * 1024),
     timeout=24 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},

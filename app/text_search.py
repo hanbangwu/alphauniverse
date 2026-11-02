@@ -118,8 +118,17 @@ class TextResults(NamedTuple):
 def text_model() -> SentenceTransformer:
     from sentence_transformers import SentenceTransformer
 
+    kernels = (
+        {"use_kernels": True, "attn_implementation": "kernels-community/flash-attn2"}
+        if device().type == "cuda"
+        else {}
+    )
     return SentenceTransformer(
-        GEMMA, device=device(), trust_remote_code=True, truncate_dim=GEMMA_DIM
+        GEMMA,
+        device=device(),
+        trust_remote_code=True,
+        truncate_dim=GEMMA_DIM,
+        model_kwargs=kernels,
     )
 
 

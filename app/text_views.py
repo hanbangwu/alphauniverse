@@ -1,6 +1,6 @@
 import multiprocessing
 from collections.abc import Callable
-from concurrent.futures import Executor, ProcessPoolExecutor
+from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from functools import cache, partial
 from io import BytesIO
 from pathlib import Path
@@ -50,7 +50,7 @@ SPECTRUM_RANGES: dict[SpectrumSurvey, tuple[float, float]] = {
 }
 FLUX_PERCENTILES = (0.5, 99.9)
 FLUX_PADDING = 0.1
-PLOTTERS = 7
+PLOTTERS = 15
 HELD_OUT_GALAXIES = 500
 
 
@@ -232,12 +232,18 @@ def embedded(
     pool: Executor,
 ) -> pa.FixedSizeListArray:
     embeddings = np.empty((len(owners), GEMMA_DIM), np.float16)
-    for view_type in np.unique(view_types):
-        members = np.flatnonzero(view_types == view_type)
-        embeddings[members] = text_model().encode_document(
-            documents(VIEW_TYPES[view_type], owners[members], rng, pool),
-            normalize_embeddings=True,
-        )
+    members = [np.flatnonzero(view_types == kind) for kind in np.unique(view_types)]
+    with ThreadPoolExecutor(1) as renderer:
+        rendering = [
+            renderer.submit(
+                documents, VIEW_TYPES[view_types[chosen[0]]], owners[chosen], rng, pool
+            )
+            for chosen in members
+        ]
+        for chosen, found in zip(members, rendering):
+            embeddings[chosen] = text_model().encode_document(
+                found.result(), normalize_embeddings=True
+            )
     return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), GEMMA_DIM)
 
 
