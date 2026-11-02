@@ -119,7 +119,11 @@ def text_model() -> SentenceTransformer:
     from sentence_transformers import SentenceTransformer
 
     kernels = (
-        {"use_kernels": True, "attn_implementation": "kernels-community/flash-attn2"}
+        {
+            "dtype": torch.bfloat16,
+            "use_kernels": True,
+            "attn_implementation": "kernels-community/flash-attn2",
+        }
         if device().type == "cuda"
         else {}
     )
