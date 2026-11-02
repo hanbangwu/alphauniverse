@@ -181,11 +181,15 @@ def realised(
     return [catalogue_text(mode, row, rng) for row in values]
 
 
-def joined(documents: tuple[PIL.Image.Image | str, ...]) -> dict | str:
+def joined(documents: tuple[PIL.Image.Image | str, ...]) -> list[dict] | str:
     pictures = [found for found in documents if isinstance(found, PIL.Image.Image)]
-    texts = [found for found in documents if isinstance(found, str)]
-    text = "\n".join(["<|image|>"] * len(pictures) + texts)
-    return {"text": text, "image": pictures} if pictures else text
+    text = "\n".join(found for found in documents if isinstance(found, str))
+    if not pictures:
+        return text
+    content = [{"type": "image", "image": picture} for picture in pictures]
+    if text:
+        content.append({"type": "text", "text": text})
+    return [{"role": "user", "content": content}]
 
 
 def combined(
@@ -230,9 +234,9 @@ def embedded(
     embeddings = np.empty((len(owners), GEMMA_DIM), np.float16)
     for view_type in np.unique(view_types):
         members = np.flatnonzero(view_types == view_type)
-        embeddings[members] = text_model().encode(
+        embeddings[members] = text_model().encode_document(
             documents(VIEW_TYPES[view_type], owners[members], rng, pool),
-            prompt_name="Document",
+            normalize_embeddings=True,
         )
     return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), GEMMA_DIM)
 

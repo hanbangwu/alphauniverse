@@ -54,18 +54,28 @@ def test_predicted_views_are_documents_of_each_mode_s_form(
                     assert all(line.partition(": ")[2] for line in lines)
 
 
-def test_documents_with_pictures_put_one_image_placeholder_before_the_texts() -> None:
+def test_documents_with_pictures_are_one_chat_message_with_the_images_before_the_texts() -> (
+    None
+):
     picture = PIL.Image.new("RGB", (4, 4))
 
-    assert text_views.joined((picture, "a: 1", picture)) == {
-        "text": "<|image|>\n<|image|>\na: 1",
-        "image": [picture, picture],
-    }
+    assert text_views.joined((picture, "a: 1", picture)) == [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image", "image": picture},
+                {"type": "image", "image": picture},
+                {"type": "text", "text": "a: 1"},
+            ],
+        }
+    ]
     assert text_views.joined(("a: 1", "b: 2")) == "a: 1\nb: 2"
 
 
 class Encoder:
-    def encode(self, documents: list[str], prompt_name: str) -> np.ndarray:
+    def encode_document(
+        self, documents: list[str], normalize_embeddings: bool
+    ) -> np.ndarray:
         return np.array([[len(found)] * GEMMA_DIM for found in documents], np.float32)
 
 

@@ -139,8 +139,8 @@ CATALOGUES: dict[str, Catalogue] = {
 
 N_MORPHOLOGIES = 10
 
-GEMMA = "google/embeddinggemma-2"
-GEMMA_DIM = 768
+GEMMA = "tencent/WeMM-Embedding-2B"
+GEMMA_DIM = 1024
 TextModality = Literal["image", "spectrum"]
 PLOT_INCHES = (16.8, 3.84)
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}

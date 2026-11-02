@@ -118,11 +118,13 @@ class TextResults(NamedTuple):
 def text_model() -> SentenceTransformer:
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(GEMMA, device=device())
+    return SentenceTransformer(
+        GEMMA, device=device(), trust_remote_code=True, truncate_dim=GEMMA_DIM
+    )
 
 
 def embed_queries(texts: list[str]) -> np.ndarray:
-    return text_model().encode(texts, prompt_name="SearchQuery")
+    return text_model().encode_query(texts, normalize_embeddings=True)
 
 
 def generic_queries() -> list[str]:
@@ -191,7 +193,7 @@ def generate_pairs() -> None:
         galaxy, aion = mean_embeddings(survey)
         gemma = np.concatenate(
             [
-                text_model().encode(batch, prompt_name="Document")
+                text_model().encode_document(batch, normalize_embeddings=True)
                 for batch in tqdm(DOCUMENTS[modality](galaxy), desc=modality)
             ]
         )
