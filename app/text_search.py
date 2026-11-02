@@ -13,7 +13,9 @@ import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
 from datasets import Image
+from huggingface_hub import hf_hub_download
 from pydantic import BaseModel, ConfigDict, Field
+from tokenizers import Tokenizer
 from tqdm import tqdm
 
 from .config import (
@@ -127,13 +129,16 @@ def text_model() -> SentenceTransformer:
         if device().type == "cuda"
         else {}
     )
-    return SentenceTransformer(
+    model = SentenceTransformer(
         GEMMA,
         device=device(),
         trust_remote_code=True,
         truncate_dim=GEMMA_DIM,
         model_kwargs=kernels,
     )
+    trained = Tokenizer.from_file(hf_hub_download(GEMMA, "tokenizer.json"))
+    model[0].processor.tokenizer.backend_tokenizer.normalizer = trained.normalizer
+    return model
 
 
 def embed_queries(texts: list[str]) -> np.ndarray:
