@@ -238,7 +238,6 @@ VIEW_TYPES = (
 )
 TEXT_RANK = 32
 TEXT_CONDITION = 64
-TEXT_POINTS = 16
 VIEWS_PER_PART = 4_000
 PARTS_PER_ROUND = 10
 PROTOTYPE_HELD_OUT = np.concatenate(
@@ -283,7 +282,7 @@ ARTIFACTS: dict[str, str] = {
     "text_views": "parquet",
     "text_views_held_out": "parquet",
     "text_bases": "npz",
-    "text_flow": "pt",
+    "text_regression": "pt",
     "text_vectors": "npy",
     "text_query_mean": "npy",
     "probabilities": "arrow",

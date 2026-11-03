@@ -244,10 +244,10 @@ def generate_text_views(parts: int) -> None:
     volumes={CACHE_PATH: cache_volume},
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
-def train_text_flow() -> None:
-    from app.text_flow import train_text_flow
+def train_text_regression() -> None:
+    from app.text_regression import train_text_regression
 
-    train_text_flow()
+    train_text_regression()
     cache_volume.commit()
 
 
@@ -260,7 +260,7 @@ def train_text_flow() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_text_vectors() -> None:
-    from app.text_flow import generate_text_vectors
+    from app.text_regression import generate_text_vectors
 
     generate_text_vectors()
     cache_volume.commit()

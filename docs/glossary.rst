@@ -31,9 +31,6 @@ Glossary
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 
-   cloud
-      A galaxy's 416 points in :term:`EmbeddingGemma`'s space, 16 for each of 26 view types, each the predicted embedding of one :term:`view`; text search averages eight of them. See :doc:`methods/text-search`.
-
    code
       One entry in a :term:`codec`'s fixed vocabulary. A :term:`token` is the code of one piece of an observation.
 
@@ -70,11 +67,8 @@ Glossary
    held out
       Left out of a network's training and used only to test it.
 
-   identification gain
-      How surely a :term:`held out` galaxy's document picks it out among N held-out galaxies, in nats above chance: :math:`\log p(g \mid d) + \log N`, averaged over each view type's documents and then over the types. See :doc:`dev/reference`.
-
-   κ
-      The sharpness of the match between a document and a galaxy's predicted points: each point counts :math:`e^{\kappa \cos}`, with cos its cosine to the document. See :doc:`dev/reference`.
+   identification
+      How surely a :term:`held out` galaxy's :term:`view` picks out its galaxy: the fraction of the other held-out galaxies whose predictions for the view's type score below its own galaxy's, averaged over each view type's views and then over the types. Chance is 0.5. See :doc:`dev/reference`.
 
    joint embedding
       One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`template embeddings <template embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes: 2,816 values for the 11 blocks.

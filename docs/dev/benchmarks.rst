@@ -29,7 +29,7 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
 Text search quality
 -------------------
 
-Does a query find the galaxies it describes, rather than the galaxies any query ranks high? ``text_search_quality`` ranks the galaxies :term:`held out` of both the text flow's and the maps' training with nine pairs of opposite descriptions. Each side's answer is a third of a measured value in ``properties`` (:doc:`reference`): the top third for the first side, the bottom third for the second.
+Does a query find the galaxies it describes, rather than the galaxies any query ranks high? ``text_search_quality`` ranks the galaxies :term:`held out` of both the text regression's and the maps' training with nine pairs of opposite descriptions. Each side's answer is a third of a measured value in ``properties`` (:doc:`reference`): the top third for the first side, the bottom third for the second.
 
 ============== ================================ =======
 Pair           Value                            Mode
@@ -47,13 +47,11 @@ mass           stellar mass
 
 Each side has six phrasings: the first, third and fifth form the *development* half, which chooses a method, and the others the *sealed* half, which judges it once. The first six pairs describe what a mode shows; the last three are physical properties.
 
-A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`/methods/text-search`, over the view types of a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift), each with its combination view.
+A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`/methods/text-search`, over a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift).
 
-- *search*: :math:`s(g \mid t)` from the stored vectors, over every mode, as text search ranks.
+- *search*: :math:`\tilde t` against the sum of the stored vectors over the set's modes, the set's share of :math:`s(g \mid t)`, which includes its part of the combination views; over every mode, :math:`s(g \mid t)` as text search ranks.
+- *search framed*: the same, with the query written after its mode set's framing, none for everything, "an image of", "the spectrum of" or "the photometry of", and less the mean of the generic queries with that framing.
 - *views*: the mean of :math:`\cos(\tilde t, \tilde e)` over EmbeddingGemma's embeddings :math:`e` of the galaxy's observed image and DESI spectrum plot, each less its modality's mean, at unit length.
-- *clouds*: :math:`\log \frac{1}{n} \sum_i \exp\left(\kappa \cos(\tilde t, x_i)\right)` over the :math:`n` points :math:`x_i` of one :term:`cloud` of those view types, at the :term:`κ` ``train_text_flow`` stores.
-- *mean cosine*: :math:`\frac{1}{n} \sum_i \cos(\tilde t, x_i)` over the same points.
-- *mean cosine framed*: the mean cosine, with the query written after its mode set's framing, none for everything, "an image of", "the spectrum of" or "the photometry of", and less the mean of the generic queries with that framing.
 
 For each side, among the held-out galaxies with the value:
 
@@ -67,7 +65,7 @@ The random null is reported, not required: random directions rank mostly along t
 
 *Cross-pair separation* scores every pair's phrasings on every pair's thirds: the mean over both sides of the specificity a phrasing pair would have there. A pair's own phrasings should separate its thirds better than the other pairs' phrasings do.
 
-Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third. *Seed overlap@32* is the fraction of its top 32 over all galaxies that a second draw shares: another cloud for clouds and mean cosine, eight more for search.
+Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third.
 
 .. bokeh-plot::
    :source-position: none
