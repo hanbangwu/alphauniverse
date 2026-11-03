@@ -16,6 +16,7 @@ from app.config import (
     CROP_PIXELS,
     DESI,
     FLAG_SURVEYS,
+    GEMMA_DIM,
     LS,
     MODES,
     N_IMAGE_TOKENS,
@@ -514,7 +515,7 @@ def test_text_search_rejects_invalid_queries(client: TestClient, params: dict) -
 def test_text_search_returns_each_match_with_its_contribution_from_every_mode(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    query = np.random.default_rng(0).standard_normal((1, 768)).astype(np.float32)
+    query = np.random.default_rng(0).standard_normal((1, GEMMA_DIM)).astype(np.float32)
     monkeypatch.setattr("app.text_search.embed_queries", lambda _: query)
 
     response = client.get("/search/text", params={"text": "a galaxy", "matches": 3})

@@ -1,6 +1,6 @@
 import multiprocessing
 from collections.abc import Callable
-from concurrent.futures import Executor, ProcessPoolExecutor
+from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from functools import cache, partial
 from io import BytesIO
 from pathlib import Path
@@ -50,7 +50,7 @@ SPECTRUM_RANGES: dict[SpectrumSurvey, tuple[float, float]] = {
 }
 FLUX_PERCENTILES = (0.5, 99.9)
 FLUX_PADDING = 0.1
-PLOTTERS = 7
+PLOTTERS = 15
 HELD_OUT_GALAXIES = 500
 
 
@@ -181,11 +181,15 @@ def realised(
     return [catalogue_text(mode, row, rng) for row in values]
 
 
-def joined(documents: tuple[PIL.Image.Image | str, ...]) -> dict | str:
+def joined(documents: tuple[PIL.Image.Image | str, ...]) -> list[dict] | str:
     pictures = [found for found in documents if isinstance(found, PIL.Image.Image)]
-    texts = [found for found in documents if isinstance(found, str)]
-    text = "\n".join(["<|image|>"] * len(pictures) + texts)
-    return {"text": text, "image": pictures} if pictures else text
+    text = "\n".join(found for found in documents if isinstance(found, str))
+    if not pictures:
+        return text
+    content = [{"type": "image", "image": picture} for picture in pictures]
+    if text:
+        content.append({"type": "text", "text": text})
+    return [{"role": "user", "content": content}]
 
 
 def combined(
@@ -228,12 +232,19 @@ def embedded(
     pool: Executor,
 ) -> pa.FixedSizeListArray:
     embeddings = np.empty((len(owners), GEMMA_DIM), np.float16)
-    for view_type in np.unique(view_types):
-        members = np.flatnonzero(view_types == view_type)
-        embeddings[members] = text_model().encode(
-            documents(VIEW_TYPES[view_type], owners[members], rng, pool),
-            prompt_name="Document",
-        )
+    members = [np.flatnonzero(view_types == kind) for kind in np.unique(view_types)]
+    model = text_model()
+    with ThreadPoolExecutor(1) as renderer:
+        rendering = [
+            renderer.submit(
+                documents, VIEW_TYPES[view_types[chosen[0]]], owners[chosen], rng, pool
+            )
+            for chosen in members
+        ]
+        for chosen, found in zip(members, rendering):
+            embeddings[chosen] = model.encode_document(
+                found.result(), normalize_embeddings=True
+            )
     return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), GEMMA_DIM)
 
 

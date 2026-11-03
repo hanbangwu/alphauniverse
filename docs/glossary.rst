@@ -31,9 +31,6 @@ Glossary
    classical MDS
       Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 
-   cloud
-      A galaxy's 416 points in :term:`EmbeddingGemma`'s space, 16 for each of 26 view types, each the predicted embedding of one :term:`view`; text search averages eight of them. See :doc:`methods/text-search`.
-
    code
       One entry in a :term:`codec`'s fixed vocabulary. A :term:`token` is the code of one piece of an observation.
 
@@ -52,9 +49,6 @@ Glossary
    embedding
       The vector of 768 numbers AION's encoder returns for a :term:`token`. The encoded embedding depends on all of the galaxy's tokens; the codebook embedding depends only on the token's :term:`code`.
 
-   EmbeddingGemma
-      Google's model that places images and text in one 768-dimensional space, so that a picture and a description of it lie close together. Text search uses it. See :doc:`methods/text-search`.
-
    equivalent width
       A spectral line's flux divided by the continuum's flux density beside it, :math:`\int (F_\lambda / F_c - 1)\, d\lambda` over the line, in Å. See :doc:`dev/reference`.
 
@@ -70,11 +64,8 @@ Glossary
    held out
       Left out of a network's training and used only to test it.
 
-   identification gain
-      How surely a :term:`held out` galaxy's document picks it out among N held-out galaxies, in nats above chance: :math:`\log p(g \mid d) + \log N`, averaged over each view type's documents and then over the types. See :doc:`dev/reference`.
-
-   κ
-      The sharpness of the match between a document and a galaxy's predicted points: each point counts :math:`e^{\kappa \cos}`, with cos its cosine to the document. See :doc:`dev/reference`.
+   identification
+      How surely a :term:`held out` galaxy's :term:`view` picks out its galaxy: the fraction of the other held-out galaxies whose predictions for the view's type score below its own galaxy's, averaged over each view type's views and then over the types. Chance is 0.5. See :doc:`dev/reference`.
 
    joint embedding
       One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`template embeddings <template embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes: 2,816 values for the 11 blocks.
@@ -116,7 +107,10 @@ Glossary
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
 
    view
-      One input to :term:`EmbeddingGemma` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`dev/reference`.
+      One input to :term:`WeMM-Embedding` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`dev/reference`.
+
+   WeMM-Embedding
+      Tencent's model that places images, plots and text in one space, so that a picture and a description of it lie close together; text search uses its 2-billion-parameter version, cut to 1,024 dimensions. See :doc:`methods/text-search`.
 
    whole-mode search
       Search over every slot of each chosen :term:`mode`, ranked from the modes' :term:`token embeddings <token embedding>`. See :doc:`methods/similarity-search`.

@@ -14,7 +14,7 @@ Serve the API from a small synthetic artifact tree and dataset in the production
    uv run fastapi dev app/main.py
    cd frontend && bun install && bun run dev
 
-The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads EmbeddingGemma.
+The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
 
 Build the dataset and the artifacts
 -----------------------------------
@@ -42,7 +42,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
    uv run modal run modal_app.py::generate_text_views --parts 10
-   uv run modal run modal_app.py::train_text_flow
+   uv run modal run modal_app.py::train_text_regression
    uv run modal run modal_app.py::generate_text_vectors
 
 A failed job leaves its artifacts incomplete; rerun it.

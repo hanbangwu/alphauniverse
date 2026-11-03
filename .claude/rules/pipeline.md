@@ -14,7 +14,7 @@ paths:
   - "app/text_search.py"
   - "app/alignment.py"
   - "app/text_views.py"
-  - "app/text_flow.py"
+  - "app/text_regression.py"
   - "modal_app.py"
   - "pyproject.toml"
   - "scripts/alphauniverse_cosmos.py"

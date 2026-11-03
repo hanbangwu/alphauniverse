@@ -4,14 +4,14 @@ import numpy as np
 import pytest
 import torch
 
-from app.config import artifact
+from app.config import GEMMA_DIM, artifact
 from app.text_search import TextQuery, text_search
 
 
 def test_galaxies_rank_by_their_mean_cosine_and_each_mode_s_contribution_sums_to_its_lead(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    query = np.random.default_rng(0).standard_normal(768).astype(np.float32)
+    query = np.random.default_rng(0).standard_normal(GEMMA_DIM).astype(np.float32)
     monkeypatch.setattr("app.text_search.embed_queries", lambda _: query[None])
 
     found = text_search(TextQuery(text="a galaxy", matches=5))

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="100%" role="img" aria-labelledby="text-search-title" font-family="sans-serif" font-size="12" fill="none" stroke="currentColor">
-  <title id="text-search-title">A flow carries noise to a cloud of points in EmbeddingGemma's space, given a galaxy's AION embedding: 16 predicted documents for each of 26 view types, among them its images, spectrum plots and catalogue text. EmbeddingGemma embeds the text query in the same space, and the galaxy's score is the query's mean cosine to the points of eight such clouds, every view type weighted alike.</title>
+  <title id="text-search-title">A network predicts, from a galaxy's AION embedding, one point in WeMM-Embedding's space for each of 26 view types, among them its images, spectrum plots and catalogue text. WeMM-Embedding embeds the text query in the same space, and the galaxy's score is the query's predicted mean cosine with the galaxy's views, every view type weighted alike.</title>
   <defs>
     <marker id="text-search-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0 0 L10 5 L0 10 z" fill="currentColor" stroke="none"/>
@@ -18,37 +18,28 @@
   </g>
   <rect x="160" y="72" width="70" height="36" rx="6"/>
   <g fill="currentColor" stroke="none" font-size="11" text-anchor="middle">
-    <text x="195" y="94">flow</text>
-    <text x="195" y="233">EmbeddingGemma</text>
+    <text x="195" y="94">network</text>
+    <text x="195" y="233">WeMM-Embedding</text>
   </g>
   <circle cx="420" cy="150" r="118" stroke-dasharray="4 3"/>
-  <text x="420" y="22" fill="currentColor" stroke="none" text-anchor="middle" font-weight="bold">EmbeddingGemma space</text>
+  <text x="420" y="22" fill="currentColor" stroke="none" text-anchor="middle" font-weight="bold">WeMM-Embedding space</text>
   <g fill="currentColor" stroke="none">
-    <circle cx="352" cy="104" r="4"/>
-    <circle cx="364" cy="96" r="4"/>
-    <circle cx="360" cy="114" r="4"/>
-    <circle cx="374" cy="108" r="4"/>
-    <rect x="404" y="80" width="8" height="8"/>
-    <rect x="418" y="90" width="8" height="8"/>
-    <rect x="410" y="100" width="8" height="8"/>
-    <rect x="426" y="78" width="8" height="8"/>
-    <path d="M462 130 l5 -9 l5 9 z"/>
-    <path d="M476 138 l5 -9 l5 9 z"/>
-    <path d="M468 146 l5 -9 l5 9 z"/>
-    <path d="M484 124 l5 -9 l5 9 z"/>
+    <circle cx="364" cy="108" r="5"/>
+    <rect x="410" y="92" width="10" height="10"/>
+    <path d="M466 140 l6 -11 l6 11 z"/>
     <circle cx="402" cy="202" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
   </g>
   <g stroke-dasharray="2 3">
-    <line x1="402" y1="196" x2="368" y2="114"/>
-    <line x1="402" y1="196" x2="416" y2="104"/>
-    <line x1="402" y1="196" x2="472" y2="142"/>
+    <line x1="402" y1="196" x2="366" y2="114"/>
+    <line x1="402" y1="196" x2="414" y2="103"/>
+    <line x1="402" y1="196" x2="471" y2="141"/>
   </g>
   <g fill="currentColor" stroke="none" font-size="11">
-    <text x="548" y="70">g's cloud: 16 predicted</text>
-    <text x="548" y="84">documents per view type</text>
+    <text x="548" y="70">g's predictions: one</text>
+    <text x="548" y="84">per view type</text>
     <text x="548" y="98">(images, plots, catalogues)</text>
     <text x="548" y="196">query t: g's score is</text>
-    <text x="548" y="210">its mean cosine over</text>
-    <text x="548" y="224">eight clouds' points</text>
+    <text x="548" y="210">its predicted mean</text>
+    <text x="548" y="224">cosine with g's views</text>
   </g>
 </svg>

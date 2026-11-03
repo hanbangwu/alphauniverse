@@ -13,7 +13,9 @@ import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
 from datasets import Image
+from huggingface_hub import hf_hub_download
 from pydantic import BaseModel, ConfigDict, Field
+from tokenizers import Tokenizer
 from tqdm import tqdm
 
 from .config import (
@@ -118,11 +120,29 @@ class TextResults(NamedTuple):
 def text_model() -> SentenceTransformer:
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(GEMMA, device=device())
+    kernels = (
+        {
+            "dtype": torch.bfloat16,
+            "use_kernels": True,
+            "attn_implementation": "kernels-community/flash-attn2",
+        }
+        if device().type == "cuda"
+        else {}
+    )
+    model = SentenceTransformer(
+        GEMMA,
+        device=device(),
+        trust_remote_code=True,
+        truncate_dim=GEMMA_DIM,
+        model_kwargs=kernels,
+    )
+    trained = Tokenizer.from_file(hf_hub_download(GEMMA, "tokenizer.json"))
+    model[0].processor.tokenizer.backend_tokenizer.normalizer = trained.normalizer
+    return model
 
 
 def embed_queries(texts: list[str]) -> np.ndarray:
-    return text_model().encode(texts, prompt_name="SearchQuery")
+    return text_model().encode_query(texts, normalize_embeddings=True)
 
 
 def generic_queries() -> list[str]:
@@ -191,7 +211,7 @@ def generate_pairs() -> None:
         galaxy, aion = mean_embeddings(survey)
         gemma = np.concatenate(
             [
-                text_model().encode(batch, prompt_name="Document")
+                text_model().encode_document(batch, normalize_embeddings=True)
                 for batch in tqdm(DOCUMENTS[modality](galaxy), desc=modality)
             ]
         )
