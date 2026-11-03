@@ -51,7 +51,7 @@ A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :do
 
 - *search*: :math:`\tilde t` against the sum of the stored vectors over the set's modes, the set's share of :math:`s(g \mid t)`, which includes its part of the combination views; over every mode, :math:`s(g \mid t)` as text search ranks.
 - *search framed*: the same, with the query written after its mode set's framing, none for everything, "an image of", "the spectrum of" or "the photometry of", and less the mean of the generic queries with that framing.
-- *views*: the mean of :math:`\cos(\tilde t, \tilde e)` over EmbeddingGemma's embeddings :math:`e` of the galaxy's observed image and DESI spectrum plot, each less its modality's mean, at unit length.
+- *views*: the mean of :math:`\cos(\tilde t, \tilde e)` over WeMM-Embedding's embeddings :math:`e` of the galaxy's observed image and DESI spectrum plot, each less its modality's mean, at unit length.
 
 For each side, among the held-out galaxies with the value:
 

@@ -49,9 +49,6 @@ Glossary
    embedding
       The vector of 768 numbers AION's encoder returns for a :term:`token`. The encoded embedding depends on all of the galaxy's tokens; the codebook embedding depends only on the token's :term:`code`.
 
-   EmbeddingGemma
-      Google's model that places images and text in one 768-dimensional space, so that a picture and a description of it lie close together. Text search uses it. See :doc:`methods/text-search`.
-
    equivalent width
       A spectral line's flux divided by the continuum's flux density beside it, :math:`\int (F_\lambda / F_c - 1)\, d\lambda` over the line, in Å. See :doc:`dev/reference`.
 
@@ -110,7 +107,10 @@ Glossary
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
 
    view
-      One input to :term:`EmbeddingGemma` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`dev/reference`.
+      One input to :term:`WeMM-Embedding` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`dev/reference`.
+
+   WeMM-Embedding
+      Tencent's model that places images, plots and text in one space, so that a picture and a description of it lie close together; text search uses its 2-billion-parameter version, cut to 1,024 dimensions. See :doc:`methods/text-search`.
 
    whole-mode search
       Search over every slot of each chosen :term:`mode`, ranked from the modes' :term:`token embeddings <token embedding>`. See :doc:`methods/similarity-search`.
