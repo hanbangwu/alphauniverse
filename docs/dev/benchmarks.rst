@@ -71,6 +71,8 @@ Over all galaxies with the value, *precision@32* is the fraction of the phrasing
 
 Five morphology classes have six phrasings each, split into halves as above: spiral, elliptical, edge-on, merger and irregular. They have no labels. For each method, *overlap@8* between two classes is the mean, over the half's three phrasing pairs, of the fraction of the 8 galaxies text search shows first that both phrasings share; a method that tells the classes apart keeps it near zero. For each phrasing the report also keeps the top 8, their image percentile, how many trained the text regression and their median r magnitude and :term:`half-light radius`, so a contact sheet can mark them.
 
+``text_search_sheet`` draws that sheet for a fixed set of 21 queries: each version's top 8 out of every galaxy, marked with r magnitude and whether it trained the text regression, beside the AION map shaded by score percentile. Given an earlier sheet, it shows both versions, so a change to text search can be judged by eye. It writes a page, not a report.
+
 .. bokeh-plot::
    :source-position: none
 
