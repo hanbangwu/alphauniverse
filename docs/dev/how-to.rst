@@ -42,7 +42,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
    uv run modal run modal_app.py::generate_text_views --parts 10
-   uv run modal run modal_app.py::train_text_flow
+   uv run modal run modal_app.py::train_text_regression
    uv run modal run modal_app.py::generate_text_vectors
 
 A failed job leaves its artifacts incomplete; rerun it.
