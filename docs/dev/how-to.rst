@@ -94,6 +94,7 @@ Run a benchmark
    uv run modal run -m scripts.benchmarks.backend_performance                # --runs, default 30
    uv run modal run -m scripts.benchmarks.projection_quality
    uv run modal run -m scripts.benchmarks.text_search_quality                # --half, default development, or sealed
+   uv run modal run -m scripts.benchmarks.text_search_sheet                  # --out, default text_search_sheet.html; --earlier, an earlier sheet's .json
    uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --queries 200, --modes every mode
    uv run modal run -m scripts.benchmarks.token_embedding_quality
    uv run --group build modal run -m scripts.benchmarks.template_quality
