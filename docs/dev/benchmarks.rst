@@ -67,9 +67,9 @@ The random null is reported, not required: random directions rank mostly along t
 
 Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third. Over all galaxies, as text search shows them, *page precision@32* is the same fraction with AION's predicted value standing in for a missing measurement, placed in the measured thirds, and *page measured@32* is the fraction of those 32 that are measured. The predicted values come from the same embeddings the search reads, so the page figures describe what a reader sees rather than test it.
 
-*Image agreement@32* is the fraction of the phrasing's top 32 held-out galaxies with an observed image that are also in the top 32 by *views* over that image alone. It needs no label: the stored vectors predict views from AION embeddings, and this measures whether the prediction ranks a query as the galaxy's real image would.
+*Image percentile@32* needs no label: among the held-out galaxies, it is the mean percentile, under *views* over the observed image alone, of the phrasing's top 32. The stored vectors predict views from AION embeddings, so it measures whether the prediction ranks a query as the galaxy's real image would.
 
-Five morphology classes have six phrasings each, split into halves as above: spiral, elliptical, edge-on, merger and irregular. They have no labels. For each method, *overlap@8* between two classes is the mean, over the half's three phrasing pairs, of the fraction of the 8 galaxies text search shows first that both phrasings share; a method that tells the classes apart keeps it near zero. The report keeps each phrasing's top 8 for a contact sheet.
+Five morphology classes have six phrasings each, split into halves as above: spiral, elliptical, edge-on, merger and irregular. They have no labels. For each method, *overlap@8* between two classes is the mean, over the half's three phrasing pairs, of the fraction of the 8 galaxies text search shows first that both phrasings share; a method that tells the classes apart keeps it near zero. For each phrasing the report also keeps the top 8, their image percentile, how many trained the text regression and their median r magnitude and :term:`half-light radius`, so a contact sheet can mark them.
 
 .. bokeh-plot::
    :source-position: none

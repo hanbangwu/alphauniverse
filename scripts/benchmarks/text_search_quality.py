@@ -9,6 +9,7 @@ import modal
 import numpy as np
 import pyarrow.parquet as pq
 import torch
+from scipy.stats import rankdata
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import normalize
 
@@ -30,6 +31,7 @@ from app.text_search import (
     query_directions,
     text_vectors,
 )
+from app.text_views import training
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -373,9 +375,11 @@ def top(score: np.ndarray, count: int = TOP) -> np.ndarray:
     return np.argsort(-score)[:count]
 
 
-def agreement(score: np.ndarray, reference: np.ndarray, imaged: np.ndarray) -> float:
-    shared = np.intersect1d(imaged[top(score[imaged])], imaged[top(reference[imaged])])
-    return round(len(shared) / TOP, 4)
+def image_percentile(
+    score: np.ndarray, reference: np.ndarray, imaged: np.ndarray, count: int
+) -> float:
+    percentiles = rankdata(reference[imaged]) / len(imaged)
+    return round(float(percentiles[top(score[imaged], count)].mean()), 4)
 
 
 def morphology_rows(
@@ -383,6 +387,8 @@ def morphology_rows(
     reference: dict[str, np.ndarray],
     imaged: np.ndarray,
     chosen: dict[str, tuple[str, ...]],
+    described: dict[str, np.ndarray],
+    trained: np.ndarray,
 ) -> dict[str, Any]:
     pages = {
         text: top(by_text[text], PAGE) for found in chosen.values() for text in found
@@ -408,9 +414,14 @@ def morphology_rows(
         "phrasings": {
             text: {
                 f"top{PAGE}": page.tolist(),
-                f"image_agreement@{TOP}": agreement(
-                    by_text[text], reference[text], imaged
+                f"image_percentile@{PAGE}": image_percentile(
+                    by_text[text], reference[text], imaged, PAGE
                 ),
+                f"trained@{PAGE}": int(np.isin(page, trained).sum()),
+            }
+            | {
+                f"median_{name}@{PAGE}": round(float(np.nanmedian(values[page])), 4)
+                for name, values in described.items()
             }
             for text, page in pages.items()
         },
@@ -488,8 +499,8 @@ def pair_rows(
                     float(estimated[opposite][shown].mean()), 4
                 ),
                 f"page_measured@{TOP}": round(float(labels["known"][shown].mean()), 4),
-                f"image_agreement@{TOP}": agreement(
-                    found[side], reference[text], imaged
+                f"image_percentile@{TOP}": image_percentile(
+                    found[side], reference[text], imaged, TOP
                 ),
             }
             rows[side][text] = row
@@ -559,6 +570,11 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         for name, pair in PAIRS.items()
     }
     labels = {name: sides(values) for name, values in measured.items()}
+    described = {
+        name: properties.column(f"{name}_measured").to_numpy(zero_copy_only=False)
+        for name in ("r_magnitude", "radius")
+    }
+    trained = training()
     estimated = {name: page_sides(measured[name], predicted[name]) for name in PAIRS}
     phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
     cross_pairs: dict[str, dict[str, Any]] = {}
@@ -571,7 +587,9 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         for name, scores in scored.items():
             method = f"{family}, {name}"
             by_text = dict(zip(texts, scores))
-            morphology[method] = morphology_rows(by_text, reference, imaged, shapes)
+            morphology[method] = morphology_rows(
+                by_text, reference, imaged, shapes, described, trained
+            )
             cross_pairs[method] = {
                 target: {
                     source: {
