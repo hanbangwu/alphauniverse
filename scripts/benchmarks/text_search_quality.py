@@ -286,7 +286,13 @@ def search_scorer(vectors: dict[str, np.ndarray]) -> Scorer:
 
 
 def families(views: dict) -> list[tuple[str, Scorer, str]]:
-    vectors = set_vectors(text_vectors().modes, MODE_SETS)
+    stored = text_vectors()
+    parts = {name: modes for name, modes in MODE_SETS.items() if modes != MODES}
+    vectors = set_vectors(stored.modes, parts) | {
+        name: stored.vectors.numpy()
+        for name, modes in MODE_SETS.items()
+        if modes == MODES
+    }
     found = [("search", search_scorer(vectors), "plain")]
     for name in MODE_SETS:
         found.append(("search framed", search_scorer({name: vectors[name]}), name))

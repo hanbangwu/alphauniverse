@@ -231,7 +231,8 @@ def identification(
         chosen = held.view_types == kind
         scores = held.directions[chosen] @ predictions[kind].T
         mine = scores.gather(1, own[chosen, None])
-        beaten[chosen] = (scores < mine).float().sum(dim=1) / (len(held.galaxies) - 1)
+        below = (scores < mine).sum(dim=1) + ((scores == mine).sum(dim=1) - 1) / 2
+        beaten[chosen] = below / (len(held.galaxies) - 1)
     sums = beaten.new_zeros(len(VIEW_TYPES)).index_add_(0, held.view_types, beaten)
     return sums / torch.bincount(held.view_types, minlength=len(VIEW_TYPES))
 
@@ -412,7 +413,7 @@ def predicted_vectors(
     found = np.empty((len(galaxies), len(MODES), width), dtype=np.float32)
     for start in range(0, len(galaxies), GALAXIES):
         rows = slice(start, start + GALAXIES)
-        chosen = joint[galaxies[rows]].to(device())
+        chosen = joint[galaxies[rows]]
         present = torch.ones(len(chosen), len(GRAM_NAMES), device=device())
         found[rows] = (
             mode_vectors(predicted(network, bases, chosen, present)).cpu().numpy()

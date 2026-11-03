@@ -37,7 +37,7 @@ def identity_bases(width: int) -> dict[str, torch.Tensor]:
     }
 
 
-def test_identification_is_one_for_predictions_matching_their_own_views_and_zero_for_alike_ones() -> (
+def test_identification_is_one_for_predictions_matching_their_own_views_and_a_half_for_alike_ones() -> (
     None
 ):
     held = text_regression.HeldOut(
@@ -60,7 +60,7 @@ def test_identification_is_one_for_predictions_matching_their_own_views_and_zero
     )
 
     assert separate[0].item() == 1
-    assert same[0].item() == 0
+    assert same[0].item() == 0.5
     assert torch.isnan(separate[1:]).all()
 
 
