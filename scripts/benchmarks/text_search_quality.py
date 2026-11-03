@@ -226,12 +226,55 @@ PAIRS = {
         ),
     ),
 }
+MORPHOLOGY = {
+    "spiral": (
+        "a spiral galaxy",
+        "a galaxy with spiral arms",
+        "a face-on spiral galaxy",
+        "a grand-design spiral galaxy",
+        "a disk galaxy with spiral structure",
+        "a barred spiral galaxy",
+    ),
+    "elliptical": (
+        "an elliptical galaxy",
+        "a smooth elliptical galaxy",
+        "a featureless elliptical galaxy",
+        "a round elliptical galaxy",
+        "an early-type galaxy",
+        "a smooth, round galaxy with no features",
+    ),
+    "edge-on": (
+        "an edge-on disk galaxy",
+        "an edge-on spiral galaxy",
+        "a disk galaxy seen edge-on",
+        "a thin edge-on disk",
+        "an edge-on galaxy with a dust lane",
+        "a spiral galaxy seen from the side",
+    ),
+    "merger": (
+        "a merging galaxy with tidal tails",
+        "two interacting galaxies",
+        "a galaxy merger",
+        "a disturbed galaxy with tidal features",
+        "a pair of colliding galaxies",
+        "an interacting galaxy",
+    ),
+    "irregular": (
+        "an irregular galaxy",
+        "a clumpy irregular galaxy",
+        "a galaxy with an irregular shape",
+        "a messy, asymmetric galaxy",
+        "a galaxy with no regular structure",
+        "a patchy irregular galaxy",
+    ),
+}
 HALVES = ("development", "sealed")
 SIDES = {"high": "low", "low": "high"}
 MODE_SETS = {name: VIEW_COMBINATIONS[name] for name in FRAMES}
 RANDOM_DIRECTIONS = 200
 EDITS = 50
 TOP = TextQuery.model_fields["matches"].default
+PAGE = 8
 GALAXIES = 1024
 REPORT = Path("docs/benchmarks/text_search_quality.json")
 
@@ -326,8 +369,52 @@ def edited(first: np.ndarray, second: np.ndarray, steps: np.ndarray) -> np.ndarr
     return np.concatenate([normalize(middle + scaled), normalize(middle - scaled)])
 
 
-def top(score: np.ndarray) -> np.ndarray:
-    return np.argsort(-score)[:TOP]
+def top(score: np.ndarray, count: int = TOP) -> np.ndarray:
+    return np.argsort(-score)[:count]
+
+
+def agreement(score: np.ndarray, reference: np.ndarray, imaged: np.ndarray) -> float:
+    shared = np.intersect1d(imaged[top(score[imaged])], imaged[top(reference[imaged])])
+    return round(len(shared) / TOP, 4)
+
+
+def morphology_rows(
+    by_text: dict[str, np.ndarray],
+    reference: dict[str, np.ndarray],
+    imaged: np.ndarray,
+    chosen: dict[str, tuple[str, ...]],
+) -> dict[str, Any]:
+    pages = {
+        text: top(by_text[text], PAGE) for found in chosen.values() for text in found
+    }
+    overlaps = {
+        f"{first}|{second}": round(
+            float(
+                np.mean(
+                    [
+                        len(np.intersect1d(pages[one], pages[other])) / PAGE
+                        for one, other in zip(chosen[first], chosen[second])
+                    ]
+                )
+            ),
+            4,
+        )
+        for index, first in enumerate(chosen)
+        for second in list(chosen)[index + 1 :]
+    }
+    return {
+        f"mean_overlap@{PAGE}": round(float(np.mean(list(overlaps.values()))), 4),
+        f"overlap@{PAGE}": overlaps,
+        "phrasings": {
+            text: {
+                f"top{PAGE}": page.tolist(),
+                f"image_agreement@{TOP}": agreement(
+                    by_text[text], reference[text], imaged
+                ),
+            }
+            for text, page in pages.items()
+        },
+    }
 
 
 def precision(
@@ -359,6 +446,8 @@ def pair_rows(
     labels: dict[str, np.ndarray],
     estimated: dict[str, np.ndarray],
     held: np.ndarray,
+    reference: dict[str, np.ndarray],
+    imaged: np.ndarray,
 ) -> dict[str, dict[str, dict[str, Any]]]:
     ranked = partial(precision, labels, held)
     known = labels["known"][held]
@@ -399,6 +488,9 @@ def pair_rows(
                     float(estimated[opposite][shown].mean()), 4
                 ),
                 f"page_measured@{TOP}": round(float(labels["known"][shown].mean()), 4),
+                f"image_agreement@{TOP}": agreement(
+                    found[side], reference[text], imaged
+                ),
             }
             rows[side][text] = row
     return rows
@@ -420,7 +512,10 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         for name, pair in PAIRS.items()
     }
     phrased = [both for found in chosen.values() for both in found]
-    texts = [text for both in phrased for text in both]
+    shapes = {name: found[start::2] for name, found in MORPHOLOGY.items()}
+    texts = [text for both in phrased for text in both] + [
+        text for found in shapes.values() for text in found
+    ]
 
     generic = embed_queries(generic_queries())
     queries = {
@@ -440,6 +535,15 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     for modality in TEXT_SURVEYS:
         galaxy, _, gemma = pairs(modality)
         views[modality] = galaxy, centred(gemma.cpu().numpy())
+    imaged = np.intersect1d(held, views["image"][0])
+    reference = dict(
+        zip(
+            texts,
+            view_scorer(views, {"images": ("image",)})(queries["plain"], slice(None))[
+                "images"
+            ],
+        )
+    )
 
     properties = pq.read_table(artifact("properties"))
     measured = {
@@ -458,6 +562,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     estimated = {name: page_sides(measured[name], predicted[name]) for name in PAIRS}
     phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
     cross_pairs: dict[str, dict[str, Any]] = {}
+    morphology: dict[str, dict[str, Any]] = {}
     for family, scorer, which in families(views):
         vectors = dict(zip(texts, queries[which]))
         edits = [edited(vectors[high], vectors[low], steps) for high, low in phrased]
@@ -466,6 +571,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         for name, scores in scored.items():
             method = f"{family}, {name}"
             by_text = dict(zip(texts, scores))
+            morphology[method] = morphology_rows(by_text, reference, imaged, shapes)
             cross_pairs[method] = {
                 target: {
                     source: {
@@ -492,6 +598,8 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
                     labels[pair],
                     estimated[pair],
                     held,
+                    reference,
+                    imaged,
                 )
     return {
         "environment": environment(),
@@ -517,6 +625,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         },
         "phrasings": phrasings,
         "cross_pairs": cross_pairs,
+        "morphology": morphology,
         "memory": memory(),
     }
 

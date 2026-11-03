@@ -97,6 +97,10 @@ def text_search_quality():
     crossed = flattened(
         found["cross_pairs"], ("method", "labels", "phrasings", "phrasing")
     )
+    shapes = [
+        {"method": method, "mean overlap@8": rows["mean_overlap@8"]} | rows["overlap@8"]
+        for method, rows in found.get("morphology", {}).items()
+    ]
     groups = {}
     for row in rows:
         groups.setdefault((row["method"], (row["pair"], row["side"])), []).append(row)
@@ -163,6 +167,7 @@ def text_search_quality():
             ("method", "labels", "phrasings", "phrasing", "separation"),
             height=400,
         ),
+        *([table(shapes, max(shapes, key=len), height=400)] if shapes else []),
         **WIDTH,
     )
 
