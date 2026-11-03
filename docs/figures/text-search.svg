@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="100%" role="img" aria-labelledby="text-search-title" font-family="sans-serif" font-size="12" fill="none" stroke="currentColor">
-  <title id="text-search-title">A network predicts, from a galaxy's AION embedding, one point in EmbeddingGemma's space for each of 26 view types, among them its images, spectrum plots and catalogue text. EmbeddingGemma embeds the text query in the same space, and the galaxy's score is the query's mean dot product with the predictions, every view type weighted alike.</title>
+  <title id="text-search-title">A network predicts, from a galaxy's AION embedding, one point in EmbeddingGemma's space for each of 26 view types, among them its images, spectrum plots and catalogue text. EmbeddingGemma embeds the text query in the same space, and the galaxy's score is the query's predicted mean cosine with the galaxy's views, every view type weighted alike.</title>
   <defs>
     <marker id="text-search-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0 0 L10 5 L0 10 z" fill="currentColor" stroke="none"/>
@@ -39,7 +39,7 @@
     <text x="548" y="84">per view type</text>
     <text x="548" y="98">(images, plots, catalogues)</text>
     <text x="548" y="196">query t: g's score is</text>
-    <text x="548" y="210">its mean dot product</text>
-    <text x="548" y="224">with the predictions</text>
+    <text x="548" y="210">its predicted mean</text>
+    <text x="548" y="224">cosine with g's views</text>
   </g>
 </svg>

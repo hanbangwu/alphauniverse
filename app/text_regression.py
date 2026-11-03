@@ -183,17 +183,6 @@ def decayed(
         average.lerp_(current, weight)
 
 
-def trainable(
-    build: Callable[[], nn.Module],
-) -> tuple[nn.Module, AveragedModel, torch.optim.Optimizer]:
-    torch.manual_seed(SEED)
-    network = build().to(device())
-    optimiser = torch.optim.AdamW(
-        network.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
-    )
-    return network, AveragedModel(network, multi_avg_fn=decayed), optimiser
-
-
 def stepped(
     network: Regression,
     average: AveragedModel,
@@ -319,7 +308,12 @@ def train_text_regression() -> None:
     targets = torch.empty(CAP, TEXT_RANK, device=device())
     owners = torch.empty(CAP, dtype=torch.long, device=device())
     kinds = torch.empty(CAP, dtype=torch.long, device=device())
-    network, average, optimiser = trainable(Regression)
+    torch.manual_seed(SEED)
+    network = Regression().to(device())
+    optimiser = torch.optim.AdamW(
+        network.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+    )
+    average = AveragedModel(network, multi_avg_fn=decayed)
 
     def inputs(batch: torch.Tensor) -> tuple[torch.Tensor, ...]:
         present = masks(BATCH)

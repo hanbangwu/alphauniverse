@@ -64,11 +64,15 @@ def test_identification_is_one_for_predictions_matching_their_own_views_and_zero
     assert torch.isnan(separate[1:]).all()
 
 
-def test_a_prediction_is_the_document_its_scaled_coefficients_stand_for() -> None:
+def test_a_prediction_s_coefficients_are_what_the_network_returned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(text_regression, "TEXT_RANK", 3)
     generator = torch.Generator().manual_seed(0)
     kinds = len(VIEW_TYPES)
+    components = torch.linalg.qr(torch.randn(kinds, 12, 3, generator=generator)).Q
     bases = identity_bases(3) | {
-        "components": torch.randn(kinds, 3, 12, generator=generator),
+        "components": components.transpose(1, 2),
         "centre": torch.randn(kinds, 12, generator=generator),
         "scale": torch.rand(kinds, 3, generator=generator) + 0.5,
     }
@@ -82,9 +86,11 @@ def test_a_prediction_is_the_document_its_scaled_coefficients_stand_for() -> Non
 
     conditions = text_regression.condition(rows, present, bases)
     for kind in (0, kinds - 1):
-        points = (conditions + kind) * bases["scale"][kind]
-        expected = points @ bases["components"][kind] + bases["centre"][kind]
-        torch.testing.assert_close(found[kind], expected)
+        view_types = torch.full((4,), kind)
+        torch.testing.assert_close(
+            text_regression.coefficients(bases, view_types, found[kind]),
+            conditions + kind,
+        )
 
 
 def test_a_masked_block_does_not_reach_the_condition() -> None:

@@ -262,7 +262,9 @@ def view_scorer(
     return score
 
 
-def search_scorer(modes: np.ndarray, sets: dict[str, tuple[str, ...]]) -> Scorer:
+def set_vectors(
+    modes: np.ndarray, sets: dict[str, tuple[str, ...]]
+) -> dict[str, np.ndarray]:
     columns = {
         name: [MODES.index(mode) for mode in found] for name, found in sets.items()
     }
@@ -273,24 +275,21 @@ def search_scorer(modes: np.ndarray, sets: dict[str, tuple[str, ...]]) -> Scorer
         rows = np.asarray(modes[start : start + GALAXIES])
         for name, kept in columns.items():
             vectors[name][start : start + GALAXIES] = rows[:, kept].sum(axis=1)
+    return vectors
 
+
+def search_scorer(vectors: dict[str, np.ndarray]) -> Scorer:
     def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
         return {name: directions @ found[galaxies].T for name, found in vectors.items()}
 
     return score
 
 
-def framed(
-    averaged: Scorer, name: str, directions: np.ndarray, galaxies: Any
-) -> dict[str, np.ndarray]:
-    return {name: averaged(directions, galaxies)[name]}
-
-
 def families(views: dict) -> list[tuple[str, Scorer, str]]:
-    stored = search_scorer(text_vectors().modes, MODE_SETS)
-    found = [("search", stored, "plain")]
+    vectors = set_vectors(text_vectors().modes, MODE_SETS)
+    found = [("search", search_scorer(vectors), "plain")]
     for name in MODE_SETS:
-        found.append(("search framed", partial(framed, stored, name), name))
+        found.append(("search framed", search_scorer({name: vectors[name]}), name))
     modalities = {
         name: tuple(
             modality
