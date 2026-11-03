@@ -10,7 +10,6 @@ import modal
 import numpy as np
 import pyarrow.parquet as pq
 import torch
-from scipy.stats import rankdata
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import normalize
 
@@ -247,11 +246,11 @@ MORPHOLOGY = {
     ),
     "edge-on": (
         "an edge-on disk galaxy",
-        "an edge-on spiral galaxy",
+        "a galaxy seen edge-on as a thin streak",
         "a disk galaxy seen edge-on",
         "a thin edge-on disk",
         "an edge-on galaxy with a dust lane",
-        "a spiral galaxy seen from the side",
+        "a flat disk seen from the side",
     ),
     "merger": (
         "a merging galaxy with tidal tails",
@@ -540,7 +539,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     imaged = np.intersect1d(held, views["image"][0])
     reference = view_scorer(views, {"images": ("image",)})(queries["plain"], imaged)
     percentiles = {
-        text: rankdata(row) / len(imaged)
+        text: (np.argsort(np.argsort(row)) + 1) / len(imaged)
         for text, row in zip(texts, reference["images"])
     }
 

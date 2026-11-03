@@ -1,6 +1,5 @@
 import base64
 import html
-import io
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +10,7 @@ import numpy as np
 import pyarrow.parquet as pq
 
 from app.config import DATASET_REVISION, artifact
+from app.dataset import encode
 from app.text_search import embed_queries, photos, query_directions, text_vectors
 from app.text_views import training
 from modal_app import CACHE_PATH, build_image, cache_volume
@@ -43,7 +43,6 @@ QUERIES = (
     "a distant galaxy at high redshift",
 )
 PAGE = 8
-THUMBNAIL = 112
 
 
 def encoded(values: np.ndarray) -> str:
@@ -68,17 +67,13 @@ def production_pages() -> dict[str, dict[str, Any]]:
     return pages(dict(zip(QUERIES, (directions @ stored.vectors.T).numpy())))
 
 
-def thumbnail(picture) -> str:
-    picture = picture.convert("RGB")
-    picture.thumbnail((THUMBNAIL, THUMBNAIL))
-    buffer = io.BytesIO()
-    picture.save(buffer, format="JPEG", quality=85)
-    return base64.b64encode(buffer.getvalue()).decode()
-
-
 def described(galaxies: set[int]) -> dict[str, Any]:
-    chosen = np.asarray(sorted(galaxies))
-    pictures = [thumbnail(picture) for batch in photos(chosen) for picture in batch]
+    chosen = np.asarray(sorted(galaxies), dtype=np.int64)
+    pictures = [
+        base64.b64encode(encode(picture)).decode()
+        for batch in photos(chosen)
+        for picture in batch
+    ]
     magnitude = pq.read_table(artifact("properties"), columns=["r_magnitude_measured"])
     magnitude = magnitude.column(0).to_numpy(zero_copy_only=False)[chosen]
     points = pq.read_table(artifact("mean_points"), columns=["x", "y"])
@@ -176,7 +171,7 @@ function show() {{
     row.className = "row";
     const tiles = entry.top.map(galaxy => {{
       const about = data.galaxies[galaxy];
-      return `<figure class="${{about.trained ? "trained" : ""}}"><img alt="galaxy ${{galaxy}}" src="data:image/jpeg;base64,${{about.image}}"><figcaption>#${{galaxy}} r ${{about.r ?? "?"}}</figcaption></figure>`;
+      return `<figure class="${{about.trained ? "trained" : ""}}"><img alt="galaxy ${{galaxy}}" src="data:image/png;base64,${{about.image}}"><figcaption>#${{galaxy}} r ${{about.r ?? "?"}}</figcaption></figure>`;
     }}).join("");
     row.innerHTML = `<div class="label"></div><canvas></canvas><div class="strip">${{tiles}}</div>`;
     row.querySelector(".label").textContent = name;
@@ -193,13 +188,17 @@ show();
 @app.local_entrypoint()
 def main(out: str = "text_search_sheet.html", earlier: str = "") -> None:
     stored = json.loads(Path(earlier).read_text()) if earlier else {}
+    if stored.get("revision", DATASET_REVISION) != DATASET_REVISION:
+        raise ValueError(f"{earlier} is from dataset revision {stored['revision']}")
     versions, galaxies = stored.get("versions", {}), stored.get("galaxies", {})
     found = sheet.remote([int(galaxy) for galaxy in galaxies])
-    name = f"{git('describe', '--always', '--dirty')}, {DATASET_REVISION[:7]}, {datetime.now(UTC):%Y-%m-%d}"
+    name = f"{git('describe', '--always', '--dirty')}, {DATASET_REVISION[:7]}, {datetime.now(UTC):%Y-%m-%d %H:%M}"
     versions[name] = found["pages"]
     galaxies |= found["galaxies"]
     Path(out).with_suffix(".json").write_text(
-        json.dumps({"versions": versions, "galaxies": galaxies})
+        json.dumps(
+            {"revision": DATASET_REVISION, "versions": versions, "galaxies": galaxies}
+        )
     )
     Path(out).write_text(page(versions, {"map": found["map"], "galaxies": galaxies}))
     print(f"wrote {out}")
