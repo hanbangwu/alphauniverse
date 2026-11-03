@@ -59,13 +59,13 @@ For each side, among the held-out galaxies with the value:
 - *specificity* is that AP less the AP of the opposite side's phrasing on the same third;
 - the *edit null* is the 95th percentile of the absolute change in AP over random edits of the pair's two directions, each the size of the edit from one to the other, about their midpoint;
 - the *random null* is the 95th percentile of AP over random unit directions;
-- a phrasing *passes* when its specificity exceeds the edit null.
+- a phrasing *passes* when its specificity exceeds the edit null and its AP exceeds its third's base rate, the AP of a random ranking.
 
 The random null is reported, not required: random directions rank mostly along the few axes that dominate the galaxies' variance, which every property here follows to some degree, so it measures how strongly a property lies along them.
 
 *Cross-pair separation* scores every pair's phrasings on every pair's thirds: the mean over both sides of the specificity a phrasing pair would have there. A pair's own phrasings should separate its thirds better than the other pairs' phrasings do.
 
-Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third.
+Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third. Over all galaxies, as text search shows them, *page precision@32* is the same fraction with AION's predicted value standing in for a missing measurement, placed in the measured thirds, and *page measured@32* is the fraction of those 32 that are measured. The predicted values come from the same embeddings the search reads, so the page figures describe what a reader sees rather than test it.
 
 .. bokeh-plot::
    :source-position: none
