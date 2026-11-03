@@ -1,8 +1,7 @@
 import json
-import math
 from collections.abc import Callable
 from datetime import UTC, datetime
-from functools import cache, partial
+from functools import partial
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -16,24 +15,12 @@ from sklearn.preprocessing import normalize
 from app.alignment import held_out, pairs
 from app.config import (
     DATASET_REVISION,
+    MODES,
     SEED,
     TEXT_SURVEYS,
     VIEW_COMBINATIONS,
-    VIEW_TYPES,
     artifact,
     galaxy_count,
-)
-from app.embeddings import loaded
-from app.text_flow import (
-    DRAWS,
-    Bases,
-    Velocity,
-    cosines,
-    drawn_vectors,
-    generated_clouds,
-    kind_means,
-    point_lengths,
-    stored_flow,
 )
 from app.text_search import (
     FRAMES,
@@ -245,75 +232,11 @@ MODE_SETS = {name: VIEW_COMBINATIONS[name] for name in FRAMES}
 RANDOM_DIRECTIONS = 200
 EDITS = 50
 TOP = TextQuery.model_fields["matches"].default
-BATCH = 64
 GALAXIES = 1024
 REPORT = Path("docs/benchmarks/text_search_quality.json")
 
 
-class TextIndex(NamedTuple):
-    points: torch.Tensor
-    lengths: torch.Tensor
-    components: torch.Tensor
-    centre: torch.Tensor
-    query_mean: torch.Tensor
-    kappa: float
-
-
 type Scorer = Callable[[np.ndarray, Any], dict[str, np.ndarray]]
-
-
-def indexed(clouds: np.ndarray) -> TextIndex:
-    with np.load(artifact("text_bases")) as stored:
-        components = torch.from_numpy(stored["components"])
-        centre = torch.from_numpy(stored["centre"])
-        kappa = float(stored["kappa"])
-    points = torch.empty(clouds.shape)
-    lengths = torch.empty(clouds.shape[:-1])
-    for start in range(0, clouds.shape[1], GALAXIES):
-        rows = slice(start, start + GALAXIES)
-        points[:, rows] = torch.from_numpy(clouds[:, rows].astype(np.float32))
-        lengths[:, rows] = torch.vmap(point_lengths)(
-            points[:, rows], components, centre
-        )
-    query_mean = torch.from_numpy(np.load(artifact("text_query_mean")))
-    return TextIndex(points, lengths, components, centre, query_mean, kappa)
-
-
-@cache
-def flow() -> tuple[Velocity, Bases, torch.Tensor]:
-    return *stored_flow(), loaded("joint_embedding", torch.float32)
-
-
-def flow_clouds(seed: int) -> np.ndarray:
-    return generated_clouds(*flow(), torch.arange(galaxy_count()), seed)
-
-
-def view_kinds(modes: tuple[str, ...]) -> list[int]:
-    return [
-        kind
-        for kind, (_, name) in enumerate(VIEW_TYPES)
-        if set(VIEW_COMBINATIONS.get(name, (name,))) <= set(modes)
-    ]
-
-
-def kind_scores(index: TextIndex, direction: torch.Tensor) -> torch.Tensor:
-    return torch.stack(
-        [
-            torch.logsumexp(
-                index.kappa
-                * cosines(
-                    index.points[kind],
-                    index.lengths[kind],
-                    direction,
-                    index.components[kind],
-                    index.centre[kind],
-                ),
-                dim=-1,
-            )
-            for kind in range(len(VIEW_TYPES))
-        ],
-        dim=-1,
-    )
 
 
 def centred(vectors: np.ndarray) -> np.ndarray:
@@ -339,51 +262,20 @@ def view_scorer(
     return score
 
 
-def cloud_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
-    columns = {name: view_kinds(modes) for name, modes in sets.items()}
-    points = index.points.shape[2]
+def search_scorer(modes: np.ndarray, sets: dict[str, tuple[str, ...]]) -> Scorer:
+    columns = {
+        name: [MODES.index(mode) for mode in found] for name, found in sets.items()
+    }
+    vectors = {
+        name: np.empty((len(modes), modes.shape[2]), dtype=np.float32) for name in sets
+    }
+    for start in range(0, len(modes), GALAXIES):
+        rows = np.asarray(modes[start : start + GALAXIES])
+        for name, kept in columns.items():
+            vectors[name][start : start + GALAXIES] = rows[:, kept].sum(axis=1)
 
     def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
-        chosen = torch.arange(index.points.shape[1])[galaxies]
-        scores = {name: np.empty((len(directions), len(chosen))) for name in sets}
-        for start in range(0, len(chosen), GALAXIES):
-            part = chosen[start : start + GALAXIES]
-            rows = slice(start, start + GALAXIES)
-            sub = index._replace(
-                points=index.points[:, part], lengths=index.lengths[:, part]
-            )
-            for first in range(0, len(directions), BATCH):
-                batch = slice(first, first + BATCH)
-                direction = torch.from_numpy(directions[batch]).float()
-                by_kind = kind_scores(sub, direction)
-                for name, kinds in columns.items():
-                    found = by_kind[..., kinds].logsumexp(dim=-1)
-                    scores[name][batch, rows] = found - math.log(len(kinds) * points)
-        return scores
-
-    return score
-
-
-def mean_scorer(index: TextIndex, sets: dict[str, tuple[str, ...]]) -> Scorer:
-    means = {}
-    for name, modes in sets.items():
-        kinds = view_kinds(modes)
-        means[name] = sum(
-            kind_means(
-                index.points[kind],
-                index.lengths[kind],
-                index.components[kind],
-                index.centre[kind],
-            )
-            for kind in kinds
-        ) / len(kinds)
-
-    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
-        direction = torch.from_numpy(directions).float()
-        return {
-            name: (direction @ found[galaxies].T).numpy()
-            for name, found in means.items()
-        }
+        return {name: directions @ found[galaxies].T for name, found in vectors.items()}
 
     return score
 
@@ -394,15 +286,11 @@ def framed(
     return {name: averaged(directions, galaxies)[name]}
 
 
-def families(index: TextIndex, views: dict) -> list[tuple[str, Scorer, str]]:
-    averaged = mean_scorer(index, MODE_SETS)
-    found = [
-        ("search", search_scorer(text_vectors().vectors.numpy()), "plain"),
-        ("clouds", cloud_scorer(index, MODE_SETS), "plain"),
-        ("mean cosine", averaged, "plain"),
-    ]
+def families(views: dict) -> list[tuple[str, Scorer, str]]:
+    stored = search_scorer(text_vectors().modes, MODE_SETS)
+    found = [("search", stored, "plain")]
     for name in MODE_SETS:
-        found.append(("mean cosine framed", partial(framed, averaged, name), name))
+        found.append(("search framed", partial(framed, stored, name), name))
     modalities = {
         name: tuple(
             modality
@@ -414,30 +302,6 @@ def families(index: TextIndex, views: dict) -> list[tuple[str, Scorer, str]]:
     observed = {name: chosen for name, chosen in modalities.items() if chosen}
     found.append(("views", view_scorer(views, observed), "plain"))
     return found
-
-
-def search_scorer(vectors: np.ndarray) -> Scorer:
-    def score(directions: np.ndarray, galaxies: Any) -> dict[str, np.ndarray]:
-        return {"everything": directions @ vectors[galaxies].T}
-
-    return score
-
-
-def cloud_tops(clouds: np.ndarray, directions: np.ndarray) -> dict[str, list]:
-    index = indexed(clouds)
-    return {
-        f"{family}, {name}": [top(row) for row in scores]
-        for family, scorer in (("clouds", cloud_scorer), ("mean cosine", mean_scorer))
-        for name, scores in scorer(index, MODE_SETS)(directions, slice(None)).items()
-    }
-
-
-def second_tops(directions: np.ndarray) -> dict[str, list[np.ndarray]]:
-    seeds = range(SEED + DRAWS, SEED + 2 * DRAWS)
-    vectors = drawn_vectors(*flow(), torch.arange(galaxy_count()), seeds).sum(axis=1)
-    return cloud_tops(flow_clouds(SEED + 1), directions) | {
-        "search, everything": [top(row) for row in directions @ vectors.T]
-    }
 
 
 def sides(values: np.ndarray) -> dict[str, np.ndarray]:
@@ -480,7 +344,6 @@ def pair_rows(
     scores: dict[str, np.ndarray],
     edits: dict[tuple[str, str], np.ndarray],
     random_scores: np.ndarray,
-    tops: dict[str, np.ndarray],
     phrasings: tuple[tuple[str, str], ...],
     labels: dict[str, np.ndarray],
     held: np.ndarray,
@@ -516,9 +379,6 @@ def pair_rows(
                     float(labels[opposite][page].mean()), 4
                 ),
             }
-            if text in tops:
-                shared = np.intersect1d(top(found[side]), tops[text])
-                row[f"seed_overlap@{TOP}"] = len(shared) / TOP
             rows[side][text] = row
     return rows
 
@@ -541,9 +401,10 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     phrased = [both for found in chosen.values() for both in found]
     texts = [text for both in phrased for text in both]
 
-    index = indexed(flow_clouds(SEED))
     generic = embed_queries(generic_queries())
-    queries = {"plain": query_directions(embed_queries(texts), index.query_mean)}
+    queries = {
+        "plain": query_directions(embed_queries(texts), text_vectors().query_mean)
+    }
     for (name, frame), block in zip(FRAMES.items(), np.split(generic, len(FRAMES))):
         framed = embed_queries([frame.format(text) for text in texts])
         queries[name] = query_directions(framed, torch.from_numpy(block.mean(axis=0)))
@@ -553,7 +414,6 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         rng.standard_normal((RANDOM_DIRECTIONS, generic.shape[1]))
     )
     steps = normalize(rng.standard_normal((EDITS, generic.shape[1])))
-    tops = second_tops(queries["plain"])
 
     views = {}
     for modality in TEXT_SURVEYS:
@@ -569,7 +429,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     }
     phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
     cross_pairs: dict[str, dict[str, Any]] = {}
-    for family, scorer, which in families(index, views):
+    for family, scorer, which in families(views):
         vectors = dict(zip(texts, queries[which]))
         edits = [edited(vectors[high], vectors[low], steps) for high, low in phrased]
         scored = scorer(queries[which], slice(None))
@@ -599,7 +459,6 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
                     by_text,
                     dict(zip(phrased, edit_scores)),
                     random_scores,
-                    dict(zip(texts, tops.get(method, []))),
                     found,
                     labels[pair],
                     held,
@@ -609,7 +468,6 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         "device": torch.cuda.get_device_name(),
         "half": half,
         "galaxies": len(held),
-        "kappa": index.kappa,
         "random_directions": RANDOM_DIRECTIONS,
         "edits": EDITS,
         "pairs": {

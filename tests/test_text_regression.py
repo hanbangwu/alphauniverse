@@ -16,7 +16,6 @@ from app.config import (
     GEMMA_DIM,
     GRAM_NAMES,
     MODES,
-    SEED,
     TEXT_VIEWS,
     TEXT_VIEWS_HELD_OUT,
     VIEW_COMBINATIONS,
@@ -25,57 +24,67 @@ from app.config import (
 )
 
 torch = pytest.importorskip("torch")
-text_flow = importlib.import_module("app.text_flow")
+text_regression = importlib.import_module("app.text_regression")
 
 
-def test_the_identification_gain_is_log_n_for_clouds_on_their_own_views_and_zero_for_alike_clouds(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(text_flow, "KAPPAS", (1000.0,))
-    directions = torch.eye(3)
-    held = text_flow.HeldOut(
+def identity_bases(width: int) -> dict[str, torch.Tensor]:
+    return {
+        "components": torch.eye(width).expand(len(VIEW_TYPES), -1, -1),
+        "centre": torch.zeros(len(VIEW_TYPES), width),
+        "scale": torch.ones(len(VIEW_TYPES), width),
+        "offset": torch.zeros(len(GRAM_NAMES)),
+        "projection": torch.eye(len(GRAM_NAMES))[:, :width],
+    }
+
+
+def test_identification_is_one_for_predictions_matching_their_own_views_and_zero_for_alike_ones() -> (
+    None
+):
+    held = text_regression.HeldOut(
         torch.arange(3),
-        torch.zeros(3, len(GRAM_NAMES)),
+        torch.eye(len(GRAM_NAMES))[:3],
         torch.arange(3),
         torch.zeros(3, dtype=torch.long),
-        directions,
+        torch.eye(3),
     )
-    bases = {
-        "components": torch.eye(3).expand(len(VIEW_TYPES), -1, -1),
-        "centre": torch.zeros(len(VIEW_TYPES), 3),
+    present = torch.ones(1, len(GRAM_NAMES))
+
+    separate = text_regression.identification(
+        lambda condition, present, kind: condition, held, identity_bases(3), present
+    )
+    same = text_regression.identification(
+        lambda condition, present, kind: torch.ones_like(condition),
+        held,
+        identity_bases(3),
+        present,
+    )
+
+    assert separate[0].item() == 1
+    assert same[0].item() == 0
+    assert torch.isnan(separate[1:]).all()
+
+
+def test_a_prediction_is_the_document_its_scaled_coefficients_stand_for() -> None:
+    generator = torch.Generator().manual_seed(0)
+    kinds = len(VIEW_TYPES)
+    bases = identity_bases(3) | {
+        "components": torch.randn(kinds, 3, 12, generator=generator),
+        "centre": torch.randn(kinds, 12, generator=generator),
+        "scale": torch.rand(kinds, 3, generator=generator) + 0.5,
     }
-    own = directions[:, None, None].expand(-1, len(VIEW_TYPES), 2, -1)
-    alike = torch.ones(3, len(VIEW_TYPES), 2, 3)
-
-    separate = text_flow.gains(text_flow.cloud_scores(own, held, bases), held)
-    same = text_flow.gains(text_flow.cloud_scores(alike, held, bases), held)
-
-    assert separate[0, 0].item() == pytest.approx(math.log(3))
-    assert same[0, 0].item() == pytest.approx(0.0, abs=1e-4)
-    assert torch.isnan(separate[0, 1:]).all()
-
-
-def test_clouds_hold_each_galaxy_s_points_by_view_type_in_their_type_s_scale(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    for name, value in {"TEXT_POINTS": 3, "TEXT_RANK": 2, "EULER": 4}.items():
-        monkeypatch.setattr(text_flow, name, value)
-
-    def network(x, t, condition, present, kind):
-        return torch.stack([1000 * condition[:, 0], 1000 * kind.float()], dim=-1)
-
-    conditions = torch.arange(4.0)[:, None].expand(-1, 5)
+    rows = torch.randn(4, len(GRAM_NAMES), generator=generator)
     present = torch.ones(4, len(GRAM_NAMES))
-    scale = torch.arange(1.0, len(VIEW_TYPES) + 1)[:, None].expand(-1, 2)
 
-    start = torch.randn(4, len(VIEW_TYPES), 3, 2)
+    def network(condition, present, kind):
+        return condition + kind[:, None]
 
-    found = text_flow.clouds(network, start, conditions, present, scale)
+    found = text_regression.predicted(network, bases, rows, present)
 
-    galaxy, kind = (found / scale[:, None] / 1000).round().unbind(-1)
-    assert found.shape == (4, len(VIEW_TYPES), 3, 2)
-    assert (galaxy == torch.arange(4.0)[:, None, None]).all()
-    assert (kind == torch.arange(float(len(VIEW_TYPES)))[:, None]).all()
+    conditions = text_regression.condition(rows, present, bases)
+    for kind in (0, kinds - 1):
+        points = (conditions + kind) * bases["scale"][kind]
+        expected = points @ bases["components"][kind] + bases["centre"][kind]
+        torch.testing.assert_close(found[kind], expected)
 
 
 def test_a_masked_block_does_not_reach_the_condition() -> None:
@@ -91,8 +100,8 @@ def test_a_masked_block_does_not_reach_the_condition() -> None:
     changed[:, 6:9] = torch.randn(4, 3, generator=generator)
 
     torch.testing.assert_close(
-        text_flow.condition(rows, present, bases),
-        text_flow.condition(changed, present, bases),
+        text_regression.condition(rows, present, bases),
+        text_regression.condition(changed, present, bases),
     )
 
 
@@ -103,11 +112,14 @@ def test_a_view_type_too_rare_for_its_own_basis_gets_its_mode_s() -> None:
     view_types = torch.repeat_interleave(torch.arange(len(VIEW_TYPES)), counts)
     embeddings = torch.randn(len(view_types), GEMMA_DIM)
 
-    bases = text_flow.fitted_bases(view_types, embeddings)
+    bases = text_regression.fitted_bases(view_types, embeddings)
 
     components = bases["components"][rare]
     torch.testing.assert_close(
-        components @ components.T, torch.eye(text_flow.TEXT_RANK), atol=1e-4, rtol=0
+        components @ components.T,
+        torch.eye(text_regression.TEXT_RANK),
+        atol=1e-4,
+        rtol=0,
     )
     torch.testing.assert_close(
         bases["mean"][rare], embeddings[view_types == rare].mean(dim=0)
@@ -119,25 +131,11 @@ def test_training_draws_every_view_type_a_galaxy_has_equally_often(
 ) -> None:
     drawn = text_views.weights(np.arange(galaxy_count()))
 
-    found = drawn * text_flow.training_weights(torch.arange(len(VIEW_TYPES))).numpy()
+    found = (
+        drawn * text_regression.training_weights(torch.arange(len(VIEW_TYPES))).numpy()
+    )
 
     np.testing.assert_allclose(found[drawn > 0], 1)
-
-
-def test_the_log_density_of_a_linear_flow_follows_its_divergence() -> None:
-    network = text_flow.Flow(text_flow.TEXT_CONDITION, 1)
-    rate = 0.3
-    network.velocity = lambda x, context: rate * x
-    network.context = lambda t, *conditions: torch.zeros(len(t), 1)
-    points = torch.randn(5, text_flow.TEXT_CONDITION)
-
-    found = text_flow.log_density(network, points)
-
-    start = points * (1 - rate / text_flow.EULER) ** text_flow.EULER
-    normal = -0.5 * (start**2).sum(-1) - 0.5 * text_flow.TEXT_CONDITION * math.log(
-        2 * math.pi
-    )
-    torch.testing.assert_close(found, normal - rate * text_flow.TEXT_CONDITION)
 
 
 def written_views(
@@ -162,7 +160,7 @@ def written_views(
     )
 
 
-def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
+def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_regression(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     rng = np.random.default_rng(0)
@@ -200,23 +198,21 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
             if not path.exists():
                 written_views(path, training, rng, index)
 
-    measured = iter([0.1, 0.5, 0.505, 0.4, 0.45])
+    measured = iter([0.1, 0.5, 0.5005, 0.4, 0.45])
 
     snapshots = []
 
     def identification(network, held, bases, present):
         snapshots.append(deepcopy(network.state_dict()))
-        kappas = len(text_flow.KAPPAS)
-        found = torch.full((kappas, len(VIEW_TYPES)), next(measured, 0.0))
-        return found + torch.arange(kappas)[:, None] / 1000
+        return torch.full((len(VIEW_TYPES),), next(measured, 0.0))
 
-    for module in (text_flow, text_views, embeddings):
+    for module in (text_regression, text_views, embeddings):
         monkeypatch.setattr(
             module, "artifact", lambda role: tmp_path / f"{role}.{ARTIFACTS[role]}"
         )
     monkeypatch.setattr(text_views, "training", lambda: training)
     monkeypatch.setattr(text_views, "generate_text_views", generate_text_views)
-    monkeypatch.setattr(text_flow, "identification", identification)
+    monkeypatch.setattr(text_regression, "identification", identification)
     for name, value in {
         "TEXT_RANK": 3,
         "TEXT_CONDITION": 4,
@@ -225,44 +221,39 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_flow(
         "CHUNK": len(VIEW_TYPES),
         "STEPS": 2,
         "PATIENCE": 2,
-        "TEXT_POINTS": 2,
-        "EULER": 2,
-        "KAPPAS": (1.0, 2.0, 3.0),
         "CAP": 10 * 2 * len(VIEW_TYPES),
         "VIEWS_PER_PART": 2 * len(VIEW_TYPES),
         "PARTS_PER_ROUND": 2,
     }.items():
-        monkeypatch.setattr(text_flow, name, value)
+        monkeypatch.setattr(text_regression, name, value)
 
-    text_flow.train_text_flow()
+    text_regression.train_text_regression()
 
     printed = capsys.readouterr().out
     report = json.loads(printed[printed.find("{\n") :])
     stored = np.load(tmp_path / "text_bases.npz")
-    flow = torch.load(tmp_path / "text_flow.pt")
+    regression = torch.load(tmp_path / "text_regression.pt")
     assert generated == [2, 4]
     assert report["views"] == 2 * 2 * len(VIEW_TYPES)
-    assert stored["kappa"] == 3.0
     assert stored["components"].shape == (len(VIEW_TYPES), 3, GEMMA_DIM)
     assert stored["projection"].shape == (len(GRAM_NAMES) * 2, 4)
-    assert all(torch.equal(flow[key], snapshots[1][key]) for key in flow)
-    assert not all(torch.equal(flow[key], snapshots[3][key]) for key in flow)
+    assert all(torch.equal(regression[key], snapshots[1][key]) for key in regression)
+    assert not all(
+        torch.equal(regression[key], snapshots[3][key]) for key in regression
+    )
 
 
-def test_text_vectors_average_each_galaxy_s_draws_from_its_own_seeds(
+def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for name, value in {
         "TEXT_RANK": 3,
         "TEXT_CONDITION": 4,
-        "TEXT_POINTS": 2,
         "HIDDEN": 8,
-        "EULER": 2,
-        "CLOUD_GALAXIES": 2,
-        "DRAWS": 2,
+        "GALAXIES": 2,
     }.items():
-        monkeypatch.setattr(text_flow, name, value)
-    for module in (text_flow, embeddings):
+        monkeypatch.setattr(text_regression, name, value)
+    for module in (text_regression, embeddings):
         monkeypatch.setattr(
             module, "artifact", lambda role: tmp_path / f"{role}.{ARTIFACTS[role]}"
         )
@@ -277,23 +268,23 @@ def test_text_vectors_average_each_galaxy_s_draws_from_its_own_seeds(
         offset=rng.standard_normal(width).astype(np.float32),
         projection=rng.standard_normal((width, 4)).astype(np.float32),
     )
-    torch.save(text_flow.Velocity().state_dict(), tmp_path / "text_flow.pt")
+    torch.save(
+        text_regression.Regression().state_dict(), tmp_path / "text_regression.pt"
+    )
     np.save(
         tmp_path / "joint_embedding.npy",
         rng.standard_normal((5, width)).astype(np.float32),
     )
     queries = rng.standard_normal((4, GEMMA_DIM)).astype(np.float32)
-    monkeypatch.setattr(text_flow, "generic_queries", lambda: ["a"] * 4)
-    monkeypatch.setattr(text_flow, "embed_queries", lambda _: queries)
+    monkeypatch.setattr(text_regression, "generic_queries", lambda: ["a"] * 4)
+    monkeypatch.setattr(text_regression, "embed_queries", lambda _: queries)
 
-    text_flow.generate_text_vectors()
+    text_regression.generate_text_vectors()
 
     stored = np.load(tmp_path / "text_vectors.npy")
-    network, bases = text_flow.stored_flow()
+    network, bases = text_regression.stored_regression()
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    alone = text_flow.drawn_vectors(
-        network, bases, joint, torch.tensor([3]), range(SEED, SEED + 2)
-    )
+    alone = text_regression.predicted_vectors(network, bases, joint, torch.tensor([3]))
     assert stored.shape == (5, len(MODES), GEMMA_DIM)
     np.testing.assert_allclose(stored[3], alone[0], rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(
@@ -301,25 +292,14 @@ def test_text_vectors_average_each_galaxy_s_draws_from_its_own_seeds(
     )
 
 
-def test_a_galaxy_s_mode_vectors_sum_to_the_mean_of_its_cloud_s_documents() -> None:
-    generator = torch.Generator().manual_seed(0)
-    kinds = len(VIEW_TYPES)
-    components = torch.linalg.qr(torch.randn(kinds, 12, 4, generator=generator)).Q
-    bases = {
-        "components": components.transpose(1, 2),
-        "centre": torch.randn(kinds, 12, generator=generator) / 4,
-    }
-    clouds = torch.randn(kinds, 2, 5, 4, generator=generator)
-
-    found = text_flow.mode_vectors(clouds, bases).numpy()
-
-    documents = bases["centre"][:, None, None] + torch.einsum(
-        "kgpr,krd->kgpd", clouds, bases["components"]
+def test_a_galaxy_s_mode_vectors_sum_to_the_mean_of_its_predictions() -> None:
+    predictions = torch.randn(
+        len(VIEW_TYPES), 2, 12, generator=torch.Generator().manual_seed(0)
     )
-    expected = torch.nn.functional.normalize(documents, dim=-1).mean(dim=(0, 2))
-    np.testing.assert_allclose(
-        found.sum(axis=1), expected.numpy(), rtol=1e-5, atol=1e-6
-    )
+
+    found = text_regression.mode_vectors(predictions)
+
+    torch.testing.assert_close(found.sum(dim=1), predictions.mean(dim=0))
 
 
 def test_mode_weights_give_each_mode_its_shapley_value() -> None:
@@ -346,27 +326,6 @@ def test_mode_weights_give_each_mode_its_shapley_value() -> None:
             )
         )
 
-    found = contributions @ text_flow.mode_weights()
+    found = contributions @ text_regression.mode_weights()
 
     np.testing.assert_allclose(found.numpy(), expected, rtol=1e-5)
-
-
-def test_a_point_s_cosine_from_its_coefficients_is_that_of_the_document_it_stands_for() -> (
-    None
-):
-    generator = torch.Generator().manual_seed(0)
-    components = torch.linalg.qr(torch.randn(12, 4, generator=generator)).Q.T
-    centre = torch.randn(12, generator=generator) / 4
-    points = torch.randn(3, 5, 4, generator=generator)
-    directions = torch.nn.functional.normalize(
-        torch.randn(7, 12, generator=generator), dim=-1
-    )
-    lengths = text_flow.point_lengths(points, components, centre)
-
-    found = text_flow.cosines(points, lengths, directions, components, centre)
-
-    documents = centre + points @ components
-    expected = torch.einsum(
-        "gpd,vd->vgp", torch.nn.functional.normalize(documents, dim=-1), directions
-    )
-    torch.testing.assert_close(found, expected)
