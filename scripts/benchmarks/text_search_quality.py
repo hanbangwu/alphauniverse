@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
+from itertools import combinations
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -31,7 +32,6 @@ from app.text_search import (
     query_directions,
     text_vectors,
 )
-from app.text_views import training
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
@@ -376,52 +376,43 @@ def top(score: np.ndarray, count: int = TOP) -> np.ndarray:
 
 
 def image_percentile(
-    score: np.ndarray, reference: np.ndarray, imaged: np.ndarray, count: int
+    score: np.ndarray, percentiles: np.ndarray, imaged: np.ndarray, count: int
 ) -> float:
-    percentiles = rankdata(reference[imaged]) / len(imaged)
     return round(float(percentiles[top(score[imaged], count)].mean()), 4)
+
+
+def shared(first: tuple[str, ...], second: tuple[str, ...], pages: dict) -> float:
+    found = [
+        len(np.intersect1d(pages[a], pages[b])) / PAGE for a, b in zip(first, second)
+    ]
+    return round(float(np.mean(found)), 4)
 
 
 def morphology_rows(
     by_text: dict[str, np.ndarray],
-    reference: dict[str, np.ndarray],
+    percentiles: dict[str, np.ndarray],
     imaged: np.ndarray,
     chosen: dict[str, tuple[str, ...]],
-    described: dict[str, np.ndarray],
-    trained: np.ndarray,
+    magnitude: np.ndarray,
 ) -> dict[str, Any]:
     pages = {
         text: top(by_text[text], PAGE) for found in chosen.values() for text in found
     }
     overlaps = {
-        f"{first}|{second}": round(
-            float(
-                np.mean(
-                    [
-                        len(np.intersect1d(pages[one], pages[other])) / PAGE
-                        for one, other in zip(chosen[first], chosen[second])
-                    ]
-                )
-            ),
-            4,
-        )
-        for index, first in enumerate(chosen)
-        for second in list(chosen)[index + 1 :]
+        f"{first}|{second}": shared(chosen[first], chosen[second], pages)
+        for first, second in combinations(chosen, 2)
     }
     return {
         f"mean_overlap@{PAGE}": round(float(np.mean(list(overlaps.values()))), 4),
         f"overlap@{PAGE}": overlaps,
         "phrasings": {
             text: {
-                f"top{PAGE}": page.tolist(),
                 f"image_percentile@{PAGE}": image_percentile(
-                    by_text[text], reference[text], imaged, PAGE
+                    by_text[text], percentiles[text], imaged, PAGE
                 ),
-                f"trained@{PAGE}": int(np.isin(page, trained).sum()),
-            }
-            | {
-                f"median_{name}@{PAGE}": round(float(np.nanmedian(values[page])), 4)
-                for name, values in described.items()
+                f"median_r_magnitude@{PAGE}": round(
+                    float(np.nanmedian(magnitude[page])), 4
+                ),
             }
             for text, page in pages.items()
         },
@@ -457,7 +448,7 @@ def pair_rows(
     labels: dict[str, np.ndarray],
     estimated: dict[str, np.ndarray],
     held: np.ndarray,
-    reference: dict[str, np.ndarray],
+    percentiles: dict[str, np.ndarray],
     imaged: np.ndarray,
 ) -> dict[str, dict[str, dict[str, Any]]]:
     ranked = partial(precision, labels, held)
@@ -500,7 +491,7 @@ def pair_rows(
                 ),
                 f"page_measured@{TOP}": round(float(labels["known"][shown].mean()), 4),
                 f"image_percentile@{TOP}": image_percentile(
-                    found[side], reference[text], imaged, TOP
+                    found[side], percentiles[text], imaged, TOP
                 ),
             }
             rows[side][text] = row
@@ -547,14 +538,11 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         galaxy, _, gemma = pairs(modality)
         views[modality] = galaxy, centred(gemma.cpu().numpy())
     imaged = np.intersect1d(held, views["image"][0])
-    reference = dict(
-        zip(
-            texts,
-            view_scorer(views, {"images": ("image",)})(queries["plain"], slice(None))[
-                "images"
-            ],
-        )
-    )
+    reference = view_scorer(views, {"images": ("image",)})(queries["plain"], imaged)
+    percentiles = {
+        text: rankdata(row) / len(imaged)
+        for text, row in zip(texts, reference["images"])
+    }
 
     properties = pq.read_table(artifact("properties"))
     measured = {
@@ -570,11 +558,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         for name, pair in PAIRS.items()
     }
     labels = {name: sides(values) for name, values in measured.items()}
-    described = {
-        name: properties.column(f"{name}_measured").to_numpy(zero_copy_only=False)
-        for name in ("r_magnitude", "radius")
-    }
-    trained = training()
+    magnitude = properties.column("r_magnitude_measured").to_numpy(zero_copy_only=False)
     estimated = {name: page_sides(measured[name], predicted[name]) for name in PAIRS}
     phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
     cross_pairs: dict[str, dict[str, Any]] = {}
@@ -588,7 +572,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
             method = f"{family}, {name}"
             by_text = dict(zip(texts, scores))
             morphology[method] = morphology_rows(
-                by_text, reference, imaged, shapes, described, trained
+                by_text, percentiles, imaged, shapes, magnitude
             )
             cross_pairs[method] = {
                 target: {
@@ -616,7 +600,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
                     labels[pair],
                     estimated[pair],
                     held,
-                    reference,
+                    percentiles,
                     imaged,
                 )
     return {

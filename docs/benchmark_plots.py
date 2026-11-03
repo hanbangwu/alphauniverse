@@ -167,7 +167,7 @@ def text_search_quality():
             ("method", "labels", "phrasings", "phrasing", "separation"),
             height=400,
         ),
-        *([table(shapes, max(shapes, key=len), height=400)] if shapes else []),
+        *([table(shapes, shapes[0], height=400)] if shapes else []),
         **WIDTH,
     )
 

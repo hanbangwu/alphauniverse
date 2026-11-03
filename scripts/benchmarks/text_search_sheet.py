@@ -9,7 +9,6 @@ from typing import Any
 import modal
 import numpy as np
 import pyarrow.parquet as pq
-from scipy.stats import rankdata
 
 from app.config import DATASET_REVISION, artifact
 from app.text_search import embed_queries, photos, query_directions, text_vectors
@@ -55,7 +54,9 @@ def pages(scores: dict[str, np.ndarray]) -> dict[str, dict[str, Any]]:
     return {
         query: {
             "top": np.argsort(-score)[:PAGE].tolist(),
-            "shade": encoded((rankdata(score) / len(score) * 255).astype(np.uint8)),
+            "shade": encoded(
+                (np.argsort(np.argsort(score)) * 256 // len(score)).astype(np.uint8)
+            ),
         }
         for query, score in scores.items()
     }
@@ -75,9 +76,9 @@ def thumbnail(picture) -> str:
     return base64.b64encode(buffer.getvalue()).decode()
 
 
-def described(galaxies: list[int]) -> dict[str, Any]:
-    chosen = np.asarray(sorted(set(galaxies)))
-    pictures = [picture for batch in photos(chosen) for picture in batch]
+def described(galaxies: set[int]) -> dict[str, Any]:
+    chosen = np.asarray(sorted(galaxies))
+    pictures = [thumbnail(picture) for batch in photos(chosen) for picture in batch]
     magnitude = pq.read_table(artifact("properties"), columns=["r_magnitude_measured"])
     magnitude = magnitude.column(0).to_numpy(zero_copy_only=False)[chosen]
     points = pq.read_table(artifact("mean_points"), columns=["x", "y"])
@@ -89,7 +90,7 @@ def described(galaxies: list[int]) -> dict[str, Any]:
         "map": encoded(((coordinates - low) / (high - low) * 65535).astype(np.uint16)),
         "galaxies": {
             str(galaxy): {
-                "image": thumbnail(picture),
+                "image": picture,
                 "r": None if np.isnan(r) else round(float(r), 1),
                 "trained": bool(flag),
             }
@@ -106,10 +107,10 @@ def described(galaxies: list[int]) -> dict[str, Any]:
     timeout=30 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def sheet(earlier: list[int]) -> dict[str, Any]:
+def sheet(known: list[int]) -> dict[str, Any]:
     found = production_pages()
-    shown = [galaxy for page in found.values() for galaxy in page["top"]]
-    return {"pages": found, **described(shown + earlier)}
+    shown = {galaxy for page in found.values() for galaxy in page["top"]}
+    return {"pages": found, **described(shown - set(known))}
 
 
 def page(versions: dict[str, dict[str, Any]], shared: dict[str, Any]) -> str:
@@ -150,17 +151,19 @@ const queries = [...new Set(Object.values(data.versions).flatMap(found => Object
 for (const query of queries) select.add(new Option(query, query));
 function draw(canvas, shade, top) {{
   const size = 300, context = canvas.getContext("2d");
+  const x = galaxy => map[2 * galaxy] / 65535 * (size - 3);
+  const y = galaxy => (1 - map[2 * galaxy + 1] / 65535) * (size - 3);
   canvas.width = canvas.height = size;
   const order = [...shade.keys()].sort((a, b) => shade[a] - shade[b]);
   for (const galaxy of order) {{
     const level = shade[galaxy] / 255;
     context.fillStyle = `rgb(${{Math.round(220 - 200 * level)}}, ${{Math.round(228 - 150 * level)}}, ${{Math.round(240 - 70 * level)}})`;
-    context.fillRect(map[2 * galaxy] / 65535 * (size - 3), (1 - map[2 * galaxy + 1] / 65535) * (size - 3), 3, 3);
+    context.fillRect(x(galaxy), y(galaxy), 3, 3);
   }}
-  context.fillStyle = "#c2410c";
+  context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--mark");
   for (const galaxy of top) {{
     context.beginPath();
-    context.arc(map[2 * galaxy] / 65535 * (size - 3) + 1.5, (1 - map[2 * galaxy + 1] / 65535) * (size - 3) + 1.5, 5, 0, 2 * Math.PI);
+    context.arc(x(galaxy) + 1.5, y(galaxy) + 1.5, 5, 0, 2 * Math.PI);
     context.fill();
   }}
 }}
@@ -189,16 +192,14 @@ show();
 
 @app.local_entrypoint()
 def main(out: str = "text_search_sheet.html", earlier: str = "") -> None:
-    versions = json.loads(Path(earlier).read_text())["versions"] if earlier else {}
-    shown = [
-        galaxy
-        for found in versions.values()
-        for entry in found.values()
-        for galaxy in entry["top"]
-    ]
-    found = sheet.remote(shown)
+    stored = json.loads(Path(earlier).read_text()) if earlier else {}
+    versions, galaxies = stored.get("versions", {}), stored.get("galaxies", {})
+    found = sheet.remote([int(galaxy) for galaxy in galaxies])
     name = f"{git('describe', '--always', '--dirty')}, {DATASET_REVISION[:7]}, {datetime.now(UTC):%Y-%m-%d}"
-    versions[name] = found.pop("pages")
-    Path(out).with_suffix(".json").write_text(json.dumps({"versions": versions}))
-    Path(out).write_text(page(versions, found))
+    versions[name] = found["pages"]
+    galaxies |= found["galaxies"]
+    Path(out).with_suffix(".json").write_text(
+        json.dumps({"versions": versions, "galaxies": galaxies})
+    )
+    Path(out).write_text(page(versions, {"map": found["map"], "galaxies": galaxies}))
     print(f"wrote {out}")
