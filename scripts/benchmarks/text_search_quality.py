@@ -314,6 +314,12 @@ def sides(values: np.ndarray) -> dict[str, np.ndarray]:
     return {"high": values > high, "low": values < low, "known": np.isfinite(values)}
 
 
+def page_sides(measured: np.ndarray, predicted: np.ndarray) -> dict[str, np.ndarray]:
+    low, high = np.nanquantile(measured, [1 / 3, 2 / 3])
+    values = np.where(np.isfinite(measured), measured, predicted)
+    return {"high": values > high, "low": values < low}
+
+
 def edited(first: np.ndarray, second: np.ndarray, steps: np.ndarray) -> np.ndarray:
     middle = (first + second) / 2
     scaled = steps * np.linalg.norm(first - second) / 2
@@ -351,9 +357,12 @@ def pair_rows(
     random_scores: np.ndarray,
     phrasings: tuple[tuple[str, str], ...],
     labels: dict[str, np.ndarray],
+    estimated: dict[str, np.ndarray],
     held: np.ndarray,
 ) -> dict[str, dict[str, dict[str, Any]]]:
     ranked = partial(precision, labels, held)
+    known = labels["known"][held]
+    rates = {side: labels[side][held][known].mean() for side in SIDES}
     nulls = {
         side: np.quantile([ranked(side, row) for row in random_scores], 0.95)
         for side in SIDES
@@ -373,16 +382,23 @@ def pair_rows(
                 0.95,
             )
             page = top(np.where(labels["known"], found[side], -np.inf))
+            shown = top(found[side])
             row = {
                 "average_precision": round(own, 4),
+                "base_rate": round(float(rates[side]), 4),
                 "specificity": round(specificity, 4),
                 "edit_null": round(float(edit_null), 4),
                 "random_null": round(float(nulls[side]), 4),
-                "passes": bool(specificity > edit_null),
+                "passes": bool(specificity > edit_null and own > rates[side]),
                 f"precision@{TOP}": round(float(labels[side][page].mean()), 4),
                 f"opposite_precision@{TOP}": round(
                     float(labels[opposite][page].mean()), 4
                 ),
+                f"page_precision@{TOP}": round(float(estimated[side][shown].mean()), 4),
+                f"page_opposite_precision@{TOP}": round(
+                    float(estimated[opposite][shown].mean()), 4
+                ),
+                f"page_measured@{TOP}": round(float(labels["known"][shown].mean()), 4),
             }
             rows[side][text] = row
     return rows
@@ -425,13 +441,21 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
         galaxy, _, gemma = pairs(modality)
         views[modality] = galaxy, centred(gemma.cpu().numpy())
 
-    properties = pq.read_table(
-        artifact("properties"), columns=[pair.label for pair in PAIRS.values()]
-    )
-    labels = {
-        name: sides(properties.column(pair.label).to_numpy(zero_copy_only=False))
+    properties = pq.read_table(artifact("properties"))
+    measured = {
+        name: properties.column(pair.label).to_numpy(zero_copy_only=False)
         for name, pair in PAIRS.items()
     }
+    predicted = {
+        name: properties.column(pair.label.replace("_measured", "_predicted")).to_numpy(
+            zero_copy_only=False
+        )
+        if pair.label.endswith("_measured")
+        else measured[name]
+        for name, pair in PAIRS.items()
+    }
+    labels = {name: sides(values) for name, values in measured.items()}
+    estimated = {name: page_sides(measured[name], predicted[name]) for name in PAIRS}
     phrasings: dict[str, dict[str, Any]] = {name: {} for name in PAIRS}
     cross_pairs: dict[str, dict[str, Any]] = {}
     for family, scorer, which in families(views):
@@ -466,6 +490,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
                     random_scores,
                     found,
                     labels[pair],
+                    estimated[pair],
                     held,
                 )
     return {
