@@ -8,6 +8,7 @@ import numpy as np
 
 from app import pql
 from app.config import DATASET_REVISION, GRID, N_IMAGE_TOKENS, SPECTRUM_SURVEYS
+from app.search import FIRST_LS_TABLE_VALUE
 from modal_app import (
     CACHE_PATH,
     SERVING_CPU,
@@ -33,7 +34,7 @@ image = serving_image.add_local_python_source("modal_app")
 REPORT = Path("docs/benchmarks/shape_performance.json")
 SIZES = (2, 3, 8, 30)
 MIXED = 3
-TABLE_VALUES = (0, 2, 6, 15)
+TABLE_VALUES = tuple(range(FIRST_LS_TABLE_VALUE, FIRST_LS_TABLE_VALUE + 4))
 MATCHES = 32
 CELLS = np.stack(np.divmod(np.arange(N_IMAGE_TOKENS), GRID), axis=-1)
 
@@ -120,10 +121,8 @@ Selected = tuple[int, dict[str, np.ndarray], list[str]]
 
 def selections(queries: int) -> dict[str, list[Selected]]:
     rng = np.random.default_rng(0)
-    imaged = np.flatnonzero(pql.observed(pql.OBSERVED_IN["ls_image"]))
-    spectra = np.flatnonzero(
-        with_spectrum() & pql.observed(pql.OBSERVED_IN["ls_image"])
-    )
+    imaged = np.arange(pql.predictions().num_rows)
+    spectra = np.flatnonzero(with_spectrum())
     found: dict[str, list[Selected]] = {}
     for count in SIZES:
         for layout, cells in (("compact", compact_cells), ("spread", spread_cells)):
