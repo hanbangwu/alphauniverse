@@ -165,7 +165,7 @@ def written_views(
     )
 
 
-def test_training_uses_every_part_for_a_fixed_number_of_steps_and_keeps_the_average(
+def test_training_uses_every_part_for_a_fixed_number_of_steps(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     rng = np.random.default_rng(0)
@@ -199,11 +199,11 @@ def test_training_uses_every_part_for_a_fixed_number_of_steps_and_keeps_the_aver
         for index in range(parts):
             written_views(folder / f"part-{index:05d}.parquet", training, rng, index)
 
-    steps = []
+    calls = []
     stepped = text_regression.stepped
 
     def counted(*args):
-        steps.append(text_regression.STEPS)
+        calls.append(None)
         return stepped(*args)
 
     for module in (text_regression, text_views, embeddings):
@@ -232,7 +232,7 @@ def test_training_uses_every_part_for_a_fixed_number_of_steps_and_keeps_the_aver
     report = json.loads(printed[printed.find("{\n") :])
     stored = np.load(tmp_path / "text_bases.npz")
     assert generated == [3]
-    assert sum(steps) == 6
+    assert len(calls) == 3
     assert report["views"] == 3 * 2 * len(VIEW_TYPES)
     assert stored["components"].shape == (len(VIEW_TYPES), 3, GEMMA_DIM)
     assert stored["projection"].shape == (len(GRAM_NAMES) * 2, 4)
@@ -249,7 +249,7 @@ def test_no_component_s_scale_falls_below_the_floor(
     found = torch.nn.functional.pad(found, (0, GEMMA_DIM - 6))
     scale = text_regression.fitted_bases(view_types, found)["scale"]
     median = scale.median(dim=1, keepdim=True).values
-    assert bool((scale >= text_regression.SCALE_FLOOR * median - 1e-6).all())
+    assert (scale >= text_regression.SCALE_FLOOR * median - 1e-6).all()
 
 
 def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(

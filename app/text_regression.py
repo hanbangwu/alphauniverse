@@ -22,10 +22,10 @@ from .config import (
     SEED,
     TEXT_CONDITION,
     TEXT_RANK,
-    TEXT_VIEW_PARTS,
     TOKEN_GRAMS,
     VIEW_COMBINATIONS,
     VIEW_TYPES,
+    VIEWS_PER_PART,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
@@ -41,6 +41,7 @@ MASKED = 0.3
 DROPPED = 0.1
 STEPS = 60
 TRAINING_STEPS = 111_000
+TEXT_VIEW_PARTS = 200
 LOGGED = 100
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-3
@@ -292,23 +293,15 @@ def train_text_regression() -> None:
 
     text_views.generate_text_views(TEXT_VIEW_PARTS)
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    parts = [views(text_views.part_path(index)) for index in range(TEXT_VIEW_PARTS)]
-    first = parts[:PARTS_PER_ROUND]
-    bases = fitted_bases(
-        torch.cat([view_type for _, view_type, _ in first]),
-        torch.cat([found for _, _, found in first]),
-    ) | whitening(joint[text_views.training()])
+    owners, kinds, found = views(artifact("text_views"))
+    first = PARTS_PER_ROUND * VIEWS_PER_PART
+    bases = fitted_bases(kinds[:first], found[:first]) | whitening(
+        joint[text_views.training()]
+    )
     held = evaluated(joint, bases)
     everything = torch.ones(1, len(GRAM_NAMES), device=device())
-    owners = torch.cat([galaxy for galaxy, _, _ in parts])
-    kinds = torch.cat([view_type for _, view_type, _ in parts])
-    targets = torch.cat(
-        [
-            coefficients(bases, view_type, residuals(bases["mean"], view_type, found))
-            for _, view_type, found in parts
-        ]
-    )
-    del parts, first
+    targets = coefficients(bases, kinds, residuals(bases["mean"], kinds, found))
+    del found
     weights = training_weights(kinds)
     torch.manual_seed(SEED)
     network = Regression().to(device())
@@ -340,7 +333,6 @@ def train_text_regression() -> None:
             "masked": MASKED,
             "dropped": DROPPED,
             "scale_floor": SCALE_FLOOR,
-            "views": len(owners),
             "seed": SEED,
         },
     ) as run:
