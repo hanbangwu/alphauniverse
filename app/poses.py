@@ -36,14 +36,14 @@ def orientations(offsets: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.concatenate(turned), parameters
 
 
-def image_poses(slots: np.ndarray, step: float) -> ImagePoses:
+def image_poses(slots: np.ndarray) -> ImagePoses:
     points = np.stack(np.divmod(slots, GRID), axis=-1)
     centre = np.round(points.mean(axis=0))
     turned, turns = orientations(points - centre)
     placed = np.rint((turned + centre) * QUARTERS).astype(np.int16)
     _, first = np.unique(placed.reshape(len(placed), -1), axis=0, return_index=True)
     first.sort()
-    stride = round(step * QUARTERS)
+    stride = QUARTERS // 2
     quarters, parameters = [], []
     for pattern, turn in zip(placed[first], turns[first], strict=True):
         low = -(pattern.min(axis=0) // stride)

@@ -541,12 +541,10 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
     ]
 
 
-def pose_reference(
-    table: pa.Table, mode: str, slots: tuple[int, ...], shift: pql.Shift
-) -> np.ndarray:
+def pose_reference(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
     overlaps = cross_overlaps(table, mode, slots)
     if mode in IMAGE_MODES:
-        quarters = image_poses(np.array(slots), pql.STEPS[shift]).quarters
+        quarters = image_poses(np.array(slots)).quarters
         return interpolated_sums(overlaps, *bilinear(quarters / 4))
     found = spectrum_poses(np.array(slots))
     return interpolated_sums(overlaps, found.indices, found.weights)
@@ -575,54 +573,24 @@ def interpolated_sums(
     return np.log(np.maximum(mixed, pql.PROBABILITY_FLOOR)).sum(axis=-1)
 
 
-SLOTS_SHAPED = (275, 276, 300)
-SHAPES = [
-    ("ls_image", SLOTS_SHAPED, "cell"),
-    ("ls_image", SLOTS_SHAPED, "half"),
-    ("desi_spectrum", (40, 41, 42), "cell"),
-]
+SHAPES = [("ls_image", (275, 276, 300)), ("desi_spectrum", (40, 41, 42))]
 
 
-@pytest.mark.parametrize(("mode", "slots", "shift"), SHAPES)
+@pytest.mark.parametrize(("mode", "slots"), SHAPES)
 def test_a_same_shape_mode_keeps_each_galaxy_s_best_pose_of_the_whole_selection(
     table: pa.Table,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
     slots: tuple[int, ...],
-    shift: pql.Shift,
 ) -> None:
     monkeypatch.setattr(pql, "CHUNK", 2)
 
-    found = pql.shape_sum(GALAXY, mode, slots, shift)
+    found = pql.shape_sum(GALAXY, mode, slots)
 
-    expected = pose_reference(table, mode, slots, shift)
+    expected = pose_reference(table, mode, slots)
     np.testing.assert_allclose(found.totals, expected.max(axis=1), rtol=1e-4)
     np.testing.assert_allclose(
         np.take_along_axis(expected, found.poses[:, None], axis=1)[:, 0],
         found.totals,
         rtol=1e-4,
     )
-
-
-def test_refinement_adds_the_half_cell_neighbours_of_each_best_whole_cell_pose(
-    table: pa.Table, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(pql, "CHUNK", 2)
-
-    found = pql.shape_sum(GALAXY, "ls_image", SLOTS_SHAPED, "refined")
-
-    cell = image_poses(np.array(SLOTS_SHAPED), 1.0)
-    whole = pose_reference(table, "ls_image", SLOTS_SHAPED, "cell")
-    best = cell.quarters[whole.argmax(axis=1)] / 4
-    overlaps = cross_overlaps(table, "ls_image", SLOTS_SHAPED)
-    expected = whole.max(axis=1)
-    for galaxy, position in enumerate(best):
-        for offset in pql.NEIGHBOURS / 4:
-            moved = position + offset
-            if ((moved >= 0) & (moved <= GRID - 1)).all():
-                indices, weights = bilinear(moved[None])
-                score = interpolated_sums(overlaps[[galaxy]], indices, weights)[0, 0]
-                expected[galaxy] = max(expected[galaxy], score)
-    np.testing.assert_allclose(found.totals, expected, rtol=1e-4)
-    half = pql.shape_sum(GALAXY, "ls_image", SLOTS_SHAPED, "half").totals
-    assert (found.totals <= half + 1e-4 * np.abs(half)).all()

@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from app.config import GRID, N_SPECTRUM_TOKENS, SPECTRUM_ORIGIN, SPECTRUM_TOKEN_WIDTH
 from app.poses import image_poses, spectrum_poses, window
@@ -23,11 +22,8 @@ def exact_positions(slots: np.ndarray, parameters: np.ndarray) -> np.ndarray:
     return turned + centre + shift[:, None]
 
 
-@pytest.mark.parametrize("step", [1.0, 0.5])
-def test_every_image_pose_is_a_rigid_motion_snapped_to_quarter_cells(
-    step: float,
-) -> None:
-    found = image_poses(SLOTS, step)
+def test_every_image_pose_is_a_rigid_motion_snapped_to_quarter_cells() -> None:
+    found = image_poses(SLOTS)
 
     positions = found.quarters / 4
 
@@ -39,13 +35,13 @@ def test_every_image_pose_is_a_rigid_motion_snapped_to_quarter_cells(
     )
 
 
-def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose() -> None:
-    found = image_poses(SLOTS, 1.0)
+def test_quarter_turns_land_on_half_cells_and_the_identity_is_a_pose() -> None:
+    found = image_poses(SLOTS)
 
     quarter = np.isclose(np.mod(found.parameters[:, 1], np.pi / 2), 0)
 
     assert quarter.sum() > 8
-    assert (found.quarters[quarter] % 4 == 0).all()
+    assert (found.quarters[quarter] % 2 == 0).all()
     cells = np.stack(np.divmod(SLOTS, GRID), axis=-1) * 4
     assert (found.quarters == cells).all(axis=(1, 2)).sum() == 1
 
@@ -53,21 +49,12 @@ def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose() -> None:
 def test_image_angles_move_the_farthest_slot_at_most_half_a_cell() -> None:
     slots = np.array([275, 278, 323])
 
-    found = image_poses(slots, 1.0)
+    found = image_poses(slots)
 
     angles = np.unique(found.parameters[:, 1])
     cells = np.stack(np.divmod(slots, GRID), axis=-1)
     radius = np.linalg.norm(cells - np.round(cells.mean(axis=0)), axis=-1).max()
     assert np.diff(np.append(angles, 2 * np.pi)).max() * radius <= 0.5
-
-
-def test_half_cell_shifts_keep_every_whole_cell_pose_and_add_more() -> None:
-    cell, half = image_poses(SLOTS, 1.0), image_poses(SLOTS, 0.5)
-
-    found = {pose.tobytes() for pose in half.quarters}
-
-    assert all(pose.tobytes() in found for pose in cell.quarters)
-    assert len(half.quarters) > len(cell.quarters)
 
 
 def test_spectrum_poses_read_each_stretched_window_by_the_share_it_covers() -> None:
