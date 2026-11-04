@@ -21,7 +21,6 @@ on:
           - redshift_quality
           - probe_quality
           - neighbour_quality
-          - shape_performance
       args:
         description: Arguments for the script, such as --runs 50; empty keeps its defaults
         type: string

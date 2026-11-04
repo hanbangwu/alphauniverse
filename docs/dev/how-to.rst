@@ -103,7 +103,6 @@ Run a benchmark
    uv run --group build modal run -m scripts.benchmarks.redshift_quality
    uv run --group build modal run -m scripts.benchmarks.probe_quality
    uv run --group build modal run -m scripts.benchmarks.neighbour_quality
-   uv run modal run -m scripts.benchmarks.shape_performance                  # --queries, default 5
 
 Each writes its report to ``docs/benchmarks/<script>.json``.
 
