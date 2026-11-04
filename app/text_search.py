@@ -143,7 +143,9 @@ def text_model() -> SentenceTransformer:
 
 
 def embed_queries(texts: list[str]) -> np.ndarray:
-    return text_model().encode_query(
+    with LOADING:
+        model = text_model()
+    return model.encode_query(
         [QUERY_PREFIX.format(text) for text in texts], normalize_embeddings=True
     )
 
