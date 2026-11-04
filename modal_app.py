@@ -270,7 +270,7 @@ def generate_text_vectors() -> None:
 @app.function(
     image=build_image,
     env={"HF_HUB_OFFLINE": "1"},
-    gpu="L4",
+    gpu=["L4", "A10G", "L40S"],
     cpu=2,
     memory=(8 * 1024, 32 * 1024),
     timeout=10 * 60,
