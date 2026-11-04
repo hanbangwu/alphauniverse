@@ -237,6 +237,11 @@ In a container built like the server, ``search_performance`` times the checked-o
 
    show(search_performance())
 
+Same-shape search speed
+-----------------------
+
+In a container built like the server, ``shape_performance`` scores same-shape selections for 5 galaxies each: Legacy Survey image cells and spectrum windows, 2, 3, 8 and 30 of them, compact or spread, and two mixed selections of 3 image cells with 3 spectrum windows or with 4 catalogue values. Image selections run with each shift option: whole cells, half cells, and whole cells refined by the best pose's half-cell neighbours. For each it reports the number of poses, the times of the any-position bound, of the exact score of every galaxy and of the pruned search at 32 matches, the share of galaxies the pruned search scores exactly, the share of the exact top 32 it finds, and the share of the half-cell top 32 that the other shift options find. It has no committed report.
+
 Request speed
 -------------
 
