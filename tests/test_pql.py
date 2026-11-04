@@ -533,3 +533,44 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
         ]
         for galaxy in found.galaxies.tolist()
     ]
+
+
+def pose_reference(
+    table: pa.Table, mode: str, slots: tuple[int, ...], centred: bool
+) -> np.ndarray:
+    own = dense(table.slice(GALAXY, 1), mode, TOP_CODES)[0, list(slots)]
+    overlaps = dense(table, mode, pql.KEPT) @ own.T
+    if mode in SPECTRUM_MODES:
+        overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
+    found = pql.pose_set(mode, slots, centred)
+    each = np.arange(len(slots))[None, :, None]
+    mixed = (overlaps[:, found.indices, each] * found.weights).sum(axis=-1)
+    return np.log(np.maximum(mixed, pql.PROBABILITY_FLOOR)).sum(axis=-1)
+
+
+SHAPES = [
+    ("ls_image", (275, 276, 300), False),
+    ("ls_image", (275, 276, 300), True),
+    ("desi_spectrum", (40, 41, 42), False),
+]
+
+
+@pytest.mark.parametrize(("mode", "slots", "centred"), SHAPES)
+def test_a_same_shape_mode_keeps_each_galaxy_s_best_pose_of_the_whole_selection(
+    table: pa.Table,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    slots: tuple[int, ...],
+    centred: bool,
+) -> None:
+    monkeypatch.setattr(pql, "CHUNK", 2)
+
+    found = pql.shape_sum(GALAXY, mode, slots, centred)
+
+    expected = pose_reference(table, mode, slots, centred)
+    np.testing.assert_allclose(found.totals, expected.max(axis=1), rtol=1e-4)
+    np.testing.assert_allclose(
+        np.take_along_axis(expected, found.poses[:, None], axis=1)[:, 0],
+        found.totals,
+        rtol=1e-4,
+    )

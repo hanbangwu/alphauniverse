@@ -38,6 +38,7 @@ from .config import (
     TokenMode,
     artifact,
 )
+from .poses import Poses, image_poses, spectrum_poses
 from .search import tokens
 
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
@@ -150,6 +151,11 @@ class Results(NamedTuple):
     predicted: list[list[str]]
     maps: dict[str, np.ndarray]
     positions: dict[str, np.ndarray]
+
+
+class Shapes(NamedTuple):
+    totals: np.ndarray
+    poses: np.ndarray
 
 
 class ModeResults(NamedTuple):
@@ -474,6 +480,55 @@ def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
             lambda rows: best_log_overlaps(rows, mode, form).sum(axis=1),
             predictions().to_batches(),
         )
+
+
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def pose_set(mode: str, slots: tuple[int, ...], centred: bool) -> Poses:
+    if mode in IMAGE_MODES:
+        return image_poses(np.array(slots), centred)
+    return spectrum_poses(np.array(slots))
+
+
+def pose_totals(overlaps: np.ndarray, found: Poses) -> np.ndarray:
+    totals = np.zeros((len(overlaps), len(found.indices)))
+    for slot in range(overlaps.shape[-1]):
+        read = np.take(overlaps[..., slot], found.indices[:, slot], axis=1)
+        mixed = np.einsum("gpr,pr->gp", read, found.weights[:, slot])
+        totals += np.log(np.maximum(mixed, PROBABILITY_FLOOR, out=mixed))
+    return totals
+
+
+def best_poses(
+    rows: pa.RecordBatch, mode: str, form: np.ndarray, found: Poses
+) -> Shapes:
+    best = Shapes(np.empty(rows.num_rows), np.empty(rows.num_rows, np.int64))
+    for chunk, overlaps in cross_overlaps(rows, mode, form):
+        totals = pose_totals(overlaps, found)
+        best.poses[chunk] = totals.argmax(axis=1)
+        best.totals[chunk] = totals.max(axis=1)
+    return best
+
+
+def shaped(
+    galaxy: int,
+    mode: str,
+    slots: tuple[int, ...],
+    centred: bool,
+    batches: list[pa.RecordBatch],
+) -> Shapes:
+    form = query_forms(row(galaxy), {mode: np.array(slots)})[mode]
+    compute = partial(
+        best_poses, mode=mode, form=form, found=pose_set(mode, slots, centred)
+    )
+    with ThreadPoolExecutor(THREADS) as pool:
+        parts = list(pool.map(compute, batches))
+    return Shapes(*(np.concatenate(part) for part in zip(*parts, strict=True)))
+
+
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...], centred: bool) -> Shapes:
+    with BUILDING:
+        return shaped(galaxy, mode, slots, centred, predictions().to_batches())
 
 
 def distributions(mode: str, form: np.ndarray) -> np.ndarray:
