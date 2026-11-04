@@ -16,7 +16,9 @@ from app.config import (
     CROP_PIXELS,
     DESI,
     FLAG_SURVEYS,
+    GEMMA_DIM,
     LS,
+    MODES,
     N_IMAGE_TOKENS,
     N_MORPHOLOGIES,
     N_SPECTRUM_TOKENS,
@@ -499,7 +501,28 @@ def test_galaxy_past_the_end_is_rejected(
 
 
 @pytest.mark.parametrize(
-    "params", [{"text": ""}, {"text": "x" * 501}, {"text": "a", "matches": 0}]
+    "params",
+    [
+        {"text": ""},
+        {"text": "x" * 501},
+        {"text": "a", "matches": 0},
+    ],
 )
 def test_text_search_rejects_invalid_queries(client: TestClient, params: dict) -> None:
     assert client.get("/search/text", params=params).status_code == 422
+
+
+def test_text_search_returns_each_match_with_its_contribution_from_every_mode(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    query = np.random.default_rng(0).standard_normal((1, GEMMA_DIM)).astype(np.float32)
+    monkeypatch.setattr("app.text_search.embed_queries", lambda _: query)
+
+    response = client.get("/search/text", params={"text": "a galaxy", "matches": 3})
+
+    assert response.status_code == 200
+    found = response.json()
+    assert len(found["galaxies"]) == len(set(found["galaxies"])) == 3
+    assert len(found["scores"]) == 3
+    assert set(found["contributions"]) == set(MODES)
+    assert all(len(values) == 3 for values in found["contributions"].values())

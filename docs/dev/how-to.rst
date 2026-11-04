@@ -6,15 +6,15 @@ Every command runs from the repository root and needs `uv <https://docs.astral.s
 Run the site locally
 --------------------
 
-Serve the API from a small synthetic artifact tree in the production schemas, then the frontend, which calls ``http://127.0.0.1:8000``:
+Serve the API from a small synthetic artifact tree and dataset in the production schemas, then the frontend, which calls ``http://127.0.0.1:8000``:
 
 .. code-block:: sh
 
    uv run python -m scripts.fixture
-   ALPHAUNIVERSE_CACHE=.cache/fixture uv run fastapi dev app/main.py
+   uv run fastapi dev app/main.py
    cd frontend && bun install && bun run dev
 
-The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Images, spectra and the catalogue table read the Hugging Face dataset itself, which the first such request downloads (24.33 GB at the pinned revision); with ``HF_HUB_OFFLINE=1`` they fail unless it is cached. The first text search downloads EmbeddingGemma the same way.
+The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
 
 Build the dataset and the artifacts
 -----------------------------------
@@ -41,9 +41,9 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_maps
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
-   uv run modal run modal_app.py::generate_alignment
-   uv run modal run modal_app.py::generate_aion_gemma_space
-   uv run modal run modal_app.py::generate_template_gemma
+   uv run modal run modal_app.py::generate_text_views --parts 10
+   uv run modal run modal_app.py::train_text_regression
+   uv run modal run modal_app.py::generate_text_vectors
 
 A failed job leaves its artifacts incomplete; rerun it.
 
@@ -93,7 +93,8 @@ Run a benchmark
    uv run modal run -m scripts.benchmarks.search_quality                     # --sample, default 1000
    uv run modal run -m scripts.benchmarks.backend_performance                # --runs, default 30
    uv run modal run -m scripts.benchmarks.projection_quality
-   uv run modal run -m scripts.benchmarks.text_search_quality
+   uv run modal run -m scripts.benchmarks.text_search_quality                # --half, default development, or sealed
+   uv run modal run -m scripts.benchmarks.text_search_sheet                  # --out, default text_search_sheet.html; --earlier, an earlier sheet's .json
    uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --queries 200, --modes every mode
    uv run modal run -m scripts.benchmarks.token_embedding_quality
    uv run --group build modal run -m scripts.benchmarks.template_quality

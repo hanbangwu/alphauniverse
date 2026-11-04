@@ -10,8 +10,9 @@ from bokeh.models import (
     TableColumn,
     Whisker,
 )
-from bokeh.palettes import Category10_10, Category20_20
+from bokeh.palettes import Category10_10, Category20_20, RdBu11
 from bokeh.plotting import figure
+from bokeh.transform import linear_cmap
 
 REPORTS = Path(__file__).parent / "benchmarks"
 WIDTH = {"sizing_mode": "stretch_width"}
@@ -28,7 +29,7 @@ def heading(found, *details):
 
 
 def table(rows, names, height=None):
-    source = ColumnDataSource({name: [row[name] for row in rows] for name in names})
+    source = ColumnDataSource({name: [row.get(name) for row in rows] for name in names})
     columns = [TableColumn(field=name, title=name) for name in names]
     return DataTable(
         source=source,
@@ -77,51 +78,96 @@ def projection_quality():
     )
 
 
+def flattened(nested, names):
+    if not names:
+        return [nested]
+    return [
+        {names[0]: key} | row
+        for key, value in nested.items()
+        for row in flattened(value, names[1:])
+    ]
+
+
 def text_search_quality():
     found = report("text_search_quality")
     if found is None:
         return missing()
-    rows = [
-        {"query": query, "space": space, "centring": centring} | figures
-        for query, spaces in found["queries"].items()
-        for space, centrings in spaces.items()
-        for centring, figures in centrings.items()
+    pairs = flattened(found["pairs"], ("pair",))
+    rows = flattened(found["phrasings"], ("pair", "method", "side", "phrasing"))
+    crossed = flattened(
+        found["cross_pairs"], ("method", "labels", "phrasings", "phrasing")
+    )
+    shapes = [
+        {"method": method, "mean overlap@8": rows["mean_overlap@8"]} | rows["overlap@8"]
+        for method, rows in found.get("morphology", {}).items()
     ]
-    raw = [row for row in rows if row["centring"] == "raw"]
+    groups = {}
+    for row in rows:
+        groups.setdefault((row["method"], (row["pair"], row["side"])), []).append(row)
     source = ColumnDataSource(
         {
-            "factor": [(row["query"], row["space"]) for row in raw],
-            "average_precision": [row["average_precision"] for row in raw],
-            "base_rate": [row["base_rate"] for row in raw],
+            "method": [method for method, _ in groups],
+            "column": [column for _, column in groups],
+            "specificity": [
+                sum(row["specificity"] for row in group) / len(group)
+                for group in groups.values()
+            ],
+            "passes": [
+                f"{sum(row['passes'] for row in group)}/{len(group)}"
+                for group in groups.values()
+            ],
         }
     )
+    methods = list(dict.fromkeys(method for method, _ in groups))
     chart = figure(
-        y_range=FactorRange(*reversed(source.data["factor"])),
-        x_range=(0, 1),
-        height=40 + 24 * len(raw),
-        title="Average precision, raw (bars) against the base rate (ticks)",
+        x_range=FactorRange(*dict.fromkeys(column for _, column in groups)),
+        y_range=FactorRange(*reversed(methods)),
+        height=80 + 22 * len(methods),
+        x_axis_location="above",
+        title="Mean specificity (colour) and the phrasings that pass (text)",
         tooltips=[
-            ("average precision", "@average_precision"),
-            ("base rate", "@base_rate"),
+            ("method", "@method"),
+            ("specificity", "@specificity"),
+            ("passes", "@passes"),
         ],
         **WIDTH,
     )
-    chart.hbar(y="factor", right="average_precision", height=0.8, source=source)
-    chart.scatter(
-        x="base_rate",
-        y="factor",
-        marker="dash",
-        angle=1.5708,
-        size=18,
-        color="black",
+    chart.rect(
+        x="column",
+        y="method",
+        width=1,
+        height=1,
+        line_color=None,
+        fill_color=linear_cmap("specificity", RdBu11, -0.5, 0.5),
         source=source,
     )
-    names = [name for name in rows[0] if name != "centring"]
-    names.insert(2, "centring")
+    chart.text(
+        x="column",
+        y="method",
+        text="passes",
+        text_align="center",
+        text_baseline="middle",
+        text_font_size="8pt",
+        source=source,
+    )
     return column(
-        heading(found, f"{found['galaxies']:,} held-out galaxies", cpus(found)),
+        heading(
+            found,
+            f"{found['galaxies']:,} held-out galaxies",
+            f"the {found['half']} half",
+            f"{found['random_directions']} random directions",
+            f"{found['edits']} edits",
+            cpus(found),
+        ),
+        table(pairs, max(pairs, key=len)),
         chart,
-        table(rows, names, height=400),
+        table(rows, max(rows, key=len), height=400),
+        table(
+            crossed,
+            ("method", "labels", "phrasings", "phrasing", "separation"),
+            height=400,
+        ),
+        *([table(shapes, shapes[0], height=400)] if shapes else []),
         **WIDTH,
     )
 

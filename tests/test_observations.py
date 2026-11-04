@@ -108,3 +108,14 @@ def test_table_errors_do_not_depend_on_which_galaxies_are_read(
 
     np.testing.assert_array_equal(batch_errors, errors[2:5])
     assert values.shape == errors.shape == (len(galaxies), len(columns))
+
+
+def test_values_are_taken_in_the_order_the_galaxies_are_asked_for(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = Dataset.from_dict({"value": [0.0, 1.0, 2.0, 3.0, 4.0]})
+    monkeypatch.setattr(observations, "dataset", lambda: rows)
+
+    found = observations.column_values("value", np.array([3, 1, 4]))
+
+    np.testing.assert_array_equal(found, [3.0, 1.0, 4.0])

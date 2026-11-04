@@ -20,13 +20,19 @@ from scripts.benchmarks.common import (
     server,
     summary,
 )
-from scripts.benchmarks.text_search_quality import CUTS
 
 image = serving_image.add_local_python_source("modal_app")
 
 MATCHES = 32
 REPORT = Path("docs/benchmarks/backend_performance.json")
-TEXTS = tuple(text for text, _ in CUTS)
+TEXTS = (
+    "a massive galaxy",
+    "a dwarf galaxy",
+    "a star-forming galaxy",
+    "a quiescent galaxy with no ongoing star formation",
+    "a distant galaxy at high redshift",
+    "a nearby galaxy at low redshift",
+)
 
 
 def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:

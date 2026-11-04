@@ -13,6 +13,7 @@ dependencies = [
   "pillow>=12.3.0",
   "pyarrow>=25.0.1",
   "pydantic>=2.13.5",
+  "qwen-vl-utils>=0.0.14",
   "sentence-transformers[image]>=6.1.0",
   "torch>=2.14.1",
   "tqdm>=4.70.1",
@@ -26,6 +27,8 @@ dev = [
   "threadpoolctl>=3.7.0"
 ]
 build = [
+  "flash-linear-attention>=0.6.0",
+  "kernels>=0.17.0,<0.18.0",
   "matplotlib>=3.11.2",
   "polymathic-aion[torch]>=0.0.2",
   "scikit-learn>=1.9.1",

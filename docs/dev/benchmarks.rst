@@ -1,7 +1,7 @@
 Benchmarks
 ==========
 
-Every benchmark runs on Modal against the artifacts on the production volume, and writes a report to ``docs/benchmarks/<script>.json``. The charts and tables below are drawn from those reports when the documentation is built, so each shows exactly one run, named by its commit and date, and a newly committed report updates its section. Figures compare only within one run, never across runs or machines. :doc:`how-to` explains how to run them.
+Each benchmark runs on Modal against the production artifacts and writes ``docs/benchmarks/<script>.json``. Each section below is drawn from one committed report when the docs build, and names its commit and date; figures compare only within one run. :doc:`how-to` runs them.
 
 Projection quality
 ------------------
@@ -29,22 +29,47 @@ where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 di
 Text search quality
 -------------------
 
-Can a sentence find the right galaxies? ``text_search_quality`` uses the 30% of galaxies held out of the text maps' training, and six queries whose answers are PROVABGS cuts:
+Does a query find the galaxies it describes, rather than the galaxies any query ranks high? ``text_search_quality`` ranks the galaxies :term:`held out` of both the text regression's and the maps' training with nine pairs of opposite descriptions. Each side's answer is a third of a measured value in ``properties`` (:doc:`reference`): the top third for the first side, the bottom third for the second.
 
-======================================================= ==============================
-Query                                                   Answer
-======================================================= ==============================
-A massive galaxy, stellar mass above 10^11 solar masses :math:`\log M_* > 11`
-A low-mass dwarf galaxy                                 :math:`\log M_* < 9.5`
-A star-forming galaxy                                   :math:`\log \mathrm{sSFR} > -10`
-A quiescent galaxy with no ongoing star formation       :math:`\log \mathrm{sSFR} < -11`
-A distant galaxy at redshift above 0.5                  :math:`z > 0.5`
-A nearby galaxy at redshift below 0.1                   :math:`z < 0.1`
-======================================================= ==============================
+============== ================================ =======
+Pair           Value                            Mode
+============== ================================ =======
+colour         g − r                            images
+size           :term:`half-light radius`        images
+brightness     r magnitude                      images
+shape          :term:`axis ratio`               images
+emission       Hα :term:`equivalent width`      spectra
+break          :term:`Dn4000`                   spectra
+redshift       redshift
+star formation :term:`sSFR`
+mass           stellar mass
+============== ================================ =======
 
-with :math:`M_*` in solar masses and sSFR in yr\ :sup:`-1`. Each query ranks the galaxies that have that PROVABGS property in three spaces per modality, image or spectrum: EmbeddingGemma's own embeddings, and AION's embeddings carried into EmbeddingGemma's space by a linear map or by the network the site uses (MLP). The spectrum spaces rank only galaxies with a DESI spectrum. *Combined MLP* ranks every galaxy by the higher of its image and spectrum rows' scores, as the site ranks them. Each is ranked raw and *centred*, with the mean document and mean query subtracted first.
+Each side has six phrasings: the first, third and fifth form the *development* half, which chooses a method, and the others the *sealed* half, which judges it once. The first six pairs describe what a mode shows; the last three are physical properties.
 
-The *base rate* is the fraction of galaxies that satisfy the cut, the score of a random ranking. *Average precision* averages, over every correct galaxy, the fraction correct among the galaxies ranked at or above it; *precision@k* is the fraction correct in the top :math:`k`. A useful ranking beats the base rate.
+A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`/methods/text-search`, over a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift).
+
+- *search*: :math:`\tilde t` against the sum of the stored vectors over the set's modes, the set's share of :math:`s(g \mid t)`, which includes its part of the combination views; over every mode, :math:`s(g \mid t)` as text search ranks.
+- *search framed*: the same, with the query written after its mode set's framing, none for everything, "an image of", "the spectrum of" or "the photometry of", and less the mean of the generic queries with that framing.
+- *views*: the mean of :math:`\cos(\tilde t, \tilde e)` over WeMM-Embedding's embeddings :math:`e` of the galaxy's observed image and DESI spectrum plot, each less its modality's mean, at unit length.
+
+For each side, among the held-out galaxies with the value:
+
+- *average precision* (AP) ranks them by the phrasing's score: it averages, over every galaxy in the side's third, the fraction in that third among the galaxies ranked at or above it;
+- *specificity* is that AP less the AP of the opposite side's phrasing on the same third;
+- the *edit null* is the 95th percentile of the absolute change in AP over random edits of the pair's two directions, each the size of the edit from one to the other, about their midpoint;
+- the *random null* is the 95th percentile of AP over random unit directions;
+- a phrasing *passes* when its specificity exceeds the edit null and its AP exceeds its third's base rate, the AP of a random ranking.
+
+The random null is reported, not required: random directions rank mostly along the few axes that dominate the galaxies' variance, which every property here follows to some degree, so it measures how strongly a property lies along them.
+
+*Cross-pair separation* scores every pair's phrasings on every pair's thirds: the mean over both sides of the specificity a phrasing pair would have there. A pair's own phrasings should separate its thirds better than the other pairs' phrasings do.
+
+Over all galaxies with the value, *precision@32* is the fraction of the phrasing's top 32 in its own third and in the opposite third. Over all galaxies, as text search shows them, *page precision@32* is the same fraction with AION's predicted value standing in for a missing measurement, placed in the measured thirds, and *page measured@32* is the fraction of those 32 that are measured. The predicted values come from the same embeddings the search reads, so the page figures describe what a reader sees rather than test it.
+
+*Image percentile@32* needs no label: among the held-out galaxies, it is the mean percentile, under *views* over the observed image alone, of the phrasing's top 32. The stored vectors predict views from AION embeddings, so it measures whether the prediction ranks a query as the galaxy's real image would. *Views* over images alone is the reference, so it scores near 1 by construction.
+
+Five morphology classes have six phrasings each, split into halves as above: spiral, elliptical, edge-on, merger and irregular. They have no labels. For each method, *overlap@8* between two classes is the mean, over the half's three phrasing pairs, of the fraction of the 8 galaxies text search shows first that both phrasings share; a method that tells the classes apart keeps it near zero. For each phrasing the report also keeps the median r magnitude of that page and the image percentile@8 of its top 8 held-out galaxies.
 
 .. bokeh-plot::
    :source-position: none

@@ -2,8 +2,10 @@
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Table from '$lib/components/ui/table'
+  import { galaxyRows, saveCsv } from '$lib/download'
   import { errorMessage } from '$lib/errors'
   import { getApp } from '$lib/state/app.svelte'
+  import { useQueryClient } from '@tanstack/svelte-query'
 
   interface Props {
     galaxies: number[]
@@ -12,18 +14,14 @@
 
   let { galaxies, loading }: Props = $props()
 
-  const { view, mosaic } = getApp()
+  const { view } = getApp()
+  const queryClient = useQueryClient()
 
   let error = $state<string | null>(null)
 
   async function download(): Promise<void> {
     try {
-      const url = URL.createObjectURL(new Blob([await mosaic.csv(galaxies)], { type: 'text/csv' }))
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'alphauniverse-selection.csv'
-      link.click()
-      setTimeout(() => URL.revokeObjectURL(url))
+      saveCsv('alphauniverse-selection.csv', await galaxyRows(queryClient, galaxies))
       error = null
     } catch (caught) {
       error = errorMessage(caught)
@@ -32,7 +30,7 @@
 </script>
 
 <section
-  class="absolute top-3 right-3 flex w-64 flex-col gap-2 rounded-md border bg-popover/90 p-2 text-xs"
+  class="absolute top-3 right-[calc(var(--right-panel)+0.75rem)] flex w-64 flex-col gap-2 glass rounded-xl p-2 text-xs"
   aria-label="Selected galaxies"
 >
   <span class="font-medium">{galaxies.length} galaxies selected</span>
@@ -61,7 +59,7 @@
       </Table.Root>
     </div>
     <Button variant="secondary" size="xs" disabled={loading} onclick={download}
-      >Export properties as CSV</Button
+      >Export as CSV</Button
     >
   {/if}
   {#if error}

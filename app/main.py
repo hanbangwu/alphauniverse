@@ -44,9 +44,9 @@ from .config import (
     Download,
     GalaxyIndex,
     ImageSurvey,
+    ModeName,
     Projection,
     SpectrumSurvey,
-    TextModality,
     TokenMode,
     artifact,
     galaxy_count,
@@ -111,8 +111,8 @@ class TableRow(BaseModel):
 
 class TextMatches(BaseModel):
     galaxies: list[int]
-    modalities: list[TextModality]
     scores: list[float]
+    contributions: dict[ModeName, list[float]]
 
 
 BINARY_OCTET: dict[str, Any] = {
@@ -593,9 +593,9 @@ def get_mode_search(query: Annotated[pql.ModeQuery, Query()]) -> Response:
 
 @app.get("/search/text")
 def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
-    galaxies, modalities, scores = text_search(query)
+    found = text_search(query)
     return TextMatches(
-        galaxies=galaxies.tolist(),
-        modalities=modalities.tolist(),
-        scores=scores.tolist(),
+        galaxies=found.galaxies.tolist(),
+        scores=found.scores.tolist(),
+        contributions=dict(zip(MODES, found.contributions.T.tolist())),
     )

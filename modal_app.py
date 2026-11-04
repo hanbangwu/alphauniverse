@@ -116,7 +116,7 @@ def generate_joint_embedding() -> None:
     image=build_image,
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
-    timeout=2 * 60,
+    timeout=60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_properties() -> None:
@@ -222,47 +222,47 @@ def generate_pairs() -> None:
 
 @app.function(
     image=build_image,
-    gpu="L4",
-    cpu=4,
-    memory=(32 * 1024, 64 * 1024),
-    timeout=3 * 60 * 60,
+    gpu="L40S",
+    cpu=16,
+    memory=(16 * 1024, 64 * 1024),
+    timeout=24 * 60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_text_views(parts: int) -> None:
+    from app.text_views import generate_text_views
+
+    generate_text_views(parts)
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
+    gpu="L40S",
+    cpu=16,
+    memory=(16 * 1024, 64 * 1024),
+    timeout=24 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
-def generate_alignment() -> None:
-    from app.alignment import generate_alignment
+def train_text_regression() -> None:
+    from app.text_regression import train_text_regression
 
-    generate_alignment()
+    train_text_regression()
     cache_volume.commit()
 
 
 @app.function(
     image=build_image,
-    gpu="L4",
+    gpu="L40S",
     cpu=4,
-    memory=(32 * 1024, 64 * 1024),
+    memory=(16 * 1024, 32 * 1024),
     timeout=1 * 60 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_aion_gemma_space() -> None:
-    from app.alignment import generate_aion_gemma_space
+def generate_text_vectors() -> None:
+    from app.text_regression import generate_text_vectors
 
-    generate_aion_gemma_space()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L4",
-    cpu=4,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=4 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_template_gemma() -> None:
-    from app.template_gemma import generate_template_gemma
-
-    generate_template_gemma()
+    generate_text_vectors()
     cache_volume.commit()
 
 

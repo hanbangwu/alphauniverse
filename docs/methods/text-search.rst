@@ -1,19 +1,25 @@
 Text search
 ===========
 
-Text search ranks galaxies by how well they match a sentence. AION reads no text, so alphaUniverse uses a second model, :term:`EmbeddingGemma`, which places images and text in one 768-dimensional space where a picture and a description of it lie close together (`model card <https://huggingface.co/google/embeddinggemma-2>`_). EmbeddingGemma sees pictures, so alphaUniverse gives it two per galaxy, the colour image and a plot of the spectrum, and carries AION's view of each observation into EmbeddingGemma's space.
+Text search ranks galaxies by how close a sentence is, on average, to their predicted views. AION reads no text, so alphaUniverse uses a second model, :term:`WeMM-Embedding`, which places images and text in one space where a picture and a description of it lie close together (`model card <https://huggingface.co/tencent/WeMM-Embedding-2B>`_), cut to its first 1,024 dimensions. What WeMM-Embedding can read about a galaxy are its :term:`views <view>`: its colour images, plots of its spectra, and its catalogue values and redshift written out as text.
 
 .. raw:: html
    :file: ../figures/text-search.svg
 
-Each *modality*, image or spectrum, pairs two vectors per galaxy that has it. For the image, they are the mean of AION's encoded embeddings of the galaxy's Legacy Survey image tokens, :math:`a_g`, and EmbeddingGemma's embedding :math:`e_g` of its Legacy Survey colour image. For the spectrum, they are the mean of AION's encoded embeddings of its DESI spectrum tokens, and EmbeddingGemma's embedding of its DESI spectrum, smoothed as on the site and plotted in grey on a 1680 × 384 pixel figure with no title or axis labels. Each modality has its own small network
+A network predicts every view a galaxy could have. Given the galaxy's :term:`joint embedding` and one of 26 view types, it predicts :math:`\bar e_{g,k}`, the average over galaxy :math:`g`'s views of type :math:`k` of each view's WeMM-Embedding embedding less the type's mean, at unit length. The view types are the observation, the :term:`template` and a sample of AION's predictions in each of the seven modes, and five combinations of modes; a galaxy unobserved in a mode still gets a prediction of that mode's observation, the one AION predicts for it. The network learns by least squares from views of the galaxies outside the :term:`held out` set. Being an average of unit vectors, a prediction is shorter where a galaxy's views of a type disagree, and its dot product with a unit vector is the predicted mean cosine of the views with it, within the type's 32 principal components.
+
+A query :math:`t` is embedded by WeMM-Embedding and, less the mean embedding of 10,080 generic queries, scaled to unit length, :math:`\tilde t`. The generic queries are every combination of three framings or none, 13 adjectives or none, 15 kinds of galaxy and 11 endings or none, such as *an image of a dusty spiral galaxy with a dust lane*. Galaxies rank by the query's predicted mean cosine with their views, every view type weighted alike:
 
 .. math::
 
-   f(a) = \frac{W_2\, \mathrm{GELU}(W_1 a + b_1) + b_2}
-   {\lVert W_2\, \mathrm{GELU}(W_1 a + b_1) + b_2 \rVert},
-   \qquad W_1 \in \mathbb{R}^{2048 \times 768},
+   s(g \mid t) = \frac{1}{26} \sum_k \bar e_{g,k} \cdot \tilde t.
 
-with the GELU activation :cite:p:`hendrycks2016gelu`, trained to minimise :math:`1 - \cos(f(a_g), e_g)`. The same 30% of all galaxies are :term:`held out` of both networks' training for the benchmark. Every galaxy gets an image row :math:`f_\text{image}(a_g)` and every galaxy with a DESI spectrum also gets a spectrum row. A query is embedded by EmbeddingGemma as :math:`t`, and all rows are ranked together by their cosine to :math:`t` (``app.text_search.text_search``), so a galaxy can appear once for each modality.
+A mode's :term:`contribution` to a match is its Shapley value in the galaxy's lead over the average galaxy, :math:`s(g \mid t) - \langle s \rangle`. Since :math:`s` is a sum over view types, each type's part splits equally among the modes it needs:
 
-:doc:`/benchmarks` measures how well these rankings recover PROVABGS properties, against EmbeddingGemma's own embeddings and a linear map in place of :math:`f`.
+.. math::
+
+   \phi_m(g \mid t) = \frac{1}{26} \sum_{k \ni m} \frac{(\bar e_{g,k} - \langle \bar e_k \rangle) \cdot \tilde t}{|M_k|},
+
+with :math:`M_k` the modes of view type :math:`k`, one for a single mode's type, and :math:`\langle \bar e_k \rangle` its mean over all galaxies. The contributions sum to the lead.
+
+:doc:`/dev/benchmarks` measures how well these rankings recover measured properties, against WeMM-Embedding's own embeddings of the observed image and spectrum.
