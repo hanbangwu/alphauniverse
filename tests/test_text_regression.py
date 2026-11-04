@@ -1,7 +1,6 @@
 import importlib
 import json
 import math
-from copy import deepcopy
 from itertools import combinations
 from pathlib import Path
 
@@ -112,7 +111,7 @@ def test_a_masked_block_does_not_reach_the_condition() -> None:
 
 
 def test_a_view_type_too_rare_for_its_own_basis_gets_its_mode_s() -> None:
-    counts = torch.full((len(VIEW_TYPES),), 40)
+    counts = torch.full((len(VIEW_TYPES),), 200)
     rare = VIEW_TYPES.index(("observed", "sdss_spectrum"))
     counts[rare] = 3
     view_types = torch.repeat_interleave(torch.arange(len(VIEW_TYPES)), counts)
@@ -166,7 +165,7 @@ def written_views(
     )
 
 
-def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_regression(
+def test_training_uses_every_part_for_a_fixed_number_of_steps_and_keeps_the_average(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     rng = np.random.default_rng(0)
@@ -176,8 +175,6 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_regre
     np.save(tmp_path / "joint_embedding.npy", joint)
     folder = tmp_path / "text_views.parquet"
     folder.mkdir()
-    for index in range(2):
-        written_views(folder / f"part-{index:05d}.parquet", training, rng, index)
     owners, view_types = np.divmod(
         np.arange(len(held) * len(VIEW_TYPES)), len(VIEW_TYPES)
     )
@@ -200,17 +197,14 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_regre
     def generate_text_views(parts: int) -> None:
         generated.append(parts)
         for index in range(parts):
-            path = folder / f"part-{index:05d}.parquet"
-            if not path.exists():
-                written_views(path, training, rng, index)
+            written_views(folder / f"part-{index:05d}.parquet", training, rng, index)
 
-    measured = iter([0.1, 0.5, 0.5005, 0.4, 0.45])
+    steps = []
+    stepped = text_regression.stepped
 
-    snapshots = []
-
-    def identification(network, held, bases, present):
-        snapshots.append(deepcopy(network.state_dict()))
-        return torch.full((len(VIEW_TYPES),), next(measured, 0.0))
+    def counted(*args):
+        steps.append(text_regression.STEPS)
+        return stepped(*args)
 
     for module in (text_regression, text_views, embeddings):
         monkeypatch.setattr(
@@ -218,17 +212,16 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_regre
         )
     monkeypatch.setattr(text_views, "training", lambda: training)
     monkeypatch.setattr(text_views, "generate_text_views", generate_text_views)
-    monkeypatch.setattr(text_regression, "identification", identification)
+    monkeypatch.setattr(text_regression, "stepped", counted)
     for name, value in {
         "TEXT_RANK": 3,
         "TEXT_CONDITION": 4,
         "HIDDEN": 8,
         "BATCH": 8,
-        "CHUNK": len(VIEW_TYPES),
         "STEPS": 2,
-        "PATIENCE": 2,
-        "CAP": 10 * 2 * len(VIEW_TYPES),
-        "VIEWS_PER_PART": 2 * len(VIEW_TYPES),
+        "TRAINING_STEPS": 6,
+        "LOGGED": 1,
+        "TEXT_VIEW_PARTS": 3,
         "PARTS_PER_ROUND": 2,
     }.items():
         monkeypatch.setattr(text_regression, name, value)
@@ -238,15 +231,25 @@ def test_training_stops_after_the_patience_without_gain_and_keeps_the_best_regre
     printed = capsys.readouterr().out
     report = json.loads(printed[printed.find("{\n") :])
     stored = np.load(tmp_path / "text_bases.npz")
-    regression = torch.load(tmp_path / "text_regression.pt")
-    assert generated == [2, 4]
-    assert report["views"] == 2 * 2 * len(VIEW_TYPES)
+    assert generated == [3]
+    assert sum(steps) == 6
+    assert report["views"] == 3 * 2 * len(VIEW_TYPES)
     assert stored["components"].shape == (len(VIEW_TYPES), 3, GEMMA_DIM)
     assert stored["projection"].shape == (len(GRAM_NAMES) * 2, 4)
-    assert all(torch.equal(regression[key], snapshots[1][key]) for key in regression)
-    assert not all(
-        torch.equal(regression[key], snapshots[3][key]) for key in regression
-    )
+
+
+def test_no_component_s_scale_falls_below_the_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(text_regression, "TEXT_RANK", 4)
+    rng = np.random.default_rng(0)
+    view_types = torch.arange(len(VIEW_TYPES)).repeat(200)
+    found = torch.from_numpy(rng.standard_normal((len(view_types), 6))).float()
+    found[:, 3:] *= 1e-6
+    found = torch.nn.functional.pad(found, (0, GEMMA_DIM - 6))
+    scale = text_regression.fitted_bases(view_types, found)["scale"]
+    median = scale.median(dim=1, keepdim=True).values
+    assert bool((scale >= text_regression.SCALE_FLOOR * median - 1e-6).all())
 
 
 def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(

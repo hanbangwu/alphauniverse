@@ -237,10 +237,11 @@ VIEW_TYPES = (
     *((kind, mode) for mode in MODES for kind in VIEW_KINDS),
     *(("combination", name) for name in VIEW_COMBINATIONS),
 )
-TEXT_RANK = 32
-TEXT_CONDITION = 64
+TEXT_RANK = 128
+TEXT_CONDITION = 256
 VIEWS_PER_PART = 4_000
 PARTS_PER_ROUND = 10
+TEXT_VIEW_PARTS = 200
 PROTOTYPE_HELD_OUT = np.concatenate(
     [
         [110, 301, 319, 830, 1003, 1365, 1413, 1492, 1561, 1653, 1655, 1656, 1790],
