@@ -12,9 +12,7 @@ def test_galaxies_rank_by_their_mean_cosine_and_each_mode_s_contribution_sums_to
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     query = np.random.default_rng(0).standard_normal(GEMMA_DIM).astype(np.float32)
-    monkeypatch.setattr("app.text_search.embed_queries", lambda _: query[None])
-
-    found = text_search(TextQuery(text="a galaxy", matches=5))
+    found = text_search(TextQuery(text="a galaxy", matches=5), lambda _: query[None])
 
     modes = np.load(artifact("text_vectors")).astype(np.float64)
     direction = query - np.load(artifact("text_query_mean"))

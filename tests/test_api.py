@@ -34,6 +34,7 @@ from app.config import (
     artifact,
 )
 from app.dataset import table_columns
+from app.main import query_embedder
 
 ARROW = "application/vnd.apache.arrow.stream"
 
@@ -516,7 +517,9 @@ def test_text_search_returns_each_match_with_its_contribution_from_every_mode(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     query = np.random.default_rng(0).standard_normal((1, GEMMA_DIM)).astype(np.float32)
-    monkeypatch.setattr("app.text_search.embed_queries", lambda _: query)
+    monkeypatch.setitem(
+        client.app.dependency_overrides, query_embedder, lambda: lambda _: query
+    )
 
     response = client.get("/search/text", params={"text": "a galaxy", "matches": 3})
 
