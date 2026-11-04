@@ -139,8 +139,9 @@ CATALOGUES: dict[str, Catalogue] = {
 
 N_MORPHOLOGIES = 10
 
-GEMMA = "tencent/WeMM-Embedding-2B"
+GEMMA = "tencent/WeMM-Embedding-9B"
 GEMMA_DIM = 1024
+QUERY_PREFIX = "Search galaxy spectra, images and catalogue measurements for: {}"
 TextModality = Literal["image", "spectrum"]
 PLOT_INCHES = (16.8, 3.84)
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}

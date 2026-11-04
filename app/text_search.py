@@ -25,6 +25,7 @@ from .config import (
     N_SPECTRUM_TOKENS,
     PAIRS,
     PLOT_INCHES,
+    QUERY_PREFIX,
     RGB_COLUMN,
     SPECTRUM_ORIGIN,
     SPECTRUM_SURVEY,
@@ -142,7 +143,9 @@ def text_model() -> SentenceTransformer:
 
 
 def embed_queries(texts: list[str]) -> np.ndarray:
-    return text_model().encode_query(texts, normalize_embeddings=True)
+    return text_model().encode_query(
+        [QUERY_PREFIX.format(text) for text in texts], normalize_embeddings=True
+    )
 
 
 def generic_queries() -> list[str]:

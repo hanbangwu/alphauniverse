@@ -110,7 +110,7 @@ Glossary
       One input to :term:`WeMM-Embedding` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`dev/reference`.
 
    WeMM-Embedding
-      Tencent's model that places images, plots and text in one space, so that a picture and a description of it lie close together; text search uses its 2-billion-parameter version, cut to 1,024 dimensions. See :doc:`methods/text-search`.
+      Tencent's model that places images, plots and text in one space, so that a picture and a description of it lie close together; text search uses its 9-billion-parameter version, cut to 1,024 dimensions. See :doc:`methods/text-search`.
 
    whole-mode search
       Search over every slot of each chosen :term:`mode`, ranked from the modes' :term:`token embeddings <token embedding>`. See :doc:`methods/similarity-search`.

@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from app.config import GEMMA_DIM, artifact
-from app.text_search import TextQuery, text_search
+from app.config import GEMMA_DIM, QUERY_PREFIX, artifact
+from app.text_search import TextQuery, embed_queries, text_search
 
 
 def test_galaxies_rank_by_their_mean_cosine_and_each_mode_s_contribution_sums_to_its_lead(
@@ -29,3 +29,20 @@ def test_galaxies_rank_by_their_mean_cosine_and_each_mode_s_contribution_sums_to
         rtol=1e-4,
         atol=1e-5,
     )
+
+
+def test_every_query_is_embedded_after_the_search_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = []
+
+    class Model:
+        def encode_query(self, texts, normalize_embeddings):
+            seen.extend(texts)
+            return np.zeros((len(texts), GEMMA_DIM), dtype=np.float32)
+
+    monkeypatch.setattr("app.text_search.text_model", Model)
+
+    embed_queries(["spirals", "a red galaxy"])
+
+    assert seen == [QUERY_PREFIX.format("spirals"), QUERY_PREFIX.format("a red galaxy")]
