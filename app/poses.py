@@ -53,17 +53,15 @@ def bilinear(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.stack(indices, axis=-1), np.stack(weights, axis=-1).astype(np.float32)
 
 
-def image_poses(slots: np.ndarray, centred: bool) -> Poses:
+def image_poses(slots: np.ndarray) -> Poses:
     points = np.stack(np.divmod(slots, GRID), axis=-1).astype(float)
-    centre = np.full(2, (GRID - 1) / 2) if centred else np.round(points.mean(axis=0))
+    centre = np.round(points.mean(axis=0))
     turned, turns = orientations(points - centre)
     positions, parameters = [], []
     for placed, turn in zip(np.round(turned + centre, DECIMALS), turns, strict=True):
-        moves = np.zeros((1, 2), int) if centred else shifts(placed)
-        moved = placed + moves[:, None]
-        inside = ((moved >= 0) & (moved <= GRID - 1)).all(axis=(1, 2))
-        positions.append(moved[inside])
-        parameters.append(np.c_[np.tile(turn, (inside.sum(), 1)), moves[inside]])
+        moves = shifts(placed)
+        positions.append(placed + moves[:, None])
+        parameters.append(np.c_[np.tile(turn, (len(moves), 1)), moves])
     positions = np.concatenate(positions)
     _, first = np.unique(
         positions.reshape(len(positions), -1), axis=0, return_index=True

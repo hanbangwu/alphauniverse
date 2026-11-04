@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from app.config import GRID, N_SPECTRUM_TOKENS, SPECTRUM_ORIGIN, SPECTRUM_TOKEN_WIDTH
 from app.poses import image_poses, spectrum_poses, window
@@ -16,9 +15,8 @@ def distances(points: np.ndarray) -> np.ndarray:
     return np.linalg.norm(points[..., :, None, :] - points[..., None, :, :], axis=-1)
 
 
-@pytest.mark.parametrize("centred", [False, True])
-def test_every_image_pose_moves_the_selection_rigidly(centred: bool) -> None:
-    found = image_poses(SLOTS, centred)
+def test_every_image_pose_moves_the_selection_rigidly() -> None:
+    found = image_poses(SLOTS)
 
     moved = placed(found.indices, found.weights)
 
@@ -29,22 +27,14 @@ def test_every_image_pose_moves_the_selection_rigidly(centred: bool) -> None:
         np.broadcast_to(distances(cells), (len(moved), 4, 4)),
         atol=1e-5,
     )
-    if centred:
-        centre = (GRID - 1) / 2
-        np.testing.assert_allclose(
-            np.linalg.norm(moved - centre, axis=-1),
-            np.broadcast_to(np.linalg.norm(cells - centre, axis=-1), (len(moved), 4)),
-            atol=1e-5,
-        )
 
 
-@pytest.mark.parametrize("centred", [False, True])
-def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose(centred: bool) -> None:
-    found = image_poses(SLOTS, centred)
+def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose() -> None:
+    found = image_poses(SLOTS)
 
     quarter = np.isclose(np.mod(found.parameters[:, 1], np.pi / 2), 0)
 
-    assert quarter.sum() >= 8 if centred else quarter.sum() > 8
+    assert quarter.sum() > 8
     assert np.isin(found.weights[quarter], (0, 1)).all()
     identity = (found.indices[..., 0] == SLOTS).all(axis=1) & (
         found.weights[..., 0] == 1
@@ -55,11 +45,11 @@ def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose(centred: bool) -
 def test_image_angles_move_the_farthest_slot_at_most_half_a_cell() -> None:
     slots = np.array([275, 278, 323])
 
-    found = image_poses(slots, centred=True)
+    found = image_poses(slots)
 
     angles = np.unique(found.parameters[:, 1])
     cells = np.stack(np.divmod(slots, GRID), axis=-1)
-    radius = np.linalg.norm(cells - (GRID - 1) / 2, axis=-1).max()
+    radius = np.linalg.norm(cells - np.round(cells.mean(axis=0)), axis=-1).max()
     assert np.diff(np.append(angles, 2 * np.pi)).max() * radius <= 0.5
 
 

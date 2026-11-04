@@ -491,11 +491,9 @@ def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
 
 
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
-def pose_reads(
-    mode: str, slots: tuple[int, ...], centred: bool
-) -> tuple[torch.Tensor, torch.Tensor]:
+def pose_reads(mode: str, slots: tuple[int, ...]) -> tuple[torch.Tensor, torch.Tensor]:
     found = (
-        image_poses(np.array(slots), centred)
+        image_poses(np.array(slots))
         if mode in IMAGE_MODES
         else spectrum_poses(np.array(slots))
     )
@@ -530,47 +528,45 @@ def shaped(
     galaxy: int,
     mode: str,
     slots: tuple[int, ...],
-    centred: bool,
     batches: list[pa.RecordBatch],
 ) -> Shapes:
     form = query_forms(row(galaxy), {mode: np.array(slots)})[mode]
-    reads = pose_reads(mode, slots, centred)
+    reads = pose_reads(mode, slots)
     found = threaded(partial(best_poses, mode=mode, form=form, reads=reads), batches)
     return Shapes(found[:, 0], found[:, 1].astype(np.int64))
 
 
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
-def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...], centred: bool) -> Shapes:
+def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> Shapes:
     with BUILDING:
-        return shaped(galaxy, mode, slots, centred, predictions().to_batches())
+        return shaped(galaxy, mode, slots, predictions().to_batches())
 
 
 def shape_scales(
     galaxy: int,
     keys: dict[str, tuple[int, ...]],
-    shapes: dict[str, bool],
     aligned: dict[str, np.ndarray],
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
-    if len(aligned) + len(shapes) == 1:
+    if len(aligned) + len(keys) == 1:
         return {}
     sample = slices(gathered(saliency_sample(galaxy)))
     return spreads(
         aligned
         | {
-            mode: shaped(galaxy, mode, keys[mode], centred, sample).totals
-            for mode, centred in shapes.items()
+            mode: shaped(galaxy, mode, slots, sample).totals
+            for mode, slots in keys.items()
         }
     )
 
 
 def pruned(
-    galaxy: int, selected: dict[str, np.ndarray], shapes: dict[str, bool], matches: int
+    galaxy: int, selected: dict[str, np.ndarray], shapes: Collection[str], matches: int
 ) -> Pruned:
     keys = {mode: tuple(selected[mode].tolist()) for mode in shapes}
     aligned = column_sums(
         galaxy, {mode: slots for mode, slots in selected.items() if mode not in shapes}
     )
-    scales = shape_scales(galaxy, keys, shapes, aligned)
+    scales = shape_scales(galaxy, keys, aligned)
     bounds = combined(
         aligned | {mode: basket_sum(galaxy, mode, keys[mode]) for mode in shapes},
         scales,
@@ -588,8 +584,8 @@ def pruned(
             if bounds[block[0]] < np.partition(others, -matches)[-matches]:
                 break
         rows = slices(gathered(block))
-        for mode, centred in shapes.items():
-            found = shaped(galaxy, mode, keys[mode], centred, rows)
+        for mode, slots in keys.items():
+            found = shaped(galaxy, mode, slots, rows)
             totals[mode][block], poses[mode][block] = found
         scored[block] = combined(
             {mode: values[block] for mode, values in totals.items()}, scales

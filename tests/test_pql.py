@@ -540,12 +540,10 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
     ]
 
 
-def pose_reference(
-    table: pa.Table, mode: str, slots: tuple[int, ...], centred: bool
-) -> np.ndarray:
+def pose_reference(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
     overlaps = cross_overlaps(table, mode, slots)
     found = (
-        image_poses(np.array(slots), centred)
+        image_poses(np.array(slots))
         if mode in IMAGE_MODES
         else spectrum_poses(np.array(slots))
     )
@@ -554,26 +552,21 @@ def pose_reference(
     return np.log(np.maximum(mixed, pql.PROBABILITY_FLOOR)).sum(axis=-1)
 
 
-SHAPES = [
-    ("ls_image", (275, 276, 300), False),
-    ("ls_image", (275, 276, 300), True),
-    ("desi_spectrum", (40, 41, 42), False),
-]
+SHAPES = [("ls_image", (275, 276, 300)), ("desi_spectrum", (40, 41, 42))]
 
 
-@pytest.mark.parametrize(("mode", "slots", "centred"), SHAPES)
+@pytest.mark.parametrize(("mode", "slots"), SHAPES)
 def test_a_same_shape_mode_keeps_each_galaxy_s_best_pose_of_the_whole_selection(
     table: pa.Table,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
     slots: tuple[int, ...],
-    centred: bool,
 ) -> None:
     monkeypatch.setattr(pql, "CHUNK", 2)
 
-    found = pql.shape_sum(GALAXY, mode, slots, centred)
+    found = pql.shape_sum(GALAXY, mode, slots)
 
-    expected = pose_reference(table, mode, slots, centred)
+    expected = pose_reference(table, mode, slots)
     np.testing.assert_allclose(found.totals, expected.max(axis=1), rtol=1e-4)
     np.testing.assert_allclose(
         np.take_along_axis(expected, found.poses[:, None], axis=1)[:, 0],
@@ -596,14 +589,13 @@ def test_pruning_ranks_matches_as_the_exact_same_shape_scores_do(
 ) -> None:
     monkeypatch.setattr(pql, "BATCH", 2)
     chosen = {mode: np.array(slots) for mode, slots in selected.items()}
-    shapes = {mode: False for mode in selected if mode != "hsc_image"}
+    shapes = [mode for mode in selected if mode != "hsc_image"]
 
     found = pql.pruned(GALAXY, chosen, shapes, matches=3)
 
     aligned = {mode: slots for mode, slots in chosen.items() if mode not in shapes}
     exact = pql.column_sums(GALAXY, aligned) | {
-        mode: pql.shape_sum(GALAXY, mode, selected[mode], False).totals
-        for mode in shapes
+        mode: pql.shape_sum(GALAXY, mode, selected[mode]).totals for mode in shapes
     }
     sample = pql.saliency_sample(GALAXY)
     if len(selected) == 1:
@@ -621,5 +613,5 @@ def test_pruning_ranks_matches_as_the_exact_same_shape_scores_do(
         np.testing.assert_allclose(found.totals[mode], exact[mode][galaxies], rtol=1e-5)
         np.testing.assert_array_equal(
             found.poses[mode],
-            pql.shape_sum(GALAXY, mode, selected[mode], False).poses[galaxies],
+            pql.shape_sum(GALAXY, mode, selected[mode]).poses[galaxies],
         )
