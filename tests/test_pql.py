@@ -22,7 +22,7 @@ from app.config import (
     TOP_CODES,
     VOCABULARY,
 )
-from app.poses import bilinear, image_poses, spectrum_poses
+from app.poses import image_poses, spectrum_poses
 
 GALAXY = 0
 SELECTION = {
@@ -545,12 +545,26 @@ def pose_reference(
     table: pa.Table, mode: str, slots: tuple[int, ...], shift: pql.Shift
 ) -> np.ndarray:
     overlaps = cross_overlaps(table, mode, slots)
-    found = (
-        image_poses(np.array(slots), pql.STEPS[shift])
-        if mode in IMAGE_MODES
-        else spectrum_poses(np.array(slots))
-    )
+    if mode in IMAGE_MODES:
+        quarters = image_poses(np.array(slots), pql.STEPS[shift]).quarters
+        return interpolated_sums(overlaps, *bilinear(quarters / 4))
+    found = spectrum_poses(np.array(slots))
     return interpolated_sums(overlaps, found.indices, found.weights)
+
+
+def bilinear(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    start = np.floor(positions).astype(int)
+    fraction = positions - start
+    indices, weights = [], []
+    for row in (0, 1):
+        for column in (0, 1):
+            cell = np.minimum(start + (row, column), GRID - 1)
+            indices.append(cell[..., 0] * GRID + cell[..., 1])
+            weights.append(
+                np.abs(1 - row - fraction[..., 0])
+                * np.abs(1 - column - fraction[..., 1])
+            )
+    return np.stack(indices, axis=-1), np.stack(weights, axis=-1)
 
 
 def interpolated_sums(
@@ -599,11 +613,11 @@ def test_refinement_adds_the_half_cell_neighbours_of_each_best_whole_cell_pose(
 
     cell = image_poses(np.array(SLOTS_SHAPED), 1.0)
     whole = pose_reference(table, "ls_image", SLOTS_SHAPED, "cell")
-    best = cell.positions[whole.argmax(axis=1)]
+    best = cell.quarters[whole.argmax(axis=1)] / 4
     overlaps = cross_overlaps(table, "ls_image", SLOTS_SHAPED)
     expected = whole.max(axis=1)
     for galaxy, position in enumerate(best):
-        for offset in pql.NEIGHBOURS:
+        for offset in pql.NEIGHBOURS / 4:
             moved = position + offset
             if ((moved >= 0) & (moved <= GRID - 1)).all():
                 indices, weights = bilinear(moved[None])

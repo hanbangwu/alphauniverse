@@ -70,6 +70,13 @@ def overlap(found: np.ndarray, expected: np.ndarray) -> float:
     return len(np.intersect1d(found[1:], expected[1:])) / (len(expected) - 1)
 
 
+def poses(mode: str, slots: tuple[int, ...], shift: pql.Shift) -> int:
+    reads = pql.pose_reads(mode, slots, shift)
+    return len(reads.indices) // (
+        1 if isinstance(reads, pql.ImageReads) else len(slots)
+    )
+
+
 def measured(
     galaxy: int,
     selected: dict[str, np.ndarray],
@@ -98,10 +105,7 @@ def measured(
     found = pql.pruned(galaxy, selected, shapes, shift, MATCHES)
     finished = time.perf_counter()
     return {
-        "poses": sum(
-            len(pql.pose_reads(mode, slots, shift).indices) // len(slots)
-            for mode, slots in keys.items()
-        ),
+        "poses": sum(poses(mode, slots, shift) for mode, slots in keys.items()),
         "bound_ms": (bound - start) * 1000,
         "exact_ms": (done - bound) * 1000,
         "pruned_ms": (finished - began) * 1000,

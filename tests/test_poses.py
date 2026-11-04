@@ -7,27 +7,35 @@ from app.poses import image_poses, spectrum_poses, window
 SLOTS = np.array([0, 2, 50, 99])
 
 
-def placed(indices: np.ndarray, weights: np.ndarray) -> np.ndarray:
-    cells = np.stack(np.divmod(indices, GRID), axis=-1)
-    return (cells * weights[..., None]).sum(axis=-2)
-
-
-def distances(points: np.ndarray) -> np.ndarray:
-    return np.linalg.norm(points[..., :, None, :] - points[..., None, :, :], axis=-1)
+def exact_positions(slots: np.ndarray, parameters: np.ndarray) -> np.ndarray:
+    cells = np.stack(np.divmod(slots, GRID), axis=-1).astype(float)
+    centre = np.round(cells.mean(axis=0))
+    mirror, angle, shift = parameters[:, :1], parameters[:, 1:2], parameters[:, 2:]
+    rows = cells[:, 0] - centre[0]
+    columns = np.where(mirror, -1, 1) * (cells[:, 1] - centre[1])
+    turned = np.stack(
+        (
+            np.cos(angle) * rows - np.sin(angle) * columns,
+            np.sin(angle) * rows + np.cos(angle) * columns,
+        ),
+        axis=-1,
+    )
+    return turned + centre + shift[:, None]
 
 
 @pytest.mark.parametrize("step", [1.0, 0.5])
-def test_every_image_pose_moves_the_selection_rigidly(step: float) -> None:
+def test_every_image_pose_is_a_rigid_motion_snapped_to_quarter_cells(
+    step: float,
+) -> None:
     found = image_poses(SLOTS, step)
 
-    moved = placed(found.indices, found.weights)
+    positions = found.quarters / 4
 
-    cells = np.stack(np.divmod(SLOTS, GRID), axis=-1).astype(float)
-    np.testing.assert_allclose(found.weights.sum(axis=-1), 1, rtol=1e-6)
-    np.testing.assert_allclose(
-        distances(moved),
-        np.broadcast_to(distances(cells), (len(moved), 4, 4)),
-        atol=1e-5,
+    exact = exact_positions(SLOTS, found.parameters)
+    assert np.abs(positions - exact).max() <= 1 / 8 + 1e-9
+    assert (positions >= 0).all() and (positions <= GRID - 1).all()
+    assert len(np.unique(found.quarters.reshape(len(positions), -1), axis=0)) == len(
+        positions
     )
 
 
@@ -37,11 +45,9 @@ def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose() -> None:
     quarter = np.isclose(np.mod(found.parameters[:, 1], np.pi / 2), 0)
 
     assert quarter.sum() > 8
-    assert np.isin(found.weights[quarter], (0, 1)).all()
-    identity = (found.indices[..., 0] == SLOTS).all(axis=1) & (
-        found.weights[..., 0] == 1
-    ).all(axis=1)
-    assert identity.sum() == 1
+    assert (found.quarters[quarter] % 4 == 0).all()
+    cells = np.stack(np.divmod(SLOTS, GRID), axis=-1) * 4
+    assert (found.quarters == cells).all(axis=(1, 2)).sum() == 1
 
 
 def test_image_angles_move_the_farthest_slot_at_most_half_a_cell() -> None:
@@ -58,10 +64,10 @@ def test_image_angles_move_the_farthest_slot_at_most_half_a_cell() -> None:
 def test_half_cell_shifts_keep_every_whole_cell_pose_and_add_more() -> None:
     cell, half = image_poses(SLOTS, 1.0), image_poses(SLOTS, 0.5)
 
-    found = {pose.tobytes() for pose in half.positions}
+    found = {pose.tobytes() for pose in half.quarters}
 
-    assert all(pose.tobytes() in found for pose in cell.positions)
-    assert len(half.positions) > len(cell.positions)
+    assert all(pose.tobytes() in found for pose in cell.quarters)
+    assert len(half.quarters) > len(cell.quarters)
 
 
 def test_spectrum_poses_read_each_stretched_window_by_the_share_it_covers() -> None:
@@ -69,7 +75,7 @@ def test_spectrum_poses_read_each_stretched_window_by_the_share_it_covers() -> N
 
     found = spectrum_poses(slots)
 
-    stretches = found.parameters
+    stretches = found.stretches
     starts = window(stretches * (SPECTRUM_ORIGIN + SPECTRUM_TOKEN_WIDTH * slots))
     samples = starts[..., None] + stretches[..., None] * (np.arange(4000) + 0.5) / 4000
     expected = np.zeros((*starts.shape, N_SPECTRUM_TOKENS))

@@ -6,13 +6,19 @@ import numpy as np
 from .config import GRID, N_SPECTRUM_TOKENS, SPECTRUM_ORIGIN, SPECTRUM_TOKEN_WIDTH
 
 DECIMALS = 9
+QUARTERS = 4
+LAST = (GRID - 1) * QUARTERS
 
 
-class Poses(NamedTuple):
+class ImagePoses(NamedTuple):
+    quarters: np.ndarray
+    parameters: np.ndarray
+
+
+class SpectrumPoses(NamedTuple):
     indices: np.ndarray
     weights: np.ndarray
-    positions: np.ndarray
-    parameters: np.ndarray
+    stretches: np.ndarray
 
 
 def orientations(offsets: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -30,53 +36,36 @@ def orientations(offsets: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.concatenate(turned), parameters
 
 
-def shifts(placed: np.ndarray, step: float) -> np.ndarray:
-    low = np.ceil(np.round(-placed.min(axis=0) / step, DECIMALS)).astype(int)
-    high = np.floor(np.round((GRID - 1 - placed.max(axis=0)) / step, DECIMALS))
-    rows, columns = np.meshgrid(
-        np.arange(low[0], high[0] + 1), np.arange(low[1], high[1] + 1), indexing="ij"
-    )
-    return step * np.stack((rows.ravel(), columns.ravel()), axis=-1)
-
-
-def bilinear(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    start = np.floor(positions).astype(int)
-    fraction = positions - start
-    indices, weights = [], []
-    for row in (0, 1):
-        for column in (0, 1):
-            cell = np.minimum(start + (row, column), GRID - 1)
-            indices.append(cell[..., 0] * GRID + cell[..., 1])
-            weights.append(
-                np.abs(1 - row - fraction[..., 0])
-                * np.abs(1 - column - fraction[..., 1])
-            )
-    return np.stack(indices, axis=-1), np.stack(weights, axis=-1).astype(np.float32)
-
-
-def image_poses(slots: np.ndarray, step: float) -> Poses:
-    points = np.stack(np.divmod(slots, GRID), axis=-1).astype(float)
+def image_poses(slots: np.ndarray, step: float) -> ImagePoses:
+    points = np.stack(np.divmod(slots, GRID), axis=-1)
     centre = np.round(points.mean(axis=0))
     turned, turns = orientations(points - centre)
-    positions, parameters = [], []
-    for placed, turn in zip(np.round(turned + centre, DECIMALS), turns, strict=True):
-        moves = shifts(placed, step)
-        positions.append(placed + moves[:, None])
-        parameters.append(np.c_[np.tile(turn, (len(moves), 1)), moves])
-    positions = np.concatenate(positions)
-    _, first = np.unique(
-        positions.reshape(len(positions), -1), axis=0, return_index=True
-    )
+    placed = np.rint((turned + centre) * QUARTERS).astype(np.int16)
+    _, first = np.unique(placed.reshape(len(placed), -1), axis=0, return_index=True)
     first.sort()
-    positions = positions[first]
-    return Poses(*bilinear(positions), positions, np.concatenate(parameters)[first])
+    stride = round(step * QUARTERS)
+    quarters, parameters = [], []
+    for pattern, turn in zip(placed[first], turns[first], strict=True):
+        low = -(pattern.min(axis=0) // stride)
+        high = (LAST - pattern.max(axis=0)) // stride
+        rows, columns = np.meshgrid(
+            np.arange(low[0], high[0] + 1),
+            np.arange(low[1], high[1] + 1),
+            indexing="ij",
+        )
+        moves = stride * np.stack((rows.ravel(), columns.ravel()), axis=-1)
+        quarters.append(pattern + moves[:, None].astype(np.int16))
+        parameters.append(
+            np.c_[np.broadcast_to(turn, (len(moves), 2)), moves / QUARTERS]
+        )
+    return ImagePoses(np.concatenate(quarters), np.concatenate(parameters))
 
 
 def window(wavelengths: np.ndarray) -> np.ndarray:
     return np.round((wavelengths - SPECTRUM_ORIGIN) / SPECTRUM_TOKEN_WIDTH, DECIMALS)
 
 
-def spectrum_poses(slots: np.ndarray) -> Poses:
+def spectrum_poses(slots: np.ndarray) -> SpectrumPoses:
     low = SPECTRUM_ORIGIN + SPECTRUM_TOKEN_WIDTH * slots
     high = low + SPECTRUM_TOKEN_WIDTH
     end = SPECTRUM_ORIGIN + SPECTRUM_TOKEN_WIDTH * N_SPECTRUM_TOKENS
@@ -93,9 +82,6 @@ def spectrum_poses(slots: np.ndarray) -> Poses:
         starts[..., None], reads
     )
     weights = np.maximum(covered, 0) / (stops - starts)[..., None]
-    return Poses(
-        np.minimum(reads, N_SPECTRUM_TOKENS - 1),
-        weights.astype(np.float32),
-        starts[..., None],
-        stretches,
+    return SpectrumPoses(
+        np.minimum(reads, N_SPECTRUM_TOKENS - 1), weights.astype(np.float32), stretches
     )
