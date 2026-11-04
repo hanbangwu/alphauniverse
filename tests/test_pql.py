@@ -21,6 +21,7 @@ from app.config import (
     TOP_CODES,
     VOCABULARY,
 )
+from app.poses import image_poses, spectrum_poses
 
 GALAXY = 0
 SELECTION = {
@@ -184,12 +185,16 @@ def test_a_search_reads_what_the_agreement_matrix_holds(query: pql.Query) -> Non
         )
 
 
-def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+def cross_overlaps(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
     own = dense(table.slice(GALAXY, 1), mode, TOP_CODES)[0, list(slots)]
     overlaps = dense(table, mode, pql.KEPT) @ own.T
     if mode in SPECTRUM_MODES:
         overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
-    return np.log(overlaps).max(axis=1).sum(axis=1)
+    return overlaps
+
+
+def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+    return np.log(cross_overlaps(table, mode, slots)).max(axis=1).sum(axis=1)
 
 
 def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
@@ -538,11 +543,12 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
 def pose_reference(
     table: pa.Table, mode: str, slots: tuple[int, ...], centred: bool
 ) -> np.ndarray:
-    own = dense(table.slice(GALAXY, 1), mode, TOP_CODES)[0, list(slots)]
-    overlaps = dense(table, mode, pql.KEPT) @ own.T
-    if mode in SPECTRUM_MODES:
-        overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
-    found = pql.pose_set(mode, slots, centred)
+    overlaps = cross_overlaps(table, mode, slots)
+    found = (
+        image_poses(np.array(slots), centred)
+        if mode in IMAGE_MODES
+        else spectrum_poses(np.array(slots))
+    )
     each = np.arange(len(slots))[None, :, None]
     mixed = (overlaps[:, found.indices, each] * found.weights).sum(axis=-1)
     return np.log(np.maximum(mixed, pql.PROBABILITY_FLOOR)).sum(axis=-1)

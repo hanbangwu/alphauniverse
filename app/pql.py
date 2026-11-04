@@ -38,7 +38,7 @@ from .config import (
     TokenMode,
     artifact,
 )
-from .poses import Poses, image_poses, spectrum_poses
+from .poses import image_poses, spectrum_poses
 from .search import tokens
 
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
@@ -491,29 +491,38 @@ def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
 
 
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
-def pose_set(mode: str, slots: tuple[int, ...], centred: bool) -> Poses:
-    if mode in IMAGE_MODES:
-        return image_poses(np.array(slots), centred)
-    return spectrum_poses(np.array(slots))
-
-
-def pose_totals(overlaps: np.ndarray, found: Poses) -> np.ndarray:
-    totals = np.zeros((len(overlaps), len(found.indices)))
-    for slot in range(overlaps.shape[-1]):
-        read = np.take(overlaps[..., slot], found.indices[:, slot], axis=1)
-        mixed = np.einsum("gpr,pr->gp", read, found.weights[:, slot])
-        totals += np.log(np.maximum(mixed, PROBABILITY_FLOOR, out=mixed))
-    return totals
+def pose_reads(
+    mode: str, slots: tuple[int, ...], centred: bool
+) -> tuple[torch.Tensor, torch.Tensor]:
+    found = (
+        image_poses(np.array(slots), centred)
+        if mode in IMAGE_MODES
+        else spectrum_poses(np.array(slots))
+    )
+    flat = found.indices * len(slots) + np.arange(len(slots))[:, None]
+    reads = found.indices.shape[-1]
+    return (
+        torch.from_numpy(flat.reshape(-1, reads).astype(np.int32)),
+        torch.from_numpy(found.weights.reshape(-1, reads)),
+    )
 
 
 def best_poses(
-    rows: pa.RecordBatch, mode: str, form: np.ndarray, found: Poses
-) -> Shapes:
-    best = Shapes(np.empty(rows.num_rows), np.empty(rows.num_rows, np.int64))
+    rows: pa.RecordBatch,
+    mode: str,
+    form: np.ndarray,
+    reads: tuple[torch.Tensor, torch.Tensor],
+) -> np.ndarray:
+    best = np.empty((rows.num_rows, 2))
     for chunk, overlaps in cross_overlaps(rows, mode, form):
-        totals = pose_totals(overlaps, found)
-        best.poses[chunk] = totals.argmax(axis=1)
-        best.totals[chunk] = totals.max(axis=1)
+        table = torch.from_numpy(np.ascontiguousarray(overlaps.transpose(1, 2, 0)))
+        mixed = torch.nn.functional.embedding_bag(
+            reads[0], table.flatten(0, 1), per_sample_weights=reads[1], mode="sum"
+        )
+        totals = mixed.clamp_(min=PROBABILITY_FLOOR).log_()
+        totals = totals.view(-1, len(form), len(overlaps)).sum(dim=1)
+        values, poses = totals.max(dim=0)
+        best[chunk] = np.c_[values.numpy(), poses.numpy()]
     return best
 
 
@@ -525,12 +534,9 @@ def shaped(
     batches: list[pa.RecordBatch],
 ) -> Shapes:
     form = query_forms(row(galaxy), {mode: np.array(slots)})[mode]
-    compute = partial(
-        best_poses, mode=mode, form=form, found=pose_set(mode, slots, centred)
-    )
-    with ThreadPoolExecutor(THREADS) as pool:
-        parts = list(pool.map(compute, batches))
-    return Shapes(*(np.concatenate(part) for part in zip(*parts, strict=True)))
+    reads = pose_reads(mode, slots, centred)
+    found = threaded(partial(best_poses, mode=mode, form=form, reads=reads), batches)
+    return Shapes(found[:, 0], found[:, 1].astype(np.int64))
 
 
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
@@ -541,23 +547,20 @@ def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...], centred: bool) -> 
 
 def shape_scales(
     galaxy: int,
-    selected: dict[str, np.ndarray],
+    keys: dict[str, tuple[int, ...]],
     shapes: dict[str, bool],
     aligned: dict[str, np.ndarray],
-) -> dict[str, tuple[float, float]]:
-    if len(selected) == 1:
-        return dict.fromkeys(selected, (0.0, 1.0))
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    if len(aligned) + len(shapes) == 1:
+        return {}
     sample = slices(gathered(saliency_sample(galaxy)))
-    found = aligned | {
-        mode: shaped(
-            galaxy, mode, tuple(selected[mode].tolist()), centred, sample
-        ).totals
-        for mode, centred in shapes.items()
-    }
-    return {
-        mode: (values.mean(), values.std() * len(selected))
-        for mode, values in found.items()
-    }
+    return spreads(
+        aligned
+        | {
+            mode: shaped(galaxy, mode, keys[mode], centred, sample).totals
+            for mode, centred in shapes.items()
+        }
+    )
 
 
 def pruned(
@@ -567,51 +570,38 @@ def pruned(
     aligned = column_sums(
         galaxy, {mode: slots for mode, slots in selected.items() if mode not in shapes}
     )
-    scales = shape_scales(galaxy, selected, shapes, aligned)
-
-    def standardised(found: dict[str, np.ndarray]) -> np.ndarray:
-        return sum(
-            (found[mode] - mean) / spread for mode, (mean, spread) in scales.items()
-        )
-
-    bounds = standardised(
-        aligned | {mode: basket_sum(galaxy, mode, keys[mode]) for mode in shapes}
+    scales = shape_scales(galaxy, keys, shapes, aligned)
+    bounds = combined(
+        aligned | {mode: basket_sum(galaxy, mode, keys[mode]) for mode in shapes},
+        scales,
     )
     order = np.argsort(-bounds, kind="stable")
-    order = order[order != galaxy]
-    evaluated = []
-    found = {mode: [] for mode in shapes}
-    scored = np.empty(0)
+    order = np.concatenate(([galaxy], order[order != galaxy]))
+    totals = aligned | {mode: np.full(len(order), -np.inf) for mode in shapes}
+    poses = {mode: np.zeros(len(order), np.int64) for mode in shapes}
+    scored = np.full(len(order), -np.inf)
+    evaluated = 0
     for start in range(0, len(order), BATCH):
-        if (
-            scored.size > matches
-            and bounds[order[start]] < np.sort(scored[1:])[-matches]
-        ):
-            break
         block = order[start : start + BATCH]
-        if not start:
-            block = np.concatenate(([galaxy], block))
+        if evaluated > matches:
+            others = scored[order[1:evaluated]]
+            if bounds[block[0]] < np.partition(others, -matches)[-matches]:
+                break
         rows = slices(gathered(block))
         for mode, centred in shapes.items():
-            found[mode].append(shaped(galaxy, mode, keys[mode], centred, rows))
-        evaluated.append(block)
-        galaxies = np.concatenate(evaluated)
-        totals = {mode: values[galaxies] for mode, values in aligned.items()} | {
-            mode: np.concatenate([part.totals for part in parts])
-            for mode, parts in found.items()
-        }
-        scored = standardised(totals)
-    best = np.lexsort((galaxies[1:], -scored[1:]))[:matches] + 1
-    chosen = np.concatenate(([0], best))
+            found = shaped(galaxy, mode, keys[mode], centred, rows)
+            totals[mode][block], poses[mode][block] = found
+        scored[block] = combined(
+            {mode: values[block] for mode, values in totals.items()}, scales
+        )
+        evaluated += len(block)
+    galaxies = ranked(scored, galaxy, matches)
     return Pruned(
-        galaxies[chosen],
-        scored[chosen],
-        {mode: values[chosen] for mode, values in totals.items()},
-        {
-            mode: np.concatenate([part.poses for part in parts])[chosen]
-            for mode, parts in found.items()
-        },
-        len(galaxies),
+        galaxies,
+        scored[galaxies],
+        {mode: values[galaxies] for mode, values in totals.items()},
+        {mode: values[galaxies] for mode, values in poses.items()},
+        evaluated,
     )
 
 
@@ -648,19 +638,40 @@ def selected_forms(
     return selected, query_forms(row(query.galaxy), selected)
 
 
-def contributions(totals: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+def spreads(
+    totals: dict[str, np.ndarray],
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     return {
-        mode: (values - values.mean(axis=-1, keepdims=True))
-        / values.std(axis=-1, keepdims=True)
-        / len(totals)
+        mode: (
+            values.mean(axis=-1, keepdims=True),
+            values.std(axis=-1, keepdims=True) * len(totals),
+        )
         for mode, values in totals.items()
     }
 
 
-def combine(totals: dict[str, np.ndarray]) -> np.ndarray:
+def standardised(
+    totals: dict[str, np.ndarray], scales: dict[str, tuple[np.ndarray, np.ndarray]]
+) -> dict[str, np.ndarray]:
+    return {
+        mode: (totals[mode] - mean) / spread for mode, (mean, spread) in scales.items()
+    }
+
+
+def contributions(totals: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    return standardised(totals, spreads(totals))
+
+
+def combined(
+    totals: dict[str, np.ndarray], scales: dict[str, tuple[np.ndarray, np.ndarray]]
+) -> np.ndarray:
     if len(totals) == 1:
         return next(iter(totals.values()))
-    return sum(contributions(totals).values())
+    return sum(standardised(totals, scales).values())
+
+
+def combine(totals: dict[str, np.ndarray]) -> np.ndarray:
+    return combined(totals, spreads(totals))
 
 
 def cosines(galaxy: int, mode: str) -> np.ndarray:

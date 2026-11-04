@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from app.config import GRID, N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_WIDTH
-from app.poses import SPECTRUM_START, image_poses, spectrum_poses, window
+from app.config import GRID, N_SPECTRUM_TOKENS, SPECTRUM_ORIGIN, SPECTRUM_TOKEN_WIDTH
+from app.poses import image_poses, spectrum_poses, window
 
 SLOTS = np.array([0, 2, 50, 99])
 
@@ -69,7 +69,7 @@ def test_spectrum_poses_read_each_stretched_window_by_the_share_it_covers() -> N
     found = spectrum_poses(slots)
 
     stretches = found.parameters
-    starts = window(stretches * (SPECTRUM_START + SPECTRUM_TOKEN_WIDTH * slots))
+    starts = window(stretches * (SPECTRUM_ORIGIN + SPECTRUM_TOKEN_WIDTH * slots))
     samples = starts[..., None] + stretches[..., None] * (np.arange(4000) + 0.5) / 4000
     expected = np.zeros((*starts.shape, N_SPECTRUM_TOKENS))
     np.put_along_axis(expected, found.indices, found.weights, axis=-1)
@@ -80,7 +80,7 @@ def test_spectrum_poses_read_each_stretched_window_by_the_share_it_covers() -> N
         ]
     ).reshape(expected.shape)
     np.testing.assert_allclose(expected, shares, atol=1e-3)
-    reddest = SPECTRUM_START + SPECTRUM_TOKEN_WIDTH * (slots.max() + 1)
+    reddest = SPECTRUM_ORIGIN + SPECTRUM_TOKEN_WIDTH * (slots.max() + 1)
     steps = np.diff(stretches[:, 0]) * reddest / SPECTRUM_TOKEN_WIDTH
     assert steps.max() <= 0.5 * stretches.max()
     identity = stretches[:, 0] == 1

@@ -3,16 +3,9 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .config import (
-    GRID,
-    N_SPECTRUM_TOKENS,
-    SPECTRUM_GRID,
-    SPECTRUM_PIXEL,
-    SPECTRUM_TOKEN_WIDTH,
-)
+from .config import GRID, N_SPECTRUM_TOKENS, SPECTRUM_ORIGIN, SPECTRUM_TOKEN_WIDTH
 
 DECIMALS = 9
-SPECTRUM_START = SPECTRUM_GRID[0] - SPECTRUM_PIXEL / 2
 
 
 class Poses(NamedTuple):
@@ -80,16 +73,16 @@ def image_poses(slots: np.ndarray, centred: bool) -> Poses:
 
 
 def window(wavelengths: np.ndarray) -> np.ndarray:
-    return np.round((wavelengths - SPECTRUM_START) / SPECTRUM_TOKEN_WIDTH, DECIMALS)
+    return np.round((wavelengths - SPECTRUM_ORIGIN) / SPECTRUM_TOKEN_WIDTH, DECIMALS)
 
 
 def spectrum_poses(slots: np.ndarray) -> Poses:
-    low = SPECTRUM_START + SPECTRUM_TOKEN_WIDTH * slots
+    low = SPECTRUM_ORIGIN + SPECTRUM_TOKEN_WIDTH * slots
     high = low + SPECTRUM_TOKEN_WIDTH
-    end = SPECTRUM_START + SPECTRUM_TOKEN_WIDTH * N_SPECTRUM_TOKENS
+    end = SPECTRUM_ORIGIN + SPECTRUM_TOKEN_WIDTH * N_SPECTRUM_TOKENS
     step = SPECTRUM_TOKEN_WIDTH / (2 * high.max())
     steps = np.arange(
-        math.ceil(math.log(SPECTRUM_START / low.min()) / step),
+        math.ceil(math.log(SPECTRUM_ORIGIN / low.min()) / step),
         math.floor(math.log(end / high.max()) / step) + 1,
     )
     stretches = np.exp(steps * step)[:, None]
