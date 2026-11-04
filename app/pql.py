@@ -158,6 +158,14 @@ class Shapes(NamedTuple):
     poses: np.ndarray
 
 
+class Pruned(NamedTuple):
+    galaxies: np.ndarray
+    scores: np.ndarray
+    totals: dict[str, np.ndarray]
+    poses: dict[str, np.ndarray]
+    evaluated: int
+
+
 class ModeResults(NamedTuple):
     galaxies: np.ndarray
     scores: np.ndarray
@@ -529,6 +537,82 @@ def shaped(
 def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...], centred: bool) -> Shapes:
     with BUILDING:
         return shaped(galaxy, mode, slots, centred, predictions().to_batches())
+
+
+def shape_scales(
+    galaxy: int,
+    selected: dict[str, np.ndarray],
+    shapes: dict[str, bool],
+    aligned: dict[str, np.ndarray],
+) -> dict[str, tuple[float, float]]:
+    if len(selected) == 1:
+        return dict.fromkeys(selected, (0.0, 1.0))
+    sample = slices(gathered(saliency_sample(galaxy)))
+    found = aligned | {
+        mode: shaped(
+            galaxy, mode, tuple(selected[mode].tolist()), centred, sample
+        ).totals
+        for mode, centred in shapes.items()
+    }
+    return {
+        mode: (values.mean(), values.std() * len(selected))
+        for mode, values in found.items()
+    }
+
+
+def pruned(
+    galaxy: int, selected: dict[str, np.ndarray], shapes: dict[str, bool], matches: int
+) -> Pruned:
+    keys = {mode: tuple(selected[mode].tolist()) for mode in shapes}
+    aligned = column_sums(
+        galaxy, {mode: slots for mode, slots in selected.items() if mode not in shapes}
+    )
+    scales = shape_scales(galaxy, selected, shapes, aligned)
+
+    def standardised(found: dict[str, np.ndarray]) -> np.ndarray:
+        return sum(
+            (found[mode] - mean) / spread for mode, (mean, spread) in scales.items()
+        )
+
+    bounds = standardised(
+        aligned | {mode: basket_sum(galaxy, mode, keys[mode]) for mode in shapes}
+    )
+    order = np.argsort(-bounds, kind="stable")
+    order = order[order != galaxy]
+    evaluated = []
+    found = {mode: [] for mode in shapes}
+    scored = np.empty(0)
+    for start in range(0, len(order), BATCH):
+        if (
+            scored.size > matches
+            and bounds[order[start]] < np.sort(scored[1:])[-matches]
+        ):
+            break
+        block = order[start : start + BATCH]
+        if not start:
+            block = np.concatenate(([galaxy], block))
+        rows = slices(gathered(block))
+        for mode, centred in shapes.items():
+            found[mode].append(shaped(galaxy, mode, keys[mode], centred, rows))
+        evaluated.append(block)
+        galaxies = np.concatenate(evaluated)
+        totals = {mode: values[galaxies] for mode, values in aligned.items()} | {
+            mode: np.concatenate([part.totals for part in parts])
+            for mode, parts in found.items()
+        }
+        scored = standardised(totals)
+    best = np.lexsort((galaxies[1:], -scored[1:]))[:matches] + 1
+    chosen = np.concatenate(([0], best))
+    return Pruned(
+        galaxies[chosen],
+        scored[chosen],
+        {mode: values[chosen] for mode, values in totals.items()},
+        {
+            mode: np.concatenate([part.poses for part in parts])[chosen]
+            for mode, parts in found.items()
+        },
+        len(galaxies),
+    )
 
 
 def distributions(mode: str, form: np.ndarray) -> np.ndarray:

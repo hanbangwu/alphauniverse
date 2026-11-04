@@ -574,3 +574,46 @@ def test_a_same_shape_mode_keeps_each_galaxy_s_best_pose_of_the_whole_selection(
         found.totals,
         rtol=1e-4,
     )
+
+
+@pytest.mark.parametrize(
+    "selected",
+    [
+        {"ls_image": (275,)},
+        {"ls_image": (275, 276, 300)},
+        {"ls_image": (275, 276, 300), "desi_spectrum": (40, 41, 42)},
+        {"desi_spectrum": (40, 41, 42), "hsc_image": (5, 6, 7)},
+    ],
+)
+def test_pruning_ranks_matches_as_the_exact_same_shape_scores_do(
+    tree: Path, monkeypatch: pytest.MonkeyPatch, selected: dict[str, tuple[int, ...]]
+) -> None:
+    monkeypatch.setattr(pql, "BATCH", 2)
+    chosen = {mode: np.array(slots) for mode, slots in selected.items()}
+    shapes = {mode: False for mode in selected if mode != "hsc_image"}
+
+    found = pql.pruned(GALAXY, chosen, shapes, matches=3)
+
+    aligned = {mode: slots for mode, slots in chosen.items() if mode not in shapes}
+    exact = pql.column_sums(GALAXY, aligned) | {
+        mode: pql.shape_sum(GALAXY, mode, selected[mode], False).totals
+        for mode in shapes
+    }
+    sample = pql.saliency_sample(GALAXY)
+    if len(selected) == 1:
+        scores = next(iter(exact.values()))
+    else:
+        scores = sum(
+            (values - reference.mean()) / (reference.std() * len(selected))
+            for mode, values in exact.items()
+            for reference in [values[sample] if mode in shapes else values]
+        )
+    galaxies = pql.ranked(scores, GALAXY, 3)
+    np.testing.assert_array_equal(found.galaxies, galaxies)
+    np.testing.assert_allclose(found.scores, scores[galaxies], rtol=1e-5)
+    for mode in shapes:
+        np.testing.assert_allclose(found.totals[mode], exact[mode][galaxies], rtol=1e-5)
+        np.testing.assert_array_equal(
+            found.poses[mode],
+            pql.shape_sum(GALAXY, mode, selected[mode], False).poses[galaxies],
+        )
