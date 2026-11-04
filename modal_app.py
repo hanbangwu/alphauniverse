@@ -268,7 +268,8 @@ def generate_text_vectors() -> None:
 
 
 @app.function(
-    image=build_image.env({"HF_HUB_OFFLINE": "1"}),
+    image=build_image,
+    env={"HF_HUB_OFFLINE": "1"},
     gpu="L4",
     cpu=2,
     memory=(8 * 1024, 32 * 1024),
