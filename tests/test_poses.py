@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from app.config import GRID, N_SPECTRUM_TOKENS, SPECTRUM_ORIGIN, SPECTRUM_TOKEN_WIDTH
 from app.poses import image_poses, spectrum_poses, window
@@ -15,8 +16,9 @@ def distances(points: np.ndarray) -> np.ndarray:
     return np.linalg.norm(points[..., :, None, :] - points[..., None, :, :], axis=-1)
 
 
-def test_every_image_pose_moves_the_selection_rigidly() -> None:
-    found = image_poses(SLOTS)
+@pytest.mark.parametrize("step", [1.0, 0.5])
+def test_every_image_pose_moves_the_selection_rigidly(step: float) -> None:
+    found = image_poses(SLOTS, step)
 
     moved = placed(found.indices, found.weights)
 
@@ -30,7 +32,7 @@ def test_every_image_pose_moves_the_selection_rigidly() -> None:
 
 
 def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose() -> None:
-    found = image_poses(SLOTS)
+    found = image_poses(SLOTS, 1.0)
 
     quarter = np.isclose(np.mod(found.parameters[:, 1], np.pi / 2), 0)
 
@@ -45,12 +47,21 @@ def test_quarter_turns_land_on_cells_and_the_identity_is_a_pose() -> None:
 def test_image_angles_move_the_farthest_slot_at_most_half_a_cell() -> None:
     slots = np.array([275, 278, 323])
 
-    found = image_poses(slots)
+    found = image_poses(slots, 1.0)
 
     angles = np.unique(found.parameters[:, 1])
     cells = np.stack(np.divmod(slots, GRID), axis=-1)
     radius = np.linalg.norm(cells - np.round(cells.mean(axis=0)), axis=-1).max()
     assert np.diff(np.append(angles, 2 * np.pi)).max() * radius <= 0.5
+
+
+def test_half_cell_shifts_keep_every_whole_cell_pose_and_add_more() -> None:
+    cell, half = image_poses(SLOTS, 1.0), image_poses(SLOTS, 0.5)
+
+    found = {pose.tobytes() for pose in half.positions}
+
+    assert all(pose.tobytes() in found for pose in cell.positions)
+    assert len(half.positions) > len(cell.positions)
 
 
 def test_spectrum_poses_read_each_stretched_window_by_the_share_it_covers() -> None:

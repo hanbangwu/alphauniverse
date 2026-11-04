@@ -11,6 +11,7 @@ DECIMALS = 9
 class Poses(NamedTuple):
     indices: np.ndarray
     weights: np.ndarray
+    positions: np.ndarray
     parameters: np.ndarray
 
 
@@ -29,13 +30,13 @@ def orientations(offsets: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.concatenate(turned), parameters
 
 
-def shifts(placed: np.ndarray) -> np.ndarray:
-    low = np.ceil(-placed.min(axis=0)).astype(int)
-    high = np.floor(GRID - 1 - placed.max(axis=0)).astype(int)
+def shifts(placed: np.ndarray, step: float) -> np.ndarray:
+    low = np.ceil(np.round(-placed.min(axis=0) / step, DECIMALS)).astype(int)
+    high = np.floor(np.round((GRID - 1 - placed.max(axis=0)) / step, DECIMALS))
     rows, columns = np.meshgrid(
         np.arange(low[0], high[0] + 1), np.arange(low[1], high[1] + 1), indexing="ij"
     )
-    return np.stack((rows.ravel(), columns.ravel()), axis=-1)
+    return step * np.stack((rows.ravel(), columns.ravel()), axis=-1)
 
 
 def bilinear(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -53,13 +54,13 @@ def bilinear(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.stack(indices, axis=-1), np.stack(weights, axis=-1).astype(np.float32)
 
 
-def image_poses(slots: np.ndarray) -> Poses:
+def image_poses(slots: np.ndarray, step: float) -> Poses:
     points = np.stack(np.divmod(slots, GRID), axis=-1).astype(float)
     centre = np.round(points.mean(axis=0))
     turned, turns = orientations(points - centre)
     positions, parameters = [], []
     for placed, turn in zip(np.round(turned + centre, DECIMALS), turns, strict=True):
-        moves = shifts(placed)
+        moves = shifts(placed, step)
         positions.append(placed + moves[:, None])
         parameters.append(np.c_[np.tile(turn, (len(moves), 1)), moves])
     positions = np.concatenate(positions)
@@ -67,7 +68,8 @@ def image_poses(slots: np.ndarray) -> Poses:
         positions.reshape(len(positions), -1), axis=0, return_index=True
     )
     first.sort()
-    return Poses(*bilinear(positions[first]), np.concatenate(parameters)[first])
+    positions = positions[first]
+    return Poses(*bilinear(positions), positions, np.concatenate(parameters)[first])
 
 
 def window(wavelengths: np.ndarray) -> np.ndarray:
@@ -94,5 +96,6 @@ def spectrum_poses(slots: np.ndarray) -> Poses:
     return Poses(
         np.minimum(reads, N_SPECTRUM_TOKENS - 1),
         weights.astype(np.float32),
+        starts[..., None],
         stretches,
     )

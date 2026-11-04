@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app import embeddings, pql
 from app.config import (
+    GRID,
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     N_IMAGE_TOKENS,
@@ -21,7 +22,7 @@ from app.config import (
     TOP_CODES,
     VOCABULARY,
 )
-from app.poses import image_poses, spectrum_poses
+from app.poses import bilinear, image_poses, spectrum_poses
 
 GALAXY = 0
 SELECTION = {
@@ -540,39 +541,77 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
     ]
 
 
-def pose_reference(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+def pose_reference(
+    table: pa.Table, mode: str, slots: tuple[int, ...], shift: pql.Shift
+) -> np.ndarray:
     overlaps = cross_overlaps(table, mode, slots)
     found = (
-        image_poses(np.array(slots))
+        image_poses(np.array(slots), pql.STEPS[shift])
         if mode in IMAGE_MODES
         else spectrum_poses(np.array(slots))
     )
-    each = np.arange(len(slots))[None, :, None]
-    mixed = (overlaps[:, found.indices, each] * found.weights).sum(axis=-1)
+    return interpolated_sums(overlaps, found.indices, found.weights)
+
+
+def interpolated_sums(
+    overlaps: np.ndarray, indices: np.ndarray, weights: np.ndarray
+) -> np.ndarray:
+    each = np.arange(overlaps.shape[-1])[None, :, None]
+    mixed = (overlaps[:, indices, each] * weights).sum(axis=-1)
     return np.log(np.maximum(mixed, pql.PROBABILITY_FLOOR)).sum(axis=-1)
 
 
-SHAPES = [("ls_image", (275, 276, 300)), ("desi_spectrum", (40, 41, 42))]
+SLOTS_SHAPED = (275, 276, 300)
+SHAPES = [
+    ("ls_image", SLOTS_SHAPED, "cell"),
+    ("ls_image", SLOTS_SHAPED, "half"),
+    ("desi_spectrum", (40, 41, 42), "cell"),
+]
 
 
-@pytest.mark.parametrize(("mode", "slots"), SHAPES)
+@pytest.mark.parametrize(("mode", "slots", "shift"), SHAPES)
 def test_a_same_shape_mode_keeps_each_galaxy_s_best_pose_of_the_whole_selection(
     table: pa.Table,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
     slots: tuple[int, ...],
+    shift: pql.Shift,
 ) -> None:
     monkeypatch.setattr(pql, "CHUNK", 2)
 
-    found = pql.shape_sum(GALAXY, mode, slots)
+    found = pql.shape_sum(GALAXY, mode, slots, shift)
 
-    expected = pose_reference(table, mode, slots)
+    expected = pose_reference(table, mode, slots, shift)
     np.testing.assert_allclose(found.totals, expected.max(axis=1), rtol=1e-4)
     np.testing.assert_allclose(
         np.take_along_axis(expected, found.poses[:, None], axis=1)[:, 0],
         found.totals,
         rtol=1e-4,
     )
+
+
+def test_refinement_adds_the_half_cell_neighbours_of_each_best_whole_cell_pose(
+    table: pa.Table, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pql, "CHUNK", 2)
+
+    found = pql.shape_sum(GALAXY, "ls_image", SLOTS_SHAPED, "refined")
+
+    cell = image_poses(np.array(SLOTS_SHAPED), 1.0)
+    whole = pose_reference(table, "ls_image", SLOTS_SHAPED, "cell")
+    best = cell.positions[whole.argmax(axis=1)]
+    overlaps = cross_overlaps(table, "ls_image", SLOTS_SHAPED)
+    expected = whole.max(axis=1)
+    for galaxy, position in enumerate(best):
+        for offset in pql.NEIGHBOURS:
+            moved = position + offset
+            if ((moved >= 0) & (moved <= GRID - 1)).all():
+                indices, weights = bilinear(moved[None])
+                score = interpolated_sums(overlaps[[galaxy]], indices, weights)[0, 0]
+                expected[galaxy] = max(expected[galaxy], score)
+    np.testing.assert_allclose(found.totals, expected, rtol=1e-4)
+    half = pql.shape_sum(GALAXY, "ls_image", SLOTS_SHAPED, "half").totals
+    assert (found.totals <= half + 1e-4 * np.abs(half)).all()
 
 
 @pytest.mark.parametrize(
@@ -591,11 +630,12 @@ def test_pruning_ranks_matches_as_the_exact_same_shape_scores_do(
     chosen = {mode: np.array(slots) for mode, slots in selected.items()}
     shapes = [mode for mode in selected if mode != "hsc_image"]
 
-    found = pql.pruned(GALAXY, chosen, shapes, matches=3)
+    found = pql.pruned(GALAXY, chosen, shapes, "cell", matches=3)
 
     aligned = {mode: slots for mode, slots in chosen.items() if mode not in shapes}
     exact = pql.column_sums(GALAXY, aligned) | {
-        mode: pql.shape_sum(GALAXY, mode, selected[mode]).totals for mode in shapes
+        mode: pql.shape_sum(GALAXY, mode, selected[mode], "cell").totals
+        for mode in shapes
     }
     sample = pql.saliency_sample(GALAXY)
     if len(selected) == 1:
@@ -613,5 +653,5 @@ def test_pruning_ranks_matches_as_the_exact_same_shape_scores_do(
         np.testing.assert_allclose(found.totals[mode], exact[mode][galaxies], rtol=1e-5)
         np.testing.assert_array_equal(
             found.poses[mode],
-            pql.shape_sum(GALAXY, mode, selected[mode]).poses[galaxies],
+            pql.shape_sum(GALAXY, mode, selected[mode], "cell").poses[galaxies],
         )

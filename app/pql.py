@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import cache, lru_cache, partial
 from itertools import accumulate
 from threading import Lock
-from typing import Annotated, NamedTuple, Self, get_args
+from typing import Annotated, Literal, NamedTuple, Self, get_args
 
 import numpy as np
 import pyarrow as pa
@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import embeddings
 from .config import (
+    GRID,
     IMAGE_MODES,
     IMAGE_VOCABULARY,
     KEPT,
@@ -38,7 +39,7 @@ from .config import (
     TokenMode,
     artifact,
 )
-from .poses import image_poses, spectrum_poses
+from .poses import bilinear, image_poses, spectrum_poses
 from .search import tokens
 
 SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
@@ -70,6 +71,12 @@ CHUNK = 16
 BLOCK = 8192
 BUILDING = Lock()
 THREADS = pa.cpu_count()
+
+Shift = Literal["cell", "half", "refined"]
+STEPS: dict[Shift, float] = {"cell": 1.0, "half": 0.5, "refined": 1.0}
+NEIGHBOURS = 0.5 * np.array(
+    [(row, column) for row in (-1, 0, 1) for column in (-1, 0, 1) if row or column]
+)
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
@@ -490,37 +497,62 @@ def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
         )
 
 
+class Reads(NamedTuple):
+    indices: torch.Tensor
+    weights: torch.Tensor
+    positions: np.ndarray | None
+
+
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
-def pose_reads(mode: str, slots: tuple[int, ...]) -> tuple[torch.Tensor, torch.Tensor]:
+def pose_reads(mode: str, slots: tuple[int, ...], shift: Shift) -> Reads:
     found = (
-        image_poses(np.array(slots))
+        image_poses(np.array(slots), STEPS[shift])
         if mode in IMAGE_MODES
         else spectrum_poses(np.array(slots))
     )
     flat = found.indices * len(slots) + np.arange(len(slots))[:, None]
     reads = found.indices.shape[-1]
-    return (
+    return Reads(
         torch.from_numpy(flat.reshape(-1, reads).astype(np.int32)),
         torch.from_numpy(found.weights.reshape(-1, reads)),
+        found.positions if shift == "refined" and mode in IMAGE_MODES else None,
     )
 
 
+def refined(
+    overlaps: np.ndarray, positions: np.ndarray, poses: np.ndarray
+) -> np.ndarray:
+    moved = positions[poses][:, None] + NEIGHBOURS[None, :, None]
+    inside = ((moved >= 0) & (moved <= GRID - 1)).all(axis=(2, 3))
+    indices, weights = bilinear(np.clip(moved, 0, GRID - 1))
+    count = overlaps.shape[-1]
+    flat = indices * count + np.arange(count)[:, None]
+    read = np.take_along_axis(
+        overlaps.reshape(len(overlaps), -1), flat.reshape(len(overlaps), -1), axis=1
+    )
+    mixed = (read.reshape(indices.shape) * weights).sum(axis=-1)
+    totals = np.log(np.maximum(mixed, PROBABILITY_FLOOR)).sum(axis=-1)
+    return np.where(inside, totals, -np.inf).max(axis=1)
+
+
 def best_poses(
-    rows: pa.RecordBatch,
-    mode: str,
-    form: np.ndarray,
-    reads: tuple[torch.Tensor, torch.Tensor],
+    rows: pa.RecordBatch, mode: str, form: np.ndarray, reads: Reads
 ) -> np.ndarray:
     best = np.empty((rows.num_rows, 2))
     for chunk, overlaps in cross_overlaps(rows, mode, form):
         table = torch.from_numpy(np.ascontiguousarray(overlaps.transpose(1, 2, 0)))
         mixed = torch.nn.functional.embedding_bag(
-            reads[0], table.flatten(0, 1), per_sample_weights=reads[1], mode="sum"
+            reads.indices,
+            table.flatten(0, 1),
+            per_sample_weights=reads.weights,
+            mode="sum",
         )
         totals = mixed.clamp_(min=PROBABILITY_FLOOR).log_()
         totals = totals.view(-1, len(form), len(overlaps)).sum(dim=1)
-        values, poses = totals.max(dim=0)
-        best[chunk] = np.c_[values.numpy(), poses.numpy()]
+        values, poses = (part.numpy() for part in totals.max(dim=0))
+        if reads.positions is not None:
+            values = np.maximum(values, refined(overlaps, reads.positions, poses))
+        best[chunk] = np.c_[values, poses]
     return best
 
 
@@ -528,23 +560,25 @@ def shaped(
     galaxy: int,
     mode: str,
     slots: tuple[int, ...],
+    shift: Shift,
     batches: list[pa.RecordBatch],
 ) -> Shapes:
     form = query_forms(row(galaxy), {mode: np.array(slots)})[mode]
-    reads = pose_reads(mode, slots)
+    reads = pose_reads(mode, slots, shift)
     found = threaded(partial(best_poses, mode=mode, form=form, reads=reads), batches)
     return Shapes(found[:, 0], found[:, 1].astype(np.int64))
 
 
 @lru_cache(maxsize=AGREEMENT_GALAXIES)
-def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> Shapes:
+def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...], shift: Shift) -> Shapes:
     with BUILDING:
-        return shaped(galaxy, mode, slots, predictions().to_batches())
+        return shaped(galaxy, mode, slots, shift, predictions().to_batches())
 
 
 def shape_scales(
     galaxy: int,
     keys: dict[str, tuple[int, ...]],
+    shift: Shift,
     aligned: dict[str, np.ndarray],
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     if len(aligned) + len(keys) == 1:
@@ -553,20 +587,24 @@ def shape_scales(
     return spreads(
         aligned
         | {
-            mode: shaped(galaxy, mode, slots, sample).totals
+            mode: shaped(galaxy, mode, slots, shift, sample).totals
             for mode, slots in keys.items()
         }
     )
 
 
 def pruned(
-    galaxy: int, selected: dict[str, np.ndarray], shapes: Collection[str], matches: int
+    galaxy: int,
+    selected: dict[str, np.ndarray],
+    shapes: Collection[str],
+    shift: Shift,
+    matches: int,
 ) -> Pruned:
     keys = {mode: tuple(selected[mode].tolist()) for mode in shapes}
     aligned = column_sums(
         galaxy, {mode: slots for mode, slots in selected.items() if mode not in shapes}
     )
-    scales = shape_scales(galaxy, keys, aligned)
+    scales = shape_scales(galaxy, keys, shift, aligned)
     bounds = combined(
         aligned | {mode: basket_sum(galaxy, mode, keys[mode]) for mode in shapes},
         scales,
@@ -585,7 +623,7 @@ def pruned(
                 break
         rows = slices(gathered(block))
         for mode, slots in keys.items():
-            found = shaped(galaxy, mode, slots, rows)
+            found = shaped(galaxy, mode, slots, shift, rows)
             totals[mode][block], poses[mode][block] = found
         scored[block] = combined(
             {mode: values[block] for mode, values in totals.items()}, scales
