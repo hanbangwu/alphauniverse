@@ -223,6 +223,7 @@ def test_training_uses_every_part_for_a_fixed_number_of_steps(
         "LOGGED": 1,
         "TEXT_VIEW_PARTS": 3,
         "PARTS_PER_ROUND": 2,
+        "VIEWS_PER_PART": 2 * len(VIEW_TYPES),
     }.items():
         monkeypatch.setattr(text_regression, name, value)
 

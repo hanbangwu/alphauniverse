@@ -81,7 +81,7 @@ class Regression(nn.Module):
         return self.layers(torch.cat([condition, present, self.kind(kind)], dim=-1))
 
 
-def views(path: Path) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def views(path: Path | list[Path]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     table = pq.read_table(path, columns=["galaxy", "view_type", "embedding"])
     embedding = table.column("embedding").combine_chunks().flatten().to_numpy()
     return (
@@ -293,15 +293,24 @@ def train_text_regression() -> None:
 
     text_views.generate_text_views(TEXT_VIEW_PARTS)
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    owners, kinds, found = views(artifact("text_views"))
-    first = PARTS_PER_ROUND * VIEWS_PER_PART
-    bases = fitted_bases(kinds[:first], found[:first]) | whitening(
+    paths = [text_views.part_path(index) for index in range(TEXT_VIEW_PARTS)]
+    _, first_kinds, first_found = views(paths[:PARTS_PER_ROUND])
+    bases = fitted_bases(first_kinds, first_found) | whitening(
         joint[text_views.training()]
     )
+    del first_kinds, first_found
     held = evaluated(joint, bases)
     everything = torch.ones(1, len(GRAM_NAMES), device=device())
-    targets = coefficients(bases, kinds, residuals(bases["mean"], kinds, found))
-    del found
+    count = TEXT_VIEW_PARTS * VIEWS_PER_PART
+    owners = torch.empty(count, dtype=torch.long, device=device())
+    kinds = torch.empty(count, dtype=torch.long, device=device())
+    targets = torch.empty(count, TEXT_RANK, device=device())
+    for index, path in enumerate(paths):
+        rows = slice(index * VIEWS_PER_PART, (index + 1) * VIEWS_PER_PART)
+        owners[rows], kinds[rows], found = views(path)
+        targets[rows] = coefficients(
+            bases, kinds[rows], residuals(bases["mean"], kinds[rows], found)
+        )
     weights = training_weights(kinds)
     torch.manual_seed(SEED)
     network = Regression().to(device())
