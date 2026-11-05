@@ -115,6 +115,25 @@
         }
       }
     },
+    "/positions": {
+      "get": {
+        "summary": "Get Positions",
+        "operationId": "get_positions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/galaxy/{galaxy}": {
       "get": {
         "summary": "Get Galaxy",

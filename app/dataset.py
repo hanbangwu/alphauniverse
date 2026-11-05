@@ -162,6 +162,12 @@ def identity(galaxy: int) -> dict[str, str | float]:
     }
 
 
+def positions() -> pa.Table:
+    return pa.table(
+        {name: dataset().data.column(f"{name}{LS}") for name in ("ra", "dec")}
+    )
+
+
 def usable(redshift: float | None, warning: bool | None) -> bool:
     return redshift is not None and not warning and redshift <= REDSHIFT_LIMIT
 

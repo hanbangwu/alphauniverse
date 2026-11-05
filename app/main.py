@@ -58,6 +58,7 @@ from .dataset import (
     fitted,
     identity,
     image,
+    positions,
     predicted_image,
     redshift,
     smoothed,
@@ -253,6 +254,15 @@ def download_artifact(role: Download, request: Request) -> Response:
 @app.head("/downloads/{role}", include_in_schema=False)
 def head_download_artifact(role: Download, request: Request) -> Response:
     return download_artifact(role, request)
+
+
+@app.get(
+    "/positions",
+    response_class=Response,
+    responses={200: {"content": ARROW_STREAM}},
+)
+def get_positions() -> Response:
+    return arrow(positions())
 
 
 @app.get(

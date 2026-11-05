@@ -3,8 +3,16 @@ Site behaviour
 
 The frontend's exact behaviour. :doc:`/using` is the visitor's summary.
 
-Map
+Sky
 ---
+
+- The default tab. Tiles are Legacy Survey DR10 south JPEGs from ``legacysurvey.org``, requested by the browser, native to zoom 14 and enlarged to zoom 16. The map fills the space between the panels, unlike the UMAP, which runs under them, so all of it stays clickable. It opens fitted to the dataset's extent plus one cutout width, panning stops there, and north stays up.
+- ``/positions`` gives each galaxy's ``ra`` and ``dec``, drawn at longitude 180° − RA and latitude Dec on the tiles' Web Mercator grid.
+- Rings appear once ``/positions`` loads, in the no-value colour, then take the colours of the UMAP's property and hide outside the legend's range.
+- Hover and click take the nearest shown galaxy whose 25″ Legacy Survey cutout holds the cursor, so overlapping cutouts go to the nearer galaxy. Hover outlines that cutout and shows the UMAP's tooltip; the open galaxy's cutout stays outlined.
+
+UMAP
+----
 
 - **Any position**, the default, draws ``any_position_points``; **Same place** draws ``same_place_points``.
 - A property is coloured on 32 viridis bins from its 1st to its 99th percentile; values beyond either end take that end's colour. Redshift is the default. g − r is only measured.

@@ -1,10 +1,18 @@
 Using the site
 ==============
 
-Browse the map
+Browse the sky
 --------------
 
-Each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
+The **Sky** tab, the default, shows the Legacy Survey image of COSMOS with a ring on each galaxy in the dataset. Drag to pan, and scroll or pinch to zoom.
+
+- Hover over a galaxy's cutout to outline it and preview the galaxy. Click to open it. Sources with no outline are not in the dataset.
+- Colour the rings and filter them to a range as on the UMAP tab. Faded rings are AION's predictions.
+
+Browse the UMAP
+---------------
+
+On the **UMAP** tab, each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
 
 - **Any position** groups galaxies whose features match wherever they sit in the image or spectrum. **Same place** groups them only when the features are in the same place.
 - Colour the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r colour, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. **Measured first** uses the measured value where there is one and AION's prediction, faded, elsewhere. **Predicted** uses AION's prediction for every galaxy.

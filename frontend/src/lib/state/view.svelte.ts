@@ -11,10 +11,11 @@ import {
 } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField, ListField } from './fields.svelte'
-import { DEFAULTS, searched, stored } from './params.svelte'
+import { DEFAULTS, type Values, searched, stored } from './params.svelte'
 import { PersistedState } from 'runed'
 
 export class ViewState {
+  readonly tab: Field<Values['tab']>
   readonly pointSet: EnumField<PointSet>
   readonly property: EnumField<Property>
   readonly source: EnumField<Source>
@@ -35,6 +36,7 @@ export class ViewState {
   })
 
   constructor() {
+    this.tab = new Field(DEFAULTS.tab, stored('tab'))
     this.pointSet = new EnumField(POINT_SETS, stored('projection'))
     this.property = new EnumField(PROPERTIES, stored('property'))
     this.source = new EnumField(SOURCES, stored('source'))

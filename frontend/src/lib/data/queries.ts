@@ -4,6 +4,7 @@ import {
   getImageTokens,
   getMeta,
   getModeSearch,
+  getPositions,
   getSaliency,
   getSearch,
   getSpectrum,
@@ -29,6 +30,7 @@ import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-quer
 import { Query, column, isIn } from '@uwdata/mosaic-sql'
 import {
   type Float32,
+  type Float64,
   type Int32,
   type Table,
   type Utf8,
@@ -39,11 +41,31 @@ import type { Point, Rectangle } from 'embedding-atlas'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
+export interface Shown {
+  galaxy: number
+  colour: number
+  value: number | null
+  width: number | null
+  predicted: boolean | null
+}
+
 export const metaQuery = queryOptions({
   queryKey: ['meta'] as const,
   queryFn: async () => {
     const { data } = await getMeta({ throwOnError: true })
     return data
+  },
+  ...FOREVER
+})
+
+export const positionsQuery = queryOptions({
+  queryKey: ['positions'] as const,
+  queryFn: async () => {
+    const { data } = await getPositions({ throwOnError: true })
+    const table = tableFromIPC<{ ra: Float64; dec: Float64 }>(
+      new Uint8Array(await data.arrayBuffer())
+    )
+    return { ra: table.getChild('ra')!.toArray(), dec: table.getChild('dec')!.toArray() }
   },
   ...FOREVER
 })
@@ -224,6 +246,29 @@ export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: 
             )
           },
     staleTime: Infinity
+  })
+}
+
+export function colouredQuery(mosaic: MosaicState, name: string | null) {
+  return queryOptions({
+    queryKey: ['coloured', name] as const,
+    queryFn:
+      name === null
+        ? skipToken
+        : async () => {
+            const rows = await mosaic.coordinator.query(
+              Query.from(name).select('galaxy', 'colour', 'value', 'width', 'predicted')
+            )
+            return Array.from(rows, (row): Shown => ({
+              galaxy: Number(row.galaxy),
+              colour: row.colour,
+              value: row.value,
+              width: row.width,
+              predicted: row.predicted
+            }))
+          },
+    placeholderData: keepPreviousData,
+    ...FOREVER
   })
 }
 
