@@ -315,5 +315,6 @@ serving_image = (
 def fastapi_app() -> FastAPI:
     from app.main import app, query_embedder
 
-    app.dependency_overrides[query_embedder] = lambda: QueryEmbedder().embed.remote
+    embed = QueryEmbedder().embed.remote
+    app.dependency_overrides[query_embedder] = lambda: embed
     return app
