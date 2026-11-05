@@ -139,8 +139,9 @@ CATALOGUES: dict[str, Catalogue] = {
 
 N_MORPHOLOGIES = 10
 
-GEMMA = "tencent/WeMM-Embedding-2B"
+GEMMA = "tencent/WeMM-Embedding-9B"
 GEMMA_DIM = 1024
+QUERY_PREFIX = "Search galaxy spectra, images and catalogue measurements for: {}"
 TextModality = Literal["image", "spectrum"]
 PLOT_INCHES = (16.8, 3.84)
 TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
@@ -236,8 +237,8 @@ VIEW_TYPES = (
     *((kind, mode) for mode in MODES for kind in VIEW_KINDS),
     *(("combination", name) for name in VIEW_COMBINATIONS),
 )
-TEXT_RANK = 32
-TEXT_CONDITION = 64
+TEXT_RANK = 128
+TEXT_CONDITION = 256
 VIEWS_PER_PART = 4_000
 PARTS_PER_ROUND = 10
 PROTOTYPE_HELD_OUT = np.concatenate(

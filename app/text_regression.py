@@ -1,6 +1,5 @@
 import json
 from collections.abc import Callable
-from copy import deepcopy
 from pathlib import Path
 from typing import NamedTuple
 
@@ -40,15 +39,15 @@ KIND_WIDTH = 16
 BATCH = 512
 MASKED = 0.3
 DROPPED = 0.1
-CHUNK = 400
 STEPS = 60
+TRAINING_STEPS = 111_000
+TEXT_VIEW_PARTS = 200
+LOGGED = 100
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-3
 DECAY = 0.999
-PATIENCE = 10
-IMPROVEMENT = 0.001
 SHARED_BASIS = 128
-CAP = 1_000_000
+SCALE_FLOOR = 0.1
 GALAXIES = 1024
 
 Bases = dict[str, torch.Tensor]
@@ -82,7 +81,7 @@ class Regression(nn.Module):
         return self.layers(torch.cat([condition, present, self.kind(kind)], dim=-1))
 
 
-def views(path: Path) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def views(path: Path | list[Path]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     table = pq.read_table(path, columns=["galaxy", "view_type", "embedding"])
     embedding = table.column("embedding").combine_chunks().flatten().to_numpy()
     return (
@@ -90,16 +89,6 @@ def views(path: Path) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         torch.tensor(table.column("view_type").to_numpy(), device=device()).long(),
         torch.tensor(embedding.reshape(len(table), GEMMA_DIM), device=device()).float(),
     )
-
-
-def first_round() -> tuple[torch.Tensor, torch.Tensor]:
-    count = PARTS_PER_ROUND * VIEWS_PER_PART
-    view_types = torch.empty(count, dtype=torch.long, device=device())
-    embeddings = torch.empty(count, GEMMA_DIM, device=device())
-    for index in range(PARTS_PER_ROUND):
-        rows = slice(index * VIEWS_PER_PART, (index + 1) * VIEWS_PER_PART)
-        _, view_types[rows], embeddings[rows] = views(text_views.part_path(index))
-    return view_types, embeddings
 
 
 def residuals(
@@ -125,7 +114,8 @@ def fitted_bases(view_types: torch.Tensor, embeddings: torch.Tensor) -> Bases:
         pca = PCA(TEXT_RANK, random_state=SEED).fit(found[fitted])
         components.append(pca.components_)
         centre.append(pca.mean_)
-        scale.append(pca.transform(found[fitted]).std(axis=0))
+        spread = pca.transform(found[fitted]).std(axis=0)
+        scale.append(np.maximum(spread, SCALE_FLOOR * np.median(spread)))
     return {
         "mean": mean,
         "components": torch.from_numpy(np.stack(components)).to(device()),
@@ -301,14 +291,27 @@ def report(network: Regression, held: HeldOut, bases: Bases) -> dict:
 def train_text_regression() -> None:
     import wandb
 
-    text_views.generate_text_views(PARTS_PER_ROUND)
+    text_views.generate_text_views(TEXT_VIEW_PARTS)
     joint = embeddings.loaded("joint_embedding", torch.float32)
-    bases = fitted_bases(*first_round()) | whitening(joint[text_views.training()])
+    paths = [text_views.part_path(index) for index in range(TEXT_VIEW_PARTS)]
+    _, first_kinds, first_found = views(paths[:PARTS_PER_ROUND])
+    bases = fitted_bases(first_kinds, first_found) | whitening(
+        joint[text_views.training()]
+    )
+    del first_kinds, first_found
     held = evaluated(joint, bases)
     everything = torch.ones(1, len(GRAM_NAMES), device=device())
-    targets = torch.empty(CAP, TEXT_RANK, device=device())
-    owners = torch.empty(CAP, dtype=torch.long, device=device())
-    kinds = torch.empty(CAP, dtype=torch.long, device=device())
+    count = TEXT_VIEW_PARTS * VIEWS_PER_PART
+    owners = torch.empty(count, dtype=torch.long, device=device())
+    kinds = torch.empty(count, dtype=torch.long, device=device())
+    targets = torch.empty(count, TEXT_RANK, device=device())
+    for index, path in enumerate(paths):
+        rows = slice(index * VIEWS_PER_PART, (index + 1) * VIEWS_PER_PART)
+        owners[rows], kinds[rows], found = views(path)
+        targets[rows] = coefficients(
+            bases, kinds[rows], residuals(bases["mean"], kinds[rows], found)
+        )
+    weights = training_weights(kinds)
     torch.manual_seed(SEED)
     network = Regression().to(device())
     optimiser = torch.optim.AdamW(
@@ -333,47 +336,32 @@ def train_text_regression() -> None:
             "condition": TEXT_CONDITION,
             "hidden": HIDDEN,
             "batch": BATCH,
-            "chunk": CHUNK,
-            "steps": STEPS,
+            "steps": TRAINING_STEPS,
             "learning_rate": LEARNING_RATE,
             "weight_decay": WEIGHT_DECAY,
             "masked": MASKED,
             "dropped": DROPPED,
+            "scale_floor": SCALE_FLOOR,
             "seed": SEED,
         },
     ) as run:
-        filled, best, best_part = 0, -1.0, 0
-        for index in range(CAP // VIEWS_PER_PART):
-            if not text_views.part_path(index).exists():
-                rounds = index // PARTS_PER_ROUND + 1
-                text_views.generate_text_views(rounds * PARTS_PER_ROUND)
-            galaxy, view_type, embedding = views(text_views.part_path(index))
-            rows = slice(filled, filled + len(galaxy))
-            directions = residuals(bases["mean"], view_type, embedding)
-            targets[rows] = coefficients(bases, view_type, directions)
-            owners[rows], kinds[rows] = galaxy, view_type
-            losses = []
-            for start in range(filled, rows.stop, CHUNK):
-                weights = training_weights(kinds[: min(start + CHUNK, rows.stop)])
-                losses.append(stepped(network, average, optimiser, weights, inputs))
-            filled = rows.stop
-            overall = identification(average.module, held, bases, everything).nanmean()
-            entry = {
-                "views": filled,
-                "train/loss": float(np.mean(losses)),
-                "identification": overall.item(),
-            }
-            run.log(entry)
-            print(json.dumps(entry), flush=True)
-            if overall.item() > best + IMPROVEMENT:
-                best, best_part, best_views = overall.item(), index, filled
-                best_network = deepcopy(average.module)
-            if index - best_part >= PATIENCE:
-                break
-        found = {"views": best_views} | report(best_network, held, bases)
+        losses = []
+        for index in range(TRAINING_STEPS // STEPS):
+            losses.append(stepped(network, average, optimiser, weights, inputs))
+            if (index + 1) % LOGGED == 0:
+                overall = identification(average.module, held, bases, everything)
+                entry = {
+                    "step": (index + 1) * STEPS,
+                    "train/loss": float(np.mean(losses)),
+                    "identification": overall.nanmean().item(),
+                }
+                run.log(entry)
+                print(json.dumps(entry), flush=True)
+                losses = []
+        found = {"views": len(owners)} | report(average.module, held, bases)
         run.summary.update(found)
         print(json.dumps(found, indent=1))
-    torch.save(best_network.state_dict(), artifact("text_regression"))
+    torch.save(average.module.state_dict(), artifact("text_regression"))
     np.savez(
         artifact("text_bases"),
         **{name: value.cpu().numpy() for name, value in bases.items()},

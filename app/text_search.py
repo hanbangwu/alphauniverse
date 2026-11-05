@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import cache
 from itertools import batched, product
 from threading import Lock
@@ -25,6 +25,7 @@ from .config import (
     N_SPECTRUM_TOKENS,
     PAIRS,
     PLOT_INCHES,
+    QUERY_PREFIX,
     RGB_COLUMN,
     SPECTRUM_ORIGIN,
     SPECTRUM_SURVEY,
@@ -142,7 +143,11 @@ def text_model() -> SentenceTransformer:
 
 
 def embed_queries(texts: list[str]) -> np.ndarray:
-    return text_model().encode_query(texts, normalize_embeddings=True)
+    with LOADING:
+        model = text_model()
+    return model.encode_query(
+        [QUERY_PREFIX.format(text) for text in texts], normalize_embeddings=True
+    )
 
 
 def generic_queries() -> list[str]:
@@ -248,10 +253,12 @@ def query_directions(embedded: np.ndarray, mean: torch.Tensor) -> torch.Tensor:
     return F.normalize(torch.from_numpy(embedded) - mean, dim=-1)
 
 
-def text_search(query: TextQuery) -> TextResults:
+def text_search(
+    query: TextQuery, embed: Callable[[list[str]], np.ndarray]
+) -> TextResults:
     with LOADING:
         stored = text_vectors()
-        embedded = embed_queries([query.text])[0]
+    embedded = embed([query.text])[0]
     direction = query_directions(embedded, stored.query_mean)
     scores = stored.vectors @ direction
     top = scores.topk(min(query.matches, len(scores))).indices

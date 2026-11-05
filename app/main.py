@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from io import BytesIO
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.routing import APIRoute
@@ -70,10 +71,10 @@ from .search import (
     templates,
     tokens,
 )
-from .text_search import TextQuery, text_search
+from .text_search import TextQuery, embed_queries, text_search
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine
+    from collections.abc import AsyncIterator, Coroutine
     from pathlib import Path
 
 
@@ -591,9 +592,16 @@ def get_mode_search(query: Annotated[pql.ModeQuery, Query()]) -> Response:
     return search_response(fields, columns, results.galaxies, results.predicted)
 
 
+def query_embedder() -> Callable[[list[str]], np.ndarray]:
+    return embed_queries
+
+
 @app.get("/search/text")
-def get_text_search(query: Annotated[TextQuery, Query()]) -> TextMatches:
-    found = text_search(query)
+def get_text_search(
+    query: Annotated[TextQuery, Query()],
+    embed: Annotated[Callable[[list[str]], np.ndarray], Depends(query_embedder)],
+) -> TextMatches:
+    found = text_search(query, embed)
     return TextMatches(
         galaxies=found.galaxies.tolist(),
         scores=found.scores.tolist(),

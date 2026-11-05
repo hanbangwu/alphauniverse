@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import modal
 
 if TYPE_CHECKING:
+    import numpy as np
     from fastapi import FastAPI
 
 CACHE_PATH = "/cache"
@@ -205,7 +206,7 @@ def generate_projections() -> None:
 
 @app.function(
     image=build_image,
-    gpu="L4",
+    gpu="L40S",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
     timeout=6 * 60 * 60,
@@ -266,6 +267,21 @@ def generate_text_vectors() -> None:
     cache_volume.commit()
 
 
+@app.function(
+    image=build_image,
+    gpu=["L4", "A10G", "L40S"],
+    cpu=2,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=10 * 60,
+    volumes={CACHE_PATH: cache_volume},
+    scaledown_window=SERVING_SCALEDOWN_WINDOW,
+)
+def embed_text_queries(texts: list[str]) -> np.ndarray:
+    from app.text_search import embed_queries
+
+    return embed_queries(texts)
+
+
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(extra_options="--no-dev")
@@ -287,6 +303,7 @@ serving_image = (
 @modal.concurrent(max_inputs=SERVING_MAX_INPUTS)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
-    from app.main import app
+    from app.main import app, query_embedder
 
+    app.dependency_overrides[query_embedder] = lambda: embed_text_queries.remote
     return app

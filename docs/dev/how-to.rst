@@ -41,11 +41,11 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_maps
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
-   uv run modal run modal_app.py::generate_text_views --parts 10
+   uv run modal run modal_app.py::generate_text_views --parts 200
    uv run modal run modal_app.py::train_text_regression
    uv run modal run modal_app.py::generate_text_vectors
 
-A failed job leaves its artifacts incomplete; rerun it.
+A failed job leaves its artifacts incomplete; rerun it. Text artifacts are not keyed by text model: after changing ``GEMMA``, move ``text_views``, ``text_views_held_out``, ``text_regression``, ``text_bases``, ``text_vectors`` and ``text_query_mean`` aside before rerunning ``generate_text_views``, ``train_text_regression`` and ``generate_text_vectors``, or new views are mixed with old ones, and rerun ``generate_pairs``, whose ``pairs_image`` and ``pairs_spectrum`` hold the text model's embeddings that ``text_search_quality`` scores queries against.
 
 These commands write to the volume production serves from. To build into the ``dev`` Modal environment instead, which has its own app, volume and secrets, add ``--env dev`` after ``modal run``.
 
