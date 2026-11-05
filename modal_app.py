@@ -267,7 +267,7 @@ def generate_text_vectors() -> None:
     cache_volume.commit()
 
 
-@app.function(
+@app.cls(
     image=build_image,
     gpu=["L4", "A10G", "L40S"],
     cpu=2,
@@ -275,11 +275,21 @@ def generate_text_vectors() -> None:
     timeout=10 * 60,
     volumes={CACHE_PATH: cache_volume},
     scaledown_window=SERVING_SCALEDOWN_WINDOW,
+    enable_memory_snapshot=True,
+    experimental_options={"enable_gpu_snapshot": True},
 )
-def embed_text_queries(texts: list[str]) -> np.ndarray:
-    from app.text_search import embed_queries
+class QueryEmbedder:
+    @modal.enter(snap=True)
+    def load(self) -> None:
+        from app.text_search import embed_queries
 
-    return embed_queries(texts)
+        embed_queries(["a galaxy"])
+
+    @modal.method()
+    def embed(self, texts: list[str]) -> np.ndarray:
+        from app.text_search import embed_queries
+
+        return embed_queries(texts)
 
 
 serving_image = (
@@ -305,5 +315,5 @@ serving_image = (
 def fastapi_app() -> FastAPI:
     from app.main import app, query_embedder
 
-    app.dependency_overrides[query_embedder] = lambda: embed_text_queries.remote
+    app.dependency_overrides[query_embedder] = lambda: QueryEmbedder().embed.remote
     return app
