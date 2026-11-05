@@ -10,21 +10,17 @@ import torch
 from astropy.stats import mad_std
 from tqdm import tqdm
 
-from app import aion_predictions, predictions, properties
-from app.config import (
-    DATASET_REVISION,
-    REDSHIFT,
-    REDSHIFT_COLUMNS,
-    STORE_COLUMNS,
-    artifact,
-)
-from app.observations import measured_redshifts, observed
-from app.search import tokens
-from modal_app import CACHE_PATH, build_image, cache_volume
+from core.artifacts import artifact, tokens
+from core.config import DATASET_REVISION, REDSHIFT, REDSHIFT_COLUMNS
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import aion_predictions, predictions, properties
+from pipeline.config import STORE_COLUMNS
+from pipeline.modal_app import build_image
+from pipeline.observations import measured_redshifts, observed
 from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-redshift-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/redshift_quality.json")
 KEPT = ("ls", "hsc")

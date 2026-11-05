@@ -34,9 +34,9 @@ def client(tree: Path) -> Iterator[TestClient]:
 @pytest.fixture(scope="module")
 def random_weights() -> Iterator[None]:
     torch = pytest.importorskip("torch")
-    encode_module = importlib.import_module("app.encode")
+    encode_module = importlib.import_module("pipeline.encode")
     codec_config = importlib.import_module("aion.codecs.config")
-    from app.config import device
+    from core.device import device
 
     configs = Path(__file__).parent / "aion"
 

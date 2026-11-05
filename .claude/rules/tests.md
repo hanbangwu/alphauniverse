@@ -7,7 +7,7 @@ paths:
 # Tests
 
 - `tests/` tests the code against the fixture tree. It is hermetic: no Modal, no network, no production artifacts. Checks on the real artifacts do not belong here.
-- One file per `app/` module, testing its functions and loaders directly.
+- One file per area of `app/`, `core/` and `pipeline/`, testing its functions and loaders directly.
 - A module that runs AION or its codecs is tested with them built with random weights from configs vendored in `tests/`; no test downloads weights. The suite runs with the `build` group, as CI runs it.
 - `test_api.py` holds only the HTTP contract: status codes, content types and response shapes.
 - A test earns its place by catching a plausible bug in this repository's code that no other test catches. If no such bug comes to mind, do not write it.

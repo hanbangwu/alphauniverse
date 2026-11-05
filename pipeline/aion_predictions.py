@@ -5,40 +5,38 @@ import pyarrow as pa
 import torch
 from aion.codecs.base import Codec
 from aion.fourm.modality_info import MODALITY_INFO
-from aion.modalities import (
-    DESISpectrum,
-    HSCImage,
-    LegacySurveyImage,
-    SDSSSpectrum,
-    Z,
-)
+from aion.modalities import DESISpectrum, HSCImage, LegacySurveyImage, SDSSSpectrum, Z
 from numpy.lib.format import open_memmap
 from tqdm import tqdm
 
-from . import encode, pql
-from .config import (
+from core import stored_predictions
+from core.artifacts import artifact
+from core.config import (
     HSC_BANDS,
-    HSC_ZERO_POINT,
     IMAGE_MODES,
     LS_BANDS,
-    LS_ZERO_POINT,
     REDSHIFT,
     SPECTRUM_MODES,
     TABLE_MODES,
     TOP_CODES,
     ImageSurvey,
-    artifact,
-    device,
 )
+from core.device import device
+
+from . import encode
+from .config import HSC_ZERO_POINT, LS_ZERO_POINT
 
 DECODED_BANDS = (*LS_BANDS, *HSC_BANDS)
+
 CENTRAL = (0.16, 0.84)
+
 MODALITIES = {
     "ls_image": LegacySurveyImage,
     "hsc_image": HSCImage,
     "desi_spectrum": DESISpectrum,
     "sdss_spectrum": SDSSSpectrum,
 }
+
 TABLE_MODALITIES = {
     REDSHIFT: (Z,),
     "ls_table": tuple(modality for modality, _ in encode.LS_TABLE_VALUES),
@@ -62,7 +60,9 @@ def codebook(codec: Codec, vocabulary: int) -> torch.Tensor:
 def image_latents(
     rows: pa.RecordBatch, survey: str, vectors: torch.Tensor
 ) -> torch.Tensor:
-    codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
+    codes, probabilities, spread = stored_predictions.query_image_tokens(
+        rows, survey, slice(None)
+    )
     codes = torch.from_numpy(codes.astype(np.int64)).to(device())
     probabilities = torch.from_numpy(probabilities).to(device())
     spread = torch.from_numpy(spread).to(device())[..., None]
@@ -76,8 +76,8 @@ def spectrum_latents(
     mean, directions, coefficients = (
         torch.from_numpy(part).to(device())
         for part in (
-            *pql.basis()[survey][:2],
-            pql.spectrum_token_coefficients(rows, survey, slice(None)),
+            *stored_predictions.basis()[survey][:2],
+            stored_predictions.spectrum_token_coefficients(rows, survey, slice(None)),
         )
     )
     return mean @ vectors + coefficients @ (directions @ vectors)
@@ -151,7 +151,9 @@ def drawn(weights: torch.Tensor, rng: np.random.Generator) -> torch.Tensor:
 def sampled_image_codes(
     rows: pa.RecordBatch, survey: str, rng: np.random.Generator
 ) -> torch.Tensor:
-    codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
+    codes, probabilities, spread = stored_predictions.query_image_tokens(
+        rows, survey, slice(None)
+    )
     codes = torch.from_numpy(codes.astype(np.int64)).to(device())
     tail = spread[..., None] * (MODALITY_INFO["tok_image"]["vocab_size"] - TOP_CODES)
     chosen = drawn(
@@ -174,7 +176,7 @@ def sampled_image_codes(
 @torch.inference_mode()
 def sampled(rows: pa.RecordBatch, mode: str, rng: np.random.Generator) -> np.ndarray:
     if mode in TABLE_MODES:
-        probabilities = pql.table_value_probabilities(rows, mode)
+        probabilities = stored_predictions.table_value_probabilities(rows, mode)
         share = rng.random((*probabilities.shape[:-1], 1))
         return quantiles(probabilities, bin_values(mode), share)
     codec = decoder(mode)
@@ -182,8 +184,12 @@ def sampled(rows: pa.RecordBatch, mode: str, rng: np.random.Generator) -> np.nda
         codes = sampled_image_codes(rows, IMAGE_MODES[mode], rng)
         return decoded_images(codec, codec.quantizer.decode(codes), IMAGE_MODES[mode])
     survey = SPECTRUM_MODES[mode]
-    coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
-    weights = torch.from_numpy(pql.distributions(mode, coefficients)).to(device())
+    coefficients = stored_predictions.spectrum_token_coefficients(
+        rows, survey, slice(None)
+    )
+    weights = torch.from_numpy(stored_predictions.distributions(mode, coefficients)).to(
+        device()
+    )
     return decoded_spectra(
         codec, codec.quantizer.decode(drawn(weights.clamp(min=0), rng))
     )
@@ -201,7 +207,9 @@ def aion_predictions(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
         },
         **{
             mode: quantiles(
-                pql.table_value_probabilities(rows, mode), bin_values(mode), 0.5
+                stored_predictions.table_value_probabilities(rows, mode),
+                bin_values(mode),
+                0.5,
             )
             for mode in TABLE_MODES
         },
@@ -210,9 +218,11 @@ def aion_predictions(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
 
 def generate_aion_predictions() -> None:
     torch.backends.cudnn.conv.fp32_precision = "ieee"
-    count = pql.predictions().num_rows
+    count = stored_predictions.predictions().num_rows
     stored, start = {}, 0
-    for rows in tqdm(pql.predictions().to_batches(), desc="aion_predictions"):
+    for rows in tqdm(
+        stored_predictions.predictions().to_batches(), desc="aion_predictions"
+    ):
         for mode, found in aion_predictions(rows).items():
             if mode not in stored:
                 stored[mode] = open_memmap(
@@ -248,7 +258,7 @@ def widths(
         found[mode] = deviation(spectrum_latents(rows, survey, moments))
     for mode in TABLE_MODES:
         probabilities, values = (
-            pql.table_value_probabilities(rows, mode),
+            stored_predictions.table_value_probabilities(rows, mode),
             bin_values(mode),
         )
         lower, upper = (quantiles(probabilities, values, share) for share in CENTRAL)

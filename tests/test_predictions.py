@@ -8,17 +8,13 @@ import pytest
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 
-from app.config import (
-    KEPT,
-    PREDICTIONS,
-    REDSHIFT,
-    STORE_COLUMNS,
-    TOP_CODES,
-    artifact,
-)
+from core.artifacts import artifact
+from core.config import KEPT, REDSHIFT, TOP_CODES
+from pipeline.config import STORE_COLUMNS
+from pipeline.schemas import PREDICTIONS
 
 pytest.importorskip("torch")
-predictions_module = importlib.import_module("app.predictions")
+predictions_module = importlib.import_module("pipeline.predictions")
 
 
 def column(table: pa.Table, name: str) -> np.ndarray:
@@ -180,7 +176,7 @@ def test_one_batched_decode_matches_decoding_each_block_of_slots_alone(
     tree: Path, random_weights: None
 ) -> None:
     torch = importlib.import_module("torch")
-    encode_module = importlib.import_module("app.encode")
+    encode_module = importlib.import_module("pipeline.encode")
     aion = encode_module.model()
     row = predictions_module.source("tokens").head(1).to_pylist()[0]
     encoded, _, encoder_mask, _ = encode_module.context(predictions_module.inputs(row))

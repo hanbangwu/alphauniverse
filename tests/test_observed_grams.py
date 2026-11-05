@@ -7,8 +7,11 @@ from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset
 
-from app import aion_predictions, observations, observed_grams, pql
-from app.config import (
+from app import pql
+from app.config import TABLE_VALUE_COLUMNS
+from core import stored_predictions
+from core.artifacts import artifact
+from core.config import (
     GRAM_NAMES,
     HSC_BANDS,
     IMAGE_MODES,
@@ -18,12 +21,11 @@ from app.config import (
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
     TABLE_MODES,
-    TABLE_VALUE_COLUMNS,
     TOKEN_GRAMS,
     TOKEN_SURVEYS,
-    artifact,
 )
-from app.observations import MAGNITUDE_ERRORS
+from pipeline import aion_predictions, observations, observed_grams
+from pipeline.observations import MAGNITUDE_ERRORS
 from scripts.fixture import covered
 
 MODE = "hsc_image"
@@ -342,7 +344,7 @@ def test_aion_prediction_embeddings_decompose_each_aion_prediction_gram_with_wid
     tree: Path, random_weights: None
 ) -> None:
     rng = np.random.default_rng(3)
-    count = pql.predictions().num_rows
+    count = stored_predictions.predictions().num_rows
     for name in GRAM_NAMES:
         np.save(
             artifact(f"aion_prediction_gram_{name}"),

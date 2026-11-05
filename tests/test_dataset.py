@@ -7,27 +7,18 @@ from aion.fourm.modality_info import MODALITY_INFO
 from datasets import Dataset, Features, Sequence, Value
 from PIL import Image
 
-from app import dataset as dataset_module
-from app.config import (
+from app import galaxy
+from app.config import TABLE_VALUE_COLUMNS
+from app.galaxy import fitted, spectrum, table, table_columns
+from core import dataset as dataset_module
+from core.config import (
     AION_SPECTRUM_GRID,
     DATASET_LS_SUFFIX,
     FLAG_SURVEYS,
     REDSHIFT_COLUMNS,
-    TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
 )
-from app.dataset import (
-    colour,
-    encode,
-    fitted,
-    image,
-    predicted_image,
-    redshift,
-    samples,
-    spectrum,
-    table,
-    table_columns,
-)
+from core.dataset import colour, encode, image, predicted_image, redshift, samples
 
 SPECTRUM_CELL = {"lambda": [-1.0, 4000.0], "flux": [9.0, 1.0], "mask": [True, False]}
 
@@ -51,7 +42,7 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> None:
             }
         ),
     )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    monkeypatch.setattr(galaxy, "dataset", lambda: rows)
 
 
 def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
@@ -228,7 +219,7 @@ def test_fitted_amplitude_weights_unmasked_samples_by_inverse_variance(
             }
         ),
     )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    monkeypatch.setattr(galaxy, "dataset", lambda: rows)
 
     np.testing.assert_allclose(fitted(shape, 0, "desi"), 3 * shape, rtol=1e-6)
 
@@ -249,7 +240,7 @@ def test_table_keeps_numeric_catalogue_columns(
             FLAG_SURVEYS["gz10"]: [None, 3],
         }
     )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    monkeypatch.setattr(galaxy, "dataset", lambda: rows)
     table_columns.cache_clear()
 
     assert table(1) == {TABLE_VALUE_COLUMNS[0]: None, FLAG_SURVEYS["gz10"]: 3}

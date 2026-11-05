@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.main import app
 
-TARGET = Path(__file__).resolve().parent.parent / "frontend" / "openapi.json"
+TARGET = Path(__file__).resolve().parent.parent / "web" / "openapi.json"
 
 
 if __name__ == "__main__":

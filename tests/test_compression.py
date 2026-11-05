@@ -5,10 +5,12 @@ import pyarrow as pa
 import pytest
 
 from app import pql
-from app.config import PREDICTIONS, SPECTRUM_TOKEN_RANK
+from core import stored_predictions
+from core.config import SPECTRUM_TOKEN_RANK
+from pipeline.schemas import PREDICTIONS
 
 torch = pytest.importorskip("torch")
-predictions_module = importlib.import_module("app.predictions")
+predictions_module = importlib.import_module("pipeline.predictions")
 compression = importlib.import_module("scripts.benchmarks.compression")
 Mode = predictions_module.Mode
 
@@ -99,7 +101,7 @@ def test_the_current_scheme_reads_gallery_and_query_images_as_search_does() -> N
     )
     for found, read in zip(
         scheme.image(stored),
-        pql.top_image_tokens(rows, mode.survey, slice(None)),
+        stored_predictions.top_image_tokens(rows, mode.survey, slice(None)),
         strict=True,
     ):
         np.testing.assert_allclose(found.numpy(), read)

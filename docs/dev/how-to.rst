@@ -1,18 +1,18 @@
 How-to guides
 =============
 
-Every command runs from the repository root and needs `uv <https://docs.astral.sh/uv/>`_; the frontend also needs `bun <https://bun.sh>`_.
+Every command runs from the repository root and needs `uv <https://docs.astral.sh/uv/>`_; the web app also needs `bun <https://bun.sh>`_.
 
 Run the site locally
 --------------------
 
-Serve the API from a small synthetic artifact tree and dataset in the production schemas, then the frontend, which calls ``http://127.0.0.1:8000``:
+Serve the API from a small synthetic artifact tree and dataset in the production schemas, then the web app, which calls ``http://127.0.0.1:8000``:
 
 .. code-block:: sh
 
    uv run python -m scripts.fixture
    uv run fastapi dev app/main.py
-   cd frontend && bun install && bun run dev
+   cd web && bun install && bun run dev
 
 The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
 
@@ -29,21 +29,21 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
 
 .. code-block:: sh
 
-   uv run modal run modal_app.py::generate_embeddings
-   uv run modal run modal_app.py::generate_predictions
-   uv run modal run modal_app.py::generate_token_grams
-   uv run modal run modal_app.py::generate_token_embeddings
-   uv run modal run modal_app.py::generate_aion_predictions
-   uv run modal run modal_app.py::generate_observed_grams
-   uv run modal run modal_app.py::generate_aion_prediction_embeddings
-   uv run modal run modal_app.py::generate_joint_embedding
-   uv run modal run modal_app.py::generate_properties
-   uv run modal run modal_app.py::generate_maps
-   uv run modal run modal_app.py::generate_projections
-   uv run modal run modal_app.py::generate_pairs
-   uv run modal run modal_app.py::generate_text_views --parts 200
-   uv run modal run modal_app.py::train_text_regression
-   uv run modal run modal_app.py::generate_text_vectors
+   uv run modal run -m pipeline.modal_app::generate_embeddings
+   uv run modal run -m pipeline.modal_app::generate_predictions
+   uv run modal run -m pipeline.modal_app::generate_token_grams
+   uv run modal run -m pipeline.modal_app::generate_token_embeddings
+   uv run modal run -m pipeline.modal_app::generate_aion_predictions
+   uv run modal run -m pipeline.modal_app::generate_observed_grams
+   uv run modal run -m pipeline.modal_app::generate_aion_prediction_embeddings
+   uv run modal run -m pipeline.modal_app::generate_joint_embedding
+   uv run modal run -m pipeline.modal_app::generate_properties
+   uv run modal run -m pipeline.modal_app::generate_maps
+   uv run modal run -m pipeline.modal_app::generate_projections
+   uv run modal run -m pipeline.modal_app::generate_pairs
+   uv run modal run -m pipeline.modal_app::generate_text_views --parts 200
+   uv run modal run -m pipeline.modal_app::train_text_regression
+   uv run modal run -m pipeline.modal_app::generate_text_vectors
 
 A failed job leaves its artifacts incomplete; rerun it. Text artifacts are not keyed by text model: after changing ``WEMM``, move ``text_views``, ``text_views_held_out``, ``text_regression``, ``text_bases``, ``text_vectors`` and ``text_query_mean`` aside before rerunning ``generate_text_views``, ``train_text_regression`` and ``generate_text_vectors``, or new views are mixed with old ones, and rerun ``generate_pairs``, whose ``pairs_image`` and ``pairs_spectrum`` hold the text model's embeddings that ``text_search_quality`` scores queries against.
 
@@ -68,9 +68,9 @@ After changing a route or response model in ``app/main.py``:
 .. code-block:: sh
 
    uv run python -m scripts.openapi
-   cd frontend && bun run check
+   cd web && bun run check
 
-The first regenerates ``frontend/openapi.json``; the second regenerates the frontend's client from it and typechecks.
+The first regenerates ``web/openapi.json``; the second regenerates the web app's client from it and typechecks.
 
 Run the tests and linters
 -------------------------
@@ -78,9 +78,9 @@ Run the tests and linters
 .. code-block:: sh
 
    uv run --group build pytest
-   uv run ruff check app scripts tests modal_app.py
-   uv run ruff format app scripts tests modal_app.py
-   cd frontend && bun run lint && bun run check
+   uv run ruff check app core pipeline scripts tests
+   uv run ruff format app core pipeline scripts tests
+   cd web && bun run lint && bun run check
 
 Tests need no Modal, GPU or network.
 

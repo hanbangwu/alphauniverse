@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, directly in ``$ALPHAUNIVERSE_CACHE``, so changing ``DATASET_REVISION`` overwrites them. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+``pipeline/`` builds the artifacts and ``app/`` serves them; ``core/`` holds only what both use, and ``app/`` and ``pipeline/`` never import each other. Fifteen Modal jobs in ``pipeline/modal_app.py``, the ``alphauniverse-build`` app, write artifacts to a volume mounted at ``/cache``, directly in ``$ALPHAUNIVERSE_CACHE``, so changing ``DATASET_REVISION`` overwrites them. The FastAPI app in ``app/main.py`` reads them in one Modal container, defined in ``app/modal_app.py``; the SvelteKit web, deployed on Vercel, calls it. ``main`` deploys ``app/modal_app.py`` to Modal through ``.github/workflows/ci-cd.yml``; the jobs are never deployed, only run with ``modal run``.
 
 =================================== =========================================== =========================================
 Job                                 Reads                                       Writes
@@ -60,24 +60,24 @@ Whole-mode search           ``app.pql.mode_search``
 This galaxy map             ``app.pql.cosines``
 Population map              ``app.pql.saliency``
 Text search                 ``app.text_search.text_search``
-The map                     ``app.maps``, run by ``generate_maps``
+The map                     ``pipeline.maps``, run by ``generate_maps``
 =========================== ========================================
 
 A :term:`whole-mode search` ranks from the mode's :term:`token embedding`: :math:`q`'s query vector times every galaxy's gallery vector, both from ``token_search_<mode>`` at 256 components, plus the offsets, gives the mode's :term:`Gram matrix` row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardised over all galaxies, one mode's too, and averaged.
 
-``generate_maps`` scores every galaxy against every other with ``app.pql.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbour graph (:doc:`/methods/map`).
+``generate_maps`` scores every galaxy against every other with ``core.token_search.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbour graph (:doc:`/methods/map`).
 
 Artifacts
 ---------
 
 ``encoded`` and ``tokens`` share one layout: a ``galaxy`` column, one cell per token survey and the redshift (a list of 768-dimensional ``float16`` embeddings, or of ``uint32`` token ids for ``tokens``, null where unmatched), and a ``bool`` per flag survey. Within an image cell the image tokens come first, then the survey's catalogue values; a spectrum cell leads with its normalisation token. Both are uncompressed Arrow IPC files that readers memory-map.
 
-.. autofunction:: app.config.store_schema
+.. autofunction:: pipeline.schemas.store_schema
    :no-index:
 
 ``probabilities`` is an uncompressed Arrow IPC file of AION's predictions at every slot. Image tokens keep their 64 most probable codes with their probabilities, the mass beyond the first 16 and the mass beyond all 64; search reads each galaxy's 16 most probable and spreads the rest evenly over the other codes, but the query galaxy's full 64; catalogue values and the redshift keep every probability; spectrum tokens keep 256 coefficients on a per-survey PCA basis, quantised to 8 bits as ``offset + code × step``.
 
-.. autodata:: app.config.PREDICTIONS
+.. autodata:: pipeline.schemas.PREDICTIONS
    :no-index:
    :no-value:
 
@@ -91,15 +91,15 @@ Artifacts
 
 ``aion_prediction_<mode>`` is an ``np.save`` file of every galaxy's :term:`AION prediction` in the mode, ``float32``, one row per galaxy, observed in the mode or not. An image AION prediction is AION's codec decoding of the expected latent at every cell, :math:`\sum_t p_{g,s}(t)\, z(t)` with the mass beyond the stored codes spread evenly over the rest of the vocabulary, 4 Legacy Survey or 5 HSC bands × 96 × 96 px in the survey's flux units: the job decodes every band in Legacy Survey units and multiplies HSC's by :math:`10^{1.8}`, the inverse of the codec's scaling from HSC's zero point of 27. A spectrum AION prediction is the decoding of the expected latent at every spectral window without the normalisation token, 8,704 values on the codec's grid from 3,500 Å in 0.8 Å steps: a shape, since the normalisation token is not predicted. A catalogue value's or the redshift's AION prediction is the median of its predicted distribution over the codec's bins, each at the value AION decodes it to, its upper edge. The open top bin takes its lower edge instead: AION decodes it to the largest value in the codec's sample of its training data (1.9 × 10⁹ nmgy for ``FLUX_Z``) or to no value. Bins past it decode to no value and are skipped. Decoding runs in IEEE float32.
 
-``text_views`` is a directory of Parquet parts, ``part-<n>.parquet``, of 4,000 :term:`views <view>` each, drawn from the galaxies outside text search's held-out set: the 30% held out of the text maps and the prototype's 143, which leaves 12,058. A view has one of 26 types: the observation, the :term:`AION prediction` or a sample in each :term:`mode`, or one of 5 combinations of modes in a single input. Each part draws its (galaxy, view type) pairs from its own seed, weighted 1 per AION prediction, observation and combination, 4 per image or spectrum sample and 8 per catalogue sample. A sample draws every slot's token from AION's stored distribution, the mass beyond an image cell's stored codes spread evenly over the rest, and decodes it with the mode's codec. An image is turned by one of its 8 rotations and reflections; a spectrum is smoothed by a Gaussian of σ = 1, 2 or 3 px and plotted at 1,680 × 384 px over the survey's observed range, its flux axis from the 0.5th to the 99.9th percentile with 10% padding; catalogue values are written one ``COLUMN: value`` line each, shuffled, at 3, 4 or 5 significant figures. A combination draws each member as observation, aion_prediction or sample, the observation only where one exists. ``round`` numbers each ten parts. A rerun keeps the parts already written, so a stopped job resumes. ``view_type`` is the type's position in ``app.config.VIEW_TYPES``:
+``text_views`` is a directory of Parquet parts, ``part-<n>.parquet``, of 4,000 :term:`views <view>` each, drawn from the galaxies outside text search's held-out set: the 30% held out of the text maps and the prototype's 143, which leaves 12,058. A view has one of 26 types: the observation, the :term:`AION prediction` or a sample in each :term:`mode`, or one of 5 combinations of modes in a single input. Each part draws its (galaxy, view type) pairs from its own seed, weighted 1 per AION prediction, observation and combination, 4 per image or spectrum sample and 8 per catalogue sample. A sample draws every slot's token from AION's stored distribution, the mass beyond an image cell's stored codes spread evenly over the rest, and decodes it with the mode's codec. An image is turned by one of its 8 rotations and reflections; a spectrum is smoothed by a Gaussian of σ = 1, 2 or 3 px and plotted at 1,680 × 384 px over the survey's observed range, its flux axis from the 0.5th to the 99.9th percentile with 10% padding; catalogue values are written one ``COLUMN: value`` line each, shuffled, at 3, 4 or 5 significant figures. A combination draws each member as observation, aion_prediction or sample, the observation only where one exists. ``round`` numbers each ten parts. A rerun keeps the parts already written, so a stopped job resumes. ``view_type`` is the type's position in ``pipeline.config.VIEW_TYPES``:
 
-.. autodata:: app.config.TEXT_VIEWS
+.. autodata:: pipeline.schemas.TEXT_VIEWS
    :no-index:
    :no-value:
 
 ``text_views_held_out`` holds the views ``train_text_regression`` checks the regression against: one of every type available to each of 500 :term:`held out` galaxies, the prototype's 143 among them, drawn from a random stream of their own:
 
-.. autodata:: app.config.TEXT_VIEWS_HELD_OUT
+.. autodata:: pipeline.schemas.TEXT_VIEWS_HELD_OUT
    :no-index:
    :no-value:
 
@@ -132,19 +132,19 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
 
 The redshift's prediction is the median of AION's predicted distribution, and its width half the range from the distribution's 16th to its 84th percentile. Both spread each bin's probability evenly over the redshifts its token covers, from the bin below up to its own value: a distribution in one bin, 0.0059 wide, predicts the bin's centre with a width of 0.0020, where the redshift :term:`AION prediction` takes the bin's top. A galaxy with a measured redshift read it, so its prediction is close to it; ``redshift_quality`` measures predictions without it. Likewise the joint embedding reads the Legacy Survey catalogue values, so the radius, r magnitude and axis ratio predictions are close to the measured ones. The others come from ridge regression on the joint embedding, its penalty chosen by leave-one-out, fitted to the galaxies with a measured value. Those galaxies' own predictions come from 5-fold cross-validation, so none is fitted to its own value, and the RMS error of those predictions is the width, the same for every galaxy. PROVABGS fits DESI spectra, so its widths are measured only on galaxies DESI observed, and the spectral ones only on galaxies with a spectrum. ``g_r`` is the observed Legacy Survey colour, :math:`-2.5 \log_{10}` of the g to r flux ratio, null where either flux is not positive. ``/galaxies/property`` serves it.
 
-.. autodata:: app.config.PROPERTIES
+.. autodata:: pipeline.schemas.PROPERTIES
    :no-index:
    :no-value:
 
 ``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet, and so are ``same_place_points`` and ``any_position_points``, one row per galaxy placed by :term:`whole-mode search` over every mode (:doc:`/methods/map`):
 
-.. autodata:: app.config.POINTS
+.. autodata:: pipeline.schemas.POINTS
    :no-index:
    :no-value:
 
 ``pairs_image`` and ``pairs_spectrum`` are Parquet, in galaxy order. ``pairs_image`` holds, for every galaxy, the mean of AION's Legacy Survey image embeddings and WeMM-Embedding's embedding of the colour image; ``pairs_spectrum`` holds, for every galaxy with a DESI spectrum, the mean of AION's DESI spectrum embeddings and WeMM-Embedding's embedding of the spectrum plot:
 
-.. autodata:: app.config.PAIRS
+.. autodata:: pipeline.schemas.PAIRS
    :no-index:
    :no-value:
 
@@ -157,11 +157,11 @@ Every endpoint is ``GET``; ``/projections/{projection}`` and ``/galaxies/propert
 
 The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the 8 most recently used. An Any position map builds no matrix: it computes the rows of its sample of galaxies (:doc:`/methods/query-maps`), and the server keeps them for the 8 most recently used pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
 
-.. openapi:: ../../frontend/openapi.json
+.. openapi:: ../../web/openapi.json
 
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, WeMM-Embedding, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the frontend has no tests.
+Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, WeMM-Embedding, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the web app has no tests.
 
-Continuous integration lints and tests every pull request, checks that ``frontend/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's default environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets. Vercel builds every branch: production builds from ``main`` and calls the default app, and preview builds from every other branch call the ``dev`` app, whose URL ``PUBLIC_API_URL`` holds in each Vercel environment. The ``dev`` app runs whichever branch last ran the workflow, so previews share it.
+Continuous integration lints and tests every pull request, checks that ``web/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's default environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets. Vercel builds every branch: production builds from ``main`` and calls the default app, and preview builds from every other branch call the ``dev`` app, whose URL ``PUBLIC_API_URL`` holds in each Vercel environment. The ``dev`` app runs whichever branch last ran the workflow, so previews share it.

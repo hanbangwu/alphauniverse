@@ -1,99 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from functools import cache
-from io import BytesIO
-from itertools import batched, product
-from threading import Lock
-from typing import TYPE_CHECKING, Annotated, NamedTuple
+from typing import Annotated, NamedTuple
 
 import numpy as np
-import PIL.Image
-import pyarrow as pa
-import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
-from aion.modalities import DESISpectrum
-from huggingface_hub import hf_hub_download
 from pydantic import BaseModel, ConfigDict, Field
-from tokenizers import Tokenizer
-from tqdm import tqdm
 
-from .config import (
-    AION_EMBEDDING_DIM,
-    AION_SPECTRUM_ORIGIN,
-    AION_SPECTRUM_TOKEN_WIDTH,
-    PAIRS,
-    PLOT_INCHES,
-    QUERY_PREFIX,
-    SPECTRUM_SURVEY,
-    TEXT_SURVEYS,
-    TOKEN_SURVEYS,
-    WEMM,
-    WEMM_DIM,
-    artifact,
-    device,
-)
-from .dataset import dataset, image, samples, smoothed
-
-if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
-
-BATCH = 1024
-LOADING = Lock()
-FRAMES = {
-    "everything": "{}",
-    "images": "an image of {}",
-    "spectra": "the spectrum of {}",
-    "catalogues": "the photometry of {}",
-}
-ADJECTIVES = (
-    "",
-    "bright",
-    "faint",
-    "red",
-    "blue",
-    "massive",
-    "small",
-    "large",
-    "nearby",
-    "distant",
-    "dusty",
-    "star-forming",
-    "quiescent",
-    "compact",
-)
-SUBJECTS = (
-    "galaxy",
-    "spiral galaxy",
-    "elliptical galaxy",
-    "disk galaxy",
-    "irregular galaxy",
-    "dwarf galaxy",
-    "lenticular galaxy",
-    "barred spiral galaxy",
-    "pair of merging galaxies",
-    "edge-on galaxy",
-    "face-on spiral galaxy",
-    "starburst galaxy",
-    "quasar host galaxy",
-    "cluster galaxy",
-    "low surface brightness galaxy",
-)
-SUFFIXES = (
-    "",
-    " with spiral arms",
-    " with a bright bulge",
-    " with a central bar",
-    " with tidal tails",
-    " with strong emission lines",
-    " with an old stellar population",
-    " at high redshift",
-    " at low redshift",
-    " with a dust lane",
-    " with a close companion",
-    " with an active nucleus",
-)
+from core.artifacts import artifact
+from core.text_model import BATCH, LOADING
 
 
 class TextQuery(BaseModel):
@@ -114,121 +31,6 @@ class TextResults(NamedTuple):
     galaxies: torch.Tensor
     scores: torch.Tensor
     contributions: torch.Tensor
-
-
-@cache
-def text_model() -> SentenceTransformer:
-    from sentence_transformers import SentenceTransformer
-
-    kernels = (
-        {
-            "dtype": torch.bfloat16,
-            "use_kernels": True,
-            "attn_implementation": "kernels-community/flash-attn2",
-        }
-        if device().type == "cuda"
-        else {}
-    )
-    model = SentenceTransformer(
-        WEMM,
-        device=device(),
-        trust_remote_code=True,
-        truncate_dim=WEMM_DIM,
-        model_kwargs=kernels,
-    )
-    trained = Tokenizer.from_file(hf_hub_download(WEMM, "tokenizer.json"))
-    model[0].processor.tokenizer.backend_tokenizer.normalizer = trained.normalizer
-    return model
-
-
-def embed_queries(texts: list[str]) -> np.ndarray:
-    with LOADING:
-        model = text_model()
-    return model.encode_query(
-        [QUERY_PREFIX.format(text) for text in texts], normalize_embeddings=True
-    )
-
-
-def generic_queries() -> list[str]:
-    phrases = (
-        f"{adjective} {subject}".strip()
-        for adjective, subject in product(ADJECTIVES, SUBJECTS)
-    )
-    nouns = [("an " if phrase[0] in "aeiou" else "a ") + phrase for phrase in phrases]
-    return [
-        frame.format(noun + suffix)
-        for frame, noun, suffix in product(FRAMES.values(), nouns, SUFFIXES)
-    ]
-
-
-def spectrum_plot(spectrum: dict[str, np.ndarray]) -> PIL.Image.Image:
-    from matplotlib.backends.backend_agg import FigureCanvasAgg
-    from matplotlib.figure import Figure
-
-    figure = Figure(figsize=PLOT_INCHES)
-    canvas = FigureCanvasAgg(figure)
-    axes = figure.subplots()
-    axes.plot(spectrum["wavelength"], smoothed(spectrum["flux"]), color="grey")
-    axes.set_xlim(
-        AION_SPECTRUM_ORIGIN,
-        AION_SPECTRUM_ORIGIN
-        + (DESISpectrum.num_tokens - 1) * AION_SPECTRUM_TOKEN_WIDTH,
-    )
-    canvas.draw()
-    return PIL.Image.fromarray(np.asarray(canvas.buffer_rgba())).convert("RGB")
-
-
-def photos(galaxy: np.ndarray) -> Iterator[list[PIL.Image.Image]]:
-    for batch in batched(galaxy.tolist(), BATCH):
-        yield [PIL.Image.open(BytesIO(image(index, "ls"))) for index in batch]
-
-
-def plots(galaxy: np.ndarray) -> Iterator[list[PIL.Image.Image]]:
-    cells = dataset().data.column(TOKEN_SURVEYS[SPECTRUM_SURVEY])
-    for batch in batched(galaxy.tolist(), BATCH):
-        yield [spectrum_plot(samples(cells[index])) for index in batch]
-
-
-DOCUMENTS = {"image": photos, "spectrum": plots}
-
-
-def mean_embeddings(survey: str) -> tuple[np.ndarray, np.ndarray]:
-    from .parametric_umap import _stream
-
-    count = len(dataset())
-    means = np.zeros((count, AION_EMBEDDING_DIM), dtype=np.float32)
-    held = np.zeros(count, dtype=bool)
-    for galaxies, offsets, values in tqdm(_stream((survey,)), desc=survey):
-        sizes = np.diff(offsets)[:, None]
-        means[galaxies] = np.add.reduceat(values, offsets[:-1]) / sizes
-        held[galaxies] = True
-    galaxy = np.flatnonzero(held).astype(np.int32)
-    return galaxy, means[galaxy]
-
-
-def generate_pairs() -> None:
-    for modality, survey in TEXT_SURVEYS.items():
-        galaxy, aion = mean_embeddings(survey)
-        wemm = np.concatenate(
-            [
-                text_model().encode_document(batch, normalize_embeddings=True)
-                for batch in tqdm(DOCUMENTS[modality](galaxy), desc=modality)
-            ]
-        )
-        pq.write_table(
-            pa.table(
-                {
-                    "galaxy": galaxy,
-                    "aion": pa.FixedSizeListArray.from_arrays(
-                        aion.ravel(), AION_EMBEDDING_DIM
-                    ),
-                    "wemm": pa.FixedSizeListArray.from_arrays(wemm.ravel(), WEMM_DIM),
-                },
-                schema=PAIRS,
-            ),
-            artifact(f"pairs_{modality}"),
-            compression="zstd",
-        )
 
 
 @cache

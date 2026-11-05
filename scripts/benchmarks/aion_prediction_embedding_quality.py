@@ -10,20 +10,17 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from app import embeddings
-from app.config import (
-    DATASET_REVISION,
-    GRAM_NAMES,
-    TOKEN_EMBEDDING_RANK,
-    TOKEN_GRAMS,
-    artifact,
-    device,
-)
-from modal_app import CACHE_PATH, build_image, cache_volume
+from core.artifacts import artifact
+from core.config import DATASET_REVISION, GRAM_NAMES, TOKEN_GRAMS
+from core.device import device
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import embeddings
+from pipeline.config import TOKEN_EMBEDDING_RANK
+from pipeline.modal_app import build_image
 from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-aion_prediction-embedding-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/aion_prediction_embedding_quality.json")
 RANKS = tuple(TOKEN_EMBEDDING_RANK // 2**halvings for halvings in range(7, -1, -1))

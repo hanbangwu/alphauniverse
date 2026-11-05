@@ -8,10 +8,11 @@ from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from pydantic import ValidationError
 
-from app import embeddings, pql
-from app.config import (
+from app import pql
+from app.config import OBSERVATIONS
+from core import artifacts, config, stored_predictions, token_search
+from core.config import (
     IMAGE_MODES,
-    OBSERVATIONS,
     REDSHIFT,
     SEARCH_RANK,
     SPECTRUM_MODES,
@@ -47,12 +48,12 @@ def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
 def top_codes(rows: pa.Table, survey: str, name: str) -> np.ndarray:
     return np.concatenate(
         [
-            column(rows, f"{survey}_{name}", LegacySurveyImage.num_tokens, pql.KEPT),
+            column(rows, f"{survey}_{name}", LegacySurveyImage.num_tokens, config.KEPT),
             column(
                 rows,
                 f"{survey}_query_{name}",
                 LegacySurveyImage.num_tokens,
-                TOP_CODES - pql.KEPT,
+                TOP_CODES - config.KEPT,
             ),
         ],
         axis=-1,
@@ -64,7 +65,7 @@ def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
     probabilities = top_codes(rows, survey, "probabilities")
     rest = (
         column(rows, f"{survey}_rest", LegacySurveyImage.num_tokens)
-        if kept == pql.KEPT
+        if kept == config.KEPT
         else column(rows, f"{survey}_tails", LegacySurveyImage.num_tokens)
     )
     dense = np.repeat(
@@ -77,7 +78,7 @@ def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
 
 
 def dense_spectrum_tokens(rows: pa.Table, survey: str) -> np.ndarray:
-    mean, directions, _, _ = pql.basis()[survey]
+    mean, directions, _, _ = stored_predictions.basis()[survey]
     coefficients = column(
         rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1, 1
     ) + column(
@@ -99,7 +100,7 @@ def dense(rows: pa.Table, mode: str, kept: int) -> np.ndarray:
 def log_overlaps(mode: str, gallery: np.ndarray, query: np.ndarray) -> np.ndarray:
     overlaps = (gallery * query).sum(axis=-1)
     if mode.endswith("spectrum"):
-        overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
+        overlaps = np.maximum(overlaps, stored_predictions.SPECTRUM_TOKEN_FLOOR)
     return np.log(overlaps)
 
 
@@ -120,7 +121,7 @@ def similarity(query: pql.Query) -> np.ndarray:
 
 @pytest.fixture(scope="module")
 def table(tree: Path) -> pa.Table:
-    return pql.predictions()
+    return stored_predictions.predictions()
 
 
 @pytest.fixture(scope="module")
@@ -139,7 +140,7 @@ def test_mode_sums_equal_a_brute_force_computation_on_dense_distributions(
     for mode, slots in SELECTED_SLOTS.items():
         expected = log_overlaps(
             mode,
-            dense(table, mode, pql.KEPT)[:, slots],
+            dense(table, mode, config.KEPT)[:, slots],
             dense(own, mode, TOP_CODES)[0, slots],
         ).sum(axis=1)
         np.testing.assert_allclose(sums[mode], expected, rtol=1e-4, err_msg=mode)
@@ -158,7 +159,7 @@ def test_aligned_maps_compare_each_slot_with_the_same_slot_of_the_query(
 
     expected = {
         mode: slot_similarities(
-            mode, dense(shown, mode, pql.KEPT), dense(own, mode, TOP_CODES)[0]
+            mode, dense(shown, mode, config.KEPT), dense(own, mode, TOP_CODES)[0]
         )
         for mode in SELECTED_SLOTS
     }
@@ -191,9 +192,9 @@ def test_a_search_reads_what_the_agreement_matrix_holds(query: pql.Query) -> Non
 
 def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
     own = dense(table.slice(GALAXY, 1), mode, TOP_CODES)[0, list(slots)]
-    overlaps = dense(table, mode, pql.KEPT) @ own.T
+    overlaps = dense(table, mode, config.KEPT) @ own.T
     if mode in SPECTRUM_MODES:
-        overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
+        overlaps = np.maximum(overlaps, stored_predictions.SPECTRUM_TOKEN_FLOOR)
     return np.log(overlaps).max(axis=1).sum(axis=1)
 
 
@@ -248,7 +249,7 @@ def test_a_position_independent_map_shows_the_best_selected_slot_at_each_slot(
 
     results = pql.search(query)
 
-    shown = dense(table.take(results.galaxies), "ls_image", pql.KEPT)
+    shown = dense(table.take(results.galaxies), "ls_image", config.KEPT)
     selected = dense(own, "ls_image", TOP_CODES)[0, slots]
     overlaps = np.log(shown @ selected.T)
     peaks = np.log(selected.max(axis=-1))
@@ -329,7 +330,7 @@ def test_position_independent_saliency_uses_each_slot_s_best_overlap(
     anywhere = query.model_copy(update={"anywhere": ("ls_image",)})
     sample = pql.saliency_sample(GALAXY)
     values = pql.agreements(GALAXY).values[sample].astype(np.float64)
-    gallery = dense(table.take(sample), "ls_image", pql.KEPT)
+    gallery = dense(table.take(sample), "ls_image", config.KEPT)
     own = dense(table.slice(GALAXY, 1), "ls_image", TOP_CODES)[0]
     start = pql.OFFSETS["ls_image"]
     values[:, start : start + LegacySurveyImage.num_tokens] = np.log(
@@ -369,7 +370,9 @@ def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
 ) -> None:
     galaxy = int(
         np.flatnonzero(
-            np.logical_and.reduce([pql.observed(column) for column in OBSERVATIONS])
+            np.logical_and.reduce(
+                [artifacts.observed(column) for column in OBSERVATIONS]
+            )
         )[0]
     )
     everything = pql.Selection(
@@ -444,7 +447,7 @@ def test_aligned_overlaps_below_float32_range_are_floored(
 
     found = pql.log_overlaps(table.to_batches()[0], mode, np.asarray([0]), form)
 
-    np.testing.assert_allclose(found, np.log(pql.PROBABILITY_FLOOR), rtol=1e-6)
+    np.testing.assert_allclose(found, np.log(config.PROBABILITY_FLOOR), rtol=1e-6)
 
 
 def test_position_independent_overlaps_below_float32_range_are_floored(
@@ -454,7 +457,7 @@ def test_position_independent_overlaps_below_float32_range_are_floored(
 
     found = pql.best_log_overlaps(table.to_batches()[0], "ls_image", form)
 
-    np.testing.assert_allclose(found, np.log(pql.PROBABILITY_FLOOR), rtol=1e-6)
+    np.testing.assert_allclose(found, np.log(config.PROBABILITY_FLOOR), rtol=1e-6)
 
 
 def test_a_repeated_slot_counts_once(tree: Path) -> None:
@@ -485,7 +488,7 @@ def test_one_mode_similarity_is_the_mean_fraction_of_the_best_overlap(
     similarities = similarity(single)
 
     overlaps = log_overlaps(
-        "ls_table", dense(table, "ls_table", pql.KEPT)[:, [1, 5]], own
+        "ls_table", dense(table, "ls_table", config.KEPT)[:, [1, 5]], own
     )
     expected = np.exp((overlaps - np.log(own.max(axis=-1))).mean(axis=1))
     np.testing.assert_allclose(similarities, expected, rtol=1e-4)
@@ -508,7 +511,7 @@ def test_predicted_lists_each_missing_observation_of_the_selection_once(
         results.galaxies.tolist(), results.predicted, strict=True
     ):
         assert missing == [
-            column for column in OBSERVATIONS if not pql.observed(column)[galaxy]
+            column for column in OBSERVATIONS if not artifacts.observed(column)[galaxy]
         ]
 
 
@@ -526,8 +529,8 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
 
     standardised = []
     for name in ("ls_image", "desi_spectrum_anywhere", REDSHIFT):
-        stored = pql.stored(name)
-        row = embeddings.scores(stored["queries"][[1]], stored, SEARCH_RANK)[0]
+        stored = token_search.stored(name)
+        row = token_search.scores(stored["queries"][[1]], stored, SEARCH_RANK)[0]
         row = row.double().numpy()
         standardised.append((row - row.mean()) / row.std())
     expected = np.mean(standardised, axis=0)
@@ -540,7 +543,7 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
         [
             column
             for column in OBSERVATIONS
-            if column in {"desi", REDSHIFT} and not pql.observed(column)[galaxy]
+            if column in {"desi", REDSHIFT} and not artifacts.observed(column)[galaxy]
         ]
         for galaxy in found.galaxies.tolist()
     ]

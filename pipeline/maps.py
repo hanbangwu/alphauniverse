@@ -5,10 +5,14 @@ import torch
 from tqdm import tqdm
 from umap import UMAP
 
-from . import pql
-from .config import FLAG_SURVEYS, MAPS, MODES, SEED, artifact, points
-from .dataset import dataset
+from core import token_search
+from core.artifacts import artifact
+from core.config import FLAG_SURVEYS, MAPS, MODES
+from core.dataset import dataset
+
+from .config import SEED
 from .embeddings import BATCH
+from .schemas import points
 
 NEIGHBOURS = UMAP().n_neighbors - 1
 
@@ -18,8 +22,8 @@ def nearest(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     parts = []
     for rows in tqdm(torch.arange(galaxies).split(BATCH), desc="search"):
-        totals = pql.whole_mode_totals(rows.numpy(), MODES, anywhere)
-        scored = torch.from_numpy(sum(pql.contributions(totals).values()))
+        totals = token_search.whole_mode_totals(rows.numpy(), MODES, anywhere)
+        scored = torch.from_numpy(sum(token_search.contributions(totals).values()))
         scored[torch.arange(len(rows)), rows] = -torch.inf
         parts.append(scored.topk(count, dim=1))
     return (

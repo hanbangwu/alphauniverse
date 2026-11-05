@@ -9,15 +9,19 @@ import modal
 import numpy as np
 import pyarrow.parquet as pq
 
-from app.config import DATASET_REVISION, artifact
-from app.dataset import encode
-from app.text_search import embed_queries, photos, query_directions, text_vectors
-from app.text_views import training
-from modal_app import CACHE_PATH, build_image, cache_volume
+from app.text_search import query_directions, text_vectors
+from core.artifacts import artifact
+from core.config import DATASET_REVISION
+from core.dataset import encode
+from core.modal_resources import CACHE_PATH, cache_volume
+from core.text_model import embed_queries
+from pipeline.modal_app import build_image
+from pipeline.text_pairs import photos
+from pipeline.text_views import training
 from scripts.benchmarks.common import git
 
 app = modal.App("alphauniverse-text-search-sheet")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 QUERIES = (
     "a galaxy",

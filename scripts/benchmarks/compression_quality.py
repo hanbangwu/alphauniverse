@@ -9,17 +9,14 @@ import modal
 import numpy as np
 import torch
 
-from app import pql, predictions
-from app.config import (
-    DATASET_REVISION,
-    PROBABILITY_FLOOR,
-    SEED,
-    STORE_COLUMNS,
-    galaxy_count,
-)
-from app.dataset import spectrum
-from app.search import tokens
-from modal_app import CACHE_PATH, build_image, cache_volume
+from app.galaxy import galaxy_count, spectrum
+from core import artifacts, stored_predictions
+from core.artifacts import tokens
+from core.config import DATASET_REVISION, PROBABILITY_FLOOR
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import predictions
+from pipeline.config import SEED, STORE_COLUMNS
+from pipeline.modal_app import build_image
 from scripts.benchmarks import compression
 from scripts.benchmarks.common import (
     environment,
@@ -30,7 +27,7 @@ from scripts.benchmarks.common import (
 )
 
 app = modal.App("alphauniverse-compression-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/compression_quality.json")
 TOP = 10
@@ -47,9 +44,9 @@ def slot_count(mode: Mode) -> int:
 
 def draw(sample: int) -> np.ndarray:
     rng = np.random.default_rng(SEED)
-    sdss = np.flatnonzero(pql.observed("sdss"))
+    sdss = np.flatnonzero(artifacts.observed("sdss"))
     chosen = rng.choice(sdss, min(len(sdss), sample // 2), replace=False)
-    paired = np.flatnonzero(pql.observed("hsc") | pql.observed("desi"))
+    paired = np.flatnonzero(artifacts.observed("hsc") | artifacts.observed("desi"))
     paired = np.setdiff1d(paired, chosen)
     wanted = min(max(sample // 2 - len(chosen), 0), len(paired))
     chosen = np.concatenate((chosen, rng.choice(paired, wanted, replace=False)))
@@ -328,7 +325,7 @@ def measure(name: str, sample: int, queries: int) -> dict[str, Any]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     galaxies = draw(sample)
     gallery = predict(galaxies, mode)
-    seen = np.flatnonzero(pql.observed(mode.survey)[galaxies])
+    seen = np.flatnonzero(artifacts.observed(mode.survey)[galaxies])
     rng = np.random.default_rng([SEED, predictions.MODES.index(mode)])
     picked = np.sort(rng.choice(seen, min(queries, len(seen)), replace=False))
     unseen = predict(galaxies[picked], mode, hidden=True)
@@ -348,7 +345,7 @@ def measure(name: str, sample: int, queries: int) -> dict[str, Any]:
     basis = (
         [
             torch.from_numpy(array).to(device)
-            for array in pql.prediction_basis()[mode.survey]
+            for array in stored_predictions.prediction_basis()[mode.survey]
         ]
         if kind(mode) == "spectrum"
         else []

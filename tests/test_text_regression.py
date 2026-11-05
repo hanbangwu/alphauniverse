@@ -9,21 +9,15 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from app import embeddings, text_views
-from app.config import (
-    ARTIFACTS,
-    GRAM_NAMES,
-    MODES,
-    TEXT_VIEWS,
-    TEXT_VIEWS_HELD_OUT,
-    VIEW_COMBINATIONS,
-    VIEW_TYPES,
-    WEMM_DIM,
-    galaxy_count,
-)
+from app.galaxy import galaxy_count
+from core.artifacts import ARTIFACTS
+from core.config import GRAM_NAMES, MODES, WEMM_DIM
+from pipeline import embeddings, text_views
+from pipeline.config import VIEW_COMBINATIONS, VIEW_TYPES
+from pipeline.schemas import TEXT_VIEWS, TEXT_VIEWS_HELD_OUT
 
 torch = pytest.importorskip("torch")
-text_regression = importlib.import_module("app.text_regression")
+text_regression = importlib.import_module("pipeline.text_regression")
 
 
 def identity_bases(width: int) -> dict[str, torch.Tensor]:

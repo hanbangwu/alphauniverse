@@ -13,17 +13,17 @@ from typing import Any, get_args
 
 import numpy as np
 
-from app import embeddings, pql
-from app.config import DATASET_REVISION, GRAM_NAMES, MODES, SEARCH_RANK, TokenMode
-from modal_app import (
-    CACHE_PATH,
+from app import pql
+from app.modal_app import (
     SERVING_CPU,
     SERVING_ENVIRONMENT,
     SERVING_MEMORY,
     app,
-    cache_volume,
     serving_image,
 )
+from core import token_search
+from core.config import DATASET_REVISION, GRAM_NAMES, MODES, SEARCH_RANK, TokenMode
+from core.modal_resources import CACHE_PATH, cache_volume
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
     elapsed,
@@ -34,8 +34,6 @@ from scripts.benchmarks.common import (
     server,
     summary,
 )
-
-image = serving_image.add_local_python_source("modal_app")
 
 STAGES = [
     "selection",
@@ -51,11 +49,11 @@ MODE_STAGES = ["ranking", "maps", "predicted"]
 LAYOUTS = {"same_place": frozenset(), "any_position": frozenset(get_args(TokenMode))}
 MATCHES = (32, 64, 128)
 SAMPLES = 4
-SOURCES = ["app", "scripts", "modal_app.py"]
+SOURCES = ["app", "core", "pipeline", "scripts"]
 REPORT = Path("docs/benchmarks/search_performance.json")
 ENTRY = (
     "import json, sys\n"
-    "from app.config import DATASET_REVISION\n"
+    "from core.config import DATASET_REVISION\n"
     "try:\n"
     "    from scripts.benchmarks.search_performance import stages\n"
     "except ModuleNotFoundError:\n"
@@ -121,12 +119,14 @@ def mode_stage_times(query: pql.ModeQuery) -> dict[str, float]:
     marks = [time.perf_counter()]
     totals = {}
     for mode in MODES:
-        found = pql.stored(f"{mode}_anywhere" if mode in query.anywhere else mode)
-        matched = embeddings.scores(
+        found = token_search.stored(
+            f"{mode}_anywhere" if mode in query.anywhere else mode
+        )
+        matched = token_search.scores(
             found["queries"][[query.galaxy]], found, SEARCH_RANK
         )
         totals[mode] = matched[0].double().numpy()
-    scored = sum(pql.contributions(totals).values())
+    scored = sum(token_search.contributions(totals).values())
     galaxies = pql.ranked(scored, query.galaxy, query.matches)
     marks.append(time.perf_counter())
     forms = pql.galaxy_forms(query.galaxy)
@@ -142,7 +142,9 @@ def mode_stage_times(query: pql.ModeQuery) -> dict[str, float]:
 
 def mode_times(runs: int) -> dict[str, Any]:
     timed = {
-        "load": summary([elapsed(lambda: [pql.stored(name) for name in GRAM_NAMES])])
+        "load": summary(
+            [elapsed(lambda: [token_search.stored(name) for name in GRAM_NAMES])]
+        )
     }
     galaxies = [query.galaxy for query in queries(runs + 1, IMAGE_TOKENS, MATCHES[0])]
     for layout, anywhere in LAYOUTS.items():
@@ -162,7 +164,7 @@ def mode_times(runs: int) -> dict[str, Any]:
     return timed
 
 
-@app.function(image=image)
+@app.function(image=serving_image)
 def stages(runs: int, matches: int = MATCHES[0]) -> dict[str, Any]:
     batch = queries(runs + 1, IMAGE_TOKENS, matches)
     stage_times(batch[0])
@@ -195,7 +197,7 @@ def stages(runs: int, matches: int = MATCHES[0]) -> dict[str, Any]:
 
 
 @app.function(
-    image=image,
+    image=serving_image,
     env=SERVING_ENVIRONMENT,
     cpu=SERVING_CPU,
     memory=SERVING_MEMORY,
@@ -245,7 +247,9 @@ def main(runs: int = 30) -> None:
                 "rev-parse", *(f"{stored['commit']}:{source}" for source in SOURCES)
             )
         except subprocess.CalledProcessError:
-            notes.append(f"best {stored['commit']} is not in this clone")
+            notes.append(
+                f"best {stored['commit']} lacks {SOURCES} or is not in this clone"
+            )
             stored = None
         else:
             if stored_code != current_code:

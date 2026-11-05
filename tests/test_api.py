@@ -12,9 +12,12 @@ from datasets import Dataset
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app import dataset as dataset_module
-from app import pql
-from app.config import (
+from app import galaxy, pql
+from app.config import N_TABLE_VALUES, REDSHIFT_TABLE_VALUE, Projection
+from app.galaxy import table_columns
+from app.main import query_embedder
+from core.artifacts import artifact
+from core.config import (
     AION_SPECTRUM_GRID,
     DATASET_DESI_SUFFIX,
     DATASET_LS_SUFFIX,
@@ -22,16 +25,10 @@ from app.config import (
     FLAG_SURVEYS,
     HSC_TABLE_COLUMNS,
     MODES,
-    N_TABLE_VALUES,
     REDSHIFT,
-    REDSHIFT_TABLE_VALUE,
     TOKEN_SURVEYS,
     WEMM_DIM,
-    Projection,
-    artifact,
 )
-from app.dataset import table_columns
-from app.main import query_embedder
 
 ARROW = "application/vnd.apache.arrow.stream"
 
@@ -59,7 +56,7 @@ def identified(monkeypatch: pytest.MonkeyPatch, galaxies: int) -> Dataset:
             ],
         }
     )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    monkeypatch.setattr(galaxy, "dataset", lambda: rows)
     return rows
 
 
@@ -220,7 +217,7 @@ def test_spectrum_aion_prediction_without_that_spectrum_is_the_shape_on_the_code
     client: TestClient, monkeypatch: pytest.MonkeyPatch, survey: str
 ) -> None:
     unobserved = Dataset.from_dict({TOKEN_SURVEYS[survey]: [None, None]})
-    monkeypatch.setattr(dataset_module, "dataset", lambda: unobserved)
+    monkeypatch.setattr(galaxy, "dataset", lambda: unobserved)
 
     response = client.get(f"/galaxy/1/spectrum/{survey}/aion_prediction")
 
@@ -402,7 +399,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             f"ZWARNING{DATASET_SDSS_SUFFIX}": [False],
         }
     )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    monkeypatch.setattr(galaxy, "dataset", lambda: rows)
     table_columns.cache_clear()
 
     response = client.get("/galaxy/0/table")
@@ -471,7 +468,7 @@ def test_aion_s_redshift_shows_beside_the_one_it_reads_or_else_desi_z(
             f"ZWARNING{DATASET_SDSS_SUFFIX}": [sdss_flagged],
         }
     )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    monkeypatch.setattr(galaxy, "dataset", lambda: rows)
     table_columns.cache_clear()
 
     response = client.get("/galaxy/0/table")

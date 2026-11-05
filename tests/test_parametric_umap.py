@@ -8,11 +8,14 @@ import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
 
-from app.config import FLAG_SURVEYS, POINTS, artifact, galaxy_count
+from app.galaxy import galaxy_count
+from core.artifacts import artifact
+from core.config import FLAG_SURVEYS
+from pipeline.schemas import POINTS
 from scripts.fixture import build, forget
 
 pytest.importorskip("torch")
-umap_module = importlib.import_module("app.parametric_umap")
+umap_module = importlib.import_module("pipeline.parametric_umap")
 
 LABELS = [1, None, 3, 0]
 PROJECTIONS = ("mean_points", "full_points")

@@ -16,8 +16,9 @@ from fastapi.responses import FileResponse, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from . import pql
-from .config import (
+from core import artifacts, stored_predictions, token_search
+from core.artifacts import aion_predictions, artifact, tokens
+from core.config import (
     AION_SPECTRUM_GRID,
     AION_SPECTRUM_ORIGIN,
     AION_SPECTRUM_TOKEN_WIDTH,
@@ -27,45 +28,42 @@ from .config import (
     GRAM_NAMES,
     IMAGE_MODES,
     MODES,
-    OBSERVATIONS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
-    REDSHIFT_TABLE_VALUE,
     SPECTRUM_MODES,
     SPECTRUM_SURVEY,
     TABLE_MODES,
-    TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
-    Catalogue,
-    GalaxyIndex,
     ImageSurvey,
-    ModeName,
-    Projection,
     SpectrumSurvey,
     TokenMode,
-    artifact,
-    galaxy_count,
 )
-from .dataset import (
+from core.dataset import image, predicted_image, redshift, smoothed
+from core.text_model import embed_queries
+
+from . import pql
+from .config import (
+    OBSERVATIONS,
+    REDSHIFT_TABLE_VALUE,
+    TABLE_VALUE_COLUMNS,
+    Catalogue,
+    ModeName,
+    Projection,
+)
+from .galaxy import (
+    FIRST_LS_TABLE_VALUE,
+    GalaxyIndex,
     catalogue,
     fitted,
+    galaxy_count,
     identity,
-    image,
-    predicted_image,
-    redshift,
-    smoothed,
     spectrum,
     table,
-)
-from .search import (
-    FIRST_LS_TABLE_VALUE,
-    aion_predictions,
     table_value_aion_predictions,
     table_value_tokens,
-    tokens,
 )
-from .text_search import TextQuery, embed_queries, text_search
+from .text_search import TextQuery, text_search
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Coroutine
@@ -112,11 +110,13 @@ class TextMatches(BaseModel):
 BINARY_OCTET: dict[str, Any] = {
     "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
 }
+
 ARROW_STREAM: dict[str, Any] = {
     "application/vnd.apache.arrow.stream": {
         "schema": {"type": "string", "format": "binary"}
     }
 }
+
 PNG: dict[str, Any] = {"image/png": {"schema": {"type": "string", "format": "binary"}}}
 
 
@@ -153,14 +153,14 @@ class RevalidatedRoute(APIRoute):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
-    pql.predictions()
-    pql.basis()
+    stored_predictions.predictions()
+    stored_predictions.basis()
     for column in OBSERVATIONS:
-        pql.observed(column)
+        artifacts.observed(column)
     for mode in MODES:
         aion_predictions(mode)
     for name in GRAM_NAMES:
-        pql.stored(name)
+        token_search.stored(name)
     yield
 
 
@@ -169,6 +169,7 @@ app = FastAPI(
     lifespan=lifespan,
     generate_unique_id_function=lambda route: route.name,
 )
+
 app.router.route_class = RevalidatedRoute
 
 app.add_middleware(
@@ -465,7 +466,7 @@ def search_response(
     ]
     columns = [
         *columns,
-        *(pa.array(pql.observed(column)[galaxies]) for column in OBSERVATIONS),
+        *(pa.array(artifacts.observed(column)[galaxies]) for column in OBSERVATIONS),
         pa.array(predicted, observations),
     ]
     return arrow(pa.record_batch(columns, schema=pa.schema(fields)))

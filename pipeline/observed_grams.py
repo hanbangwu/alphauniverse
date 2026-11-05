@@ -4,8 +4,12 @@ from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum
 from tqdm import tqdm
 
-from . import aion_predictions, embeddings, observations, pql
-from .config import IMAGE_MODES, MODES, SPECTRUM_MODES, TOKEN_GRAMS, artifact, device
+from core import stored_predictions
+from core.artifacts import artifact
+from core.config import IMAGE_MODES, MODES, SPECTRUM_MODES, TOKEN_GRAMS
+from core.device import device
+
+from . import aion_predictions, embeddings, observations
 from .grams import ROWS
 
 BATCH = 256
@@ -240,10 +244,10 @@ def generate_observed_grams() -> None:
 def predictive_widths() -> dict[str, np.ndarray]:
     with np.load(artifact("observed_reference")) as references:
         depths = {mode: references[f"{mode}_depth"] for mode in MODES}
-    count = pql.predictions().num_rows
+    count = stored_predictions.predictions().num_rows
     found = {mode: np.empty(count, np.float32) for mode in MODES}
     start = 0
-    for rows in tqdm(pql.predictions().to_batches(), desc="widths"):
+    for rows in tqdm(stored_predictions.predictions().to_batches(), desc="widths"):
         for mode, values in aion_predictions.widths(rows, depths).items():
             found[mode][start : start + rows.num_rows] = values
         start += rows.num_rows

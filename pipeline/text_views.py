@@ -12,46 +12,56 @@ import pyarrow.parquet as pq
 from astropy.convolution import Gaussian1DKernel, convolve
 from tqdm import tqdm
 
-from . import aion_predictions, alignment, pql, search
-from .config import (
+from core import artifacts, stored_predictions
+from core.artifacts import artifact
+from core.config import (
     AION_SPECTRUM_GRID,
     HSC_TABLE_COLUMNS,
     IMAGE_MODES,
     LS_TABLE_COLUMNS,
     MODE_SURVEYS,
     MODES,
+    REDSHIFT,
+    SPECTRUM_MODES,
+    TABLE_MODES,
+    TOKEN_SURVEYS,
+    WEMM_DIM,
+    SpectrumSurvey,
+)
+from core.dataset import dataset, image, predicted_image, samples
+from core.text_model import text_model
+
+from . import aion_predictions, alignment
+from .config import (
     PARTS_PER_ROUND,
     PLOT_INCHES,
     PROTOTYPE_HELD_OUT,
-    REDSHIFT,
     SEED,
-    SPECTRUM_MODES,
-    TABLE_MODES,
-    TEXT_VIEWS,
-    TEXT_VIEWS_HELD_OUT,
-    TOKEN_SURVEYS,
     VIEW_COMBINATIONS,
     VIEW_KINDS,
     VIEW_TYPES,
     VIEWS_PER_PART,
-    WEMM_DIM,
-    SpectrumSurvey,
-    artifact,
 )
-from .dataset import dataset, image, predicted_image, samples
 from .observations import table_values
-from .text_search import text_model
+from .schemas import TEXT_VIEWS, TEXT_VIEWS_HELD_OUT
 
 SAMPLE_WEIGHTS = {mode: 8 if mode in TABLE_MODES else 4 for mode in MODES}
+
 SMOOTHING = (1, 2, 3)
+
 PRECISIONS = (3, 4, 5)
+
 SPECTRUM_RANGES: dict[SpectrumSurvey, tuple[float, float]] = {
     "desi": (3600.0, 9824.0),
     "sdss": (3795.8, 9221.5),
 }
+
 FLUX_PERCENTILES = (0.5, 99.9)
+
 FLUX_PADDING = 0.1
+
 PLOTTERS = 15
+
 HELD_OUT_GALAXIES = 500
 
 
@@ -69,7 +79,7 @@ def weights(galaxies: np.ndarray) -> np.ndarray:
     columns = []
     for kind, name in VIEW_TYPES:
         if kind == "observed":
-            columns.append(pql.observed(MODE_SURVEYS[name])[galaxies])
+            columns.append(artifacts.observed(MODE_SURVEYS[name])[galaxies])
         elif kind == "sample":
             columns.append(np.full(len(galaxies), SAMPLE_WEIGHTS[name]))
         else:
@@ -78,7 +88,7 @@ def weights(galaxies: np.ndarray) -> np.ndarray:
 
 
 def rows(galaxies: np.ndarray, mode: str) -> pa.RecordBatch:
-    table = pql.predictions()
+    table = stored_predictions.predictions()
     table = table.select(
         [TABLE_MODES[mode][0]]
         if mode in TABLE_MODES
@@ -159,7 +169,7 @@ def realised(
     pool: Executor,
 ) -> list[PIL.Image.Image] | list[str]:
     if kind == "aion_prediction":
-        predicted = search.aion_predictions(mode)[galaxies]
+        predicted = artifacts.aion_predictions(mode)[galaxies]
     elif kind == "sample":
         predicted = aion_predictions.sampled(rows(galaxies, mode), mode, rng)
     if mode in IMAGE_MODES:
@@ -206,7 +216,7 @@ def combined(
     parts = []
     for mode in members:
         kinds = rng.integers(
-            ~pql.observed(MODE_SURVEYS[mode])[galaxies], len(VIEW_KINDS)
+            ~artifacts.observed(MODE_SURVEYS[mode])[galaxies], len(VIEW_KINDS)
         )
         member = [None] * len(galaxies)
         for kind in np.unique(kinds):

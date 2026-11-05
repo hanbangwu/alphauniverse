@@ -9,39 +9,27 @@ import pyarrow as pa
 import torch
 from tqdm import tqdm
 
-from app import (
+from app.galaxy import galaxy_count
+from core import artifacts, stored_predictions, token_search
+from core.artifacts import artifact, tokens
+from core.config import DATASET_REVISION, GRAM_NAMES, TOKEN_GRAMS
+from core.device import device
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import (
     aion_predictions,
     embeddings,
     encode,
     grams,
     observed_grams,
     parametric_umap,
-    pql,
     predictions,
 )
-from app.config import (
-    DATASET_REVISION,
-    GRAM_NAMES,
-    SEED,
-    STORE_COLUMNS,
-    TOKEN_EMBEDDING_RANK,
-    TOKEN_GRAMS,
-    artifact,
-    device,
-    galaxy_count,
-)
-from app.search import tokens
-from modal_app import CACHE_PATH, build_image, cache_volume
-from scripts.benchmarks.common import (
-    COMBINED,
-    environment,
-    git,
-    memory,
-    standardised,
-)
+from pipeline.config import SEED, STORE_COLUMNS, TOKEN_EMBEDDING_RANK
+from pipeline.modal_app import build_image
+from scripts.benchmarks.common import COMBINED, environment, git, memory, standardised
 
 app = modal.App("alphauniverse-retrieval-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/retrieval_quality.json")
 SAMPLE = 512
@@ -59,7 +47,7 @@ TESTS = {
 
 def chosen(required: tuple[str, ...]) -> np.ndarray:
     galaxies = np.flatnonzero(
-        np.logical_and.reduce([pql.observed(survey) for survey in required])
+        np.logical_and.reduce([artifacts.observed(survey) for survey in required])
     )
     rng = np.random.default_rng(SEED)
     return np.sort(rng.choice(galaxies, min(SAMPLE, len(galaxies)), replace=False))
@@ -75,9 +63,13 @@ def encoded(
         means.append(context[0].float().mean(dim=0))
         predicted = predictions.decode(context, mask, predictions.TARGETS)
         records.append(
-            predictions.record(row["galaxy"], predicted, pql.prediction_basis())
+            predictions.record(
+                row["galaxy"], predicted, stored_predictions.prediction_basis()
+            )
         )
-    return pa.Table.from_batches([pql.prediction_batch(records)]), torch.stack(means)
+    return pa.Table.from_batches([predictions.prediction_batch(records)]), torch.stack(
+        means
+    )
 
 
 def reverse_rows(
@@ -98,9 +90,11 @@ def token_rows(
 ) -> dict[str, dict[str, dict[str, torch.Tensor]]]:
     torch.backends.cuda.matmul.fp32_precision = "tf32"
     found = {test: {"exact": {}, "reverse": {}} for test in tests}
-    stored = {test: pql.predictions().take(galaxies[test]) for test in tests}
+    stored = {
+        test: stored_predictions.predictions().take(galaxies[test]) for test in tests
+    }
     for mode in TOKEN_GRAMS:
-        gallery = grams.forms(mode, pql.predictions())
+        gallery = grams.forms(mode, stored_predictions.predictions())
         for test, table in tests.items():
             queries = grams.forms(mode, table)
             found[test]["exact"] |= grams.gram(mode, queries, gallery)
@@ -195,7 +189,7 @@ def family(
     }
     scored = rows | {
         rank: {
-            name: embeddings.scores(vectors[name], found[name], rank)
+            name: token_search.scores(vectors[name], found[name], rank)
             for name in vectors
         }
         for rank in RANKS
@@ -255,7 +249,7 @@ def measure() -> dict[str, Any]:
     return {
         "environment": environment(),
         "device": torch.cuda.get_device_name(),
-        "galaxies": pql.predictions().num_rows,
+        "galaxies": stored_predictions.predictions().num_rows,
         "ranks": RANKS,
         "tests": report,
         "memory": memory(),

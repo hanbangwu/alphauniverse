@@ -7,18 +7,12 @@ import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
 
-from app import alignment, pql, text_views
-from app.config import (
-    IMAGE_MODES,
-    MODE_SURVEYS,
-    MODES,
-    PLOT_INCHES,
-    SPECTRUM_MODES,
-    TEXT_VIEWS,
-    TEXT_VIEWS_HELD_OUT,
-    WEMM_DIM,
-    galaxy_count,
-)
+from app.galaxy import galaxy_count
+from core import artifacts
+from core.config import IMAGE_MODES, MODE_SURVEYS, MODES, SPECTRUM_MODES, WEMM_DIM
+from pipeline import alignment, config, text_views
+from pipeline.config import PLOT_INCHES
+from pipeline.schemas import TEXT_VIEWS, TEXT_VIEWS_HELD_OUT
 
 
 def test_observed_view_types_are_drawn_only_for_galaxies_observed_in_the_mode(
@@ -26,10 +20,10 @@ def test_observed_view_types_are_drawn_only_for_galaxies_observed_in_the_mode(
 ) -> None:
     found = text_views.weights(np.arange(galaxy_count()))
 
-    for index, (kind, name) in enumerate(text_views.VIEW_TYPES):
+    for index, (kind, name) in enumerate(config.VIEW_TYPES):
         if kind == "observed":
             np.testing.assert_array_equal(
-                found[:, index] > 0, pql.observed(MODE_SURVEYS[name]), name
+                found[:, index] > 0, artifacts.observed(MODE_SURVEYS[name]), name
             )
 
 

@@ -11,25 +11,22 @@ from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 from umap import UMAP
 
-from app import embeddings
-from app.config import (
-    DATASET_REVISION,
-    GRAM_NAMES,
-    REDSHIFT,
-    SEARCH_RANK,
-    SEED,
-    artifact,
-    galaxy_count,
-)
-from app.maps import placed
-from app.parametric_umap import scan
-from modal_app import CACHE_PATH, build_image, cache_volume
+from app.galaxy import galaxy_count
+from core import token_search
+from core.artifacts import artifact
+from core.config import DATASET_REVISION, GRAM_NAMES, REDSHIFT, SEARCH_RANK
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import embeddings
+from pipeline.config import SEED
+from pipeline.maps import placed
+from pipeline.modal_app import build_image
+from pipeline.parametric_umap import scan
 from scripts.benchmarks import projection_quality
 from scripts.benchmarks.common import COMBINED, environment, git, memory, standardised
 from scripts.benchmarks.probe_quality import WIDTHS, principal, targets
 
 app = modal.App("alphauniverse-neighbour-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/neighbour_quality.json")
 ROLES = ("token", "aion_prediction")
@@ -71,7 +68,7 @@ def searched(
 ) -> torch.Tensor:
     return sum(
         standardised(
-            embeddings.scores(
+            token_search.scores(
                 blocks[name]["queries"][queries], blocks[name], SEARCH_RANK
             ).double()
         )

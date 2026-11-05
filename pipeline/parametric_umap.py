@@ -13,31 +13,37 @@ from tqdm import tqdm
 from umap import UMAP
 from umap.umap_ import find_ab_params, fuzzy_simplicial_set
 
+from core.artifacts import artifact, source
+from core.config import DATASET_REVISION, FLAG_SURVEYS
+from core.dataset import dataset
+from core.device import device
+
 from .config import (
     AION_EMBEDDING_DIM,
-    DATASET_REVISION,
-    FLAG_SURVEYS,
-    POINTS,
     SEED,
     STORE_COLUMNS,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
-    artifact,
-    device,
-    points,
 )
-from .dataset import dataset
-from .search import source
+from .schemas import POINTS, points
 
 BATCH = 1024
+
 CHUNK = 128
+
 EPOCHS = 20
+
 LEARNING_RATE = 1e-3
+
 MIN_DIST = 0.1
+
 NEGATIVES = 5
+
 SAMPLE = 5_000_000
+
 VALIDATION = 0.3
+
 CURVE_A, CURVE_B = find_ab_params(1.0, MIN_DIST)
 
 

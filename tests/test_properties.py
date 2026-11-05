@@ -6,17 +6,17 @@ import pytest
 from aion.fourm.modality_info import MODALITY_INFO
 from datasets import Dataset
 
-from app import aion_predictions, observations, properties
-from app.config import (
+from core.artifacts import artifact
+from core.config import (
     DATASET_LS_SUFFIX,
     DATASET_PROVABGS_SUFFIX,
-    PROBED,
-    PROPERTIES,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     TOKEN_SURVEYS,
-    artifact,
 )
+from pipeline import aion_predictions, observations, properties
+from pipeline.config import PROBED
+from pipeline.schemas import PROPERTIES
 
 LABELLED = 30
 CONTINUUM = 2.0

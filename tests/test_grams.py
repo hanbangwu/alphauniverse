@@ -6,8 +6,11 @@ import pytest
 import torch
 from aion.modalities import LegacySurveyImage
 
-from app import grams, pql
-from app.config import TOKEN_GRAMS, TokenMode, artifact
+from app import pql
+from core import stored_predictions
+from core.artifacts import artifact
+from core.config import TOKEN_GRAMS, TokenMode
+from pipeline import grams
 
 GALAXY = 3
 
@@ -15,18 +18,24 @@ GALAXY = 3
 def test_a_row_with_search_s_representation_equals_search_with_every_slot_selected(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    selected = {mode: np.arange(slots) for mode, slots in pql.WIDTHS.items()}
+    selected = {
+        mode: np.arange(slots) for mode, slots in stored_predictions.WIDTHS.items()
+    }
     positional = pql.positional_slots(selected, get_args(TokenMode))
     aligned = pql.mode_totals(GALAXY, selected, {})
     anywhere = pql.mode_totals(GALAXY, selected, positional)
     queries = {
-        mode: grams.forms(mode, pql.predictions()).dense(slice(GALAXY, GALAXY + 1))
+        mode: grams.forms(mode, stored_predictions.predictions()).dense(
+            slice(GALAXY, GALAXY + 1)
+        )
         for mode in TOKEN_GRAMS
     }
-    monkeypatch.setattr(pql, "query_image_tokens", pql.top_image_tokens)
+    monkeypatch.setattr(
+        stored_predictions, "query_image_tokens", stored_predictions.top_image_tokens
+    )
 
     for mode, names in TOKEN_GRAMS.items():
-        gallery = grams.forms(mode, pql.predictions())
+        gallery = grams.forms(mode, stored_predictions.predictions())
         found = grams.scores(queries[mode], gallery.dense(slice(None)), gallery)
         for name, row, expected in zip(names, found, (aligned[mode], anywhere[mode])):
             np.testing.assert_allclose(row[0], expected, rtol=1e-6, err_msg=name)
@@ -41,7 +50,7 @@ def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
     grams.generate_token_grams()
 
     for mode, names in TOKEN_GRAMS.items():
-        forms = grams.forms(mode, pql.predictions())
+        forms = grams.forms(mode, stored_predictions.predictions())
         everyone = forms.dense(slice(None))
         for name, expected in zip(names, grams.scores(everyone, everyone, forms)):
             np.testing.assert_allclose(
@@ -57,10 +66,10 @@ def test_rows_of_other_queries_are_their_rows_against_every_galaxy(
 ) -> None:
     monkeypatch.setattr(grams, "ROWS", 2 * LegacySurveyImage.num_tokens)
     chosen = [GALAXY, 0, 5]
-    table = pql.predictions().take(chosen)
+    table = stored_predictions.predictions().take(chosen)
 
     for mode, names in TOKEN_GRAMS.items():
-        gallery = grams.forms(mode, pql.predictions())
+        gallery = grams.forms(mode, stored_predictions.predictions())
         queries = grams.forms(mode, table)
         found = grams.gram(mode, queries, gallery)
         everyone = gallery.dense(slice(None))

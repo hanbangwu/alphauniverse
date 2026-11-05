@@ -11,8 +11,8 @@ from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from tqdm import tqdm
 
-from app import aion_predictions, observations
-from app.config import (
+from core.artifacts import artifact, tokens
+from core.config import (
     DATASET_REVISION,
     HSC_TABLE_COLUMNS,
     IMAGE_MODES,
@@ -21,16 +21,16 @@ from app.config import (
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
     TABLE_MODES,
-    artifact,
-    device,
 )
-from app.dataset import usable
-from app.search import tokens
-from modal_app import CACHE_PATH, build_image, cache_volume
+from core.dataset import usable
+from core.device import device
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import aion_predictions, observations
+from pipeline.modal_app import build_image
 from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-aion_prediction-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/aion_prediction_quality.json")
 BATCH = 256

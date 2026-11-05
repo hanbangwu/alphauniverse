@@ -1,7 +1,9 @@
 from pathlib import Path
 
-from app import maps, pql
-from app.config import MAPS, MODES, galaxy_count
+from app import pql
+from app.galaxy import galaxy_count
+from core.config import MAPS, MODES
+from pipeline import maps
 
 NEIGHBOURS = 5
 

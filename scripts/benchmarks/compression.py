@@ -2,8 +2,9 @@ import numpy as np
 import torch
 
 from app import pql
-from app.config import KEPT, PROBABILITY_FLOOR, TOP_CODES
-from app.predictions import Mode, coefficients, image_token_codes
+from core import stored_predictions
+from core.config import KEPT, PROBABILITY_FLOOR, TOP_CODES
+from pipeline.predictions import Mode, coefficients, image_token_codes
 
 Stored = dict[str, torch.Tensor]
 
@@ -24,7 +25,9 @@ class Current:
         self.mean = mean
         self.directions = directions
         self.floor = (
-            pql.SPECTRUM_TOKEN_FLOOR if self.kind == "spectrum" else PROBABILITY_FLOOR
+            stored_predictions.SPECTRUM_TOKEN_FLOOR
+            if self.kind == "spectrum"
+            else PROBABILITY_FLOOR
         )
 
     def encode(self, log_probabilities: torch.Tensor) -> Stored:

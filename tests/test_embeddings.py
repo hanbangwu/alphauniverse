@@ -4,8 +4,9 @@ import numpy as np
 import pytest
 import torch
 
-from app import embeddings, grams
-from app.config import GRAM_NAMES, SEARCH_RANK, artifact
+from core.artifacts import artifact
+from core.config import GRAM_NAMES, SEARCH_RANK
+from pipeline import embeddings, grams
 
 GALAXIES = 40
 RANK = 5

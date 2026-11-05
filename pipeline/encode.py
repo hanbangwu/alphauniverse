@@ -44,7 +44,7 @@ from aion.modalities import (
 )
 from tqdm import tqdm
 
-from .config import (
+from core.config import (
     FLAG_SURVEYS,
     HSC_BANDS,
     HSC_TABLE_COLUMNS,
@@ -52,13 +52,13 @@ from .config import (
     LS_TABLE_COLUMNS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
-    STORES,
     TOKEN_SURVEYS,
-    device,
-    store_schema,
-    store_writer,
 )
-from .dataset import dataset, redshift
+from core.dataset import dataset, redshift
+from core.device import device
+
+from .config import STORES
+from .schemas import store_schema, store_writer
 
 BATCH = 128
 

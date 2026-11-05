@@ -2,7 +2,9 @@
 paths:
   - "scripts/benchmarks/**"
   - "docs/dev/benchmarks.rst"
-  - "modal_app.py"
+  - "app/modal_app.py"
+  - "pipeline/modal_app.py"
+  - "core/modal_resources.py"
   - "docs/benchmarks/**"
   - ".github/workflows/benchmark.yml"
 ---

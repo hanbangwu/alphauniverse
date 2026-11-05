@@ -2,7 +2,11 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .config import GRAM_NAMES, SEARCH_RANK, TOKEN_EMBEDDING_RANK, artifact, device
+from core.artifacts import artifact
+from core.config import GRAM_NAMES, SEARCH_RANK
+from core.device import device
+
+from .config import TOKEN_EMBEDDING_RANK
 
 BATCH = 1024
 
@@ -41,12 +45,6 @@ def query_vectors(rows: torch.Tensor, found: dict[str, torch.Tensor]) -> torch.T
     matrix = rows - rows.mean(dim=1, keepdim=True) - offsets + offsets.mean()
     singular_values = found["singular_values"][: galleries.shape[1]].to(galleries)
     return matrix @ (galleries / singular_values)
-
-
-def scores(
-    queries: torch.Tensor, found: dict[str, torch.Tensor], rank: int
-) -> torch.Tensor:
-    return queries[:, :rank] @ found["galleries"][:, :rank].T + found["offsets"]
 
 
 def saved(role: str, found: dict[str, torch.Tensor], **extra: np.ndarray) -> None:

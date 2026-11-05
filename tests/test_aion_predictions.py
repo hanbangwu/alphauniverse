@@ -9,8 +9,10 @@ from aion.codecs.preprocessing.image import RescaleToLegacySurvey
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import LegacySurveyImage
 
-from app import aion_predictions, pql, predictions, search
-from app.config import (
+from app import pql
+from core import artifacts, stored_predictions
+from core.artifacts import artifact
+from core.config import (
     HSC_BANDS,
     IMAGE_MODES,
     LS_BANDS,
@@ -18,9 +20,9 @@ from app.config import (
     REDSHIFT,
     SPECTRUM_MODES,
     TABLE_MODES,
-    artifact,
-    device,
 )
+from core.device import device
+from pipeline import aion_predictions, predictions
 
 GALAXY = 7
 
@@ -98,12 +100,14 @@ def test_a_spectrum_aion_prediction_decodes_the_codebook_averaged_over_each_wind
     tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rng = np.random.default_rng(0)
-    for survey, (_, directions, _, _) in list(pql.basis().items()):
+    for survey, (_, directions, _, _) in list(stored_predictions.basis().items()):
         mean = rng.dirichlet(
             np.ones(MODALITY_INFO["tok_spectrum_desi"]["vocab_size"])
         ).astype(np.float32)
         monkeypatch.setitem(
-            pql.basis(), survey, (mean, directions, mean @ mean, directions @ mean)
+            stored_predictions.basis(),
+            survey,
+            (mean, directions, mean @ mean, directions @ mean),
         )
     rows = pql.row(GALAXY)
     for mode, survey in SPECTRUM_MODES.items():
@@ -111,8 +115,12 @@ def test_a_spectrum_aion_prediction_decodes_the_codebook_averaged_over_each_wind
         vectors = aion_predictions.codebook(
             spectrum, MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]
         )
-        coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
-        dense = torch.from_numpy(pql.distributions(mode, coefficients)).to(vectors)
+        coefficients = stored_predictions.spectrum_token_coefficients(
+            rows, survey, slice(None)
+        )
+        dense = torch.from_numpy(
+            stored_predictions.distributions(mode, coefficients)
+        ).to(vectors)
 
         found = aion_predictions.spectrum_aion_predictions(spectrum, rows, survey)
 
@@ -132,7 +140,7 @@ def test_each_stored_aion_prediction_is_its_galaxy_s_in_every_mode(
     expected = aion_predictions.aion_predictions(pql.row(GALAXY))
     for mode, found in expected.items():
         stored = np.load(artifact(f"aion_prediction_{mode}"))
-        assert len(stored) == pql.predictions().num_rows
+        assert len(stored) == stored_predictions.predictions().num_rows
         assert np.isfinite(stored).all(), mode
         np.testing.assert_allclose(
             stored[GALAXY], found[0], rtol=1e-5, atol=1e-5, err_msg=mode
@@ -199,8 +207,12 @@ def test_widths_are_the_predicted_spread_in_every_mode(
             aion_predictions.decoder(mode),
             MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
         ).double()
-        coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
-        dense = torch.from_numpy(pql.distributions(mode, coefficients)).to(vectors)
+        coefficients = stored_predictions.spectrum_token_coefficients(
+            rows, survey, slice(None)
+        )
+        dense = torch.from_numpy(
+            stored_predictions.distributions(mode, coefficients)
+        ).to(vectors)
         variance = dense @ vectors**2 - (dense @ vectors) ** 2
         np.testing.assert_allclose(
             found[mode],
@@ -209,7 +221,9 @@ def test_widths_are_the_predicted_spread_in_every_mode(
             err_msg=mode,
         )
     for mode, bins in values.items():
-        cumulative = pql.table_value_probabilities(rows, mode)[0].cumsum(axis=-1)
+        cumulative = stored_predictions.table_value_probabilities(rows, mode)[0].cumsum(
+            axis=-1
+        )
         lower, upper = (
             bins[
                 np.arange(len(bins)), (cumulative < share * cumulative[:, -1:]).sum(-1)
@@ -248,13 +262,15 @@ def test_image_codes_drawn_from_the_tail_are_never_a_cell_s_stored_codes(
     tree: Path, monkeypatch: pytest.MonkeyPatch, survey: str
 ) -> None:
     rows = pql.row(GALAXY)
-    codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
+    codes, probabilities, spread = stored_predictions.query_image_tokens(
+        rows, survey, slice(None)
+    )
     tail_only = (
         codes,
         0 * probabilities,
         np.full_like(spread, 1 / MODALITY_INFO["tok_image"]["vocab_size"]),
     )
-    monkeypatch.setattr(pql, "query_image_tokens", lambda *_: tail_only)
+    monkeypatch.setattr(stored_predictions, "query_image_tokens", lambda *_: tail_only)
 
     found = aion_predictions.sampled_image_codes(rows, survey, np.random.default_rng(0))
 
@@ -267,10 +283,10 @@ def test_image_codes_drawn_from_the_tail_are_never_a_cell_s_stored_codes(
 def test_a_sample_has_the_shape_of_the_mode_s_aion_prediction(
     tree: Path, random_weights: None
 ) -> None:
-    rows = pql.predictions().slice(GALAXY, 2).to_batches()[0]
+    rows = stored_predictions.predictions().slice(GALAXY, 2).to_batches()[0]
     for mode in MODES:
         found = aion_predictions.sampled(rows, mode, np.random.default_rng(0))
 
         assert (
-            found.shape == search.aion_predictions(mode)[GALAXY : GALAXY + 2].shape
+            found.shape == artifacts.aion_predictions(mode)[GALAXY : GALAXY + 2].shape
         ), mode

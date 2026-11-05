@@ -8,17 +8,13 @@ from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import LegacySurveyImage
 from tqdm import tqdm
 
-from . import pql
-from .config import (
-    IMAGE_MODES,
-    PROBABILITY_FLOOR,
-    SPECTRUM_MODES,
-    TOKEN_GRAMS,
-    artifact,
-    device,
-)
+from core import stored_predictions
+from core.artifacts import artifact
+from core.config import IMAGE_MODES, PROBABILITY_FLOOR, SPECTRUM_MODES, TOKEN_GRAMS
+from core.device import device
 
 ALIGNMENT = 32
+
 ROWS = 64 * LegacySurveyImage.num_tokens
 
 
@@ -52,7 +48,9 @@ def stacked(
 
 def image_forms(survey: str, table: pa.Table) -> Forms:
     def parts(rows: pa.RecordBatch) -> tuple[np.ndarray, ...]:
-        codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
+        codes, probabilities, spread = stored_predictions.query_image_tokens(
+            rows, survey, slice(None)
+        )
         return codes.astype(np.int64), probabilities, spread
 
     codes, probabilities, spread = stacked(table, parts)
@@ -68,24 +66,25 @@ def image_forms(survey: str, table: pa.Table) -> Forms:
 
 
 def spectrum_forms(survey: str, table: pa.Table) -> Forms:
-    _, _, mean_square, projected_mean = pql.basis()[survey]
+    _, _, mean_square, projected_mean = stored_predictions.basis()[survey]
     (coefficients,) = stacked(
         table,
         lambda rows: (
-            pql.spectrum_token_coefficients(rows, survey, slice(None)) + projected_mean,
+            stored_predictions.spectrum_token_coefficients(rows, survey, slice(None))
+            + projected_mean,
         ),
     )
     return Forms(
         lambda part: coefficients[part],
         float(mean_square - projected_mean @ projected_mean),
-        pql.SPECTRUM_TOKEN_FLOOR,
+        stored_predictions.SPECTRUM_TOKEN_FLOOR,
         table.num_rows,
     )
 
 
 def table_forms(mode: str, table: pa.Table) -> Forms:
     def parts(rows: pa.RecordBatch) -> tuple[np.ndarray]:
-        values = pql.table_value_probabilities(rows, mode)
+        values = stored_predictions.table_value_probabilities(rows, mode)
         padding = padded(values.shape[-1]) - values.shape[-1]
         return (np.pad(values, ((0, 0), (0, 0), (0, padding))),)
 
@@ -130,7 +129,7 @@ def gram(
     symmetric = gallery is None
     if symmetric:
         gallery = queries
-    size = ROWS // pql.WIDTHS[mode]
+    size = ROWS // stored_predictions.WIDTHS[mode]
     found = {
         name: torch.empty(queries.count, gallery.count, device=device())
         for name in TOKEN_GRAMS[mode]
@@ -154,5 +153,7 @@ def gram(
 def generate_token_grams() -> None:
     torch.backends.cuda.matmul.fp32_precision = "tf32"
     for mode in TOKEN_GRAMS:
-        for name, matrix in gram(mode, forms(mode, pql.predictions())).items():
+        for name, matrix in gram(
+            mode, forms(mode, stored_predictions.predictions())
+        ).items():
             np.save(artifact(f"token_gram_{name}"), matrix.cpu().numpy())

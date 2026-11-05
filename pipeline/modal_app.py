@@ -1,38 +1,10 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 import modal
 
-if TYPE_CHECKING:
-    import numpy as np
-    from fastapi import FastAPI
+from core.modal_resources import CACHE_PATH, build_dependencies, cache_volume
 
-CACHE_PATH = "/cache"
-SERVING_CPU = 8
-SERVING_MEMORY = (4 * 1024, 32 * 1024)
-SERVING_MAX_INPUTS = 16
-SERVING_MAX_CONTAINERS = 1
-SERVING_SCALEDOWN_WINDOW = 5 * 60
-SERVING_ENVIRONMENT = {"OPENBLAS_NUM_THREADS": "1"}
+app = modal.App("alphauniverse-build")
 
-app = modal.App("alphauniverse")
-
-cache_volume = modal.Volume.from_name("alphauniverse-cache", create_if_missing=True)
-
-environment = {
-    "ALPHAUNIVERSE_CACHE": CACHE_PATH,
-    "HF_HOME": CACHE_PATH,
-    "WANDB_DIR": CACHE_PATH,
-}
-
-
-build_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .uv_sync(groups=["build"], extra_options="--no-dev")
-    .env(environment)
-    .add_local_python_source("app")
-)
+build_image = build_dependencies.add_local_python_source("core", "pipeline")
 
 
 @app.function(
@@ -44,8 +16,8 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
-    from app.config import build_dir
-    from app.encode import generate_embeddings
+    from core.artifacts import build_dir
+    from pipeline.encode import generate_embeddings
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_embeddings()
@@ -61,8 +33,8 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_predictions() -> None:
-    from app.config import build_dir
-    from app.predictions import generate_predictions
+    from core.artifacts import build_dir
+    from pipeline.predictions import generate_predictions
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_predictions()
@@ -78,7 +50,7 @@ def generate_predictions() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_token_grams() -> None:
-    from app.grams import generate_token_grams
+    from pipeline.grams import generate_token_grams
 
     generate_token_grams()
     cache_volume.commit()
@@ -93,7 +65,7 @@ def generate_token_grams() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_token_embeddings() -> None:
-    from app.embeddings import generate_token_embeddings
+    from pipeline.embeddings import generate_token_embeddings
 
     generate_token_embeddings()
     cache_volume.commit()
@@ -107,7 +79,7 @@ def generate_token_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_joint_embedding() -> None:
-    from app.embeddings import generate_joint_embedding
+    from pipeline.embeddings import generate_joint_embedding
 
     generate_joint_embedding()
     cache_volume.commit()
@@ -121,7 +93,7 @@ def generate_joint_embedding() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_properties() -> None:
-    from app.properties import generate_properties
+    from pipeline.properties import generate_properties
 
     generate_properties()
     cache_volume.commit()
@@ -135,7 +107,7 @@ def generate_properties() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_maps() -> None:
-    from app.maps import generate_maps
+    from pipeline.maps import generate_maps
 
     generate_maps()
     cache_volume.commit()
@@ -150,7 +122,7 @@ def generate_maps() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_aion_predictions() -> None:
-    from app.aion_predictions import generate_aion_predictions
+    from pipeline.aion_predictions import generate_aion_predictions
 
     generate_aion_predictions()
     cache_volume.commit()
@@ -165,7 +137,7 @@ def generate_aion_predictions() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_observed_grams() -> None:
-    from app.observed_grams import generate_observed_grams
+    from pipeline.observed_grams import generate_observed_grams
 
     generate_observed_grams()
     cache_volume.commit()
@@ -180,7 +152,7 @@ def generate_observed_grams() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_aion_prediction_embeddings() -> None:
-    from app.observed_grams import generate_aion_prediction_embeddings
+    from pipeline.observed_grams import generate_aion_prediction_embeddings
 
     generate_aion_prediction_embeddings()
     cache_volume.commit()
@@ -196,8 +168,8 @@ def generate_aion_prediction_embeddings() -> None:
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def generate_projections() -> None:
-    from app.config import build_dir
-    from app.parametric_umap import generate_projections
+    from core.artifacts import build_dir
+    from pipeline.parametric_umap import generate_projections
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_projections()
@@ -213,8 +185,8 @@ def generate_projections() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_pairs() -> None:
-    from app.config import build_dir
-    from app.text_search import generate_pairs
+    from core.artifacts import build_dir
+    from pipeline.text_pairs import generate_pairs
 
     build_dir().mkdir(parents=True, exist_ok=True)
     generate_pairs()
@@ -230,7 +202,7 @@ def generate_pairs() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_text_views(parts: int) -> None:
-    from app.text_views import generate_text_views
+    from pipeline.text_views import generate_text_views
 
     generate_text_views(parts)
     cache_volume.commit()
@@ -246,7 +218,7 @@ def generate_text_views(parts: int) -> None:
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def train_text_regression() -> None:
-    from app.text_regression import train_text_regression
+    from pipeline.text_regression import train_text_regression
 
     train_text_regression()
     cache_volume.commit()
@@ -261,60 +233,7 @@ def train_text_regression() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_text_vectors() -> None:
-    from app.text_regression import generate_text_vectors
+    from pipeline.text_regression import generate_text_vectors
 
     generate_text_vectors()
     cache_volume.commit()
-
-
-@app.cls(
-    image=build_image,
-    gpu=["L4", "A10G", "L40S"],
-    cpu=2,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=10 * 60,
-    volumes={CACHE_PATH: cache_volume},
-    scaledown_window=SERVING_SCALEDOWN_WINDOW,
-    enable_memory_snapshot=True,
-    experimental_options={"enable_gpu_snapshot": True},
-)
-class QueryEmbedder:
-    @modal.enter(snap=True)
-    def load(self) -> None:
-        from app.text_search import embed_queries
-
-        embed_queries(["a galaxy"])
-
-    @modal.method()
-    def embed(self, texts: list[str]) -> np.ndarray:
-        from app.text_search import embed_queries
-
-        return embed_queries(texts)
-
-
-serving_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .uv_sync(extra_options="--no-dev")
-    .env(environment | {"HF_HUB_OFFLINE": "1"})
-    .add_local_python_source("app")
-)
-
-
-@app.function(
-    image=serving_image,
-    env=SERVING_ENVIRONMENT,
-    cpu=SERVING_CPU,
-    memory=SERVING_MEMORY,
-    timeout=10 * 60,
-    volumes={CACHE_PATH: cache_volume},
-    max_containers=SERVING_MAX_CONTAINERS,
-    scaledown_window=SERVING_SCALEDOWN_WINDOW,
-)
-@modal.concurrent(max_inputs=SERVING_MAX_INPUTS)
-@modal.asgi_app()
-def fastapi_app() -> FastAPI:
-    from app.main import app, query_embedder
-
-    embed = QueryEmbedder().embed.remote
-    app.dependency_overrides[query_embedder] = lambda: embed
-    return app

@@ -5,29 +5,40 @@ from sklearn.linear_model import RidgeCV
 from sklearn.metrics import root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 
-from . import aion_predictions, pql
-from .config import (
+from core import stored_predictions
+from core.artifacts import artifact
+from core.config import (
     DATASET_LS_SUFFIX,
     DATASET_PROVABGS_SUFFIX,
+    REDSHIFT,
+    SPECTRUM_MODES,
+)
+
+from . import aion_predictions
+from .config import (
     LS_PROPERTIES,
     LS_ZERO_POINT,
-    PROPERTIES,
     PROVABGS_PROPERTIES,
-    REDSHIFT,
     SEED,
     SPECTRAL_PROPERTIES,
-    SPECTRUM_MODES,
-    artifact,
 )
 from .observations import column_values, measured_redshifts, samples, spectra
+from .schemas import PROPERTIES
 
 ALPHAS = np.logspace(-3, 4, 15)
+
 FOLDS = KFold(shuffle=True, random_state=SEED)
+
 HALPHA = 6564.61
+
 HALPHA_BANDS = ((6490.0, 6530.0), (6600.0, 6640.0), (HALPHA - 10, HALPHA + 10))
+
 BREAK_BANDS = ((3850.0, 3950.0), (4000.0, 4100.0))
+
 MINIMUM_PIXELS = 5
+
 MINIMUM_SIGNAL = 3
+
 BATCH = 256
 
 
@@ -132,8 +143,8 @@ def spread_quantiles(
 def predicted_redshifts() -> tuple[np.ndarray, np.ndarray]:
     values = aion_predictions.bin_values(REDSHIFT)[0]
     batches = [
-        pql.table_value_probabilities(rows, REDSHIFT)[:, 0]
-        for rows in pql.predictions().select([REDSHIFT]).to_batches()
+        stored_predictions.table_value_probabilities(rows, REDSHIFT)[:, 0]
+        for rows in stored_predictions.predictions().select([REDSHIFT]).to_batches()
     ]
     lower, median, upper = (
         np.concatenate([spread_quantiles(found, values, share) for found in batches])

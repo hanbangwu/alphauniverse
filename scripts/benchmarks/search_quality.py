@@ -9,15 +9,18 @@ import numpy as np
 import pyarrow as pa
 
 from app import pql
-from app.config import DATASET_REVISION, REDSHIFT, SPECTRUM_MODES, TOKEN_SURVEYS
-from app.search import (
+from app.galaxy import (
     FIRST_HSC_TABLE_VALUE,
     FIRST_LS_TABLE_VALUE,
     N_HSC_TABLE_VALUES,
     N_LS_TABLE_VALUES,
-    source,
 )
-from modal_app import CACHE_PATH, build_image, cache_volume
+from core import artifacts, stored_predictions
+from core.artifacts import source
+from core.config import DATASET_REVISION, REDSHIFT, SPECTRUM_MODES, TOKEN_SURVEYS
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import encode, predictions
+from pipeline.modal_app import build_image
 from scripts.benchmarks.common import (
     TABLE_VALUES,
     environment,
@@ -31,7 +34,7 @@ from scripts.benchmarks.common import (
 )
 
 app = modal.App("alphauniverse-search-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/search_quality.json")
 WINDOW = 16
@@ -60,7 +63,7 @@ def selections(galaxy: int, rng: np.random.Generator) -> dict[str, pql.Query]:
             ),
         ),
     }
-    if pql.observed("hsc")[galaxy]:
+    if artifacts.observed("hsc")[galaxy]:
         chosen = FIRST_HSC_TABLE_VALUE + rng.choice(
             N_HSC_TABLE_VALUES, TABLE_VALUES, replace=False
         )
@@ -71,7 +74,6 @@ def selections(galaxy: int, rng: np.random.Generator) -> dict[str, pql.Query]:
 
 
 def hidden(galaxies: np.ndarray) -> pa.RecordBatch:
-    from app import encode, predictions
 
     table = source("tokens").to_table(columns=["galaxy", *TOKEN_SURVEYS])
     records = []
@@ -80,9 +82,11 @@ def hidden(galaxies: np.ndarray) -> pa.RecordBatch:
         encoded, _, mask, _ = encode.context(predictions.inputs(row))
         predicted = predictions.decode(encoded, mask, predictions.TARGETS)
         records.append(
-            predictions.record(row["galaxy"], predicted, pql.prediction_basis())
+            predictions.record(
+                row["galaxy"], predicted, stored_predictions.prediction_basis()
+            )
         )
-    return pql.prediction_batch(records)
+    return predictions.prediction_batch(records)
 
 
 def bias(

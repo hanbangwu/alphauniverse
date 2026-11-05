@@ -4,8 +4,8 @@ import pyarrow.compute as pc
 from aion.fourm.modality_info import MODALITY_INFO
 from astropy.stats import mad_std
 
-from . import aion_predictions, pql
-from .config import (
+from core import artifacts
+from core.config import (
     DATASET_HSC_SUFFIX,
     HSC_BANDS,
     HSC_TABLE_COLUMNS,
@@ -19,7 +19,9 @@ from .config import (
     TOKEN_SURVEYS,
     ImageSurvey,
 )
-from .dataset import dataset, redshift
+from core.dataset import dataset, redshift
+
+from . import aion_predictions
 
 MAGNITUDE_ERRORS = {
     f"{band}_cmodel_mag{DATASET_HSC_SUFFIX}": f"{band}_cmodel_magerr{DATASET_HSC_SUFFIX}"
@@ -28,7 +30,7 @@ MAGNITUDE_ERRORS = {
 
 
 def observed(mode: str) -> np.ndarray:
-    return np.flatnonzero(pql.observed(MODE_SURVEYS[mode]))
+    return np.flatnonzero(artifacts.observed(MODE_SURVEYS[mode]))
 
 
 def covering(column: pa.ChunkedArray, galaxies: np.ndarray) -> pa.Array:

@@ -14,23 +14,24 @@ from aion.modalities import DESISpectrum, LegacySurveyImage
 from threadpoolctl import threadpool_info
 
 from app import pql
-from app.config import (
-    AION_SPECTRUM_ORIGIN,
-    AION_SPECTRUM_TOKEN_WIDTH,
-    DATASET_DESI_SUFFIX,
-    DATASET_SDSS_SUFFIX,
-    SPECTRUM_MODES,
-    TOKEN_GRAMS,
-    galaxy_count,
-)
-from app.dataset import dataset, spectrum
-from modal_app import (
+from app.galaxy import galaxy_count, spectrum
+from app.modal_app import (
     SERVING_CPU,
     SERVING_MAX_CONTAINERS,
     SERVING_MAX_INPUTS,
     SERVING_MEMORY,
     SERVING_SCALEDOWN_WINDOW,
 )
+from core import artifacts
+from core.config import (
+    AION_SPECTRUM_ORIGIN,
+    AION_SPECTRUM_TOKEN_WIDTH,
+    DATASET_DESI_SUFFIX,
+    DATASET_SDSS_SUFFIX,
+    SPECTRUM_MODES,
+    TOKEN_GRAMS,
+)
+from core.dataset import dataset
 
 IMAGE_TOKENS = 4
 SPECTRUM_TOKENS = 4
@@ -80,13 +81,15 @@ def standardised(scores: torch.Tensor) -> torch.Tensor:
 
 def with_spectrum() -> np.ndarray:
     return np.logical_or.reduce(
-        [pql.observed(survey) for survey in SPECTRUM_MODES.values()]
+        [artifacts.observed(survey) for survey in SPECTRUM_MODES.values()]
     )
 
 
 def spectrum_query(galaxy: int, slots: tuple[int, ...]) -> pql.Query:
     survey = next(
-        survey for survey in SPECTRUM_MODES.values() if pql.observed(survey)[galaxy]
+        survey
+        for survey in SPECTRUM_MODES.values()
+        if artifacts.observed(survey)[galaxy]
     )
     return pql.Query(galaxy=galaxy, **{f"{survey}_spectrum": slots})
 

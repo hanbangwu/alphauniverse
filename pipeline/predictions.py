@@ -9,38 +9,41 @@ from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from tqdm import tqdm
 
-from . import encode
-from .config import (
+from core.artifacts import artifact, source
+from core.config import (
     KEPT,
-    PREDICTIONS,
     PROBABILITY_FLOOR,
     REDSHIFT,
-    SEED,
     SPECTRUM_TOKEN_RANK,
-    STORE_COLUMNS,
     TOP_CODES,
-    artifact,
-    device,
 )
-from .pql import prediction_batch, save_prediction_basis
-from .search import source
+from core.device import device
+
+from . import encode
+from .config import SEED, STORE_COLUMNS
+from .schemas import PREDICTIONS
 
 CHUNK = 128
+
 LEVELS = np.iinfo(np.uint8).max
+
 BATCH = 256
 
 IMAGES = {
     "ls": encode.LegacySurveyImage.token_key,
     "hsc": encode.HSCImage.token_key,
 }
+
 TABLE_VALUES = {
     "ls": tuple(modality.token_key for modality, _ in encode.LS_TABLE_VALUES),
     "hsc": tuple(modality.token_key for modality, _ in encode.HSC_TABLE_VALUES),
 }
+
 SPECTRA = {
     "desi": encode.DESISpectrum.token_key,
     "sdss": encode.SDSSSpectrum.token_key,
 }
+
 REDSHIFT_KEY = encode.Z.token_key
 
 
@@ -91,9 +94,11 @@ MODES = (
         REDSHIFT,
     ),
 )
+
 SPECTRUM_TOKEN_TARGETS = {
     key: np.arange(1, DESISpectrum.num_tokens) for key in SPECTRA.values()
 }
+
 TARGETS = {key: mode.positions for mode in MODES for key in mode.keys}
 
 
@@ -283,3 +288,26 @@ def generate_predictions() -> None:
                     ]
                 )
             )
+
+
+def prediction_batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
+    columns = []
+    for field in PREDICTIONS:
+        flat = np.concatenate([values[field.name] for values in records])
+        columns.append(
+            pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
+            if pa.types.is_fixed_size_list(field.type)
+            else pa.array(flat)
+        )
+    return pa.record_batch(columns, schema=PREDICTIONS)
+
+
+def save_prediction_basis(fitted: dict[str, tuple[np.ndarray, np.ndarray]]) -> None:
+    np.savez(
+        artifact("probability_basis"),
+        **{
+            f"{survey}_{name}": value
+            for survey, pair in fitted.items()
+            for name, value in zip(("mean", "directions"), pair, strict=True)
+        },
+    )

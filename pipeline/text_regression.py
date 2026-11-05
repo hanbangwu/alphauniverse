@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import json
 from collections.abc import Callable
+from itertools import product
 from pathlib import Path
 from typing import NamedTuple
 
@@ -11,43 +14,124 @@ from sklearn.decomposition import PCA
 from torch import nn
 from torch.optim.swa_utils import AveragedModel
 
+from core.artifacts import artifact
+from core.config import DATASET_REVISION, GRAM_NAMES, MODES, TOKEN_GRAMS, WEMM_DIM
+from core.device import device
+from core.text_model import embed_queries
+
 from . import embeddings, text_views
 from .config import (
-    DATASET_REVISION,
-    GRAM_NAMES,
-    MODES,
     PARTS_PER_ROUND,
     PROTOTYPE_HELD_OUT,
     SEED,
     TEXT_CONDITION,
     TEXT_RANK,
-    TOKEN_GRAMS,
     VIEW_COMBINATIONS,
     VIEW_TYPES,
     VIEWS_PER_PART,
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
-    WEMM_DIM,
-    artifact,
-    device,
 )
-from .text_search import embed_queries, generic_queries
+
+FRAMES = {
+    "everything": "{}",
+    "images": "an image of {}",
+    "spectra": "the spectrum of {}",
+    "catalogues": "the photometry of {}",
+}
+
+ADJECTIVES = (
+    "",
+    "bright",
+    "faint",
+    "red",
+    "blue",
+    "massive",
+    "small",
+    "large",
+    "nearby",
+    "distant",
+    "dusty",
+    "star-forming",
+    "quiescent",
+    "compact",
+)
+
+SUBJECTS = (
+    "galaxy",
+    "spiral galaxy",
+    "elliptical galaxy",
+    "disk galaxy",
+    "irregular galaxy",
+    "dwarf galaxy",
+    "lenticular galaxy",
+    "barred spiral galaxy",
+    "pair of merging galaxies",
+    "edge-on galaxy",
+    "face-on spiral galaxy",
+    "starburst galaxy",
+    "quasar host galaxy",
+    "cluster galaxy",
+    "low surface brightness galaxy",
+)
+
+SUFFIXES = (
+    "",
+    " with spiral arms",
+    " with a bright bulge",
+    " with a central bar",
+    " with tidal tails",
+    " with strong emission lines",
+    " with an old stellar population",
+    " at high redshift",
+    " at low redshift",
+    " with a dust lane",
+    " with a close companion",
+    " with an active nucleus",
+)
+
+
+def generic_queries() -> list[str]:
+    phrases = (
+        f"{adjective} {subject}".strip()
+        for adjective, subject in product(ADJECTIVES, SUBJECTS)
+    )
+    nouns = [("an " if phrase[0] in "aeiou" else "a ") + phrase for phrase in phrases]
+    return [
+        frame.format(noun + suffix)
+        for frame, noun, suffix in product(FRAMES.values(), nouns, SUFFIXES)
+    ]
+
 
 HIDDEN = 512
+
 KIND_WIDTH = 16
+
 BATCH = 512
+
 MASKED = 0.3
+
 DROPPED = 0.1
+
 STEPS = 60
+
 TRAINING_STEPS = 111_000
+
 TEXT_VIEW_PARTS = 200
+
 LOGGED = 100
+
 LEARNING_RATE = 1e-3
+
 WEIGHT_DECAY = 1e-3
+
 DECAY = 0.999
+
 SHARED_BASIS = 128
+
 SCALE_FLOOR = 0.1
+
 GALAXIES = 1024
 
 Bases = dict[str, torch.Tensor]

@@ -6,8 +6,8 @@ import pytest
 from aion.fourm.modality_info import MODALITY_INFO
 from datasets import Dataset
 
-from app import observations
-from app.config import HSC_BANDS, LS_TABLE_COLUMNS, TOKEN_SURVEYS
+from core.config import HSC_BANDS, LS_TABLE_COLUMNS, TOKEN_SURVEYS
+from pipeline import observations
 
 SIZE = MODALITY_INFO["tok_image"]["input_size"] + 8
 

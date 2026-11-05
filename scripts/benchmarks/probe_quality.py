@@ -14,25 +14,26 @@ from sklearn.model_selection import cross_val_predict
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import make_pipeline
 
-from app import embeddings
-from app.config import (
+from app.galaxy import galaxy_count
+from core.config import (
     DATASET_PROVABGS_SUFFIX,
     DATASET_REVISION,
     GRAM_NAMES,
     REDSHIFT,
     SEARCH_RANK,
-    SEED,
     SPECTRUM_MODES,
-    galaxy_count,
 )
-from app.observations import column_values
-from app.parametric_umap import scan
-from app.properties import ALPHAS, FOLDS, provabgs
-from modal_app import CACHE_PATH, build_image, cache_volume
+from core.modal_resources import CACHE_PATH, cache_volume
+from pipeline import embeddings
+from pipeline.config import SEED
+from pipeline.modal_app import build_image
+from pipeline.observations import column_values
+from pipeline.parametric_umap import scan
+from pipeline.properties import ALPHAS, FOLDS, provabgs
 from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-probe-quality")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 REPORT = Path("docs/benchmarks/probe_quality.json")
 NEIGHBOURS = 10

@@ -13,29 +13,20 @@ import torch
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import normalize
 
-from app.alignment import held_out, pairs
-from app.config import (
-    DATASET_REVISION,
-    MODES,
-    SEED,
-    TEXT_SURVEYS,
-    VIEW_COMBINATIONS,
-    artifact,
-    galaxy_count,
-)
-from app.text_search import (
-    FRAMES,
-    TextQuery,
-    embed_queries,
-    generic_queries,
-    query_directions,
-    text_vectors,
-)
-from modal_app import CACHE_PATH, build_image, cache_volume
+from app.galaxy import galaxy_count
+from app.text_search import TextQuery, query_directions, text_vectors
+from core.artifacts import artifact
+from core.config import DATASET_REVISION, MODES, TEXT_SURVEYS
+from core.modal_resources import CACHE_PATH, cache_volume
+from core.text_model import embed_queries
+from pipeline.alignment import held_out, pairs
+from pipeline.config import SEED, VIEW_COMBINATIONS
+from pipeline.modal_app import build_image
+from pipeline.text_regression import FRAMES, generic_queries
 from scripts.benchmarks.common import environment, git, memory
 
 app = modal.App("alphauniverse-text-search")
-image = build_image.add_local_python_source("modal_app")
+image = build_image.add_local_python_source("app")
 
 
 class Pair(NamedTuple):

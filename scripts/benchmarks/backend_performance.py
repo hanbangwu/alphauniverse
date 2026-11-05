@@ -10,9 +10,10 @@ import numpy as np
 import pyarrow.compute as pc
 from aion.modalities import LegacySurveyImage
 
-from app.config import DATASET_REVISION, MODES, SPECTRUM_SURVEY
-from app.search import source
-from modal_app import CACHE_PATH, app, cache_volume, fastapi_app, serving_image
+from app.modal_app import app, fastapi_app, serving_image
+from core.artifacts import source
+from core.config import DATASET_REVISION, MODES, SPECTRUM_SURVEY
+from core.modal_resources import CACHE_PATH, cache_volume
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
     elapsed,
@@ -21,8 +22,6 @@ from scripts.benchmarks.common import (
     server,
     summary,
 )
-
-image = serving_image.add_local_python_source("modal_app")
 
 MATCHES = 32
 REPORT = Path("docs/benchmarks/backend_performance.json")
@@ -41,7 +40,9 @@ def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
     return summary([elapsed(call) for _ in range(runs)])
 
 
-@app.function(image=image, cpu=1, timeout=60 * 60, volumes={CACHE_PATH: cache_volume})
+@app.function(
+    image=serving_image, cpu=1, timeout=60 * 60, volumes={CACHE_PATH: cache_volume}
+)
 def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
     rng = np.random.default_rng(0)
     texts = cycle(TEXTS)

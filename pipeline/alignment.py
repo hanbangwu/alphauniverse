@@ -3,8 +3,12 @@ import pyarrow.parquet as pq
 import torch
 from sklearn.model_selection import train_test_split
 
-from .config import SEED, TextModality, artifact, device
-from .dataset import dataset
+from core.artifacts import artifact
+from core.config import TextModality
+from core.dataset import dataset
+from core.device import device
+
+from .config import SEED
 
 VALIDATION = 0.3
 

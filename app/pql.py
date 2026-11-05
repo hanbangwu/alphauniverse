@@ -1,86 +1,87 @@
 import math
-from collections.abc import Callable, Collection, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from functools import cache, lru_cache, partial
+from functools import lru_cache, partial
 from itertools import accumulate
 from threading import Lock
 from typing import Annotated, NamedTuple, Self, get_args
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import torch
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from . import embeddings
-from .config import (
+from core.artifacts import observed
+from core.config import (
     IMAGE_MODES,
-    KEPT,
     MODE_SURVEYS,
     MODES,
-    N_TABLE_VALUES,
-    OBSERVATIONS,
-    PREDICTIONS,
     PROBABILITY_FLOOR,
-    SALIENCY_SAMPLE,
-    SEARCH_RANK,
     SPECTRUM_MODES,
     SPECTRUM_TOKEN_RANK,
     TABLE_MODES,
-    TOP_CODES,
-    GalaxyIndex,
-    ModeName,
     TokenMode,
-    artifact,
 )
-from .search import tokens
+from core.stored_predictions import (
+    SPECTRUM_TOKEN_FLOOR,
+    WIDTHS,
+    array,
+    basis,
+    distributions,
+    predictions,
+    query_image_tokens,
+    spectrum_token_coefficients,
+    table_value_probabilities,
+    top_image_tokens,
+)
+from core.token_search import contributions, whole_mode_totals
 
-SPECTRUM_TOKEN_FLOOR = 0.1 / MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]
+from .config import N_TABLE_VALUES, OBSERVATIONS, SALIENCY_SAMPLE, ModeName
+from .galaxy import GalaxyIndex
+
 OBSERVED_IN = {
     mode: survey for mode, survey in MODE_SURVEYS.items() if survey in OBSERVATIONS
 }
+
 QUERY_COLUMNS = tuple(
     f"{survey}_{name}"
     for survey in IMAGE_MODES.values()
     for name in ("query_codes", "query_probabilities", "tails")
 )
+
 TABLE_SLOTS = tuple(
     (mode, slot) for mode, (_, count, _) in TABLE_MODES.items() for slot in range(count)
 )
 
-WIDTHS = (
-    dict.fromkeys(IMAGE_MODES, LegacySurveyImage.num_tokens)
-    | dict.fromkeys(SPECTRUM_MODES, DESISpectrum.num_tokens - 1)
-    | {mode: count for mode, (_, count, _) in TABLE_MODES.items()}
-)
 OFFSETS = {
     mode: end - WIDTHS[mode]
     for mode, end in zip(MODES, accumulate(WIDTHS.values()), strict=True)
 }
 WIDTH = sum(WIDTHS.values())
+
 AGREEMENT_GALAXIES = 8
+
 BATCH = 256
+
 CHUNK = 16
+
 BLOCK = 8192
+
 BUILDING = Lock()
+
 THREADS = pa.cpu_count()
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=LegacySurveyImage.num_tokens)], ...],
     Field(max_length=LegacySurveyImage.num_tokens),
 ]
+
 SpectrumTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=DESISpectrum.num_tokens - 1)], ...],
     Field(max_length=DESISpectrum.num_tokens - 1),
 ]
-
-
-@cache
-def observed(column: str) -> np.ndarray:
-    return pc.is_valid(tokens().column(column)).to_numpy()
-
 
 Matches = Annotated[int, Field(ge=1, le=128)]
 
@@ -163,65 +164,6 @@ class Agreements(NamedTuple):
     totals: np.ndarray
 
 
-def prediction_batch(records: list[dict[str, np.ndarray]]) -> pa.RecordBatch:
-    columns = []
-    for field in PREDICTIONS:
-        flat = np.concatenate([values[field.name] for values in records])
-        columns.append(
-            pa.FixedSizeListArray.from_arrays(flat, field.type.list_size)
-            if pa.types.is_fixed_size_list(field.type)
-            else pa.array(flat)
-        )
-    return pa.record_batch(columns, schema=PREDICTIONS)
-
-
-def save_prediction_basis(fitted: dict[str, tuple[np.ndarray, np.ndarray]]) -> None:
-    np.savez(
-        artifact("probability_basis"),
-        **{
-            f"{survey}_{name}": value
-            for survey, pair in fitted.items()
-            for name, value in zip(("mean", "directions"), pair, strict=True)
-        },
-    )
-
-
-@cache
-def predictions() -> pa.Table:
-    return pa.ipc.open_file(pa.memory_map(str(artifact("probabilities")))).read_all()
-
-
-@cache
-def prediction_basis() -> dict[str, tuple[np.ndarray, np.ndarray]]:
-    with np.load(artifact("probability_basis")) as stored:
-        return {
-            survey: (stored[f"{survey}_mean"], stored[f"{survey}_directions"])
-            for survey in SPECTRUM_MODES.values()
-        }
-
-
-@cache
-def basis() -> dict[str, tuple[np.ndarray, np.ndarray, np.float32, np.ndarray]]:
-    fitted = {}
-    for survey, pair in prediction_basis().items():
-        mean, directions = (part.astype(np.float32) for part in pair)
-        fitted[survey] = (mean, directions, mean @ mean, directions @ mean)
-    return fitted
-
-
-@cache
-def stored(name: str) -> dict[str, torch.Tensor]:
-    with np.load(artifact(f"token_search_{name}")) as found:
-        return {
-            part: torch.from_numpy(found[part])
-            for part in ("queries", "galleries", "offsets")
-        }
-
-
-def array(rows: pa.RecordBatch, name: str, *shape: int) -> np.ndarray:
-    return rows.column(name).flatten().to_numpy().reshape(rows.num_rows, *shape)
-
-
 def row(galaxy: int) -> pa.RecordBatch:
     return predictions().slice(galaxy, 1).to_batches()[0]
 
@@ -232,40 +174,6 @@ def selection(query: Selection) -> dict[str, np.ndarray]:
         mode, slot = TABLE_SLOTS[table_value]
         selected[mode] = (*selected.get(mode, ()), slot)
     return {mode: np.unique(slots) for mode, slots in selected.items() if len(slots)}
-
-
-def top_image_tokens(
-    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    codes = array(rows, f"{survey}_codes", LegacySurveyImage.num_tokens, KEPT)[:, slots]
-    probabilities = array(
-        rows, f"{survey}_probabilities", LegacySurveyImage.num_tokens, KEPT
-    )[:, slots]
-    rest = array(rows, f"{survey}_rest", LegacySurveyImage.num_tokens)[:, slots]
-    return (
-        codes,
-        probabilities,
-        rest / (MODALITY_INFO["tok_image"]["vocab_size"] - KEPT),
-    )
-
-
-def query_image_tokens(
-    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    codes, probabilities, _ = top_image_tokens(rows, survey, slots)
-    width = TOP_CODES - KEPT
-    query_codes = array(
-        rows, f"{survey}_query_codes", LegacySurveyImage.num_tokens, width
-    )[:, slots]
-    query_probabilities = array(
-        rows, f"{survey}_query_probabilities", LegacySurveyImage.num_tokens, width
-    )[:, slots]
-    tails = array(rows, f"{survey}_tails", LegacySurveyImage.num_tokens)[:, slots]
-    return (
-        np.concatenate((codes, query_codes), axis=-1),
-        np.concatenate((probabilities, query_probabilities), axis=-1),
-        tails / (MODALITY_INFO["tok_image"]["vocab_size"] - TOP_CODES),
-    )
 
 
 def dense_image_tokens(
@@ -301,17 +209,6 @@ def image_token_overlaps(
     return overlaps
 
 
-def spectrum_token_coefficients(
-    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
-) -> np.ndarray:
-    quantised = array(
-        rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
-    )[:, slots]
-    offsets = array(rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1)[:, slots]
-    steps = array(rows, f"{survey}_steps", DESISpectrum.num_tokens - 1)[:, slots]
-    return offsets[..., None] + quantised * steps[..., None]
-
-
 def spectrum_token_overlaps(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray, query: np.ndarray
 ) -> np.ndarray:
@@ -329,11 +226,6 @@ def spectrum_token_overlaps(
         * np.einsum("...r,...r->...", quantised, weights)
     )
     return np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR)
-
-
-def table_value_probabilities(rows: pa.RecordBatch, mode: str) -> np.ndarray:
-    column, count, vocabulary = TABLE_MODES[mode]
-    return array(rows, column, count, vocabulary)
 
 
 def table_value_overlaps(
@@ -481,13 +373,6 @@ def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
         )
 
 
-def distributions(mode: str, form: np.ndarray) -> np.ndarray:
-    if mode in SPECTRUM_MODES:
-        mean, directions, _, _ = basis()[SPECTRUM_MODES[mode]]
-        return mean + form @ directions
-    return form
-
-
 def slot_peaks(forms: dict[str, np.ndarray]) -> np.ndarray:
     return np.concatenate(
         [np.log(distributions(mode, forms[mode]).max(axis=-1)) for mode in MODES]
@@ -512,15 +397,6 @@ def selected_forms(
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     selected = selection(query)
     return selected, query_forms(row(query.galaxy), selected)
-
-
-def contributions(totals: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    return {
-        mode: (values - values.mean(axis=-1, keepdims=True))
-        / values.std(axis=-1, keepdims=True)
-        / len(totals)
-        for mode, values in totals.items()
-    }
 
 
 def combine(totals: dict[str, np.ndarray]) -> np.ndarray:
@@ -740,18 +616,6 @@ def search(query: Query) -> Results:
         maps(forms, peaks, rows) | shown,
         positions,
     )
-
-
-def whole_mode_totals(
-    galaxies: np.ndarray, modes: Collection[str], anywhere: Collection[str]
-) -> dict[str, np.ndarray]:
-    totals = {}
-    for mode in MODES:
-        if mode in modes:
-            found = stored(f"{mode}_anywhere" if mode in anywhere else mode)
-            matched = embeddings.scores(found["queries"][galaxies], found, SEARCH_RANK)
-            totals[mode] = matched.double().numpy()
-    return totals
 
 
 def mode_search(query: ModeQuery) -> ModeResults:

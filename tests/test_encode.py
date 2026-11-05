@@ -7,20 +7,21 @@ import pytest
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 
-from app.config import (
+from app.galaxy import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES
+from core.artifacts import source
+from core.config import (
     FLAG_SURVEYS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
-    STORES,
     TOKEN_SURVEYS,
-    store_schema,
 )
-from app.search import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, source
+from pipeline.config import STORES
+from pipeline.schemas import store_schema
 from scripts.fixture import TOKENS, forget
 
 torch = pytest.importorskip("torch")
-encode_module = importlib.import_module("app.encode")
+encode_module = importlib.import_module("pipeline.encode")
 
 pytestmark = pytest.mark.usefixtures("random_weights")
 
