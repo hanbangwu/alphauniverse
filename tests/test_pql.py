@@ -4,14 +4,13 @@ from threading import Thread
 import numpy as np
 import pyarrow as pa
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from pydantic import ValidationError
 
 from app import embeddings, pql
 from app.config import (
     IMAGE_MODES,
-    IMAGE_VOCABULARY,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
     OBSERVATIONS,
     REDSHIFT,
     SEARCH_RANK,
@@ -19,7 +18,6 @@ from app.config import (
     SPECTRUM_TOKEN_RANK,
     TABLE_MODES,
     TOP_CODES,
-    VOCABULARY,
 )
 
 GALAXY = 0
@@ -49,9 +47,12 @@ def column(rows: pa.Table, name: str, *shape: int) -> np.ndarray:
 def top_codes(rows: pa.Table, survey: str, name: str) -> np.ndarray:
     return np.concatenate(
         [
-            column(rows, f"{survey}_{name}", N_IMAGE_TOKENS, pql.KEPT),
+            column(rows, f"{survey}_{name}", LegacySurveyImage.num_tokens, pql.KEPT),
             column(
-                rows, f"{survey}_query_{name}", N_IMAGE_TOKENS, TOP_CODES - pql.KEPT
+                rows,
+                f"{survey}_query_{name}",
+                LegacySurveyImage.num_tokens,
+                TOP_CODES - pql.KEPT,
             ),
         ],
         axis=-1,
@@ -62,12 +63,14 @@ def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
     codes = top_codes(rows, survey, "codes").astype(np.int64)
     probabilities = top_codes(rows, survey, "probabilities")
     rest = (
-        column(rows, f"{survey}_rest", N_IMAGE_TOKENS)
+        column(rows, f"{survey}_rest", LegacySurveyImage.num_tokens)
         if kept == pql.KEPT
-        else column(rows, f"{survey}_tails", N_IMAGE_TOKENS)
+        else column(rows, f"{survey}_tails", LegacySurveyImage.num_tokens)
     )
     dense = np.repeat(
-        (rest / (IMAGE_VOCABULARY - kept))[..., None], IMAGE_VOCABULARY, axis=-1
+        (rest / (MODALITY_INFO["tok_image"]["vocab_size"] - kept))[..., None],
+        MODALITY_INFO["tok_image"]["vocab_size"],
+        axis=-1,
     )
     np.put_along_axis(dense, codes[..., :kept], probabilities[..., :kept], axis=-1)
     return dense
@@ -75,9 +78,11 @@ def dense_image_tokens(rows: pa.Table, survey: str, kept: int) -> np.ndarray:
 
 def dense_spectrum_tokens(rows: pa.Table, survey: str) -> np.ndarray:
     mean, directions, _, _ = pql.basis()[survey]
-    coefficients = column(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS, 1) + column(
-        rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
-    ) * column(rows, f"{survey}_steps", N_SPECTRUM_TOKENS, 1)
+    coefficients = column(
+        rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1, 1
+    ) + column(
+        rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
+    ) * column(rows, f"{survey}_steps", DESISpectrum.num_tokens - 1, 1)
     return mean + coefficients @ directions
 
 
@@ -327,7 +332,9 @@ def test_position_independent_saliency_uses_each_slot_s_best_overlap(
     gallery = dense(table.take(sample), "ls_image", pql.KEPT)
     own = dense(table.slice(GALAXY, 1), "ls_image", TOP_CODES)[0]
     start = pql.OFFSETS["ls_image"]
-    values[:, start : start + N_IMAGE_TOKENS] = np.log(gallery @ own.T).max(axis=1)
+    values[:, start : start + LegacySurveyImage.num_tokens] = np.log(
+        gallery @ own.T
+    ).max(axis=1)
 
     expected = partial_correlations(values, pql.columns(pql.selection(anywhere)))
 
@@ -367,10 +374,10 @@ def test_saliency_is_finite_and_bounded_when_every_slot_is_selected(
     )
     everything = pql.Selection(
         galaxy=galaxy,
-        ls_image=tuple(range(N_IMAGE_TOKENS)),
-        hsc_image=tuple(range(N_IMAGE_TOKENS)),
-        desi_spectrum=tuple(range(N_SPECTRUM_TOKENS)),
-        sdss_spectrum=tuple(range(N_SPECTRUM_TOKENS)),
+        ls_image=tuple(range(LegacySurveyImage.num_tokens)),
+        hsc_image=tuple(range(LegacySurveyImage.num_tokens)),
+        desi_spectrum=tuple(range(DESISpectrum.num_tokens - 1)),
+        sdss_spectrum=tuple(range(DESISpectrum.num_tokens - 1)),
         table_values=tuple(range(len(pql.TABLE_SLOTS))),
     )
 
@@ -424,7 +431,11 @@ def test_a_selection_across_modes_ranks_by_its_mean_standardised_mode_sum(
 
 
 @pytest.mark.parametrize(
-    ("mode", "vocabulary"), [("ls_image", IMAGE_VOCABULARY), ("ls_table", VOCABULARY)]
+    ("mode", "vocabulary"),
+    [
+        ("ls_image", MODALITY_INFO["tok_image"]["vocab_size"]),
+        ("ls_table", MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]),
+    ],
 )
 def test_aligned_overlaps_below_float32_range_are_floored(
     table: pa.Table, mode: str, vocabulary: int
@@ -439,7 +450,7 @@ def test_aligned_overlaps_below_float32_range_are_floored(
 def test_position_independent_overlaps_below_float32_range_are_floored(
     table: pa.Table,
 ) -> None:
-    form = np.zeros((1, IMAGE_VOCABULARY), dtype=np.float32)
+    form = np.zeros((1, MODALITY_INFO["tok_image"]["vocab_size"]), dtype=np.float32)
 
     found = pql.best_log_overlaps(table.to_batches()[0], "ls_image", form)
 

@@ -12,13 +12,13 @@ import pytest
 from app import embeddings, text_views
 from app.config import (
     ARTIFACTS,
-    GEMMA_DIM,
     GRAM_NAMES,
     MODES,
     TEXT_VIEWS,
     TEXT_VIEWS_HELD_OUT,
     VIEW_COMBINATIONS,
     VIEW_TYPES,
+    WEMM_DIM,
     galaxy_count,
 )
 
@@ -115,7 +115,7 @@ def test_a_view_type_too_rare_for_its_own_basis_gets_its_mode_s() -> None:
     rare = VIEW_TYPES.index(("observed", "sdss_spectrum"))
     counts[rare] = 3
     view_types = torch.repeat_interleave(torch.arange(len(VIEW_TYPES)), counts)
-    embeddings = torch.randn(len(view_types), GEMMA_DIM)
+    embeddings = torch.randn(len(view_types), WEMM_DIM)
 
     bases = text_regression.fitted_bases(view_types, embeddings)
 
@@ -147,7 +147,7 @@ def written_views(
     path: Path, galaxies: np.ndarray, rng: np.random.Generator, index: int
 ) -> None:
     view_types = np.tile(np.arange(len(VIEW_TYPES)), 2)
-    vectors = rng.standard_normal((len(view_types), GEMMA_DIM))
+    vectors = rng.standard_normal((len(view_types), WEMM_DIM))
     vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
     pq.write_table(
         pa.table(
@@ -156,7 +156,7 @@ def written_views(
                 "view_type": view_types,
                 "round": np.full(len(view_types), index // 2),
                 "embedding": pa.FixedSizeListArray.from_arrays(
-                    vectors.astype(np.float16).ravel(), GEMMA_DIM
+                    vectors.astype(np.float16).ravel(), WEMM_DIM
                 ),
             },
             schema=TEXT_VIEWS,
@@ -178,14 +178,14 @@ def test_training_uses_every_part_for_a_fixed_number_of_steps(
     owners, view_types = np.divmod(
         np.arange(len(held) * len(VIEW_TYPES)), len(VIEW_TYPES)
     )
-    vectors = rng.standard_normal((len(owners), GEMMA_DIM)).astype(np.float16)
+    vectors = rng.standard_normal((len(owners), WEMM_DIM)).astype(np.float16)
     pq.write_table(
         pa.table(
             {
                 "galaxy": held[owners],
                 "view_type": view_types,
                 "embedding": pa.FixedSizeListArray.from_arrays(
-                    vectors.ravel(), GEMMA_DIM
+                    vectors.ravel(), WEMM_DIM
                 ),
             },
             schema=TEXT_VIEWS_HELD_OUT,
@@ -235,7 +235,7 @@ def test_training_uses_every_part_for_a_fixed_number_of_steps(
     assert generated == [3]
     assert len(calls) == 3
     assert report["views"] == 3 * 2 * len(VIEW_TYPES)
-    assert stored["components"].shape == (len(VIEW_TYPES), 3, GEMMA_DIM)
+    assert stored["components"].shape == (len(VIEW_TYPES), 3, WEMM_DIM)
     assert stored["projection"].shape == (len(GRAM_NAMES) * 2, 4)
 
 
@@ -247,7 +247,7 @@ def test_no_component_s_scale_falls_below_the_floor(
     view_types = torch.arange(len(VIEW_TYPES)).repeat(200)
     found = torch.from_numpy(rng.standard_normal((len(view_types), 6))).float()
     found[:, 3:] *= 1e-6
-    found = torch.nn.functional.pad(found, (0, GEMMA_DIM - 6))
+    found = torch.nn.functional.pad(found, (0, WEMM_DIM - 6))
     scale = text_regression.fitted_bases(view_types, found)["scale"]
     median = scale.median(dim=1, keepdim=True).values
     assert (scale >= text_regression.SCALE_FLOOR * median - 1e-6).all()
@@ -272,8 +272,8 @@ def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(
     width = len(GRAM_NAMES) * 2
     np.savez(
         tmp_path / "text_bases.npz",
-        components=rng.standard_normal((kinds, 3, GEMMA_DIM)).astype(np.float32),
-        centre=rng.standard_normal((kinds, GEMMA_DIM)).astype(np.float32),
+        components=rng.standard_normal((kinds, 3, WEMM_DIM)).astype(np.float32),
+        centre=rng.standard_normal((kinds, WEMM_DIM)).astype(np.float32),
         scale=rng.uniform(0.5, 1.5, (kinds, 3)).astype(np.float32),
         offset=rng.standard_normal(width).astype(np.float32),
         projection=rng.standard_normal((width, 4)).astype(np.float32),
@@ -285,7 +285,7 @@ def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(
         tmp_path / "joint_embedding.npy",
         rng.standard_normal((5, width)).astype(np.float32),
     )
-    queries = rng.standard_normal((4, GEMMA_DIM)).astype(np.float32)
+    queries = rng.standard_normal((4, WEMM_DIM)).astype(np.float32)
     monkeypatch.setattr(text_regression, "generic_queries", lambda: ["a"] * 4)
     monkeypatch.setattr(text_regression, "embed_queries", lambda _: queries)
 
@@ -295,7 +295,7 @@ def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(
     network, bases = text_regression.stored_regression()
     joint = embeddings.loaded("joint_embedding", torch.float32)
     alone = text_regression.predicted_vectors(network, bases, joint, torch.tensor([3]))
-    assert stored.shape == (5, len(MODES), GEMMA_DIM)
+    assert stored.shape == (5, len(MODES), WEMM_DIM)
     np.testing.assert_allclose(stored[3], alone[0], rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(
         np.load(tmp_path / "text_query_mean.npy"), queries.mean(axis=0)

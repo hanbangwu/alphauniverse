@@ -6,7 +6,6 @@
   import { getView } from '$lib/state/app.svelte'
   import ColourControl from './colour-control.svelte'
   import DatasetFooter from './dataset-footer.svelte'
-  import DownloadArtifact from './download-artifact.svelte'
 
   const view = getView()
 </script>
@@ -26,8 +25,6 @@
     <Segmented field={view.pointSet} />
 
     <ColourControl />
-
-    <DownloadArtifact />
   </div>
 
   <DatasetFooter />

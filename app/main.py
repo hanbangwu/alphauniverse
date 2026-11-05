@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import LegacySurveyImage
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -16,33 +18,26 @@ from pydantic import BaseModel
 
 from . import pql
 from .config import (
+    AION_SPECTRUM_GRID,
+    AION_SPECTRUM_ORIGIN,
+    AION_SPECTRUM_TOKEN_WIDTH,
     DATASET_AUTHOR,
     DATASET_NAME,
     FLAG_SURVEYS,
     GRAM_NAMES,
-    GRID,
     IMAGE_MODES,
     MODES,
-    N_IMAGE_TOKENS,
     OBSERVATIONS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
     REDSHIFT_TABLE_VALUE,
-    SALIENCY_SAMPLE,
-    SEARCH_RANK,
-    SPECTRUM_GRID,
     SPECTRUM_MODES,
-    SPECTRUM_ORIGIN,
-    SPECTRUM_PIXEL,
-    SPECTRUM_SMOOTHING_SIGMA,
     SPECTRUM_SURVEY,
-    SPECTRUM_TOKEN_WIDTH,
     TABLE_MODES,
     TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
     Catalogue,
-    Download,
     GalaxyIndex,
     ImageSurvey,
     ModeName,
@@ -51,7 +46,6 @@ from .config import (
     TokenMode,
     artifact,
     galaxy_count,
-    labels,
 )
 from .dataset import (
     catalogue,
@@ -66,9 +60,9 @@ from .dataset import (
 )
 from .search import (
     FIRST_LS_TABLE_VALUE,
-    table_value_templates,
+    aion_predictions,
+    table_value_aion_predictions,
     table_value_tokens,
-    templates,
     tokens,
 )
 from .text_search import TextQuery, embed_queries, text_search
@@ -81,11 +75,10 @@ if TYPE_CHECKING:
 class Meta(BaseModel):
     author: str
     id: str
-    galaxies: int
+    galaxy_count: int
     grid: int
     spectrum_origin: float
     spectrum_width: float
-    morphologies: list[int]
 
 
 class Galaxy(BaseModel):
@@ -104,7 +97,7 @@ class TableRow(BaseModel):
     section: Catalogue | Literal["redshift"]
     column: str
     value: float | int | bool | None
-    template: float | None
+    aion_prediction: float | None
     table_value: int | None
     token: int | None
     excluded: str | None
@@ -160,13 +153,12 @@ class RevalidatedRoute(APIRoute):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
-    labels()
     pql.predictions()
     pql.basis()
     for column in OBSERVATIONS:
         pql.observed(column)
     for mode in MODES:
-        templates(mode)
+        aion_predictions(mode)
     for name in GRAM_NAMES:
         pql.stored(name)
     yield
@@ -202,11 +194,11 @@ def get_meta() -> Meta:
     return Meta(
         author=DATASET_AUTHOR,
         id=DATASET_NAME,
-        galaxies=galaxy_count(),
-        grid=GRID,
-        spectrum_origin=SPECTRUM_ORIGIN,
-        spectrum_width=SPECTRUM_TOKEN_WIDTH,
-        morphologies=labels(),
+        galaxy_count=galaxy_count(),
+        grid=MODALITY_INFO["tok_image"]["input_size"]
+        // MODALITY_INFO["tok_image"]["patch_size"],
+        spectrum_origin=AION_SPECTRUM_ORIGIN,
+        spectrum_width=AION_SPECTRUM_TOKEN_WIDTH,
     )
 
 
@@ -242,17 +234,17 @@ def head_projections(projection: Projection, request: Request) -> Response:
 
 
 @app.get(
-    "/downloads/{role}",
+    "/galaxies/property",
     response_class=FileResponse,
     responses={200: {"content": BINARY_OCTET}},
 )
-def download_artifact(role: Download, request: Request) -> Response:
-    return file(artifact(role), request)
+def get_properties(request: Request) -> Response:
+    return file(artifact("properties"), request)
 
 
-@app.head("/downloads/{role}", include_in_schema=False)
-def head_download_artifact(role: Download, request: Request) -> Response:
-    return download_artifact(role, request)
+@app.head("/galaxies/property", include_in_schema=False)
+def head_properties(request: Request) -> Response:
+    return get_properties(request)
 
 
 @app.get(
@@ -292,7 +284,7 @@ def redshift_row(
         section=REDSHIFT,
         column=f"{survey.upper()} {column.partition('-')[0]}",
         value=values[column],
-        template=predicted[REDSHIFT]
+        aion_prediction=predicted[REDSHIFT]
         if first and survey == (chosen or SPECTRUM_SURVEY)
         else None,
         table_value=REDSHIFT_TABLE_VALUE if selectable else None,
@@ -313,7 +305,7 @@ def catalogue_row(
         section=catalogue(column),
         column=column.partition("-")[0],
         value=value,
-        template=predicted.get(column),
+        aion_prediction=predicted.get(column),
         table_value=table_value,
         token=None if table_value is None else token_ids.get(column),
         excluded=None,
@@ -325,7 +317,7 @@ def catalogue_row(
 )
 def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     token_ids = table_value_tokens(galaxy)
-    predicted = table_value_templates(galaxy)
+    predicted = table_value_aion_predictions(galaxy)
     values = table(galaxy)
     chosen = redshift(values)
     shown = [
@@ -348,10 +340,6 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     "/galaxy/{galaxy}/image/{survey}",
     response_class=Response,
     responses={200: {"content": PNG}},
-    description="The central 96 by 96 px of the galaxy's image in one survey: the "
-    "dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i "
-    "and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy "
-    "Survey's.",
 )
 def get_image(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     found = image(galaxy, survey)
@@ -370,22 +358,19 @@ def get_image_tokens(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     if not cell.is_valid:
         raise HTTPException(404, f"galaxy {galaxy} has no {survey} image")
     return Response(
-        np.asarray(cell.values)[:N_IMAGE_TOKENS].tobytes(),
+        np.asarray(cell.values)[: LegacySurveyImage.num_tokens].tobytes(),
         media_type="application/octet-stream",
     )
 
 
 @app.get(
-    "/galaxy/{galaxy}/image/{survey}/template",
+    "/galaxy/{galaxy}/image/{survey}/aion_prediction",
     response_class=Response,
     responses={200: {"content": PNG}},
-    description="AION's predicted image of the galaxy in one survey, 96 by 96 px, "
-    "coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, "
-    "which made the Legacy Survey's colour images.",
 )
-def get_image_template(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
+def get_image_aion_prediction(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     return Response(
-        predicted_image(templates(f"{survey}_image")[galaxy], survey),
+        predicted_image(aion_predictions(f"{survey}_image")[galaxy], survey),
         media_type="image/png",
     )
 
@@ -394,8 +379,6 @@ def get_image_template(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     "/galaxy/{galaxy}/spectrum/{survey}",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
-    description="The galaxy's spectrum for display, its flux smoothed with a "
-    f"Gaussian of sigma {SPECTRUM_SMOOTHING_SIGMA} pixels; masked pixels stay NaN.",
 )
 def get_spectrum(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
     table = spectrum(galaxy, survey)
@@ -420,21 +403,18 @@ def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response
 
 
 @app.get(
-    "/galaxy/{galaxy}/spectrum/{survey}/template",
+    "/galaxy/{galaxy}/spectrum/{survey}/aion_prediction",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
-    description="AION's predicted spectrum of the galaxy in one survey on its codec's "
-    f"grid, from {SPECTRUM_ORIGIN:g} Å in {SPECTRUM_PIXEL:g} Å steps. For a galaxy "
-    "with that survey's spectrum it is scaled to the flux, by the amplitude that fits "
-    "the unmasked pixels in inverse-variance weighted least squares; otherwise it is "
-    "the normalised shape AION predicts.",
 )
-def get_spectrum_template(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
-    flux = fitted(templates(f"{survey}_spectrum")[galaxy], galaxy, survey)
+def get_spectrum_aion_prediction(
+    galaxy: GalaxyIndex, survey: SpectrumSurvey
+) -> Response:
+    flux = fitted(aion_predictions(f"{survey}_spectrum")[galaxy], galaxy, survey)
     return arrow(
         pa.table(
             {
-                "wavelength": pa.array(SPECTRUM_GRID, pa.float32()),
+                "wavelength": pa.array(AION_SPECTRUM_GRID, pa.float32()),
                 "flux": pa.array(flux, pa.float32()),
             }
         )
@@ -445,9 +425,6 @@ def get_spectrum_template(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Respon
     "/galaxy/{galaxy}/cosines/{mode}",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
-    description="The cosine between AION's predicted distributions at every pair of "
-    "the galaxy's slots of one image or spectrum mode: n by n float32, row-major, "
-    "n the mode's slot count.",
 )
 def get_cosines(galaxy: GalaxyIndex, mode: TokenMode) -> Response:
     return Response(
@@ -498,13 +475,6 @@ def search_response(
     "/saliency",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
-    description="For the query galaxy, at every slot of every mode, the partial "
-    "correlation over every other galaxy between its score on the selection and its "
-    "agreement with the query galaxy at that slot, controlling for its mean agreement "
-    "outside the selection. With anywhere, the correlation runs over "
-    f"{SALIENCY_SAMPLE} other galaxies drawn at random with the query galaxy as "
-    "the seed, and a mode named in anywhere takes, at each slot, the best agreement "
-    "at any slot of that mode. One row, one list column per map.",
 )
 def get_saliency(query: Annotated[pql.Selection, Query()]) -> Response:
     fields, columns = map_arrays(pql.by_mode(pql.saliency(query)[None]))
@@ -563,16 +533,6 @@ def get_search(query: Annotated[pql.Query, Query()]) -> Response:
     "/search/modes",
     response_class=Response,
     responses={200: {"content": ARROW_STREAM}},
-    description="Ranks every galaxy against the query galaxy over whole modes, from "
-    f"the stored token embeddings cut to {SEARCH_RANK} components: each "
-    "mode's scores, at any position for a mode named in anywhere, are standardised "
-    "over all galaxies, and a galaxy's score is their mean. The query galaxy comes "
-    "first. A selected mode's contribution is its standardised score over the "
-    "number of modes, so the contributions sum to the score; an unselected mode's "
-    "is null. Each mode's map holds, at every slot, the galaxy's overlap with the "
-    "query galaxy at the same place over the query galaxy's highest probability "
-    "there. A flag per observation says whether the galaxy has it, and predicted "
-    "lists the selected modes' observations it lacks.",
 )
 def get_mode_search(query: Annotated[pql.ModeQuery, Query()]) -> Response:
     results = pql.mode_search(query)

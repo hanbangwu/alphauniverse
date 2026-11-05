@@ -5,7 +5,7 @@ Glossary
    :sorted:
 
    against-data score
-      The log-likelihood of one galaxy's data under another galaxy's :term:`template`, with the data's own errors, less its log-likelihood under the median template. See :doc:`dev/reference`.
+      The log-likelihood of one galaxy's data under another galaxy's :term:`AION prediction`, with the data's own errors, less its log-likelihood under the median AION prediction. See :doc:`dev/reference`.
 
    ECSV
       Enhanced CSV: a CSV table whose commented header records each column's type and unit and notes about the whole table. astropy and TOPCAT read it; spreadsheets show the header as extra rows.
@@ -14,13 +14,13 @@ Glossary
       How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalogue value. See :doc:`dev/reference`.
 
    saturation
-      A galaxy's highest possible :term:`against-data score` in a :term:`mode`: the score of a template equal to its data.
+      A galaxy's highest possible :term:`against-data score` in a :term:`mode`: the score of an AION prediction equal to its data.
 
-   template embedding
-      A galaxy's query and gallery vectors for one :term:`mode`, from the singular value decomposition of the mode's :term:`template Gram`, as for a :term:`token embedding`.
+   AION prediction embedding
+      A galaxy's query and gallery vectors for one :term:`mode`, from the singular value decomposition of the mode's :term:`AION prediction Gram`, as for a :term:`token embedding`.
 
-   template Gram
-      A :term:`mode`'s :term:`templates <template>` compared with each other at the :term:`typical depth`: minus half the squared distance between every pair. See :doc:`dev/reference`.
+   AION prediction Gram
+      A :term:`mode`'s :term:`AION predictions <AION prediction>` compared with each other at the :term:`typical depth`: minus half the squared distance between every pair. See :doc:`dev/reference`.
 
    typical depth
       The median inverse variance of each pixel or value over the galaxies with data in a :term:`mode`.
@@ -47,7 +47,7 @@ Glossary
       The strength of a spectrum's 4000 Å break: the mean flux per unit frequency just redward of 4000 Å divided by that just blueward :cite:p:`balogh1999`. Older stellar populations have larger breaks. See :doc:`dev/reference`.
 
    embedding
-      The vector of 768 numbers AION's encoder returns for a :term:`token`. The encoded embedding depends on all of the galaxy's tokens; the codebook embedding depends only on the token's :term:`code`.
+      The vector of 768 numbers AION's encoder returns for a :term:`token`. It depends on all of the galaxy's tokens.
 
    equivalent width
       A spectral line's flux divided by the continuum's flux density beside it, :math:`\int (F_\lambda / F_c - 1)\, d\lambda` over the line, in Å. See :doc:`dev/reference`.
@@ -68,7 +68,7 @@ Glossary
       How surely a :term:`held out` galaxy's :term:`view` picks out its galaxy: the fraction of the other held-out galaxies whose predictions for the view's type score below its own galaxy's, averaged over each view type's views and then over the types. Chance is 0.5. See :doc:`dev/reference`.
 
    joint embedding
-      One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`template embeddings <template embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes: 2,816 values for the 11 blocks.
+      One vector per galaxy from its :term:`token embeddings <token embedding>` or :term:`AION prediction embeddings <AION prediction embedding>`: each mode's first 256 gallery components, scaled to unit root-mean-square length about their mean, concatenated over the modes: 2,816 values for the 11 blocks.
 
    mean embedding
       The average of a galaxy's encoded :term:`embeddings <embedding>`, one vector per galaxy.
@@ -94,7 +94,7 @@ Glossary
    sSFR
       Specific star formation rate: star formation rate divided by stellar mass, in yr\ :sup:`-1`.
 
-   template
+   AION prediction
       A galaxy's :term:`prediction` in one :term:`mode` turned back into an observation by the mode's :term:`codec`: an image, a spectrum's shape, or a catalogue value or redshift. See :doc:`dev/reference`.
 
    token
@@ -107,7 +107,7 @@ Glossary
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
 
    view
-      One input to :term:`WeMM-Embedding` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`template` or a sample of AION's predictions. See :doc:`dev/reference`.
+      One input to :term:`WeMM-Embedding` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`AION prediction` or a sample of AION's predictions. See :doc:`dev/reference`.
 
    WeMM-Embedding
       Tencent's model that places images, plots and text in one space, so that a picture and a description of it lie close together; text search uses its 9-billion-parameter version, cut to 1,024 dimensions. See :doc:`methods/text-search`.

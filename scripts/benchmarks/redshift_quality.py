@@ -10,7 +10,7 @@ import torch
 from astropy.stats import mad_std
 from tqdm import tqdm
 
-from app import predictions, properties, templates
+from app import aion_predictions, predictions, properties
 from app.config import (
     DATASET_REVISION,
     REDSHIFT,
@@ -39,7 +39,7 @@ def hidden(galaxies: np.ndarray) -> np.ndarray:
         predicted = predictions.predictions(predictions.inputs(row | blank), TARGET)
         found.append(predictions.flushed(np.exp(predicted[predictions.REDSHIFT_KEY])))
     return properties.spread_quantiles(
-        np.stack(found)[:, 0], templates.bin_values(REDSHIFT)[0], 0.5
+        np.stack(found)[:, 0], aion_predictions.bin_values(REDSHIFT)[0], 0.5
     )
 
 

@@ -3,7 +3,6 @@ import type { CosineMode, ImageSurvey, SpectrumSurvey } from '$lib/client'
 import { surveysOf } from '$lib/state/schema'
 import type { ModeName } from './similarity'
 
-export const ANCHOR: ImageSurvey = 'ls'
 export const IMAGE_SURVEYS = surveysOf('/galaxy/{galaxy}/image/{survey}') as readonly ImageSurvey[]
 export const SPECTRUM_SURVEYS = surveysOf(
   '/galaxy/{galaxy}/spectrum/{survey}'

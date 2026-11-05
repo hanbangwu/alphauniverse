@@ -1,7 +1,7 @@
 import type { Galaxy } from '$lib/api'
 import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, byMode, isTokenMode, surveyOf } from '$lib/data/modes'
+import { IMAGE_MODES, SPECTRUM_MODES, byMode, isTokenMode, surveyOf } from '$lib/data/modes'
 import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
 import {
@@ -228,11 +228,7 @@ export class Similarity {
 
   #shown(mode: CosineMode): boolean {
     const survey = surveyOf(mode)
-    return (
-      this.#app.view.predictions.value ||
-      survey === ANCHOR ||
-      (this.#coverage.data?.[survey] ?? false)
-    )
+    return this.#app.view.predictions.value || (this.#coverage.data?.[survey] ?? false)
   }
 
   #layerDomain(modes: readonly CosineMode[]): Extent | null {
@@ -252,7 +248,7 @@ export class Similarity {
   }
 
   observes(survey: string, index: number): boolean {
-    return survey === ANCHOR || (this.#result.data?.observed[survey]?.[index] ?? false)
+    return this.#result.data?.observed[survey]?.[index] ?? false
   }
 
   shows(survey: string, index: number): boolean {

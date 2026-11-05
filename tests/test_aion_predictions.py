@@ -6,18 +6,18 @@ import pyarrow as pa
 import pytest
 import torch
 from aion.codecs.preprocessing.image import RescaleToLegacySurvey
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import LegacySurveyImage
 
-from app import pql, predictions, search, templates
+from app import aion_predictions, pql, predictions, search
 from app.config import (
-    BANDS,
+    HSC_BANDS,
     IMAGE_MODES,
-    IMAGE_VOCABULARY,
+    LS_BANDS,
     MODES,
-    N_IMAGE_TOKENS,
     REDSHIFT,
     SPECTRUM_MODES,
     TABLE_MODES,
-    VOCABULARY,
     artifact,
     device,
 )
@@ -30,10 +30,12 @@ def test_image_latents_average_the_codebook_over_each_cell_s_stored_distribution
 ) -> None:
     rows = pql.row(GALAXY)
     for mode, survey in IMAGE_MODES.items():
-        vectors = templates.codebook(templates.decoder(mode), IMAGE_VOCABULARY)
+        vectors = aion_predictions.codebook(
+            aion_predictions.decoder(mode), MODALITY_INFO["tok_image"]["vocab_size"]
+        )
         dense = torch.from_numpy(pql.dense_image_tokens(rows, survey, slice(None)))
 
-        found = templates.image_latents(rows, survey, vectors)
+        found = aion_predictions.image_latents(rows, survey, vectors)
 
         np.testing.assert_allclose(
             found.cpu().numpy(),
@@ -44,8 +46,11 @@ def test_image_latents_average_the_codebook_over_each_cell_s_stored_distribution
 
 
 def certain(codes: np.ndarray) -> pa.RecordBatch:
-    logits = np.full((N_IMAGE_TOKENS, IMAGE_VOCABULARY), -np.inf)
-    logits[np.arange(N_IMAGE_TOKENS), codes] = 0
+    logits = np.full(
+        (LegacySurveyImage.num_tokens, MODALITY_INFO["tok_image"]["vocab_size"]),
+        -np.inf,
+    )
+    logits[np.arange(LegacySurveyImage.num_tokens), codes] = 0
     rows = pql.row(GALAXY)
     for survey in IMAGE_MODES.values():
         for name, values in predictions.image_token_codes(logits).items():
@@ -61,7 +66,7 @@ def certain(codes: np.ndarray) -> pa.RecordBatch:
     return rows
 
 
-def test_an_image_template_of_certain_codes_is_the_codec_s_decoding_of_them(
+def test_an_image_aion_prediction_of_certain_codes_is_the_codec_s_decoding_of_them(
     tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
@@ -70,56 +75,63 @@ def test_an_image_template_of_certain_codes_is_the_codec_s_decoding_of_them(
         RescaleToLegacySurvey.convert_zeropoint,
         raising=False,
     )
-    codes = np.random.default_rng(0).integers(IMAGE_VOCABULARY, size=N_IMAGE_TOKENS)
+    codes = np.random.default_rng(0).integers(
+        MODALITY_INFO["tok_image"]["vocab_size"], size=LegacySurveyImage.num_tokens
+    )
     rows = certain(codes)
     for mode, survey in IMAGE_MODES.items():
-        image = templates.decoder(mode)
+        image = aion_predictions.decoder(mode)
 
-        found = templates.image_templates(image, rows, survey)
+        found = aion_predictions.image_aion_predictions(image, rows, survey)
 
         with torch.inference_mode():
             expected = image.decode(
-                torch.from_numpy(codes)[None].to(device()), bands=BANDS[survey]
+                torch.from_numpy(codes)[None].to(device()),
+                bands=HSC_BANDS if survey == "hsc" else LS_BANDS,
             ).flux
         np.testing.assert_allclose(
             found, expected.cpu().numpy(), rtol=1e-5, atol=1e-6, err_msg=mode
         )
 
 
-def test_a_spectrum_template_decodes_the_codebook_averaged_over_each_window_s_distribution(
+def test_a_spectrum_aion_prediction_decodes_the_codebook_averaged_over_each_window_s_distribution(
     tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rng = np.random.default_rng(0)
     for survey, (_, directions, _, _) in list(pql.basis().items()):
-        mean = rng.dirichlet(np.ones(VOCABULARY)).astype(np.float32)
+        mean = rng.dirichlet(
+            np.ones(MODALITY_INFO["tok_spectrum_desi"]["vocab_size"])
+        ).astype(np.float32)
         monkeypatch.setitem(
             pql.basis(), survey, (mean, directions, mean @ mean, directions @ mean)
         )
     rows = pql.row(GALAXY)
     for mode, survey in SPECTRUM_MODES.items():
-        spectrum = templates.decoder(mode)
-        vectors = templates.codebook(spectrum, VOCABULARY)
+        spectrum = aion_predictions.decoder(mode)
+        vectors = aion_predictions.codebook(
+            spectrum, MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]
+        )
         coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
         dense = torch.from_numpy(pql.distributions(mode, coefficients)).to(vectors)
 
-        found = templates.spectrum_templates(spectrum, rows, survey)
+        found = aion_predictions.spectrum_aion_predictions(spectrum, rows, survey)
 
-        expected = templates.decoded_spectra(
+        expected = aion_predictions.decoded_spectra(
             spectrum, (dense @ vectors).transpose(1, 2)
         )
         np.testing.assert_allclose(found, expected, rtol=1e-5, atol=1e-5, err_msg=mode)
 
 
-def test_each_stored_template_is_its_galaxy_s_in_every_mode(
+def test_each_stored_aion_prediction_is_its_galaxy_s_in_every_mode(
     tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(torch.backends.cudnn.conv, "fp32_precision", "ieee")
 
-    templates.generate_templates()
+    aion_predictions.generate_aion_predictions()
 
-    expected = templates.templates(pql.row(GALAXY))
+    expected = aion_predictions.aion_predictions(pql.row(GALAXY))
     for mode, found in expected.items():
-        stored = np.load(artifact(f"template_{mode}"))
+        stored = np.load(artifact(f"aion_prediction_{mode}"))
         assert len(stored) == pql.predictions().num_rows
         assert np.isfinite(stored).all(), mode
         np.testing.assert_allclose(
@@ -141,10 +153,10 @@ def test_a_scalar_codec_s_open_top_bin_takes_its_lower_edge(
         codebook_size=len(decoded), decode=torch.tensor(decoded).__getitem__
     )
     monkeypatch.setattr(
-        templates, "loaded", lambda _: SimpleNamespace(quantizer=quantizer)
+        aion_predictions, "loaded", lambda _: SimpleNamespace(quantizer=quantizer)
     )
 
-    found = templates.bin_values(REDSHIFT)
+    found = aion_predictions.bin_values(REDSHIFT)
 
     np.testing.assert_array_equal(found[0, : len(decoded)], expected)
     assert np.isnan(found[0, len(decoded) :]).all()
@@ -155,7 +167,8 @@ def test_quantiles_skip_bins_without_a_value() -> None:
     probabilities = np.array([[[0.2, 0.2, 0.5, 0.1]]], np.float32)
 
     found = [
-        templates.quantiles(probabilities, values, share) for share in (0.16, 0.5, 0.84)
+        aion_predictions.quantiles(probabilities, values, share)
+        for share in (0.16, 0.5, 0.84)
     ]
 
     np.testing.assert_array_equal(found, [[[1.0]], [[3.0]], [[5.0]]])
@@ -165,7 +178,9 @@ def test_widths_are_the_predicted_spread_in_every_mode(
     tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = certain(
-        np.random.default_rng(1).integers(IMAGE_VOCABULARY, size=N_IMAGE_TOKENS)
+        np.random.default_rng(1).integers(
+            MODALITY_INFO["tok_image"]["vocab_size"], size=LegacySurveyImage.num_tokens
+        )
     )
     rng = np.random.default_rng(2)
     values = {
@@ -173,14 +188,17 @@ def test_widths_are_the_predicted_spread_in_every_mode(
         for mode, (_, count, vocabulary) in TABLE_MODES.items()
     }
     depths = {mode: rng.random(len(found)) for mode, found in values.items()}
-    monkeypatch.setattr(templates, "bin_values", values.get)
+    monkeypatch.setattr(aion_predictions, "bin_values", values.get)
 
-    found = templates.widths(rows, depths)
+    found = aion_predictions.widths(rows, depths)
 
     for mode in IMAGE_MODES:
         np.testing.assert_allclose(found[mode], 0, atol=1e-6, err_msg=mode)
     for mode, survey in SPECTRUM_MODES.items():
-        vectors = templates.codebook(templates.decoder(mode), VOCABULARY).double()
+        vectors = aion_predictions.codebook(
+            aion_predictions.decoder(mode),
+            MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
+        ).double()
         coefficients = pql.spectrum_token_coefficients(rows, survey, slice(None))
         dense = torch.from_numpy(pql.distributions(mode, coefficients)).to(vectors)
         variance = dense @ vectors**2 - (dense @ vectors) ** 2
@@ -196,7 +214,7 @@ def test_widths_are_the_predicted_spread_in_every_mode(
             bins[
                 np.arange(len(bins)), (cumulative < share * cumulative[:, -1:]).sum(-1)
             ]
-            for share in templates.CENTRAL
+            for share in aion_predictions.CENTRAL
         )
         np.testing.assert_allclose(
             found[mode],
@@ -220,7 +238,7 @@ def test_draws_at_either_end_of_the_unit_interval_skip_entries_of_zero_probabili
     probabilities = np.array([[0.0, 0.5, 0.0, 0.5], [0.3, 0.7, 0.0, 0.0]], np.float32)
 
     for value in (0.0, np.nextafter(1.0, 0.0)):
-        found = templates.drawn(torch.from_numpy(probabilities), Fixed(value))
+        found = aion_predictions.drawn(torch.from_numpy(probabilities), Fixed(value))
 
         assert probabilities[np.arange(len(probabilities)), found.numpy()].all()
 
@@ -231,22 +249,28 @@ def test_image_codes_drawn_from_the_tail_are_never_a_cell_s_stored_codes(
 ) -> None:
     rows = pql.row(GALAXY)
     codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
-    tail_only = (codes, 0 * probabilities, np.full_like(spread, 1 / IMAGE_VOCABULARY))
+    tail_only = (
+        codes,
+        0 * probabilities,
+        np.full_like(spread, 1 / MODALITY_INFO["tok_image"]["vocab_size"]),
+    )
     monkeypatch.setattr(pql, "query_image_tokens", lambda *_: tail_only)
 
-    found = templates.sampled_image_codes(rows, survey, np.random.default_rng(0))
+    found = aion_predictions.sampled_image_codes(rows, survey, np.random.default_rng(0))
 
     found = found.cpu().numpy()
     assert not (found[..., None] == codes).any()
-    assert found.min() >= 0 and found.max() < IMAGE_VOCABULARY
+    assert found.min() >= 0 and found.max() < MODALITY_INFO["tok_image"]["vocab_size"]
     assert len(np.unique(found)) > codes.shape[-1]
 
 
-def test_a_sample_has_the_shape_of_the_mode_s_template(
+def test_a_sample_has_the_shape_of_the_mode_s_aion_prediction(
     tree: Path, random_weights: None
 ) -> None:
     rows = pql.predictions().slice(GALAXY, 2).to_batches()[0]
     for mode in MODES:
-        found = templates.sampled(rows, mode, np.random.default_rng(0))
+        found = aion_predictions.sampled(rows, mode, np.random.default_rng(0))
 
-        assert found.shape == search.templates(mode)[GALAXY : GALAXY + 2].shape, mode
+        assert (
+            found.shape == search.aion_predictions(mode)[GALAXY : GALAXY + 2].shape
+        ), mode

@@ -5,7 +5,7 @@ paths:
   - "app/grams.py"
   - "app/parametric_umap.py"
   - "app/predictions.py"
-  - "app/templates.py"
+  - "app/aion_predictions.py"
   - "app/observations.py"
   - "app/observed_grams.py"
   - "app/properties.py"

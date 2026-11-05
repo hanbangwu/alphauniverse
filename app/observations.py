@@ -1,25 +1,29 @@
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+from aion.fourm.modality_info import MODALITY_INFO
 from astropy.stats import mad_std
 
-from . import pql, templates
+from . import aion_predictions, pql
 from .config import (
-    BANDS,
-    CROP_PIXELS,
-    HSC,
+    DATASET_HSC_SUFFIX,
+    HSC_BANDS,
+    HSC_TABLE_COLUMNS,
     IMAGE_MODES,
+    LS_BANDS,
+    LS_TABLE_COLUMNS,
     MODE_SURVEYS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
-    TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
+    ImageSurvey,
 )
 from .dataset import dataset, redshift
 
 MAGNITUDE_ERRORS = {
-    f"{band}_cmodel_mag{HSC}": f"{band}_cmodel_magerr{HSC}" for band in "grizy"
+    f"{band}_cmodel_mag{DATASET_HSC_SUFFIX}": f"{band}_cmodel_magerr{DATASET_HSC_SUFFIX}"
+    for band in "grizy"
 }
 
 
@@ -61,12 +65,12 @@ def measured_redshifts(galaxies: np.ndarray) -> tuple[np.ndarray, list[str | Non
 def pixels(field: pa.ListArray, galaxies: int, bands: int) -> np.ndarray:
     values = field.flatten().flatten().flatten().to_numpy()
     size = round((len(values) / (galaxies * bands)) ** 0.5)
-    start = round((size - CROP_PIXELS) / 2)
-    crop = slice(start, start + CROP_PIXELS)
+    start = round((size - MODALITY_INFO["tok_image"]["input_size"]) / 2)
+    crop = slice(start, start + MODALITY_INFO["tok_image"]["input_size"])
     return values.reshape(galaxies, bands, size, size)[:, :, crop, crop]
 
 
-def images(survey: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def images(survey: ImageSurvey, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     first = int(galaxies[0])
     cells = covering(dataset().data.column(TOKEN_SURVEYS[survey]), galaxies)
     found = np.flatnonzero(cells.is_valid().to_numpy(zero_copy_only=False))
@@ -74,12 +78,12 @@ def images(survey: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         raise ValueError(f"{survey} images are not the galaxies observed in it")
     fields = dict(zip(cells.type.names, cells.flatten(), strict=True))
     names = np.asarray(fields["band"].flatten()).reshape(len(galaxies), -1)
-    if not (np.char.upper(names.astype(str)) == BANDS[survey]).all():
-        raise ValueError(f"{survey} bands are not stored as {BANDS[survey]}")
-    bands = len(BANDS[survey])
+    bands = HSC_BANDS if survey == "hsc" else LS_BANDS
+    if not (np.char.upper(names.astype(str)) == bands).all():
+        raise ValueError(f"{survey} bands are not stored as {bands}")
     return (
-        pixels(fields["flux"], len(galaxies), bands),
-        pixels(fields["ivar"], len(galaxies), bands),
+        pixels(fields["flux"], len(galaxies), len(bands)),
+        pixels(fields["ivar"], len(galaxies), len(bands)),
     )
 
 
@@ -122,7 +126,7 @@ def table_values(mode: str, galaxies: np.ndarray) -> tuple[np.ndarray, np.ndarra
             np.array([[row[value]] for row, (value, _, _) in zip(rows, chosen)], float),
             np.array([[row[error]] for row, (_, error, _) in zip(rows, chosen)], float),
         )
-    columns = TABLE_VALUE_SURVEYS[MODE_SURVEYS[mode]]
+    columns = HSC_TABLE_COLUMNS if mode == "hsc_table" else LS_TABLE_COLUMNS
     values = np.stack([column_values(column, galaxies) for column in columns], axis=1)
     errors = [
         column_values(MAGNITUDE_ERRORS[column], galaxies)
@@ -140,7 +144,7 @@ def measured(
     mode: str, galaxies: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if mode in SPECTRUM_MODES:
-        grid = templates.decoder(mode).latent_grid.wavelength.cpu().numpy()
+        grid = aion_predictions.decoder(mode).latent_grid.wavelength.cpu().numpy()
         return gridded(spectra(SPECTRUM_MODES[mode], galaxies), grid)
     if mode in IMAGE_MODES:
         flux, ivar = images(IMAGE_MODES[mode], galaxies)

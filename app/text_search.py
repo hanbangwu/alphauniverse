@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from functools import cache
+from io import BytesIO
 from itertools import batched, product
 from threading import Lock
 from typing import TYPE_CHECKING, Annotated, NamedTuple
@@ -12,30 +13,28 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
-from datasets import Image
+from aion.modalities import DESISpectrum
 from huggingface_hub import hf_hub_download
 from pydantic import BaseModel, ConfigDict, Field
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
 from .config import (
-    DIM,
-    GEMMA,
-    GEMMA_DIM,
-    N_SPECTRUM_TOKENS,
+    AION_EMBEDDING_DIM,
+    AION_SPECTRUM_ORIGIN,
+    AION_SPECTRUM_TOKEN_WIDTH,
     PAIRS,
     PLOT_INCHES,
     QUERY_PREFIX,
-    RGB_COLUMN,
-    SPECTRUM_ORIGIN,
     SPECTRUM_SURVEY,
-    SPECTRUM_SURVEYS,
-    SPECTRUM_TOKEN_WIDTH,
     TEXT_SURVEYS,
+    TOKEN_SURVEYS,
+    WEMM,
+    WEMM_DIM,
     artifact,
     device,
 )
-from .dataset import dataset, samples, smoothed
+from .dataset import dataset, image, samples, smoothed
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
@@ -131,13 +130,13 @@ def text_model() -> SentenceTransformer:
         else {}
     )
     model = SentenceTransformer(
-        GEMMA,
+        WEMM,
         device=device(),
         trust_remote_code=True,
-        truncate_dim=GEMMA_DIM,
+        truncate_dim=WEMM_DIM,
         model_kwargs=kernels,
     )
-    trained = Tokenizer.from_file(hf_hub_download(GEMMA, "tokenizer.json"))
+    trained = Tokenizer.from_file(hf_hub_download(WEMM, "tokenizer.json"))
     model[0].processor.tokenizer.backend_tokenizer.normalizer = trained.normalizer
     return model
 
@@ -171,25 +170,21 @@ def spectrum_plot(spectrum: dict[str, np.ndarray]) -> PIL.Image.Image:
     axes = figure.subplots()
     axes.plot(spectrum["wavelength"], smoothed(spectrum["flux"]), color="grey")
     axes.set_xlim(
-        SPECTRUM_ORIGIN, SPECTRUM_ORIGIN + N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_WIDTH
+        AION_SPECTRUM_ORIGIN,
+        AION_SPECTRUM_ORIGIN
+        + (DESISpectrum.num_tokens - 1) * AION_SPECTRUM_TOKEN_WIDTH,
     )
     canvas.draw()
     return PIL.Image.fromarray(np.asarray(canvas.buffer_rgba())).convert("RGB")
 
 
 def photos(galaxy: np.ndarray) -> Iterator[list[PIL.Image.Image]]:
-    images = (
-        dataset()
-        .select_columns([RGB_COLUMN])
-        .select(galaxy)
-        .cast_column(RGB_COLUMN, Image())
-    )
-    for batch in images.iter(batch_size=BATCH):
-        yield batch[RGB_COLUMN]
+    for batch in batched(galaxy.tolist(), BATCH):
+        yield [PIL.Image.open(BytesIO(image(index, "ls"))) for index in batch]
 
 
 def plots(galaxy: np.ndarray) -> Iterator[list[PIL.Image.Image]]:
-    cells = dataset().data.column(SPECTRUM_SURVEYS[SPECTRUM_SURVEY])
+    cells = dataset().data.column(TOKEN_SURVEYS[SPECTRUM_SURVEY])
     for batch in batched(galaxy.tolist(), BATCH):
         yield [spectrum_plot(samples(cells[index])) for index in batch]
 
@@ -201,7 +196,7 @@ def mean_embeddings(survey: str) -> tuple[np.ndarray, np.ndarray]:
     from .parametric_umap import _stream
 
     count = len(dataset())
-    means = np.zeros((count, DIM), dtype=np.float32)
+    means = np.zeros((count, AION_EMBEDDING_DIM), dtype=np.float32)
     held = np.zeros(count, dtype=bool)
     for galaxies, offsets, values in tqdm(_stream((survey,)), desc=survey):
         sizes = np.diff(offsets)[:, None]
@@ -214,7 +209,7 @@ def mean_embeddings(survey: str) -> tuple[np.ndarray, np.ndarray]:
 def generate_pairs() -> None:
     for modality, survey in TEXT_SURVEYS.items():
         galaxy, aion = mean_embeddings(survey)
-        gemma = np.concatenate(
+        wemm = np.concatenate(
             [
                 text_model().encode_document(batch, normalize_embeddings=True)
                 for batch in tqdm(DOCUMENTS[modality](galaxy), desc=modality)
@@ -224,10 +219,10 @@ def generate_pairs() -> None:
             pa.table(
                 {
                     "galaxy": galaxy,
-                    "aion": pa.FixedSizeListArray.from_arrays(aion.ravel(), DIM),
-                    "gemma": pa.FixedSizeListArray.from_arrays(
-                        gemma.ravel(), GEMMA_DIM
+                    "aion": pa.FixedSizeListArray.from_arrays(
+                        aion.ravel(), AION_EMBEDDING_DIM
                     ),
+                    "wemm": pa.FixedSizeListArray.from_arrays(wemm.ravel(), WEMM_DIM),
                 },
                 schema=PAIRS,
             ),

@@ -22,10 +22,10 @@ from app.config import (
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
-app = modal.App("alphauniverse-template-embedding-quality")
+app = modal.App("alphauniverse-aion_prediction-embedding-quality")
 image = build_image.add_local_python_source("modal_app")
 
-REPORT = Path("docs/benchmarks/template_embedding_quality.json")
+REPORT = Path("docs/benchmarks/aion_prediction_embedding_quality.json")
 RANKS = tuple(TOKEN_EMBEDDING_RANK // 2**halvings for halvings in range(7, -1, -1))
 TOP = (10, 100)
 BATCH = 1024
@@ -87,7 +87,7 @@ def fit_rows(
     return matrix[rows] - saturation
 
 
-def template_rows(
+def aion_prediction_rows(
     rows: slice | torch.Tensor, matrix: torch.Tensor, galleries: torch.Tensor
 ) -> torch.Tensor:
     return matrix[rows][:, galleries]
@@ -107,8 +107,8 @@ def block(name: str, mode: str, references: dict) -> dict[str, Any]:
     galleries = torch.from_numpy(references[f"{mode}_galleries"]).to(device())
     saturation = torch.from_numpy(references[f"{mode}_saturation"]).float().to(device())
     measured = embeddings.loaded(f"data_gram_{name}", torch.float32)
-    expected = embeddings.loaded(f"template_gram_{name}", torch.float32)
-    stored = np.load(artifact(f"template_embedding_{name}"))
+    expected = embeddings.loaded(f"aion_prediction_gram_{name}", torch.float32)
+    stored = np.load(artifact(f"aion_prediction_embedding_{name}"))
     queries = torch.from_numpy(stored["queries"]).to(device())
     vectors, offsets = (
         torch.from_numpy(stored[part]).to(device())[galleries]
@@ -123,8 +123,8 @@ def block(name: str, mode: str, references: dict) -> dict[str, Any]:
             "fit": partial(fit_rows, matrix=measured, saturation=saturation),
         }
     exact = {label: top(score, own) for label, score in truths.items()}
-    exact["template"] = top(
-        partial(template_rows, matrix=expected, galleries=galleries), own
+    exact["aion_prediction"] = top(
+        partial(aion_prediction_rows, matrix=expected, galleries=galleries), own
     )
     energy = stored["singular_values"] ** 2
     energy = energy.cumsum() / energy.sum()
@@ -146,8 +146,8 @@ def block(name: str, mode: str, references: dict) -> dict[str, Any]:
     return {
         "galleries": len(galleries),
         "own_rank": {label: own_ranks(score, own) for label, score in truths.items()},
-        "template_gram": {
-            label: agreement(exact["template"], exact[label]) for label in truths
+        "aion_prediction_gram": {
+            label: agreement(exact["aion_prediction"], exact[label]) for label in truths
         },
         "energy": {rank: round(float(energy[rank - 1]), 4) for rank in RANKS},
         "stored": agreements,

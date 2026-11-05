@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { GetImageData, GetImageTemplateData } from '$lib/api'
+  import type { GetImageData, GetImageAionPredictionData } from '$lib/api'
   import { type ImageSurvey, client } from '$lib/client'
   import { Spinner } from '$lib/components/ui/spinner'
   import { coverageQuery } from '$lib/data/queries'
@@ -20,9 +20,9 @@
   const coverage = createQuery(() => coverageQuery(galaxy))
 
   const src = $derived(
-    client.buildUrl<GetImageData | GetImageTemplateData>({
+    client.buildUrl<GetImageData | GetImageAionPredictionData>({
       url: predicted
-        ? '/galaxy/{galaxy}/image/{survey}/template'
+        ? '/galaxy/{galaxy}/image/{survey}/aion_prediction'
         : '/galaxy/{galaxy}/image/{survey}',
       path: { galaxy, survey }
     })

@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING, Annotated, Literal, get_args
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pydantic import AfterValidator, Field
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
+from annotated_types import Predicate
+from pydantic import Field
 
 if TYPE_CHECKING:
     import torch
@@ -26,137 +29,124 @@ def device() -> torch.device:
 DATASET_AUTHOR = "hanbangwu"
 DATASET_NAME = "alphauniverse-cosmos"
 DATASET_REVISION = "e250e43c35e63523ee3940c9543302c29ca56437"
-LOCAL_DATASET = "dataset"
+DATASET_LS_SUFFIX = "-mmu_legacysurvey_dr10_south_21"
+DATASET_HSC_SUFFIX = "-mmu_hsc_pdr3_dud_22.5"
+DATASET_DESI_SUFFIX = "-mmu_desi_edr_sv3"
+DATASET_SDSS_SUFFIX = "-mmu_sdss_sdss"
+DATASET_GZ10_SUFFIX = "-mmu_gz10"
+DATASET_PROVABGS_SUFFIX = "-mmu_desi_provabgs"
+LS_ZERO_POINT = 22.5
+HSC_ZERO_POINT = 27.0
 
-
-DEFAULT_CACHE = Path(__file__).resolve().parent.parent / ".cache"
-
-CROP_PIXELS = 96
-
-DIM = 768
-
-GRID = 24
-N_IMAGE_TOKENS = GRID**2
-
-SPECTRUM_ORIGIN = 3500.0
-SPECTRUM_PIXEL = 0.8
-SPECTRUM_GRID = SPECTRUM_ORIGIN + SPECTRUM_PIXEL * np.arange(8704)
+AION_SPECTRUM_ORIGIN = 3500.0
+AION_SPECTRUM_PIXEL = 0.8
+AION_SPECTRUM_GRID = AION_SPECTRUM_ORIGIN + AION_SPECTRUM_PIXEL * np.arange(8704)
+AION_SPECTRUM_TOKEN_WIDTH = 32 * AION_SPECTRUM_PIXEL
 SPECTRUM_SMOOTHING_SIGMA = 2
-SPECTRUM_SURVEY: SpectrumSurvey = "desi"
-SPECTRUM_TOKEN_WIDTH = 32 * SPECTRUM_PIXEL
-N_SPECTRUM_TOKENS = len(SPECTRUM_GRID) // 32
+SPECTRUM_SURVEY = "desi"
 
-ANCHOR = "ls"
-LS = "-mmu_legacysurvey_dr10_south_21"
-HSC = "-mmu_hsc_pdr3_dud_22.5"
-DESI = "-mmu_desi_edr_sv3"
-SDSS = "-mmu_sdss_sdss"
-GZ10 = "-mmu_gz10"
-PROVABGS = "-mmu_desi_provabgs"
-ZERO_POINTS = {ANCHOR: 22.5, "hsc": 27.0}
+AION_EMBEDDING_DIM = 768
 
 
 SpectrumSurvey = Literal["desi", "sdss"]
 ImageSurvey = Literal["ls", "hsc"]
-SPECTRUM_SURVEYS: dict[SpectrumSurvey, str] = {
-    "desi": f"spectrum{DESI}",
-    "sdss": f"spectrum{SDSS}",
-}
 TOKEN_SURVEYS: dict[str, str] = {
-    ANCHOR: f"image{LS}",
-    "hsc": f"image{HSC}",
-    **SPECTRUM_SURVEYS,
+    "ls": f"image{DATASET_LS_SUFFIX}",
+    "hsc": f"image{DATASET_HSC_SUFFIX}",
+    "desi": f"spectrum{DATASET_DESI_SUFFIX}",
+    "sdss": f"spectrum{DATASET_SDSS_SUFFIX}",
 }
 FLAG_SURVEYS: dict[str, str] = {
-    "gz10": f"gz10_label{GZ10}",
-    "provabgs": f"LOG_MSTAR{PROVABGS}",
+    "gz10": f"gz10_label{DATASET_GZ10_SUFFIX}",
+    "provabgs": f"LOG_MSTAR{DATASET_PROVABGS_SUFFIX}",
 }
-RGB_COLUMN = f"rgb{LS}"
-BANDS: dict[str, list[str]] = {
-    ANCHOR: ["DES-G", "DES-R", "DES-I", "DES-Z"],
-    "hsc": ["HSC-G", "HSC-R", "HSC-I", "HSC-Z", "HSC-Y"],
-}
-
-TABLE_VALUE_SURVEYS: dict[str, tuple[str, ...]] = {
-    ANCHOR: tuple(
-        f"{name}{LS}"
-        for name in (
-            "EBV",
-            "FLUX_G",
-            "FLUX_R",
-            "FLUX_I",
-            "FLUX_Z",
-            "FLUX_W1",
-            "FLUX_W2",
-            "FLUX_W3",
-            "FLUX_W4",
-            "SHAPE_R",
-            "SHAPE_E1",
-            "SHAPE_E2",
-        )
-    ),
-    "hsc": tuple(
-        f"{name}{HSC}"
-        for name in (
-            "a_g",
-            "a_r",
-            "a_i",
-            "a_z",
-            "a_y",
-            "g_cmodel_mag",
-            "r_cmodel_mag",
-            "i_cmodel_mag",
-            "z_cmodel_mag",
-            "y_cmodel_mag",
-            "i_sdssshape_shape11",
-            "i_sdssshape_shape22",
-            "i_sdssshape_shape12",
-        )
-    ),
-}
-TABLE_VALUE_COLUMNS = tuple(
-    column for columns in TABLE_VALUE_SURVEYS.values() for column in columns
+LS_BANDS = ("DES-G", "DES-R", "DES-I", "DES-Z")
+HSC_BANDS = ("HSC-G", "HSC-R", "HSC-I", "HSC-Z", "HSC-Y")
+LS_TABLE_COLUMNS = tuple(
+    f"{name}{DATASET_LS_SUFFIX}"
+    for name in (
+        "EBV",
+        "FLUX_G",
+        "FLUX_R",
+        "FLUX_I",
+        "FLUX_Z",
+        "FLUX_W1",
+        "FLUX_W2",
+        "FLUX_W3",
+        "FLUX_W4",
+        "SHAPE_R",
+        "SHAPE_E1",
+        "SHAPE_E2",
+    )
 )
+HSC_TABLE_COLUMNS = tuple(
+    f"{name}{DATASET_HSC_SUFFIX}"
+    for name in (
+        "a_g",
+        "a_r",
+        "a_i",
+        "a_z",
+        "a_y",
+        "g_cmodel_mag",
+        "r_cmodel_mag",
+        "i_cmodel_mag",
+        "z_cmodel_mag",
+        "y_cmodel_mag",
+        "i_sdssshape_shape11",
+        "i_sdssshape_shape22",
+        "i_sdssshape_shape12",
+    )
+)
+TABLE_VALUE_COLUMNS = (*LS_TABLE_COLUMNS, *HSC_TABLE_COLUMNS)
+N_TABLE_VALUES = len(TABLE_VALUE_COLUMNS) + 1
+
 REDSHIFT = "redshift"
 REDSHIFT_TABLE_VALUE = 0
-N_TABLE_VALUES = len(TABLE_VALUE_COLUMNS) + 1
+
 REDSHIFT_LIMIT = 6.0
 REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
-    "desi": (f"Z{DESI}", f"ZERR{DESI}", f"ZWARN{DESI}"),
-    "sdss": (f"Z{SDSS}", f"Z_ERR{SDSS}", f"ZWARNING{SDSS}"),
+    "desi": (
+        f"Z{DATASET_DESI_SUFFIX}",
+        f"ZERR{DATASET_DESI_SUFFIX}",
+        f"ZWARN{DATASET_DESI_SUFFIX}",
+    ),
+    "sdss": (
+        f"Z{DATASET_SDSS_SUFFIX}",
+        f"Z_ERR{DATASET_SDSS_SUFFIX}",
+        f"ZWARNING{DATASET_SDSS_SUFFIX}",
+    ),
 }
 STORE_COLUMNS = (*TOKEN_SURVEYS, REDSHIFT)
 
 Catalogue = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
 CATALOGUES: dict[str, Catalogue] = {
-    LS: ANCHOR,
-    HSC: "hsc",
-    DESI: "desi",
-    SDSS: "sdss",
-    GZ10: "gz10",
-    PROVABGS: "provabgs",
+    DATASET_LS_SUFFIX: "ls",
+    DATASET_HSC_SUFFIX: "hsc",
+    DATASET_DESI_SUFFIX: "desi",
+    DATASET_SDSS_SUFFIX: "sdss",
+    DATASET_GZ10_SUFFIX: "gz10",
+    DATASET_PROVABGS_SUFFIX: "provabgs",
 }
 
-N_MORPHOLOGIES = 10
-
-GEMMA = "tencent/WeMM-Embedding-9B"
-GEMMA_DIM = 1024
+WEMM = "tencent/WeMM-Embedding-9B"
+WEMM_DIM = 1024
 QUERY_PREFIX = "Search galaxy spectra, images and catalogue measurements for: {}"
 TextModality = Literal["image", "spectrum"]
 PLOT_INCHES = (16.8, 3.84)
-TEXT_SURVEYS: dict[TextModality, str] = {"image": ANCHOR, "spectrum": SPECTRUM_SURVEY}
+TEXT_SURVEYS: dict[TextModality, str] = {
+    "image": "ls",
+    "spectrum": SPECTRUM_SURVEY,
+}
 
-Download = Literal["encoded", "codebook", "tokens", "properties"]
 
-
-STORES = ("encoded", "codebook", "tokens")
+STORES = ("encoded", "tokens")
 
 
 def store_schema(role: str) -> pa.Schema:
     cell = (
         pa.list_(pa.uint32())
         if role == "tokens"
-        else pa.list_(pa.list_(pa.float16(), DIM))
+        else pa.list_(pa.list_(pa.float16(), AION_EMBEDDING_DIM))
     )
     return pa.schema(
         [pa.field("galaxy", pa.int32())]
@@ -165,17 +155,15 @@ def store_schema(role: str) -> pa.Schema:
     )
 
 
-def store_writer(role: str) -> pq.ParquetWriter | pa.ipc.RecordBatchFileWriter:
-    if ARTIFACTS[role] == "arrow":
-        return pa.ipc.new_file(artifact(role), store_schema(role))
-    return pq.ParquetWriter(artifact(role), store_schema(role), compression="zstd")
+def store_writer(role: str) -> pa.ipc.RecordBatchFileWriter:
+    return pa.ipc.new_file(artifact(role), store_schema(role))
 
 
 PAIRS = pa.schema(
     [
         pa.field("galaxy", pa.int32()),
-        pa.field("aion", pa.list_(pa.float32(), DIM)),
-        pa.field("gemma", pa.list_(pa.float32(), GEMMA_DIM)),
+        pa.field("aion", pa.list_(pa.float32(), AION_EMBEDDING_DIM)),
+        pa.field("wemm", pa.list_(pa.float32(), WEMM_DIM)),
     ]
 )
 
@@ -185,14 +173,14 @@ TEXT_VIEWS = pa.schema(
         pa.field("galaxy", pa.int32()),
         pa.field("view_type", pa.int8()),
         pa.field("round", pa.int16()),
-        pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
+        pa.field("embedding", pa.list_(pa.float16(), WEMM_DIM)),
     ]
 )
 TEXT_VIEWS_HELD_OUT = pa.schema(
     [
         pa.field("galaxy", pa.int32()),
         pa.field("view_type", pa.int8()),
-        pa.field("embedding", pa.list_(pa.float16(), GEMMA_DIM)),
+        pa.field("embedding", pa.list_(pa.float16(), WEMM_DIM)),
     ]
 )
 
@@ -201,23 +189,25 @@ KEPT = 16
 PROBABILITY_FLOOR = float(np.finfo(np.float32).tiny)
 SALIENCY_SAMPLE = 512
 SPECTRUM_TOKEN_RANK = 256
-IMAGE_VOCABULARY = 4375
-VOCABULARY = 1024
-REDSHIFT_VOCABULARY = 1025
 IMAGE_MODES = {f"{survey}_image": survey for survey in get_args(ImageSurvey)}
-SPECTRUM_MODES = {f"{survey}_spectrum": survey for survey in SPECTRUM_SURVEYS}
+SPECTRUM_MODES = {f"{survey}_spectrum": survey for survey in get_args(SpectrumSurvey)}
 TokenMode = Literal[*IMAGE_MODES, *SPECTRUM_MODES]
-TABLE_MODES = {REDSHIFT: (REDSHIFT, 1, REDSHIFT_VOCABULARY)} | {
-    f"{survey}_table": (f"{survey}_table_values", len(columns), VOCABULARY)
-    for survey, columns in TABLE_VALUE_SURVEYS.items()
+TABLE_MODES = {REDSHIFT: (REDSHIFT, 1, MODALITY_INFO["tok_z"]["vocab_size"])} | {
+    f"{survey}_table": (
+        f"{survey}_table_values",
+        len(columns),
+        MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
+    )
+    for survey, columns in (("ls", LS_TABLE_COLUMNS), ("hsc", HSC_TABLE_COLUMNS))
 }
 MODE_SURVEYS = (
     IMAGE_MODES
     | SPECTRUM_MODES
-    | {f"{survey}_table": survey for survey in TABLE_VALUE_SURVEYS}
+    | {f"{survey}_table": survey for survey in get_args(ImageSurvey)}
     | {REDSHIFT: REDSHIFT}
 )
 OBSERVATIONS = {
+    "ls": "Legacy Survey match",
     "hsc": "HSC match",
     "desi": "DESI spectrum",
     "sdss": "SDSS spectrum",
@@ -225,7 +215,7 @@ OBSERVATIONS = {
 }
 
 MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
-VIEW_KINDS = ("observed", "template", "sample")
+VIEW_KINDS = ("observed", "aion_prediction", "sample")
 VIEW_COMBINATIONS = {
     "images": tuple(IMAGE_MODES),
     "spectra": tuple(SPECTRUM_MODES),
@@ -274,7 +264,6 @@ SEARCH_RANK = 256
 
 ARTIFACTS: dict[str, str] = {
     "encoded": "arrow",
-    "codebook": "parquet",
     "tokens": "arrow",
     "mean_points": "parquet",
     "full_points": "parquet",
@@ -291,11 +280,11 @@ ARTIFACTS: dict[str, str] = {
     **{f"token_gram_{name}": "npy" for name in GRAM_NAMES},
     **{f"token_embedding_{name}": "npz" for name in GRAM_NAMES},
     **{f"token_search_{name}": "npz" for name in GRAM_NAMES},
-    **{f"template_{mode}": "npy" for mode in MODES},
+    **{f"aion_prediction_{mode}": "npy" for mode in MODES},
     **{f"data_gram_{name}": "npy" for name in GRAM_NAMES},
-    **{f"template_gram_{name}": "npy" for name in GRAM_NAMES},
+    **{f"aion_prediction_gram_{name}": "npy" for name in GRAM_NAMES},
     "observed_reference": "npz",
-    **{f"template_embedding_{name}": "npz" for name in GRAM_NAMES},
+    **{f"aion_prediction_embedding_{name}": "npz" for name in GRAM_NAMES},
     "joint_embedding": "npy",
     "properties": "parquet",
     **{f"{name}_points": "parquet" for name in MAPS},
@@ -304,42 +293,65 @@ ARTIFACTS: dict[str, str] = {
 PREDICTIONS = pa.schema(
     [
         pa.field("galaxy", pa.int32()),
-        pa.field(REDSHIFT, pa.list_(pa.float32(), REDSHIFT_VOCABULARY)),
+        pa.field(
+            REDSHIFT, pa.list_(pa.float32(), MODALITY_INFO["tok_z"]["vocab_size"])
+        ),
     ]
     + [
         field
-        for survey, columns in TABLE_VALUE_SURVEYS.items()
+        for survey, columns in (("ls", LS_TABLE_COLUMNS), ("hsc", HSC_TABLE_COLUMNS))
         for field in (
-            pa.field(f"{survey}_codes", pa.list_(pa.uint16(), N_IMAGE_TOKENS * KEPT)),
             pa.field(
-                f"{survey}_probabilities", pa.list_(pa.float32(), N_IMAGE_TOKENS * KEPT)
+                f"{survey}_codes",
+                pa.list_(pa.uint16(), LegacySurveyImage.num_tokens * KEPT),
             ),
-            pa.field(f"{survey}_rest", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
+            pa.field(
+                f"{survey}_probabilities",
+                pa.list_(pa.float32(), LegacySurveyImage.num_tokens * KEPT),
+            ),
+            pa.field(
+                f"{survey}_rest", pa.list_(pa.float32(), LegacySurveyImage.num_tokens)
+            ),
             pa.field(
                 f"{survey}_query_codes",
-                pa.list_(pa.uint16(), N_IMAGE_TOKENS * (TOP_CODES - KEPT)),
+                pa.list_(
+                    pa.uint16(), LegacySurveyImage.num_tokens * (TOP_CODES - KEPT)
+                ),
             ),
             pa.field(
                 f"{survey}_query_probabilities",
-                pa.list_(pa.float16(), N_IMAGE_TOKENS * (TOP_CODES - KEPT)),
+                pa.list_(
+                    pa.float16(), LegacySurveyImage.num_tokens * (TOP_CODES - KEPT)
+                ),
             ),
-            pa.field(f"{survey}_tails", pa.list_(pa.float32(), N_IMAGE_TOKENS)),
+            pa.field(
+                f"{survey}_tails", pa.list_(pa.float32(), LegacySurveyImage.num_tokens)
+            ),
             pa.field(
                 f"{survey}_table_values",
-                pa.list_(pa.float32(), len(columns) * VOCABULARY),
+                pa.list_(
+                    pa.float32(),
+                    len(columns) * MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
+                ),
             ),
         )
     ]
     + [
         field
-        for survey in SPECTRUM_SURVEYS
+        for survey in get_args(SpectrumSurvey)
         for field in (
             pa.field(
                 f"{survey}_coefficients",
-                pa.list_(pa.uint8(), N_SPECTRUM_TOKENS * SPECTRUM_TOKEN_RANK),
+                pa.list_(
+                    pa.uint8(), (DESISpectrum.num_tokens - 1) * SPECTRUM_TOKEN_RANK
+                ),
             ),
-            pa.field(f"{survey}_offsets", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
-            pa.field(f"{survey}_steps", pa.list_(pa.float32(), N_SPECTRUM_TOKENS)),
+            pa.field(
+                f"{survey}_offsets", pa.list_(pa.float32(), DESISpectrum.num_tokens - 1)
+            ),
+            pa.field(
+                f"{survey}_steps", pa.list_(pa.float32(), DESISpectrum.num_tokens - 1)
+            ),
         )
     ]
 )
@@ -384,7 +396,15 @@ def points(galaxy: np.ndarray, coordinates: np.ndarray, category: pa.Array) -> p
 
 
 def build_dir() -> Path:
-    return Path(os.environ.get("ALPHAUNIVERSE_CACHE", DEFAULT_CACHE))
+    return Path(
+        os.environ.get(
+            "ALPHAUNIVERSE_CACHE", Path(__file__).resolve().parent.parent / ".cache"
+        )
+    )
+
+
+def dataset_dir() -> Path:
+    return build_dir() / "dataset"
 
 
 def artifact(role: str) -> Path:
@@ -396,21 +416,9 @@ def galaxy_count() -> int:
     return pq.read_metadata(artifact("mean_points")).num_rows
 
 
-@cache
-def labels() -> list[int]:
-    category = pq.read_table(artifact("mean_points"), columns=["category"])["category"]
-    return np.bincount(
-        np.asarray(category.fill_null(N_MORPHOLOGIES)), minlength=N_MORPHOLOGIES + 1
-    ).tolist()
-
-
-def stored_galaxy(galaxy: int) -> int:
-    if galaxy >= galaxy_count():
-        raise ValueError(f"should be less than {galaxy_count()}, the galaxy count")
-    return galaxy
-
-
-GalaxyIndex = Annotated[int, Field(ge=0), AfterValidator(stored_galaxy)]
+GalaxyIndex = Annotated[
+    int, Field(ge=0), Predicate(lambda galaxy: galaxy < galaxy_count())
+]
 
 
 WANDB_ENTITY = "aistrophysics"

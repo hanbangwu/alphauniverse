@@ -5,24 +5,20 @@ from typing import NamedTuple
 import numpy as np
 import pyarrow as pa
 import torch
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from tqdm import tqdm
 
 from . import encode
 from .config import (
-    ANCHOR,
-    IMAGE_VOCABULARY,
     KEPT,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
     PREDICTIONS,
     PROBABILITY_FLOOR,
     REDSHIFT,
-    REDSHIFT_VOCABULARY,
     SEED,
     SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
     TOP_CODES,
-    VOCABULARY,
     artifact,
     device,
 )
@@ -33,9 +29,12 @@ CHUNK = 128
 LEVELS = np.iinfo(np.uint8).max
 BATCH = 256
 
-IMAGES = {ANCHOR: encode.LegacySurveyImage.token_key, "hsc": encode.HSCImage.token_key}
+IMAGES = {
+    "ls": encode.LegacySurveyImage.token_key,
+    "hsc": encode.HSCImage.token_key,
+}
 TABLE_VALUES = {
-    ANCHOR: tuple(modality.token_key for modality, _ in encode.LS_TABLE_VALUES),
+    "ls": tuple(modality.token_key for modality, _ in encode.LS_TABLE_VALUES),
     "hsc": tuple(modality.token_key for modality, _ in encode.HSC_TABLE_VALUES),
 }
 SPECTRA = {
@@ -58,8 +57,8 @@ MODES = (
         Mode(
             f"{survey}_image",
             (key,),
-            np.arange(N_IMAGE_TOKENS),
-            IMAGE_VOCABULARY,
+            np.arange(LegacySurveyImage.num_tokens),
+            MODALITY_INFO["tok_image"]["vocab_size"],
             survey,
         )
         for survey, key in IMAGES.items()
@@ -68,20 +67,32 @@ MODES = (
         Mode(
             f"{survey}_spectrum",
             (key,),
-            np.arange(1, N_SPECTRUM_TOKENS + 1),
-            VOCABULARY,
+            np.arange(1, DESISpectrum.num_tokens),
+            MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
             survey,
         )
         for survey, key in SPECTRA.items()
     ),
     *(
-        Mode(f"{survey}_table", keys, np.arange(1), VOCABULARY, survey)
+        Mode(
+            f"{survey}_table",
+            keys,
+            np.arange(1),
+            MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
+            survey,
+        )
         for survey, keys in TABLE_VALUES.items()
     ),
-    Mode(REDSHIFT, (REDSHIFT_KEY,), np.arange(1), REDSHIFT_VOCABULARY, REDSHIFT),
+    Mode(
+        REDSHIFT,
+        (REDSHIFT_KEY,),
+        np.arange(1),
+        MODALITY_INFO["tok_z"]["vocab_size"],
+        REDSHIFT,
+    ),
 )
 SPECTRUM_TOKEN_TARGETS = {
-    key: np.arange(1, N_SPECTRUM_TOKENS + 1) for key in SPECTRA.values()
+    key: np.arange(1, DESISpectrum.num_tokens) for key in SPECTRA.values()
 }
 TARGETS = {key: mode.positions for mode in MODES for key in mode.keys}
 
@@ -98,9 +109,14 @@ def inputs(row: dict) -> dict[str, torch.Tensor]:
         if row[survey] is None:
             continue
         ids = torch.as_tensor(row[survey], dtype=torch.int64)[None]
-        tokens[image_key] = ids[:, :N_IMAGE_TOKENS]
+        tokens[image_key] = ids[:, : LegacySurveyImage.num_tokens]
         for offset, key in enumerate(TABLE_VALUES[survey]):
-            tokens[key] = ids[:, N_IMAGE_TOKENS + offset : N_IMAGE_TOKENS + offset + 1]
+            tokens[key] = ids[
+                :,
+                LegacySurveyImage.num_tokens + offset : LegacySurveyImage.num_tokens
+                + offset
+                + 1,
+            ]
     for survey, key in SPECTRA.items():
         if row[survey] is not None:
             tokens[key] = torch.as_tensor(row[survey], dtype=torch.int64)[None]
@@ -177,8 +193,13 @@ def image_token_codes(log_probabilities: np.ndarray) -> dict[str, np.ndarray]:
 class Moments:
     def __init__(self) -> None:
         self.count = 0
-        self.total = np.zeros(VOCABULARY)
-        self.products = np.zeros((VOCABULARY, VOCABULARY))
+        self.total = np.zeros(MODALITY_INFO["tok_spectrum_desi"]["vocab_size"])
+        self.products = np.zeros(
+            (
+                MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
+                MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
+            )
+        )
 
     def add(self, probabilities: np.ndarray) -> None:
         rows = probabilities.astype(np.float64)

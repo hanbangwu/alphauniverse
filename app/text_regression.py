@@ -14,7 +14,6 @@ from torch.optim.swa_utils import AveragedModel
 from . import embeddings, text_views
 from .config import (
     DATASET_REVISION,
-    GEMMA_DIM,
     GRAM_NAMES,
     MODES,
     PARTS_PER_ROUND,
@@ -29,6 +28,7 @@ from .config import (
     WANDB_ENTITY,
     WANDB_MODE,
     WANDB_PROJECT,
+    WEMM_DIM,
     artifact,
     device,
 )
@@ -87,7 +87,7 @@ def views(path: Path | list[Path]) -> tuple[torch.Tensor, torch.Tensor, torch.Te
     return (
         torch.tensor(table.column("galaxy").to_numpy(), device=device()).long(),
         torch.tensor(table.column("view_type").to_numpy(), device=device()).long(),
-        torch.tensor(embedding.reshape(len(table), GEMMA_DIM), device=device()).float(),
+        torch.tensor(embedding.reshape(len(table), WEMM_DIM), device=device()).float(),
     )
 
 

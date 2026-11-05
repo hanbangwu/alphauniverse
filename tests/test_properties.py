@@ -3,18 +3,18 @@ from pathlib import Path
 import numpy as np
 import pyarrow.parquet as pq
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
 from datasets import Dataset
 
-from app import observations, properties, templates
+from app import aion_predictions, observations, properties
 from app.config import (
-    LS,
+    DATASET_LS_SUFFIX,
+    DATASET_PROVABGS_SUFFIX,
     PROBED,
     PROPERTIES,
-    PROVABGS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
-    REDSHIFT_VOCABULARY,
-    SPECTRUM_SURVEYS,
+    TOKEN_SURVEYS,
     artifact,
 )
 
@@ -48,7 +48,7 @@ def test_a_redshift_bin_s_probability_spreads_from_the_bin_below_to_its_value() 
 
     lower, upper = (
         properties.spread_quantiles(probabilities, values, share)
-        for share in templates.CENTRAL
+        for share in aion_predictions.CENTRAL
     )
 
     np.testing.assert_allclose(lower, [0.116, 0.132, 0.116], rtol=1e-6)
@@ -88,27 +88,31 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
             error: [1e-4] * galaxies,
             warning: [False] * galaxies,
             **{column: [None] * galaxies for column in REDSHIFT_COLUMNS["sdss"]},
-            f"FLUX_G{LS}": green.tolist(),
-            f"FLUX_R{LS}": red.tolist(),
-            f"SHAPE_R{LS}": radius.tolist(),
-            f"SHAPE_E1{LS}": first.tolist(),
-            f"SHAPE_E2{LS}": second.tolist(),
-            SPECTRUM_SURVEYS["desi"]: [
+            f"FLUX_G{DATASET_LS_SUFFIX}": green.tolist(),
+            f"FLUX_R{DATASET_LS_SUFFIX}": red.tolist(),
+            f"SHAPE_R{DATASET_LS_SUFFIX}": radius.tolist(),
+            f"SHAPE_E1{DATASET_LS_SUFFIX}": first.tolist(),
+            f"SHAPE_E2{DATASET_LS_SUFFIX}": second.tolist(),
+            TOKEN_SURVEYS["desi"]: [
                 None if np.isnan(z) else spectrum for z in redshift
             ],
-            f"LOG_MSTAR{PROVABGS}": [
+            f"LOG_MSTAR{DATASET_PROVABGS_SUFFIX}": [
                 float(mass) if kept else None
                 for mass, kept in zip(rng.normal(10, 1, galaxies), labelled)
             ],
-            f"AVG_SFR{PROVABGS}": [
+            f"AVG_SFR{DATASET_PROVABGS_SUFFIX}": [
                 float(sfr) if kept else None
                 for sfr, kept in zip(rng.lognormal(size=galaxies), labelled)
             ],
         }
     )
     monkeypatch.setattr(observations, "dataset", lambda: rows)
-    bins = {REDSHIFT: np.linspace(0.01, 6, REDSHIFT_VOCABULARY, dtype=np.float32)[None]}
-    monkeypatch.setattr(templates, "bin_values", bins.get)
+    bins = {
+        REDSHIFT: np.linspace(
+            0.01, 6, MODALITY_INFO["tok_z"]["vocab_size"], dtype=np.float32
+        )[None]
+    }
+    monkeypatch.setattr(aion_predictions, "bin_values", bins.get)
     np.save(
         artifact("joint_embedding"), rng.normal(size=(galaxies, 4)).astype(np.float32)
     )

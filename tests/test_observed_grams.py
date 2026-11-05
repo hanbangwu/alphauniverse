@@ -3,22 +3,22 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset
 
-from app import observations, observed_grams, pql, templates
+from app import aion_predictions, observations, observed_grams, pql
 from app.config import (
-    BANDS,
-    CROP_PIXELS,
     GRAM_NAMES,
+    HSC_BANDS,
     IMAGE_MODES,
+    LS_BANDS,
     MODES,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
     TABLE_MODES,
-    TABLE_VALUE_SURVEYS,
+    TABLE_VALUE_COLUMNS,
     TOKEN_GRAMS,
     TOKEN_SURVEYS,
     artifact,
@@ -29,7 +29,7 @@ from scripts.fixture import covered
 MODE = "hsc_image"
 GALAXY = 7
 UNMEASURED = 0
-WIDTH = len(BANDS["hsc"]) * CROP_PIXELS**2
+WIDTH = len(HSC_BANDS) * MODALITY_INFO["tok_image"]["input_size"] ** 2
 
 
 def random_data(
@@ -97,13 +97,17 @@ def slot_scores(
 def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(observed_grams, "ROWS", 2 * N_IMAGE_TOKENS)
+    monkeypatch.setattr(observed_grams, "ROWS", 2 * LegacySurveyImage.num_tokens)
     rng = np.random.default_rng(1)
     queries = random_data(rng, 3)[0].float()
     values, information = random_data(rng, 5)
-    information[1].view(-1, CROP_PIXELS, CROP_PIXELS)[:, : CROP_PIXELS // 2] = 0
+    information[1].view(
+        -1,
+        MODALITY_INFO["tok_image"]["input_size"],
+        MODALITY_INFO["tok_image"]["input_size"],
+    )[:, : MODALITY_INFO["tok_image"]["input_size"] // 2] = 0
     reference = queries.mean(dim=0)
-    kept = torch.ones(N_IMAGE_TOKENS, dtype=torch.bool)
+    kept = torch.ones(LegacySurveyImage.num_tokens, dtype=torch.bool)
 
     found = observed_grams.anywhere(
         *observed_grams.data_features(
@@ -125,15 +129,15 @@ def test_any_position_takes_each_query_slot_s_best_gallery_slot_with_data(
             )
 
 
-def test_template_tiles_give_both_directions_of_the_nearest_patch_score(
+def test_aion_prediction_tiles_give_both_directions_of_the_nearest_patch_score(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(observed_grams, "ROWS", 2 * N_IMAGE_TOKENS)
+    monkeypatch.setattr(observed_grams, "ROWS", 2 * LegacySurveyImage.num_tokens)
     scaled = torch.from_numpy(np.random.default_rng(2).normal(size=(5, WIDTH))).float()
-    kept = torch.ones(N_IMAGE_TOKENS, dtype=torch.bool)
+    kept = torch.ones(LegacySurveyImage.num_tokens, dtype=torch.bool)
 
     found = observed_grams.anywhere(
-        *observed_grams.template_features(scaled, MODE, kept), symmetric=True
+        *observed_grams.aion_prediction_features(scaled, MODE, kept), symmetric=True
     )
 
     patches = observed_grams.slotted(scaled.double(), MODE)
@@ -148,30 +152,34 @@ def test_template_tiles_give_both_directions_of_the_nearest_patch_score(
             )
 
 
-def test_a_template_gram_is_minus_half_the_squared_distance_between_templates() -> None:
+def test_an_aion_prediction_gram_is_minus_half_the_squared_distance_between_aion_predictions() -> (
+    None
+):
     rng = np.random.default_rng(4)
     left, right = (torch.from_numpy(rng.normal(size=(count, 7))) for count in (3, 5))
 
-    found = observed_grams.template_gram(left, right)
+    found = observed_grams.aion_prediction_gram(left, right)
 
     np.testing.assert_allclose(found, -0.5 * torch.cdist(left, right) ** 2, rtol=1e-9)
 
 
 @pytest.mark.parametrize("mode", [MODE, "desi_spectrum"])
-def test_template_rows_of_other_queries_are_their_rows_of_the_template_grams(
+def test_aion_prediction_rows_of_other_queries_are_their_rows_of_the_aion_prediction_grams(
     mode: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(observed_grams, "ROWS", 2 * N_IMAGE_TOKENS)
+    monkeypatch.setattr(observed_grams, "ROWS", 2 * LegacySurveyImage.num_tokens)
     rng = np.random.default_rng(6)
-    width = WIDTH if mode == MODE else 2 * N_SPECTRUM_TOKENS
+    width = WIDTH if mode == MODE else 2 * (DESISpectrum.num_tokens - 1)
     everyone = torch.from_numpy(rng.normal(size=(5, width))).float()
     depth = torch.from_numpy(rng.random(width)).float()
     depth[: width // 4] = 0
     chosen = [3, 0]
 
-    found = observed_grams.template_grams(everyone[chosen], depth, mode, everyone)
+    found = observed_grams.aion_prediction_grams(
+        everyone[chosen], depth, mode, everyone
+    )
 
-    expected = observed_grams.template_grams(everyone, depth, mode)
+    expected = observed_grams.aion_prediction_grams(everyone, depth, mode)
     assert found.keys() == expected.keys() == set(TOKEN_GRAMS[mode])
     for name, matrix in found.items():
         np.testing.assert_allclose(
@@ -180,10 +188,11 @@ def test_template_rows_of_other_queries_are_their_rows_of_the_template_grams(
 
 
 def image(rng: np.random.Generator, survey: str) -> dict:
-    size = CROP_PIXELS + 8
-    shape = (len(BANDS[survey]), size, size)
+    size = MODALITY_INFO["tok_image"]["input_size"] + 8
+    bands = HSC_BANDS if survey == "hsc" else LS_BANDS
+    shape = (len(bands), size, size)
     return {
-        "band": [band.lower() for band in BANDS[survey]],
+        "band": [band.lower() for band in bands],
         "flux": rng.normal(size=shape).astype(np.float32),
         "ivar": rng.random(shape).astype(np.float32),
     }
@@ -229,8 +238,7 @@ def dataset(rng: np.random.Generator) -> Dataset:
             **{column: [None] * len(galaxies) for column in REDSHIFT_COLUMNS["sdss"]},
             **{
                 column: rng.lognormal(size=len(galaxies)).tolist()
-                for columns in TABLE_VALUE_SURVEYS.values()
-                for column in columns
+                for column in TABLE_VALUE_COLUMNS
             },
             **{
                 column: rng.uniform(0.01, 0.1, len(galaxies)).tolist()
@@ -240,14 +248,14 @@ def dataset(rng: np.random.Generator) -> Dataset:
     )
 
 
-def test_stored_matrices_score_every_template_against_each_observed_galaxy(
+def test_stored_matrices_score_every_aion_prediction_against_each_observed_galaxy(
     tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = dataset(np.random.default_rng(3))
     monkeypatch.setattr(observations, "dataset", lambda: rows)
     monkeypatch.setattr(torch.backends.cudnn.conv, "fp32_precision", "ieee")
     monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "ieee")
-    templates.generate_templates()
+    aion_predictions.generate_aion_predictions()
 
     observed_grams.generate_observed_grams()
 
@@ -257,7 +265,7 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         galaxies = observations.observed(mode)
         if free:
             galaxies = galaxies[galaxies != UNMEASURED]
-        queries = torch.from_numpy(np.load(artifact(f"template_{mode}")))
+        queries = torch.from_numpy(np.load(artifact(f"aion_prediction_{mode}")))
         queries = queries.reshape(len(queries), -1)
         reference = torch.from_numpy(references[f"{mode}_reference"])
         weighted, information, squares = (
@@ -294,7 +302,7 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         if free:
             scaled /= scaled.norm(dim=1, keepdim=True)
         np.testing.assert_allclose(
-            np.load(artifact(f"template_gram_{mode}")),
+            np.load(artifact(f"aion_prediction_gram_{mode}")),
             -0.5 * torch.cdist(scaled.double(), scaled.double()) ** 2,
             rtol=1e-4,
             atol=1e-3,
@@ -319,9 +327,9 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         if not free:
             assert (anywhere >= same - 1e-3 * (1 + np.abs(same))).all(), name
         np.testing.assert_allclose(
-            np.load(artifact(f"template_gram_{name}")),
+            np.load(artifact(f"aion_prediction_gram_{name}")),
             observed_grams.anywhere(
-                *observed_grams.template_features(scaled, mode, kept),
+                *observed_grams.aion_prediction_features(scaled, mode, kept),
                 symmetric=True,
             ),
             rtol=1e-5,
@@ -330,14 +338,14 @@ def test_stored_matrices_score_every_template_against_each_observed_galaxy(
         )
 
 
-def test_template_embeddings_decompose_each_template_gram_with_widths(
+def test_aion_prediction_embeddings_decompose_each_aion_prediction_gram_with_widths(
     tree: Path, random_weights: None
 ) -> None:
     rng = np.random.default_rng(3)
     count = pql.predictions().num_rows
     for name in GRAM_NAMES:
         np.save(
-            artifact(f"template_gram_{name}"),
+            artifact(f"aion_prediction_gram_{name}"),
             rng.normal(size=(count, count)).astype(np.float32),
         )
     depths = {
@@ -349,13 +357,13 @@ def test_template_embeddings_decompose_each_template_gram_with_widths(
         **{f"{mode}_depth": depth for mode, depth in depths.items()},
     )
 
-    observed_grams.generate_template_embeddings()
+    observed_grams.generate_aion_prediction_embeddings()
 
-    expected = templates.widths(pql.row(GALAXY), depths)
+    expected = aion_predictions.widths(pql.row(GALAXY), depths)
     for mode, names in TOKEN_GRAMS.items():
         for name in names:
-            gram = np.load(artifact(f"template_gram_{name}")).astype(np.float64)
-            found = np.load(artifact(f"template_embedding_{name}"))
+            gram = np.load(artifact(f"aion_prediction_gram_{name}")).astype(np.float64)
+            found = np.load(artifact(f"aion_prediction_embedding_{name}"))
             difference = (
                 found["queries"] @ found["galleries"].T + found["offsets"] - gram
             )

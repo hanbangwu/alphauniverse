@@ -9,7 +9,7 @@ import numpy as np
 import pyarrow as pa
 
 from app import pql
-from app.config import DATASET_REVISION, REDSHIFT, SPECTRUM_SURVEYS, TOKEN_SURVEYS
+from app.config import DATASET_REVISION, REDSHIFT, SPECTRUM_MODES, TOKEN_SURVEYS
 from app.search import (
     FIRST_HSC_TABLE_VALUE,
     FIRST_LS_TABLE_VALUE,
@@ -76,7 +76,7 @@ def hidden(galaxies: np.ndarray) -> pa.RecordBatch:
     table = source("tokens").to_table(columns=["galaxy", *TOKEN_SURVEYS])
     records = []
     for row in table.take(galaxies).to_pylist():
-        row |= dict.fromkeys((*SPECTRUM_SURVEYS, REDSHIFT))
+        row |= dict.fromkeys((*SPECTRUM_MODES.values(), REDSHIFT))
         encoded, _, mask, _ = encode.context(predictions.inputs(row))
         predicted = predictions.decode(encoded, mask, predictions.TARGETS)
         records.append(

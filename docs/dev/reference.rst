@@ -6,46 +6,46 @@ How it fits together
 
 The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to a volume mounted at ``/cache``, directly in ``$ALPHAUNIVERSE_CACHE``, so changing ``DATASET_REVISION`` overwrites them. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit frontend, deployed on Vercel, calls it. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
-============================ ====================================== ==================================
-Job                          Reads                                  Writes
-============================ ====================================== ==================================
-generate_embeddings          the dataset                            encoded, codebook, tokens
-generate_predictions         tokens                                 probabilities, probability_basis
-generate_token_grams         probabilities, probability_basis       token_gram_<mode>,
-                                                                    token_gram_<mode>_anywhere
-generate_token_embeddings    token_gram_<mode>,                     token_embedding_<mode>,
-                             token_gram_<mode>_anywhere             token_embedding_<mode>_anywhere,
-                                                                    token_search_<mode>,
-                                                                    token_search_<mode>_anywhere
-generate_templates           probabilities, probability_basis       template_<mode>
-generate_observed_grams      the dataset, tokens, template_<mode>   data_gram_<mode>,
-                                                                    data_gram_<mode>_anywhere,
-                                                                    template_gram_<mode>,
-                                                                    template_gram_<mode>_anywhere,
-                                                                    observed_reference
-generate_template_embeddings probabilities, probability_basis,      template_embedding_<mode>,
-                             template_gram_<mode>,                  template_embedding_<mode>_anywhere
-                             template_gram_<mode>_anywhere,
-                             observed_reference
-generate_joint_embedding     token_embedding_<mode>,                joint_embedding
-                             token_embedding_<mode>_anywhere
-generate_properties          the dataset, probabilities,            properties
-                             joint_embedding
-generate_maps                the dataset, joint_embedding,          same_place_points,
-                             token_search_<mode>,                   any_position_points
-                             token_search_<mode>_anywhere
-generate_projections         the dataset, encoded                   mean_points, full_points,
-                                                                    parametric_umap
-generate_pairs               the dataset, encoded                   pairs_<modality>
-generate_text_views          the dataset, tokens, probabilities,    text_views, text_views_held_out
-                             probability_basis, template_<mode>
-train_text_regression        the dataset, tokens, probabilities,    text_regression, text_bases,
-                             probability_basis, template_<mode>,    text_views, text_views_held_out
-                             joint_embedding, text_views,
-                             text_views_held_out
-generate_text_vectors        text_regression, text_bases,           text_vectors, text_query_mean
-                             joint_embedding
-============================ ====================================== ==================================
+=================================== =========================================== =========================================
+Job                                 Reads                                       Writes
+=================================== =========================================== =========================================
+generate_embeddings                 the dataset                                 encoded, tokens
+generate_predictions                tokens                                      probabilities, probability_basis
+generate_token_grams                probabilities, probability_basis            token_gram_<mode>,
+                                                                                token_gram_<mode>_anywhere
+generate_token_embeddings           token_gram_<mode>,                          token_embedding_<mode>,
+                                    token_gram_<mode>_anywhere                  token_embedding_<mode>_anywhere,
+                                                                                token_search_<mode>,
+                                                                                token_search_<mode>_anywhere
+generate_aion_predictions           probabilities, probability_basis            aion_prediction_<mode>
+generate_observed_grams             the dataset, tokens, aion_prediction_<mode> data_gram_<mode>,
+                                                                                data_gram_<mode>_anywhere,
+                                                                                aion_prediction_gram_<mode>,
+                                                                                aion_prediction_gram_<mode>_anywhere,
+                                                                                observed_reference
+generate_aion_prediction_embeddings probabilities, probability_basis,           aion_prediction_embedding_<mode>,
+                                    aion_prediction_gram_<mode>,                aion_prediction_embedding_<mode>_anywhere
+                                    aion_prediction_gram_<mode>_anywhere,
+                                    observed_reference
+generate_joint_embedding            token_embedding_<mode>,                     joint_embedding
+                                    token_embedding_<mode>_anywhere
+generate_properties                 the dataset, probabilities,                 properties
+                                    joint_embedding
+generate_maps                       the dataset, joint_embedding,               same_place_points,
+                                    token_search_<mode>,                        any_position_points
+                                    token_search_<mode>_anywhere
+generate_projections                the dataset, encoded                        mean_points, full_points,
+                                                                                parametric_umap
+generate_pairs                      the dataset, encoded                        pairs_<modality>
+generate_text_views                 the dataset, tokens, probabilities,         text_views, text_views_held_out
+                                    probability_basis, aion_prediction_<mode>
+train_text_regression               the dataset, tokens, probabilities,         text_regression, text_bases,
+                                    probability_basis, aion_prediction_<mode>,  text_views, text_views_held_out
+                                    joint_embedding, text_views,
+                                    text_views_held_out
+generate_text_vectors               text_regression, text_bases,                text_vectors, text_query_mean
+                                    joint_embedding
+=================================== =========================================== =========================================
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. Each spectrum reaches the codec followed by one masked sample at wavelength 99,999 with zero flux and inverse variance, which gives the tokens of the codec on AION's ``main`` branch: it pads every spectrum with such samples, to 7,808 for DESI and 4,800 for SDSS, and only the first affects the tokens. AION 0.0.2 does not pad. The serving app reads images, spectra and the catalogue from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
 
@@ -70,7 +70,7 @@ A :term:`whole-mode search` ranks from the mode's :term:`token embedding`: :math
 Artifacts
 ---------
 
-``encoded``, ``codebook`` and ``tokens`` share one layout: a ``galaxy`` column, one cell per token survey and the redshift (a list of 768-dimensional ``float16`` embeddings, or of ``uint32`` token ids for ``tokens``, null where unmatched), and a ``bool`` per flag survey. Within an image cell the image tokens come first, then the survey's catalogue values; a spectrum cell leads with its normalisation token. ``encoded`` and ``tokens`` are uncompressed Arrow IPC files that readers memory-map; ``codebook`` is Parquet.
+``encoded`` and ``tokens`` share one layout: a ``galaxy`` column, one cell per token survey and the redshift (a list of 768-dimensional ``float16`` embeddings, or of ``uint32`` token ids for ``tokens``, null where unmatched), and a ``bool`` per flag survey. Within an image cell the image tokens come first, then the survey's catalogue values; a spectrum cell leads with its normalisation token. Both are uncompressed Arrow IPC files that readers memory-map.
 
 .. autofunction:: app.config.store_schema
    :no-index:
@@ -89,9 +89,9 @@ Artifacts
 
 ``token_search_<mode>`` and ``token_search_<mode>_anywhere``, from the same job, are ``np.savez`` files of the same ``queries`` and ``galleries`` cut to their first 256 components, and ``offsets``. The app loads them at startup for :term:`whole-mode search`, 392 MB for 17,369 galaxies (11 × 17,369 × (2 × 256 + 1) × 4 bytes), and it does not start without them.
 
-``template_<mode>`` is an ``np.save`` file of every galaxy's :term:`template` in the mode, ``float32``, one row per galaxy, observed in the mode or not. An image template is AION's codec decoding of the expected latent at every cell, :math:`\sum_t p_{g,s}(t)\, z(t)` with the mass beyond the stored codes spread evenly over the rest of the vocabulary, 4 Legacy Survey or 5 HSC bands × 96 × 96 px in the survey's flux units: the job decodes every band in Legacy Survey units and multiplies HSC's by :math:`10^{1.8}`, the inverse of the codec's scaling from HSC's zero point of 27. A spectrum template is the decoding of the expected latent at every spectral window without the normalisation token, 8,704 values on the codec's grid from 3,500 Å in 0.8 Å steps: a shape, since the normalisation token is not predicted. A catalogue value's or the redshift's template is the median of its predicted distribution over the codec's bins, each at the value AION decodes it to, its upper edge. The open top bin takes its lower edge instead: AION decodes it to the largest value in the codec's sample of its training data (1.9 × 10⁹ nmgy for ``FLUX_Z``) or to no value. Bins past it decode to no value and are skipped. Decoding runs in IEEE float32.
+``aion_prediction_<mode>`` is an ``np.save`` file of every galaxy's :term:`AION prediction` in the mode, ``float32``, one row per galaxy, observed in the mode or not. An image AION prediction is AION's codec decoding of the expected latent at every cell, :math:`\sum_t p_{g,s}(t)\, z(t)` with the mass beyond the stored codes spread evenly over the rest of the vocabulary, 4 Legacy Survey or 5 HSC bands × 96 × 96 px in the survey's flux units: the job decodes every band in Legacy Survey units and multiplies HSC's by :math:`10^{1.8}`, the inverse of the codec's scaling from HSC's zero point of 27. A spectrum AION prediction is the decoding of the expected latent at every spectral window without the normalisation token, 8,704 values on the codec's grid from 3,500 Å in 0.8 Å steps: a shape, since the normalisation token is not predicted. A catalogue value's or the redshift's AION prediction is the median of its predicted distribution over the codec's bins, each at the value AION decodes it to, its upper edge. The open top bin takes its lower edge instead: AION decodes it to the largest value in the codec's sample of its training data (1.9 × 10⁹ nmgy for ``FLUX_Z``) or to no value. Bins past it decode to no value and are skipped. Decoding runs in IEEE float32.
 
-``text_views`` is a directory of Parquet parts, ``part-<n>.parquet``, of 4,000 :term:`views <view>` each, drawn from the galaxies outside text search's held-out set: the 30% held out of the text maps and the prototype's 143, which leaves 12,058. A view has one of 26 types: the observation, the :term:`template` or a sample in each :term:`mode`, or one of 5 combinations of modes in a single input. Each part draws its (galaxy, view type) pairs from its own seed, weighted 1 per template, observation and combination, 4 per image or spectrum sample and 8 per catalogue sample. A sample draws every slot's token from AION's stored distribution, the mass beyond an image cell's stored codes spread evenly over the rest, and decodes it with the mode's codec. An image is turned by one of its 8 rotations and reflections; a spectrum is smoothed by a Gaussian of σ = 1, 2 or 3 px and plotted at 1,680 × 384 px over the survey's observed range, its flux axis from the 0.5th to the 99.9th percentile with 10% padding; catalogue values are written one ``COLUMN: value`` line each, shuffled, at 3, 4 or 5 significant figures. A combination draws each member as observation, template or sample, the observation only where one exists. ``round`` numbers each ten parts. A rerun keeps the parts already written, so a stopped job resumes. ``view_type`` is the type's position in ``app.config.VIEW_TYPES``:
+``text_views`` is a directory of Parquet parts, ``part-<n>.parquet``, of 4,000 :term:`views <view>` each, drawn from the galaxies outside text search's held-out set: the 30% held out of the text maps and the prototype's 143, which leaves 12,058. A view has one of 26 types: the observation, the :term:`AION prediction` or a sample in each :term:`mode`, or one of 5 combinations of modes in a single input. Each part draws its (galaxy, view type) pairs from its own seed, weighted 1 per AION prediction, observation and combination, 4 per image or spectrum sample and 8 per catalogue sample. A sample draws every slot's token from AION's stored distribution, the mass beyond an image cell's stored codes spread evenly over the rest, and decodes it with the mode's codec. An image is turned by one of its 8 rotations and reflections; a spectrum is smoothed by a Gaussian of σ = 1, 2 or 3 px and plotted at 1,680 × 384 px over the survey's observed range, its flux axis from the 0.5th to the 99.9th percentile with 10% padding; catalogue values are written one ``COLUMN: value`` line each, shuffled, at 3, 4 or 5 significant figures. A combination draws each member as observation, aion_prediction or sample, the observation only where one exists. ``round`` numbers each ten parts. A rerun keeps the parts already written, so a stopped job resumes. ``view_type`` is the type's position in ``app.config.VIEW_TYPES``:
 
 .. autodata:: app.config.TEXT_VIEWS
    :no-index:
@@ -107,19 +107,19 @@ Artifacts
 
 ``text_vectors`` is an ``np.save`` file, ``float32``, galaxies × 7 modes × 1,024: for each galaxy and mode, the sum over view types :math:`k` that need the mode of :math:`\bar e_{g,k} / (26\,|M_k|)` (:doc:`/methods/text-search`), with :math:`\bar e_{g,k}` the regression's prediction with every block of the joint embedding present: its coefficients times ``scale``, through ``components``, plus ``centre``. Summed over modes, a galaxy's row is its mean prediction; the app sums it in batches on the first text search and reads the matches' rows for their contributions. ``text_query_mean`` is an ``np.save`` file of the mean WeMM-Embedding embedding of the 10,080 generic queries, each embedded after the search prefix as every query is (``float32``, 1,024), which every query has subtracted before scoring. WeMM-Embedding loads with the tokenizer normalizer its repository ships, which current ``transformers`` drops, and on a GPU in bfloat16 with flash attention from the kernels hub. The server sends each text query to ``QueryEmbedder.embed``, a method on whichever of an L4, A10G or L40S GPU is free first that stops after five idle minutes: on CPUs without AVX-512, a 9B query took about 6 s in bfloat16. It starts from a GPU memory snapshot taken after it loads the model from the volume, fetches the flash-attention kernel from the kernels hub and embeds one query, which compiles flash-linear-attention's Triton kernels. The starts that take Modal's snapshots, the first few on each GPU type after a deploy, do all of this in full.
 
-``data_gram_<mode>`` and ``data_gram_<mode>_anywhere`` are ``np.save`` files of :term:`against-data scores <against-data score>`, ``float32``, one row per galaxy and one column per galaxy observed in the mode with data on the template's pixels, in the order of ``observed_reference``'s ``<mode>_galleries``. With :math:`\mu_q` the query's :term:`template`, :math:`\mu_0` the median of all galaxies' templates, and :math:`x_g` and :math:`w_g` the gallery galaxy's data and inverse variances on the template's pixels (the central 96 × 96 px of an image; for a spectrum, the codec's grid, through the transpose of the linear interpolation to each observed wavelength; for catalogue values and the redshift, the errors of ``template_quality``):
+``data_gram_<mode>`` and ``data_gram_<mode>_anywhere`` are ``np.save`` files of :term:`against-data scores <against-data score>`, ``float32``, one row per galaxy and one column per galaxy observed in the mode with data on the aion_prediction's pixels, in the order of ``observed_reference``'s ``<mode>_galleries``. With :math:`\mu_q` the query's :term:`AION prediction`, :math:`\mu_0` the median of all galaxies' AION predictions, and :math:`x_g` and :math:`w_g` the gallery galaxy's data and inverse variances on the AION prediction's pixels (the central 96 × 96 px of an image; for a spectrum, the codec's grid, through the transpose of the linear interpolation to each observed wavelength; for catalogue values and the redshift, the errors of ``aion_prediction_quality``):
 
 .. math::
 
    S(q, g) = \langle \mu_q - \mu_0,\; w_g x_g \rangle - \tfrac12 \langle \mu_q^2 - \mu_0^2,\; w_g \rangle = S_\text{sat}(g) - \tfrac12 \chi^2(x_g; \mu_q)
 
-with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`S_\text{sat}(g) = \tfrac12 \chi^2(x_g; \mu_0)` the gallery galaxy's :term:`saturation`. A spectrum template takes its best amplitude, :math:`S(q, g) = \tfrac12 \left[ \langle \mu_q, w_g x_g \rangle^2 / \langle \mu_q^2, w_g \rangle - \langle \mu_0, w_g x_g \rangle^2 / \langle \mu_0^2, w_g \rangle \right]`. At any position, each of the query's :term:`slots <slot>` (a 4 × 4 px cell in every band, or one of the 32-pixel windows the survey covers) takes its best score over the gallery galaxy's slots with data, each against :math:`\mu_0` at that slot, and the slot scores add, so :math:`S` can exceed :math:`S_\text{sat}`; a spectrum's data are first divided by the best amplitude of the galaxy's own template. Same-place scores are computed in float64, any-position ones in IEEE float32.
+with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`S_\text{sat}(g) = \tfrac12 \chi^2(x_g; \mu_0)` the gallery galaxy's :term:`saturation`. A spectrum AION prediction takes its best amplitude, :math:`S(q, g) = \tfrac12 \left[ \langle \mu_q, w_g x_g \rangle^2 / \langle \mu_q^2, w_g \rangle - \langle \mu_0, w_g x_g \rangle^2 / \langle \mu_0^2, w_g \rangle \right]`. At any position, each of the query's :term:`slots <slot>` (a 4 × 4 px cell in every band, or one of the 32-pixel windows the survey covers) takes its best score over the gallery galaxy's slots with data, each against :math:`\mu_0` at that slot, and the slot scores add, so :math:`S` can exceed :math:`S_\text{sat}`; a spectrum's data are first divided by the best amplitude of the galaxy's own AION prediction. Same-place scores are computed in float64, any-position ones in IEEE float32.
 
-``template_gram_<mode>`` and ``template_gram_<mode>_anywhere`` are ``np.save`` files of galaxies × galaxies ``float32`` :term:`template Grams <template Gram>`. Each template is scaled to the mode's :term:`typical depth`, :math:`a_g = \mu_g \sqrt{\bar w}`, with :math:`\bar w` the median of :math:`w_g` over the gallery galaxies; for a spectrum, :math:`w_g` is in units of the galaxy's own template's amplitude and :math:`a_g` is scaled to unit length. Entry :math:`(q, g)` is :math:`-\tfrac12 \lVert a_q - a_g \rVert^2`, or at any position the sum over the query's slots of :math:`-\tfrac12 \lVert a_{q,s} - a_{g,s'} \rVert^2` at the gallery galaxy's nearest slot :math:`s'`. As for the scores, same-place entries are computed in float64 and any-position ones in IEEE float32.
+``aion_prediction_gram_<mode>`` and ``aion_prediction_gram_<mode>_anywhere`` are ``np.save`` files of galaxies × galaxies ``float32`` :term:`AION prediction Grams <AION prediction Gram>`. Each AION prediction is scaled to the mode's :term:`typical depth`, :math:`a_g = \mu_g \sqrt{\bar w}`, with :math:`\bar w` the median of :math:`w_g` over the gallery galaxies; for a spectrum, :math:`w_g` is in units of the galaxy's own AION prediction's amplitude and :math:`a_g` is scaled to unit length. Entry :math:`(q, g)` is :math:`-\tfrac12 \lVert a_q - a_g \rVert^2`, or at any position the sum over the query's slots of :math:`-\tfrac12 \lVert a_{q,s} - a_{g,s'} \rVert^2` at the gallery galaxy's nearest slot :math:`s'`. As for the scores, same-place entries are computed in float64 and any-position ones in IEEE float32.
 
-``observed_reference`` is an ``np.savez`` holding, for each mode, ``<mode>_reference`` (:math:`\mu_0`), ``<mode>_galleries`` (the galaxies observed in the mode with data on the template's pixels), ``<mode>_saturation`` (each one's :term:`saturation`), ``<mode>_depth`` (:math:`\sqrt{\bar w}`) and, for spectra, ``<mode>_amplitudes`` (each galaxy's own template's best amplitude on its data).
+``observed_reference`` is an ``np.savez`` holding, for each mode, ``<mode>_reference`` (:math:`\mu_0`), ``<mode>_galleries`` (the galaxies observed in the mode with data on the aion_prediction's pixels), ``<mode>_saturation`` (each one's :term:`saturation`), ``<mode>_depth`` (:math:`\sqrt{\bar w}`) and, for spectra, ``<mode>_amplitudes`` (each galaxy's own AION prediction's best amplitude on its data).
 
-``template_embedding_<mode>`` and ``template_embedding_<mode>_anywhere`` are :term:`template embeddings <template embedding>`, ``np.savez`` files with the parts of a token embedding, decomposed from the template Grams, and ``widths``, each galaxy's :term:`predictive width` in the mode: for an image or spectrum the root mean square over slots of the variance of AION's predicted codec latent, summed over its dimensions; for catalogue values and the redshift the root mean square over values of half the width of the predicted central 68%, times :math:`\sqrt{\bar w}`.
+``aion_prediction_embedding_<mode>`` and ``aion_prediction_embedding_<mode>_anywhere`` are :term:`AION prediction embeddings <AION prediction embedding>`, ``np.savez`` files with the parts of a token embedding, decomposed from the aion_prediction Grams, and ``widths``, each galaxy's :term:`predictive width` in the mode: for an image or spectrum the root mean square over slots of the variance of AION's predicted codec latent, summed over its dimensions; for catalogue values and the redshift the root mean square over values of half the width of the predicted central 68%, times :math:`\sqrt{\bar w}`.
 
 ``joint_embedding`` is an ``np.save`` file of every galaxy's :term:`joint embedding` from its token embeddings, galaxies × 2,816 ``float32``: the 11 blocks' 256 columns each, in ``GRAM_NAMES`` order, so any block can be taken alone.
 
@@ -130,7 +130,7 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
 - from the Legacy Survey's model of the galaxy: ``SHAPE_R``; :math:`22.5 - 2.5 \log_{10}` of the r flux in nanomaggies, null where the flux is not positive; and the axis ratio, null where both ellipticity components are 0, as in models round by construction;
 - from the spectrum of the survey whose redshift is used, moved to the rest frame: Hα's equivalent width over 6,554.6 to 6,574.6 Å, against the mean of the median fluxes over 6,490 to 6,530 Å and 6,600 to 6,640 Å, positive for emission; and the Dn4000, the mean of :math:`f_\lambda \lambda^2` over 4,000 to 4,100 Å divided by its mean over 3,850 to 3,950 Å. Each band must lie inside the spectrum's unmasked pixels with at least 5 of them, and the continuum and both of the Dn4000's means must exceed three times their errors. So Hα is measured up to redshift 9,824 / 6,640 − 1 = 0.48 in DESI and 9,221.5 / 6,640 − 1 = 0.39 in SDSS.
 
-The redshift's prediction is the median of AION's predicted distribution, and its width half the range from the distribution's 16th to its 84th percentile. Both spread each bin's probability evenly over the redshifts its token covers, from the bin below up to its own value: a distribution in one bin, 0.0059 wide, predicts the bin's centre with a width of 0.0020, where the redshift :term:`template` takes the bin's top. A galaxy with a measured redshift read it, so its prediction is close to it; ``redshift_quality`` measures predictions without it. Likewise the joint embedding reads the Legacy Survey catalogue values, so the radius, r magnitude and axis ratio predictions are close to the measured ones. The others come from ridge regression on the joint embedding, its penalty chosen by leave-one-out, fitted to the galaxies with a measured value. Those galaxies' own predictions come from 5-fold cross-validation, so none is fitted to its own value, and the RMS error of those predictions is the width, the same for every galaxy. PROVABGS fits DESI spectra, so its widths are measured only on galaxies DESI observed, and the spectral ones only on galaxies with a spectrum. ``g_r`` is the observed Legacy Survey colour, :math:`-2.5 \log_{10}` of the g to r flux ratio, null where either flux is not positive. ``/downloads/properties`` serves it.
+The redshift's prediction is the median of AION's predicted distribution, and its width half the range from the distribution's 16th to its 84th percentile. Both spread each bin's probability evenly over the redshifts its token covers, from the bin below up to its own value: a distribution in one bin, 0.0059 wide, predicts the bin's centre with a width of 0.0020, where the redshift :term:`AION prediction` takes the bin's top. A galaxy with a measured redshift read it, so its prediction is close to it; ``redshift_quality`` measures predictions without it. Likewise the joint embedding reads the Legacy Survey catalogue values, so the radius, r magnitude and axis ratio predictions are close to the measured ones. The others come from ridge regression on the joint embedding, its penalty chosen by leave-one-out, fitted to the galaxies with a measured value. Those galaxies' own predictions come from 5-fold cross-validation, so none is fitted to its own value, and the RMS error of those predictions is the width, the same for every galaxy. PROVABGS fits DESI spectra, so its widths are measured only on galaxies DESI observed, and the spectral ones only on galaxies with a spectrum. ``g_r`` is the observed Legacy Survey colour, :math:`-2.5 \log_{10}` of the g to r flux ratio, null where either flux is not positive. ``/galaxies/property`` serves it.
 
 .. autodata:: app.config.PROPERTIES
    :no-index:
@@ -153,9 +153,9 @@ The redshift's prediction is the median of AION's predicted distribution, and it
 HTTP API
 --------
 
-Every endpoint is ``GET``; ``/projections/{projection}`` and ``/downloads/{role}`` also answer ``HEAD``. A request whose ``If-None-Match`` matches the response's ETag gets ``304 Not Modified``. Artifact files carry Starlette's ETag, from size and modification time; every other response's ETag is an MD5 of its body. Every response carries ``Cache-Control: no-cache``.
+Every endpoint is ``GET``; ``/projections/{projection}`` and ``/galaxies/property`` also answer ``HEAD``. A request whose ``If-None-Match`` matches the response's ETag gets ``304 Not Modified``. Artifact files carry Starlette's ETag, from size and modification time; every other response's ETag is an MD5 of its body. Every response carries ``Cache-Control: no-cache``.
 
-The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the 8 most recently used. An Any position map builds no matrix: it computes the rows of its sample of galaxies, described under ``/saliency`` below, and the server keeps them for the 8 most recently used pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
+The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the 8 most recently used. An Any position map builds no matrix: it computes the rows of its sample of galaxies (:doc:`/methods/query-maps`), and the server keeps them for the 8 most recently used pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
 
 .. openapi:: ../../frontend/openapi.json
 

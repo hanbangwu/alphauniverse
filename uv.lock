@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -212,12 +212,14 @@ name = "alphauniverse"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "annotated-types" },
     { name = "astropy" },
     { name = "datasets" },
     { name = "fastapi", extra = ["standard"] },
     { name = "modal" },
     { name = "numpy" },
     { name = "pillow" },
+    { name = "polymathic-aion", extra = ["torch"] },
     { name = "pyarrow" },
     { name = "pydantic" },
     { name = "qwen-vl-utils" },
@@ -231,7 +233,6 @@ build = [
     { name = "flash-linear-attention" },
     { name = "kernels" },
     { name = "matplotlib" },
-    { name = "polymathic-aion", extra = ["torch"] },
     { name = "scikit-learn" },
     { name = "torchvision" },
     { name = "umap-learn" },
@@ -257,12 +258,14 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "annotated-types", specifier = ">=0.8.0" },
     { name = "astropy", specifier = ">=8.0.1" },
     { name = "datasets", specifier = ">=5.1.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.142.2" },
     { name = "modal", specifier = ">=1.6.1" },
     { name = "numpy", specifier = ">=2.5.3" },
     { name = "pillow", specifier = ">=12.3.0" },
+    { name = "polymathic-aion", extras = ["torch"], specifier = ">=0.0.2" },
     { name = "pyarrow", specifier = ">=25.0.1" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "qwen-vl-utils", specifier = ">=0.0.14" },
@@ -276,7 +279,6 @@ build = [
     { name = "flash-linear-attention", specifier = ">=0.6.0" },
     { name = "kernels", specifier = ">=0.17.0,<0.18.0" },
     { name = "matplotlib", specifier = ">=3.11.2" },
-    { name = "polymathic-aion", extras = ["torch"], specifier = ">=0.0.2" },
     { name = "scikit-learn", specifier = ">=1.9.1" },
     { name = "torchvision", specifier = ">=0.29.1" },
     { name = "umap-learn", specifier = ">=0.5.12" },
@@ -5123,11 +5125,11 @@ wheels = [
 
 [[package]]
 name = "wadler-lindig"
-version = "0.1.7"
+version = "0.1.8"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1e/67/cbae4bf7683a64755c2c1778c418fea96d00e34395bb91743f08bd951571/wadler_lindig-0.1.7.tar.gz", hash = "sha256:81d14d3fe77d441acf3ebd7f4aefac20c74128bf460e84b512806dccf7b2cd55", size = 15842, upload-time = "2025-06-18T07:00:42.843Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ea/bf/4caf1aada6c84eb3fadf9341a90367f436a759692456e1a234d444d428ee/wadler_lindig-0.1.8.tar.gz", hash = "sha256:1a94d51cd26100dda9e430c64539c5b92b9788c87f10db3e1c87503ab814411a", size = 16256, upload-time = "2026-10-25T19:06:02.92Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl", hash = "sha256:e3ec83835570fd0a9509f969162aeb9c65618f998b1f42918cfc8d45122fe953", size = 20516, upload-time = "2025-06-18T07:00:41.684Z" },
+    { url = "https://files.pythonhosted.org/packages/00/0b/b170089cd44848f25dbc9efda08e5aa4a8402d9a13f0d4d0f3d7808be539/wadler_lindig-0.1.8-py3-none-any.whl", hash = "sha256:8671e8c98449ae3f4e4ba720eccd63a502b3983042f8d112b49a9c6be49e8d92", size = 20840, upload-time = "2026-10-25T19:06:01.79Z" },
 ]
 
 [[package]]

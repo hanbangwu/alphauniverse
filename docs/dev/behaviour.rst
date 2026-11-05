@@ -16,10 +16,10 @@ Map
 Galaxy
 ------
 
-- Images are the central 96 × 96 px: the Legacy Survey colour image, and HSC coloured from its *g r i z* flux by the Legacy Survey's mapping.
+- Images are the central 96 × 96 px, coloured from their *g r i z* flux by the Legacy Survey's mapping.
 - Spectra are smoothed for display with a Gaussian of σ = 2 pixels. Search uses AION's predictions, never the smoothed flux.
 - Groups collapse, and stay open or collapsed for every galaxy in both views. The search view adds the catalogue group: Galaxy Zoo 10, PROVABGS and the redshift, with the 26 values AION reads selectable.
-- **AION predictions** shows the :term:`templates <template>` of every survey, observed or not: images in place of the observed ones, coloured the same way and marked AION; spectra over the observed ones, each scaled to its flux, or alone and normalised; in search, the median of the predicted distribution beside each of the 25 catalogue values and the redshift AION reads, or beside DESI's when the galaxy has no redshift AION reads. In the search, a template of a survey the galaxy lacks cannot be selected.
+- **AION predictions** shows the :term:`AION predictions <AION prediction>` of every survey, observed or not: images in place of the observed ones, coloured the same way and marked AION; spectra over the observed ones, each scaled to its flux, or alone and normalised; in search, the median of the predicted distribution beside each of the 25 catalogue values and the redshift AION reads, or beside DESI's when the galaxy has no redshift AION reads. In the search, an AION prediction of a survey the galaxy lacks cannot be selected.
 
 Similarity search
 -----------------

@@ -149,10 +149,10 @@ def generate_maps() -> None:
     timeout=20 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_templates() -> None:
-    from app.templates import generate_templates
+def generate_aion_predictions() -> None:
+    from app.aion_predictions import generate_aion_predictions
 
-    generate_templates()
+    generate_aion_predictions()
     cache_volume.commit()
 
 
@@ -179,10 +179,10 @@ def generate_observed_grams() -> None:
     timeout=10 * 60,
     volumes={CACHE_PATH: cache_volume},
 )
-def generate_template_embeddings() -> None:
-    from app.observed_grams import generate_template_embeddings
+def generate_aion_prediction_embeddings() -> None:
+    from app.observed_grams import generate_aion_prediction_embeddings
 
-    generate_template_embeddings()
+    generate_aion_prediction_embeddings()
     cache_volume.commit()
 
 

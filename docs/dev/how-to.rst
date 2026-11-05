@@ -33,9 +33,9 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_predictions
    uv run modal run modal_app.py::generate_token_grams
    uv run modal run modal_app.py::generate_token_embeddings
-   uv run modal run modal_app.py::generate_templates
+   uv run modal run modal_app.py::generate_aion_predictions
    uv run modal run modal_app.py::generate_observed_grams
-   uv run modal run modal_app.py::generate_template_embeddings
+   uv run modal run modal_app.py::generate_aion_prediction_embeddings
    uv run modal run modal_app.py::generate_joint_embedding
    uv run modal run modal_app.py::generate_properties
    uv run modal run modal_app.py::generate_maps
@@ -45,7 +45,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::train_text_regression
    uv run modal run modal_app.py::generate_text_vectors
 
-A failed job leaves its artifacts incomplete; rerun it. Text artifacts are not keyed by text model: after changing ``GEMMA``, move ``text_views``, ``text_views_held_out``, ``text_regression``, ``text_bases``, ``text_vectors`` and ``text_query_mean`` aside before rerunning ``generate_text_views``, ``train_text_regression`` and ``generate_text_vectors``, or new views are mixed with old ones, and rerun ``generate_pairs``, whose ``pairs_image`` and ``pairs_spectrum`` hold the text model's embeddings that ``text_search_quality`` scores queries against.
+A failed job leaves its artifacts incomplete; rerun it. Text artifacts are not keyed by text model: after changing ``WEMM``, move ``text_views``, ``text_views_held_out``, ``text_regression``, ``text_bases``, ``text_vectors`` and ``text_query_mean`` aside before rerunning ``generate_text_views``, ``train_text_regression`` and ``generate_text_vectors``, or new views are mixed with old ones, and rerun ``generate_pairs``, whose ``pairs_image`` and ``pairs_spectrum`` hold the text model's embeddings that ``text_search_quality`` scores queries against.
 
 These commands write to the volume production serves from. To build into the ``dev`` Modal environment instead, which has its own app, volume and secrets, add ``--env dev`` after ``modal run``.
 
@@ -97,8 +97,8 @@ Run a benchmark
    uv run modal run -m scripts.benchmarks.text_search_sheet                  # --out, default text_search_sheet.html; --earlier, an earlier sheet's .json
    uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --queries 200, --modes every mode
    uv run modal run -m scripts.benchmarks.token_embedding_quality
-   uv run --group build modal run -m scripts.benchmarks.template_quality
-   uv run modal run -m scripts.benchmarks.template_embedding_quality
+   uv run --group build modal run -m scripts.benchmarks.aion_prediction_quality
+   uv run modal run -m scripts.benchmarks.aion_prediction_embedding_quality
    uv run --group build modal run -m scripts.benchmarks.retrieval_quality
    uv run --group build modal run -m scripts.benchmarks.redshift_quality
    uv run --group build modal run -m scripts.benchmarks.probe_quality

@@ -1,5 +1,5 @@
 import type { Meta, TableRow } from '$lib/api'
-import { ANCHOR, IMAGE_MODES, SPECTRUM_MODES, surveyOf } from '$lib/data/modes'
+import { IMAGE_MODES, SPECTRUM_MODES, surveyOf } from '$lib/data/modes'
 import { row } from '$lib/data/scores'
 import { type SimilarityQuery, type SimilarityResult, isModeQuery } from '$lib/data/similarity'
 import { spectrumTokenOf } from '$lib/data/spectra'
@@ -64,8 +64,7 @@ export function searchEcsv(
   const count = result.galaxies.length
   const width = result.tableValues.length / count
   const names = tableValueNames(tableRows, width)
-  const observes = (survey: string, index: number) =>
-    survey === ANCHOR || (result.observed[survey]?.[index] ?? false)
+  const observes = (survey: string, index: number) => result.observed[survey]?.[index] ?? false
   const mapAt = (map: Float32Array, index: number) => row(map, index, map.length / count)
 
   const columns: EcsvColumn[] = [

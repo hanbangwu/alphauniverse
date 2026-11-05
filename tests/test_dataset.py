@@ -3,19 +3,16 @@ from io import BytesIO
 import numpy as np
 import pyarrow as pa
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
 from datasets import Dataset, Features, Sequence, Value
-from datasets import Image as ImageFeature
 from PIL import Image
 
 from app import dataset as dataset_module
 from app.config import (
-    CROP_PIXELS,
+    AION_SPECTRUM_GRID,
+    DATASET_LS_SUFFIX,
     FLAG_SURVEYS,
-    LS,
     REDSHIFT_COLUMNS,
-    RGB_COLUMN,
-    SPECTRUM_GRID,
-    SPECTRUM_SURVEYS,
     TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
 )
@@ -32,11 +29,6 @@ from app.dataset import (
     table_columns,
 )
 
-SOURCE = Image.fromarray(
-    np.random.default_rng(0).integers(
-        256, size=(CROP_PIXELS + 8, CROP_PIXELS + 8, 3), dtype=np.uint8
-    )
-)
 SPECTRUM_CELL = {"lambda": [-1.0, 4000.0], "flux": [9.0, 1.0], "mask": [True, False]}
 
 
@@ -49,15 +41,13 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> None:
     }
     rows = Dataset.from_dict(
         {
-            RGB_COLUMN: [SOURCE, SOURCE],
-            SPECTRUM_SURVEYS["desi"]: [None, SPECTRUM_CELL],
-            SPECTRUM_SURVEYS["sdss"]: [SPECTRUM_CELL, None],
+            TOKEN_SURVEYS["desi"]: [None, SPECTRUM_CELL],
+            TOKEN_SURVEYS["sdss"]: [SPECTRUM_CELL, None],
         },
         features=Features(
             {
-                RGB_COLUMN: ImageFeature(),
-                SPECTRUM_SURVEYS["desi"]: spectrum_feature,
-                SPECTRUM_SURVEYS["sdss"]: spectrum_feature,
+                TOKEN_SURVEYS["desi"]: spectrum_feature,
+                TOKEN_SURVEYS["sdss"]: spectrum_feature,
             }
         ),
     )
@@ -65,16 +55,33 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
-    width, height = CROP_PIXELS + 104, CROP_PIXELS + 8
+    width, height = (
+        MODALITY_INFO["tok_image"]["input_size"] + 104,
+        MODALITY_INFO["tok_image"]["input_size"] + 8,
+    )
     pixels = np.zeros((height, width, 3), dtype=np.uint8)
-    left, top = (width - CROP_PIXELS) // 2, (height - CROP_PIXELS) // 2
+    left, top = (
+        (width - MODALITY_INFO["tok_image"]["input_size"]) // 2,
+        (height - MODALITY_INFO["tok_image"]["input_size"]) // 2,
+    )
     pixels[top, left] = (255, 0, 0)
-    pixels[top + CROP_PIXELS - 1, left + CROP_PIXELS - 1] = (0, 0, 255)
+    pixels[
+        top + MODALITY_INFO["tok_image"]["input_size"] - 1,
+        left + MODALITY_INFO["tok_image"]["input_size"] - 1,
+    ] = (0, 0, 255)
 
     with Image.open(BytesIO(encode(Image.fromarray(pixels)))) as png:
-        assert png.size == (CROP_PIXELS, CROP_PIXELS)
+        assert png.size == (
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        )
         assert png.convert("RGB").getpixel((0, 0)) == (255, 0, 0)
-        assert png.convert("RGB").getpixel((CROP_PIXELS - 1, CROP_PIXELS - 1)) == (
+        assert png.convert("RGB").getpixel(
+            (
+                MODALITY_INFO["tok_image"]["input_size"] - 1,
+                MODALITY_INFO["tok_image"]["input_size"] - 1,
+            )
+        ) == (
             0,
             0,
             255,
@@ -82,14 +89,24 @@ def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
 
 
 def test_colour_maps_bands_by_letter_g_to_blue_and_z_to_red() -> None:
-    half = CROP_PIXELS // 2
-    flux = np.zeros((5, CROP_PIXELS, CROP_PIXELS), dtype=np.float32)
+    half = MODALITY_INFO["tok_image"]["input_size"] // 2
+    flux = np.zeros(
+        (
+            5,
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        ),
+        dtype=np.float32,
+    )
     flux[0, :, half:] = 1
     flux[3, :, :half] = 1
     flux[4] = 1
 
     with Image.open(BytesIO(colour(flux, ["z", "i", "r", "g", "y"]))) as png:
-        left, right = png.getpixel((0, 0)), png.getpixel((CROP_PIXELS - 1, 0))
+        left, right = (
+            png.getpixel((0, 0)),
+            png.getpixel((MODALITY_INFO["tok_image"]["input_size"] - 1, 0)),
+        )
 
     assert left[2] > left[0]
     assert right[0] > right[2]
@@ -111,8 +128,19 @@ def test_samples_drop_padding_and_blank_masked_flux() -> None:
     assert kept["flux"].dtype == np.float32
 
 
-def test_image_decodes_the_stored_rgb_column(stored: None) -> None:
-    assert image(1, "ls") == encode(SOURCE)
+def test_ls_images_colour_their_flux_as_predicted_images_do(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    size = MODALITY_INFO["tok_image"]["input_size"]
+    flux = np.random.default_rng(0).uniform(0, 0.5, (4, size, size))
+    flux = flux.astype(np.float32)
+    bands = ["des-g", "des-r", "des-i", "des-z"]
+    rows = Dataset.from_dict(
+        {TOKEN_SURVEYS["ls"]: [{"band": bands, "flux": flux.tolist()}]}
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+
+    assert image(0, "ls") == predicted_image(flux, "ls")
 
 
 @pytest.mark.parametrize(("band", "channel"), [("g", 2), ("r", 1), ("i", 1), ("z", 0)])
@@ -120,7 +148,14 @@ def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
     monkeypatch: pytest.MonkeyPatch, band: str, channel: int
 ) -> None:
     bands = ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]
-    flux = np.zeros((len(bands), CROP_PIXELS + 8, CROP_PIXELS + 8), dtype=np.float32)
+    flux = np.zeros(
+        (
+            len(bands),
+            MODALITY_INFO["tok_image"]["input_size"] + 8,
+            MODALITY_INFO["tok_image"]["input_size"] + 8,
+        ),
+        dtype=np.float32,
+    )
     flux[bands.index(f"hsc-{band}"), 4, 5] = 100.0
     rows = Dataset.from_dict(
         {TOKEN_SURVEYS["hsc"]: [None, {"band": bands, "flux": flux.tolist()}]}
@@ -130,17 +165,42 @@ def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
     assert image(0, "hsc") is None
     with Image.open(BytesIO(image(1, "hsc"))) as png:
         pixels = np.asarray(png.convert("RGB"))
-    assert pixels.shape == (CROP_PIXELS, CROP_PIXELS, 3)
+    assert pixels.shape == (
+        MODALITY_INFO["tok_image"]["input_size"],
+        MODALITY_INFO["tok_image"]["input_size"],
+        3,
+    )
     brightest = np.unravel_index(pixels.sum(axis=2).argmax(), pixels.shape[:2])
     assert brightest == (0, 1)
     assert pixels[0, 1].argmax() == channel
 
 
-def test_an_hsc_template_is_coloured_from_nanomaggies_as_a_legacy_survey_one() -> None:
+def test_an_hsc_aion_prediction_is_coloured_from_nanomaggies_as_a_legacy_survey_one() -> (
+    None
+):
     rng = np.random.default_rng(0)
-    flux = rng.uniform(0, 0.5, (4, CROP_PIXELS, CROP_PIXELS))
+    flux = rng.uniform(
+        0,
+        0.5,
+        (
+            4,
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        ),
+    )
     hsc = np.concatenate(
-        [flux * 10**1.8, rng.uniform(0, 50, (1, CROP_PIXELS, CROP_PIXELS))]
+        [
+            flux * 10**1.8,
+            rng.uniform(
+                0,
+                50,
+                (
+                    1,
+                    MODALITY_INFO["tok_image"]["input_size"],
+                    MODALITY_INFO["tok_image"]["input_size"],
+                ),
+            ),
+        ]
     )
 
     assert predicted_image(hsc, "hsc") == predicted_image(flux, "ls")
@@ -149,19 +209,19 @@ def test_an_hsc_template_is_coloured_from_nanomaggies_as_a_legacy_survey_one() -
 def test_fitted_amplitude_weights_unmasked_samples_by_inverse_variance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    shape = np.linspace(1.0, 2.0, len(SPECTRUM_GRID))
+    shape = np.linspace(1.0, 2.0, len(AION_SPECTRUM_GRID))
     at = 2000
     cell = {
-        "lambda": [0.0, SPECTRUM_GRID[at], SPECTRUM_GRID[at], 6000.0, 7000.0],
+        "lambda": [0.0, AION_SPECTRUM_GRID[at], AION_SPECTRUM_GRID[at], 6000.0, 7000.0],
         "flux": [1e6, 2 * shape[at], 6 * shape[at], 1e6, 1e6],
         "ivar": [1.0, 3.0, 1.0, 0.0, 1.0],
         "mask": [False, False, False, False, True],
     }
     rows = Dataset.from_dict(
-        {SPECTRUM_SURVEYS["desi"]: [cell]},
+        {TOKEN_SURVEYS["desi"]: [cell]},
         features=Features(
             {
-                SPECTRUM_SURVEYS["desi"]: {
+                TOKEN_SURVEYS["desi"]: {
                     name: Sequence(Value("bool" if name == "mask" else "float32"))
                     for name in cell
                 }
@@ -184,7 +244,7 @@ def test_table_keeps_numeric_catalogue_columns(
     rows = Dataset.from_dict(
         {
             TABLE_VALUE_COLUMNS[0]: [0.5, None],
-            f"object_id{LS}": ["a", "b"],
+            f"object_id{DATASET_LS_SUFFIX}": ["a", "b"],
             "_healpix_29": [1, 2],
             FLAG_SURVEYS["gz10"]: [None, 3],
         }

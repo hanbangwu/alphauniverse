@@ -3,20 +3,20 @@ from functools import cache
 import numpy as np
 import pyarrow as pa
 import pyarrow.dataset as ds
+from aion.modalities import LegacySurveyImage
 from pyarrow.fs import LocalFileSystem
 
 from .config import (
-    ANCHOR,
     ARTIFACTS,
-    N_IMAGE_TOKENS,
+    HSC_TABLE_COLUMNS,
+    LS_TABLE_COLUMNS,
     REDSHIFT,
     REDSHIFT_TABLE_VALUE,
-    TABLE_VALUE_SURVEYS,
     artifact,
 )
 
-N_LS_TABLE_VALUES = len(TABLE_VALUE_SURVEYS[ANCHOR])
-N_HSC_TABLE_VALUES = len(TABLE_VALUE_SURVEYS["hsc"])
+N_LS_TABLE_VALUES = len(LS_TABLE_COLUMNS)
+N_HSC_TABLE_VALUES = len(HSC_TABLE_COLUMNS)
 FIRST_LS_TABLE_VALUE = REDSHIFT_TABLE_VALUE + 1
 FIRST_HSC_TABLE_VALUE = FIRST_LS_TABLE_VALUE + N_LS_TABLE_VALUES
 
@@ -36,17 +36,19 @@ def tokens() -> pa.Table:
 
 
 @cache
-def templates(mode: str) -> np.ndarray:
-    return np.load(artifact(f"template_{mode}"), mmap_mode="r")
+def aion_predictions(mode: str) -> np.ndarray:
+    return np.load(artifact(f"aion_prediction_{mode}"), mmap_mode="r")
 
 
 def table_value_tokens(galaxy: int) -> dict[str, int]:
     found = {
         column: int(token)
-        for survey, columns in TABLE_VALUE_SURVEYS.items()
+        for survey, columns in (("ls", LS_TABLE_COLUMNS), ("hsc", HSC_TABLE_COLUMNS))
         if (cell := tokens().column(survey)[galaxy]).is_valid
         for column, token in zip(
-            columns, np.asarray(cell.values)[N_IMAGE_TOKENS:], strict=True
+            columns,
+            np.asarray(cell.values)[LegacySurveyImage.num_tokens :],
+            strict=True,
         )
     }
     if (cell := tokens().column(REDSHIFT)[galaxy]).is_valid:
@@ -54,13 +56,13 @@ def table_value_tokens(galaxy: int) -> dict[str, int]:
     return found
 
 
-def table_value_templates(galaxy: int) -> dict[str, float]:
+def table_value_aion_predictions(galaxy: int) -> dict[str, float]:
     found = {
         column: float(value)
-        for survey, columns in TABLE_VALUE_SURVEYS.items()
+        for survey, columns in (("ls", LS_TABLE_COLUMNS), ("hsc", HSC_TABLE_COLUMNS))
         for column, value in zip(
-            columns, templates(f"{survey}_table")[galaxy], strict=True
+            columns, aion_predictions(f"{survey}_table")[galaxy], strict=True
         )
     }
-    found[REDSHIFT] = float(templates(REDSHIFT)[galaxy, 0])
+    found[REDSHIFT] = float(aion_predictions(REDSHIFT)[galaxy, 0])
     return found

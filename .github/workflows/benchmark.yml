@@ -15,8 +15,8 @@ on:
           - text_search_quality
           - compression_quality
           - token_embedding_quality
-          - template_quality
-          - template_embedding_quality
+          - aion_prediction_quality
+          - aion_prediction_embedding_quality
           - retrieval_quality
           - redshift_quality
           - probe_quality

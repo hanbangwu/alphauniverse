@@ -34,8 +34,8 @@ uv run modal run -m scripts.benchmarks.text_search_quality                # meas
 uv run modal run -m scripts.benchmarks.text_search_sheet                  # draw text search's contact sheet on Modal
 uv run --group build modal run -m scripts.benchmarks.compression_quality  # measure prediction storage on Modal
 uv run modal run -m scripts.benchmarks.token_embedding_quality            # measure token embeddings on Modal
-uv run --group build modal run -m scripts.benchmarks.template_quality     # measure templates against data on Modal
-uv run modal run -m scripts.benchmarks.template_embedding_quality         # measure template embeddings against data on Modal
+uv run --group build modal run -m scripts.benchmarks.aion_prediction_quality     # measure AION predictions against data on Modal
+uv run modal run -m scripts.benchmarks.aion_prediction_embedding_quality         # measure AION prediction embeddings against data on Modal
 uv run --group build modal run -m scripts.benchmarks.retrieval_quality    # measure retrieval from partial data on Modal
 uv run --group build modal run -m scripts.benchmarks.probe_quality        # measure PROVABGS probes on the stored vectors on Modal
 uv run --group build modal run -m scripts.benchmarks.redshift_quality     # measure AION's redshift without spectra on Modal

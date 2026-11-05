@@ -14,8 +14,8 @@ from umap import UMAP
 from umap.umap_ import find_ab_params, fuzzy_simplicial_set
 
 from .config import (
+    AION_EMBEDDING_DIM,
     DATASET_REVISION,
-    DIM,
     FLAG_SURVEYS,
     POINTS,
     SEED,
@@ -196,7 +196,7 @@ def _stream(
                 np.asarray(batch.column("galaxy")),
                 offsets - offsets[0],
                 np.asarray(cells.flatten().flatten(), dtype=np.float32).reshape(
-                    -1, DIM
+                    -1, AION_EMBEDDING_DIM
                 ),
             )
 
@@ -221,9 +221,9 @@ def sample() -> np.ndarray:
 def scan(count: int, chosen: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     order = np.argsort(chosen)
     ascending = chosen[order]
-    sums = np.zeros((count, DIM), dtype=np.float64)
+    sums = np.zeros((count, AION_EMBEDDING_DIM), dtype=np.float64)
     held = np.zeros(count, dtype=np.int64)
-    taken = np.empty((len(chosen), DIM), dtype=np.float32)
+    taken = np.empty((len(chosen), AION_EMBEDDING_DIM), dtype=np.float32)
     seen = 0
     for galaxies, offsets, values in tqdm(_stream(), desc="scan"):
         sums[galaxies] += np.add.reduceat(values, offsets[:-1])

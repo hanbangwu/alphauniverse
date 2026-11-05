@@ -9,7 +9,6 @@ from datasets import Dataset
 
 from app import alignment, pql, text_views
 from app.config import (
-    GEMMA_DIM,
     IMAGE_MODES,
     MODE_SURVEYS,
     MODES,
@@ -17,6 +16,7 @@ from app.config import (
     SPECTRUM_MODES,
     TEXT_VIEWS,
     TEXT_VIEWS_HELD_OUT,
+    WEMM_DIM,
     galaxy_count,
 )
 
@@ -40,7 +40,7 @@ def test_predicted_views_are_documents_of_each_mode_s_form(
     rng = np.random.default_rng(0)
     with ThreadPoolExecutor(1) as pool:
         for mode in MODES:
-            for kind in ("template", "sample"):
+            for kind in ("aion_prediction", "sample"):
                 found = text_views.realised(mode, kind, galaxies, rng, pool)
 
                 assert len(found) == len(galaxies)
@@ -76,7 +76,7 @@ class Encoder:
     def encode_document(
         self, documents: list[str], normalize_embeddings: bool
     ) -> np.ndarray:
-        return np.array([[len(found)] * GEMMA_DIM for found in documents], np.float32)
+        return np.array([[len(found)] * WEMM_DIM for found in documents], np.float32)
 
 
 @pytest.fixture

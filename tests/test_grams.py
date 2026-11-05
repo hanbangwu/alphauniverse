@@ -4,9 +4,10 @@ from typing import get_args
 import numpy as np
 import pytest
 import torch
+from aion.modalities import LegacySurveyImage
 
 from app import grams, pql
-from app.config import N_IMAGE_TOKENS, TOKEN_GRAMS, TokenMode, artifact
+from app.config import TOKEN_GRAMS, TokenMode, artifact
 
 GALAXY = 3
 
@@ -34,7 +35,7 @@ def test_a_row_with_search_s_representation_equals_search_with_every_slot_select
 def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(grams, "ROWS", 5 * N_IMAGE_TOKENS)
+    monkeypatch.setattr(grams, "ROWS", 5 * LegacySurveyImage.num_tokens)
     monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
 
     grams.generate_token_grams()
@@ -54,7 +55,7 @@ def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
 def test_rows_of_other_queries_are_their_rows_against_every_galaxy(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(grams, "ROWS", 2 * N_IMAGE_TOKENS)
+    monkeypatch.setattr(grams, "ROWS", 2 * LegacySurveyImage.num_tokens)
     chosen = [GALAXY, 0, 5]
     table = pql.predictions().take(chosen)
 

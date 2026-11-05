@@ -1,8 +1,8 @@
 import type {
-  DownloadArtifactData,
   GetCosinesData,
   GetImageData,
   GetProjectionsData,
+  GetPropertiesData,
   GetSpectrumData
 } from './api'
 import { client } from './api/client.gen'
@@ -24,9 +24,6 @@ export function projectionUrl(projection: Projection): string {
   })
 }
 
-export function downloadUrl(role: DownloadArtifactData['path']['role']): string {
-  return client.buildUrl<DownloadArtifactData>({
-    url: '/downloads/{role}',
-    path: { role }
-  })
+export function propertiesUrl(): string {
+  return client.buildUrl<GetPropertiesData>({ url: '/galaxies/property' })
 }

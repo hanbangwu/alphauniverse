@@ -16,9 +16,9 @@ from sklearn.pipeline import make_pipeline
 
 from app import embeddings
 from app.config import (
+    DATASET_PROVABGS_SUFFIX,
     DATASET_REVISION,
     GRAM_NAMES,
-    PROVABGS,
     REDSHIFT,
     SEARCH_RANK,
     SEED,
@@ -54,7 +54,9 @@ def principal(matrix: np.ndarray) -> np.ndarray:
 
 def targets() -> dict[str, np.ndarray]:
     galaxies = np.arange(galaxy_count())
-    return provabgs(galaxies) | {REDSHIFT: column_values(f"Z_HP{PROVABGS}", galaxies)}
+    return provabgs(galaxies) | {
+        REDSHIFT: column_values(f"Z_HP{DATASET_PROVABGS_SUFFIX}", galaxies)
+    }
 
 
 def shots(
@@ -131,7 +133,7 @@ def measure() -> dict[str, Any]:
             name: embeddings.scaled(embeddings.galleries(f"{role}_embedding_{name}"))
             for name in GRAM_NAMES
         }
-        for role in ("token", "template")
+        for role in ("token", "aion_prediction")
     }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     report, reduced = {}, {}

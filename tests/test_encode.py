@@ -4,16 +4,14 @@ from pathlib import Path
 import numpy as np
 import pyarrow.compute as pc
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 
 from app.config import (
-    ANCHOR,
-    CROP_PIXELS,
     FLAG_SURVEYS,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
-    SPECTRUM_SURVEYS,
+    SPECTRUM_MODES,
     STORES,
     TOKEN_SURVEYS,
     store_schema,
@@ -28,7 +26,7 @@ pytestmark = pytest.mark.usefixtures("random_weights")
 
 
 def image(rng: np.random.Generator, bands: list[str]) -> dict[str, list]:
-    size = CROP_PIXELS + 8
+    size = MODALITY_INFO["tok_image"]["input_size"] + 8
     return {
         "band": bands,
         "flux": [rng.random((size, size), dtype=np.float32) for _ in bands],
@@ -60,7 +58,7 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
     }
     return {
         **redshifts,
-        TOKEN_SURVEYS[ANCHOR]: image(rng, ["des-g", "des-r", "des-i", "des-z"]),
+        TOKEN_SURVEYS["ls"]: image(rng, ["des-g", "des-r", "des-i", "des-z"]),
         TOKEN_SURVEYS["hsc"]: (
             image(rng, ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]) if hsc else None
         ),
@@ -113,7 +111,7 @@ def test_spectra_tokenize_as_aion_main_pads_them(
 
 def test_each_survey_lands_in_its_own_cell_images_first() -> None:
     groups = encode_module.tokenize(galaxy(0, hsc=True, desi=True, sdss=True))
-    _, _, modality_mask = encode_module.encode(groups)
+    _, modality_mask = encode_module.encode(groups)
     positions = encode_module.by_survey(
         np.arange(len(modality_mask)), groups, modality_mask
     )
@@ -125,10 +123,10 @@ def test_each_survey_lands_in_its_own_cell_images_first() -> None:
         owned = {identifiers[key] for key in group}
         assert set(modality_mask[positions[survey]]) == owned
     for survey, image_key in (
-        (ANCHOR, encode_module.LegacySurveyImage.token_key),
+        ("ls", encode_module.LegacySurveyImage.token_key),
         ("hsc", encode_module.HSCImage.token_key),
     ):
-        first = modality_mask[positions[survey][:N_IMAGE_TOKENS]]
+        first = modality_mask[positions[survey][: LegacySurveyImage.num_tokens]]
         assert np.all(first == identifiers[image_key])
     assert sorted(np.concatenate(list(positions.values()))) == list(
         range(len(modality_mask))
@@ -153,25 +151,29 @@ def test_generated_stores_have_their_schemas_and_a_vector_per_token(
         for role in STORES:
             assert source(role).schema.equals(store_schema(role))
         table = source("encoded").to_table(
-            columns=[ANCHOR, "hsc", *SPECTRUM_SURVEYS, REDSHIFT]
+            columns=["ls", "hsc", *SPECTRUM_MODES.values(), REDSHIFT]
         )
         vectors = {
             column: pc.list_value_length(table.column(column)).to_pylist()
             for column in table.column_names
         }
-        assert vectors[ANCHOR] == [N_IMAGE_TOKENS + N_LS_TABLE_VALUES] * len(rows)
+        assert vectors["ls"] == [
+            LegacySurveyImage.num_tokens + N_LS_TABLE_VALUES
+        ] * len(rows)
         assert vectors["hsc"] == [
-            N_IMAGE_TOKENS + N_HSC_TABLE_VALUES if row[TOKEN_SURVEYS["hsc"]] else None
+            LegacySurveyImage.num_tokens + N_HSC_TABLE_VALUES
+            if row[TOKEN_SURVEYS["hsc"]]
+            else None
             for row in rows
         ]
-        for survey in SPECTRUM_SURVEYS:
+        for survey in SPECTRUM_MODES.values():
             assert vectors[survey] == [
-                N_SPECTRUM_TOKENS + 1 if row[TOKEN_SURVEYS[survey]] else None
+                DESISpectrum.num_tokens if row[TOKEN_SURVEYS[survey]] else None
                 for row in rows
             ]
         assert vectors[REDSHIFT] == [
             1
-            if any(row[TOKEN_SURVEYS[survey]] for survey in SPECTRUM_SURVEYS)
+            if any(row[TOKEN_SURVEYS[survey]] for survey in SPECTRUM_MODES.values())
             else None
             for row in rows
         ]

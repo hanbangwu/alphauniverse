@@ -4,30 +4,27 @@ from io import BytesIO
 import numpy as np
 import PIL.Image
 import pyarrow as pa
+from aion.fourm.modality_info import MODALITY_INFO
 from astropy.convolution import Gaussian1DKernel, convolve
-from datasets import Dataset, Image, load_dataset, load_from_disk
+from datasets import Dataset, load_dataset, load_from_disk
 
 from .config import (
-    ANCHOR,
-    BANDS,
+    AION_SPECTRUM_GRID,
     CATALOGUES,
-    CROP_PIXELS,
     DATASET_AUTHOR,
+    DATASET_LS_SUFFIX,
     DATASET_NAME,
     DATASET_REVISION,
-    LOCAL_DATASET,
-    LS,
+    HSC_BANDS,
+    LS_BANDS,
     REDSHIFT_COLUMNS,
     REDSHIFT_LIMIT,
-    RGB_COLUMN,
-    SPECTRUM_GRID,
     SPECTRUM_SMOOTHING_SIGMA,
-    SPECTRUM_SURVEYS,
     TOKEN_SURVEYS,
     Catalogue,
     ImageSurvey,
     SpectrumSurvey,
-    build_dir,
+    dataset_dir,
 )
 
 RGB_SCALES = {"g": 6.0, "r": 3.4, "i": 3.0, "z": 2.2}
@@ -44,18 +41,24 @@ HSC_TO_NANOMAGGIES = 10 ** (-0.4 * (27.0 - 22.5))
 
 @cache
 def dataset() -> Dataset:
-    local = build_dir() / LOCAL_DATASET
-    if local.exists():
-        return load_from_disk(local)
+    if dataset_dir().exists():
+        return load_from_disk(dataset_dir())
     return load_dataset(
         f"{DATASET_AUTHOR}/{DATASET_NAME}", split="train", revision=DATASET_REVISION
     )
 
 
 def encode(image: PIL.Image.Image) -> bytes:
-    left = (image.width - CROP_PIXELS) // 2
-    top = (image.height - CROP_PIXELS) // 2
-    crop = image.crop((left, top, left + CROP_PIXELS, top + CROP_PIXELS)).convert("RGB")
+    left = (image.width - MODALITY_INFO["tok_image"]["input_size"]) // 2
+    top = (image.height - MODALITY_INFO["tok_image"]["input_size"]) // 2
+    crop = image.crop(
+        (
+            left,
+            top,
+            left + MODALITY_INFO["tok_image"]["input_size"],
+            top + MODALITY_INFO["tok_image"]["input_size"],
+        )
+    ).convert("RGB")
 
     buffer = BytesIO()
     crop.save(buffer, format="PNG")
@@ -79,20 +82,20 @@ def colour(flux: np.ndarray, bands: list[str]) -> bytes:
 
 
 def image(galaxy: int, survey: ImageSurvey) -> bytes | None:
-    if survey == ANCHOR:
-        cell = dataset().data.column(RGB_COLUMN)[galaxy]
-        return encode(Image().decode_example(cell.as_py()))
     cell = dataset().data.column(TOKEN_SURVEYS[survey])[galaxy]
     if not cell.is_valid:
         return None
     bands = [band.partition("-")[2] for band in cell["band"].as_py()]
     rows = cell["flux"].values.flatten()
     flux = rows.flatten().to_numpy().reshape(len(bands), len(rows) // len(bands), -1)
-    return colour(flux * HSC_TO_NANOMAGGIES, bands)
+    return colour(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
 
 
 def predicted_image(flux: np.ndarray, survey: ImageSurvey) -> bytes:
-    bands = [band.partition("-")[2].lower() for band in BANDS[survey]]
+    bands = [
+        band.partition("-")[2].lower()
+        for band in (HSC_BANDS if survey == "hsc" else LS_BANDS)
+    ]
     return colour(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
 
 
@@ -109,21 +112,21 @@ def smoothed(flux: np.ndarray) -> np.ndarray:
 
 
 def spectrum(galaxy: int, survey: SpectrumSurvey) -> pa.Table | None:
-    cell = dataset().data.column(SPECTRUM_SURVEYS[survey])[galaxy]
+    cell = dataset().data.column(TOKEN_SURVEYS[survey])[galaxy]
     if not cell.is_valid:
         return None
     return pa.table(samples(cell))
 
 
 def fitted(shape: np.ndarray, galaxy: int, survey: SpectrumSurvey) -> np.ndarray:
-    cell = dataset().data.column(SPECTRUM_SURVEYS[survey])[galaxy]
+    cell = dataset().data.column(TOKEN_SURVEYS[survey])[galaxy]
     if not cell.is_valid:
         return shape
     wavelength, flux, ivar, mask = (
         np.asarray(cell[field].values) for field in ("lambda", "flux", "ivar", "mask")
     )
     unmasked = (wavelength > 0) & ~mask
-    model = np.interp(wavelength[unmasked], SPECTRUM_GRID, shape)
+    model = np.interp(wavelength[unmasked], AION_SPECTRUM_GRID, shape)
     weights = ivar[unmasked]
     amplitude = (weights * flux[unmasked] * model).sum() / (weights * model**2).sum()
     return amplitude * shape
@@ -157,7 +160,7 @@ def table(galaxy: int) -> dict[str, float | int | bool | None]:
 
 def identity(galaxy: int) -> dict[str, str | float]:
     return {
-        name: dataset().data.column(f"{name}{LS}")[galaxy].as_py()
+        name: dataset().data.column(f"{name}{DATASET_LS_SUFFIX}")[galaxy].as_py()
         for name in ("object_id", "ra", "dec")
     }
 

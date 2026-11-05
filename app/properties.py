@@ -5,19 +5,18 @@ from sklearn.linear_model import RidgeCV
 from sklearn.metrics import root_mean_squared_error
 from sklearn.model_selection import KFold, cross_val_predict
 
-from . import pql, templates
+from . import aion_predictions, pql
 from .config import (
-    ANCHOR,
-    LS,
+    DATASET_LS_SUFFIX,
+    DATASET_PROVABGS_SUFFIX,
     LS_PROPERTIES,
+    LS_ZERO_POINT,
     PROPERTIES,
-    PROVABGS,
     PROVABGS_PROPERTIES,
     REDSHIFT,
     SEED,
     SPECTRAL_PROPERTIES,
-    SPECTRUM_SURVEYS,
-    ZERO_POINTS,
+    SPECTRUM_MODES,
     artifact,
 )
 from .observations import column_values, measured_redshifts, samples, spectra
@@ -33,16 +32,16 @@ BATCH = 256
 
 
 def provabgs(galaxies: np.ndarray) -> dict[str, np.ndarray]:
-    mass = column_values(f"LOG_MSTAR{PROVABGS}", galaxies)
+    mass = column_values(f"LOG_MSTAR{DATASET_PROVABGS_SUFFIX}", galaxies)
     with np.errstate(divide="ignore", invalid="ignore"):
-        sfr = np.log10(column_values(f"AVG_SFR{PROVABGS}", galaxies))
+        sfr = np.log10(column_values(f"AVG_SFR{DATASET_PROVABGS_SUFFIX}", galaxies))
     return dict(zip(PROVABGS_PROPERTIES, (mass, sfr, sfr - mass)))
 
 
 def magnitudes(galaxies: np.ndarray, band: str) -> np.ndarray:
-    flux = column_values(f"FLUX_{band}{LS}", galaxies)
+    flux = column_values(f"FLUX_{band}{DATASET_LS_SUFFIX}", galaxies)
     with np.errstate(divide="ignore", invalid="ignore"):
-        return np.where(flux > 0, ZERO_POINTS[ANCHOR] - 2.5 * np.log10(flux), np.nan)
+        return np.where(flux > 0, LS_ZERO_POINT - 2.5 * np.log10(flux), np.nan)
 
 
 def colours(galaxies: np.ndarray) -> np.ndarray:
@@ -51,7 +50,7 @@ def colours(galaxies: np.ndarray) -> np.ndarray:
 
 def ls_properties(galaxies: np.ndarray) -> dict[str, np.ndarray]:
     radius, first, second = (
-        column_values(f"{name}{LS}", galaxies)
+        column_values(f"{name}{DATASET_LS_SUFFIX}", galaxies)
         for name in ("SHAPE_R", "SHAPE_E1", "SHAPE_E2")
     )
     ellipticity = np.hypot(first, second)
@@ -100,7 +99,7 @@ def spectral_properties(
     galaxies: np.ndarray, redshifts: np.ndarray, surveys: list[str | None]
 ) -> dict[str, np.ndarray]:
     found = np.full((len(SPECTRAL_PROPERTIES), len(galaxies)), np.nan)
-    for survey in SPECTRUM_SURVEYS:
+    for survey in SPECTRUM_MODES.values():
         chosen = np.flatnonzero(np.array(surveys) == survey)
         for start in range(0, len(chosen), BATCH):
             part = chosen[start : start + BATCH]
@@ -131,14 +130,14 @@ def spread_quantiles(
 
 
 def predicted_redshifts() -> tuple[np.ndarray, np.ndarray]:
-    values = templates.bin_values(REDSHIFT)[0]
+    values = aion_predictions.bin_values(REDSHIFT)[0]
     batches = [
         pql.table_value_probabilities(rows, REDSHIFT)[:, 0]
         for rows in pql.predictions().select([REDSHIFT]).to_batches()
     ]
     lower, median, upper = (
         np.concatenate([spread_quantiles(found, values, share) for found in batches])
-        for share in (templates.CENTRAL[0], 0.5, templates.CENTRAL[1])
+        for share in (aion_predictions.CENTRAL[0], 0.5, aion_predictions.CENTRAL[1])
     )
     return median, (upper - lower) / 2
 

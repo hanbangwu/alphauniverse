@@ -3,12 +3,7 @@ import pyarrow.parquet as pq
 import torch
 from sklearn.model_selection import train_test_split
 
-from .config import (
-    SEED,
-    TextModality,
-    artifact,
-    device,
-)
+from .config import SEED, TextModality, artifact, device
 from .dataset import dataset
 
 VALIDATION = 0.3
@@ -16,19 +11,19 @@ VALIDATION = 0.3
 
 def pairs(modality: TextModality) -> tuple[np.ndarray, torch.Tensor, torch.Tensor]:
     table = pq.read_table(
-        artifact(f"pairs_{modality}"), columns=["galaxy", "aion", "gemma"]
+        artifact(f"pairs_{modality}"), columns=["galaxy", "aion", "wemm"]
     )
     galaxy = np.asarray(table.column("galaxy"))
-    aion, gemma = (
+    aion, wemm = (
         torch.as_tensor(
             np.asarray(table.column(name).combine_chunks().flatten()).reshape(
                 len(galaxy), -1
             ),
             device=device(),
         )
-        for name in ("aion", "gemma")
+        for name in ("aion", "wemm")
     )
-    return galaxy, aion, gemma
+    return galaxy, aion, wemm
 
 
 def held_out(galaxy: np.ndarray) -> torch.Tensor:

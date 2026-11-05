@@ -3,7 +3,11 @@
   import { type RGB, tokenAlpha, tokenColors } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
-  import { spectrumQuery, spectrumTemplateQuery, spectrumTokensQuery } from '$lib/data/queries'
+  import {
+    spectrumQuery,
+    spectrumAionPredictionQuery,
+    spectrumTokensQuery
+  } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
@@ -32,7 +36,7 @@
   const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, survey))
   const tokens = createQuery(() => spectrumTokensQuery(matched && !map ? galaxy : null, survey))
   const prediction = createQuery(() =>
-    spectrumTemplateQuery(view.predictions.value ? galaxy : null, survey)
+    spectrumAionPredictionQuery(view.predictions.value ? galaxy : null, survey)
   )
 
   const cells = $derived(map ?? tokens.data ?? null)

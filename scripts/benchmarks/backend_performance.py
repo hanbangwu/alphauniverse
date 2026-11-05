@@ -7,11 +7,12 @@ from typing import Any
 
 import httpx
 import numpy as np
-import pyarrow as pa
 import pyarrow.compute as pc
+from aion.modalities import LegacySurveyImage
 
-from app.config import ANCHOR, DATASET_REVISION, MODES, N_IMAGE_TOKENS, SPECTRUM_SURVEY
-from modal_app import app, fastapi_app, serving_image
+from app.config import DATASET_REVISION, MODES, SPECTRUM_SURVEY
+from app.search import source
+from modal_app import CACHE_PATH, app, cache_volume, fastapi_app, serving_image
 from scripts.benchmarks.common import (
     IMAGE_TOKENS,
     elapsed,
@@ -40,7 +41,7 @@ def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
     return summary([elapsed(call) for _ in range(runs)])
 
 
-@app.function(image=image, cpu=1, timeout=60 * 60)
+@app.function(image=image, cpu=1, timeout=60 * 60, volumes={CACHE_PATH: cache_volume})
 def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
     rng = np.random.default_rng(0)
     texts = cycle(TEXTS)
@@ -51,10 +52,8 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             session.get(path, params=params).raise_for_status()
 
         cold = {"meta": round(elapsed(lambda: get("/meta")), 3)}
-        galaxies = session.get("/meta").raise_for_status().json()["galaxies"]
-        cells = pa.ipc.open_file(
-            session.get("/downloads/tokens").raise_for_status().content
-        ).read_all()
+        galaxies = session.get("/meta").raise_for_status().json()["galaxy_count"]
+        cells = source("tokens").to_table(columns=[SPECTRUM_SURVEY])
         holders = np.flatnonzero(pc.is_valid(cells.column(SPECTRUM_SURVEY)))
 
         def galaxy() -> int:
@@ -66,7 +65,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 "/search",
                 galaxy=galaxy(),
                 ls_image=rng.choice(
-                    N_IMAGE_TOKENS, IMAGE_TOKENS, replace=False
+                    LegacySurveyImage.num_tokens, IMAGE_TOKENS, replace=False
                 ).tolist(),
                 matches=MATCHES,
             ),
@@ -74,7 +73,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
                 "/search/modes", galaxy=galaxy(), modes=list(MODES), matches=MATCHES
             ),
             "text search": lambda: get("/search/text", text=next(texts)),
-            "image": lambda: get(f"/galaxy/{galaxy()}/image/{ANCHOR}"),
+            "image": lambda: get(f"/galaxy/{galaxy()}/image/ls"),
             "spectrum": lambda: get(
                 f"/galaxy/{rng.choice(holders)}/spectrum/{SPECTRUM_SURVEY}"
             ),

@@ -10,6 +10,7 @@ import torch
 from tqdm import tqdm
 
 from app import (
+    aion_predictions,
     embeddings,
     encode,
     grams,
@@ -17,7 +18,6 @@ from app import (
     parametric_umap,
     pql,
     predictions,
-    templates,
 )
 from app.config import (
     DATASET_REVISION,
@@ -112,7 +112,7 @@ def token_rows(
     return found
 
 
-def template_rows(
+def aion_prediction_rows(
     tests: dict[str, pa.Table], galaxies: dict[str, np.ndarray]
 ) -> dict[str, dict[str, dict[str, torch.Tensor]]]:
     torch.backends.cuda.matmul.fp32_precision = "ieee"
@@ -124,33 +124,37 @@ def template_rows(
         }
     decoded = {}
     for test, table in tests.items():
-        parts = [templates.templates(rows) for rows in table.to_batches(BATCH)]
+        parts = [
+            aion_predictions.aion_predictions(rows) for rows in table.to_batches(BATCH)
+        ]
         decoded[test] = {
             mode: np.concatenate([part[mode] for part in parts]) for mode in parts[0]
         }
     found = {test: {"exact": {}, "reverse": {}} for test in tests}
     for mode in TOKEN_GRAMS:
-        everyone = embeddings.loaded(f"template_{mode}", torch.float32).flatten(1)
+        everyone = embeddings.loaded(f"aion_prediction_{mode}", torch.float32).flatten(
+            1
+        )
         for test in tests:
             queries = torch.from_numpy(decoded[test][mode]).to(device()).flatten(1)
             stored = everyone[torch.from_numpy(galaxies[test]).to(device())]
-            found[test]["exact"] |= template_scores(
+            found[test]["exact"] |= aion_prediction_scores(
                 queries, depths[mode], mode, everyone
             )
             found[test]["reverse"] |= reverse_rows(
-                "template",
-                template_scores(stored, depths[mode], mode, queries),
+                "aion_prediction",
+                aion_prediction_scores(stored, depths[mode], mode, queries),
                 galaxies[test],
             )
     return found
 
 
-def template_scores(
+def aion_prediction_scores(
     left: torch.Tensor, depth: torch.Tensor, mode: str, right: torch.Tensor
 ) -> dict[str, torch.Tensor]:
     return {
         name: matrix.float()
-        for name, matrix in observed_grams.template_grams(
+        for name, matrix in observed_grams.aion_prediction_grams(
             left, depth, mode, right
         ).items()
     }
@@ -227,7 +231,7 @@ def measure() -> dict[str, Any]:
         tests[test], means[test] = encoded(galaxies[test], kept)
     rows = {
         "token": token_rows(tests, galaxies),
-        "template": template_rows(tests, galaxies),
+        "aion_prediction": aion_prediction_rows(tests, galaxies),
     }
     stored = {role: embedded(f"{role}_embedding") for role in rows}
     gallery = parametric_umap.scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]

@@ -12,10 +12,12 @@ import pyarrow.parquet as pq
 from astropy.convolution import Gaussian1DKernel, convolve
 from tqdm import tqdm
 
-from . import alignment, pql, search, templates
+from . import aion_predictions, alignment, pql, search
 from .config import (
-    GEMMA_DIM,
+    AION_SPECTRUM_GRID,
+    HSC_TABLE_COLUMNS,
     IMAGE_MODES,
+    LS_TABLE_COLUMNS,
     MODE_SURVEYS,
     MODES,
     PARTS_PER_ROUND,
@@ -23,17 +25,16 @@ from .config import (
     PROTOTYPE_HELD_OUT,
     REDSHIFT,
     SEED,
-    SPECTRUM_GRID,
     SPECTRUM_MODES,
-    SPECTRUM_SURVEYS,
     TABLE_MODES,
-    TABLE_VALUE_SURVEYS,
     TEXT_VIEWS,
     TEXT_VIEWS_HELD_OUT,
+    TOKEN_SURVEYS,
     VIEW_COMBINATIONS,
     VIEW_KINDS,
     VIEW_TYPES,
     VIEWS_PER_PART,
+    WEMM_DIM,
     SpectrumSurvey,
     artifact,
 )
@@ -135,7 +136,11 @@ def plotted(
 
 def catalogue_text(mode: str, values: np.ndarray, rng: np.random.Generator) -> str:
     columns = (
-        (REDSHIFT,) if mode == REDSHIFT else TABLE_VALUE_SURVEYS[MODE_SURVEYS[mode]]
+        (REDSHIFT,)
+        if mode == REDSHIFT
+        else HSC_TABLE_COLUMNS
+        if mode == "hsc_table"
+        else LS_TABLE_COLUMNS
     )
     precision = rng.choice(PRECISIONS)
     lines = [
@@ -153,10 +158,10 @@ def realised(
     rng: np.random.Generator,
     pool: Executor,
 ) -> list[PIL.Image.Image] | list[str]:
-    if kind == "template":
-        predicted = search.templates(mode)[galaxies]
+    if kind == "aion_prediction":
+        predicted = search.aion_predictions(mode)[galaxies]
     elif kind == "sample":
-        predicted = templates.sampled(rows(galaxies, mode), mode, rng)
+        predicted = aion_predictions.sampled(rows(galaxies, mode), mode, rng)
     if mode in IMAGE_MODES:
         survey = IMAGE_MODES[mode]
         encoded = (
@@ -168,12 +173,12 @@ def realised(
     if mode in SPECTRUM_MODES:
         survey = SPECTRUM_MODES[mode]
         if kind == "observed":
-            cells = dataset().data.column(SPECTRUM_SURVEYS[survey])
+            cells = dataset().data.column(TOKEN_SURVEYS[survey])
             wavelengths, fluxes = zip(
                 *(samples(cells[galaxy]).values() for galaxy in galaxies.tolist())
             )
         else:
-            wavelengths, fluxes = [SPECTRUM_GRID] * len(galaxies), predicted
+            wavelengths, fluxes = [AION_SPECTRUM_GRID] * len(galaxies), predicted
         sigmas = rng.choice(SMOOTHING, len(galaxies))
         surveys = [survey] * len(galaxies)
         return list(pool.map(plotted, wavelengths, fluxes, surveys, sigmas))
@@ -231,7 +236,7 @@ def embedded(
     rng: np.random.Generator,
     pool: Executor,
 ) -> pa.FixedSizeListArray:
-    embeddings = np.empty((len(owners), GEMMA_DIM), np.float16)
+    embeddings = np.empty((len(owners), WEMM_DIM), np.float16)
     members = [np.flatnonzero(view_types == kind) for kind in np.unique(view_types)]
     model = text_model()
     with ThreadPoolExecutor(1) as renderer:
@@ -245,7 +250,7 @@ def embedded(
             embeddings[chosen] = model.encode_document(
                 found.result(), normalize_embeddings=True
             )
-    return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), GEMMA_DIM)
+    return pa.FixedSizeListArray.from_arrays(embeddings.ravel(), WEMM_DIM)
 
 
 def part(

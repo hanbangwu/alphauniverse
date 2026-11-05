@@ -1,4 +1,4 @@
-import { type Projection, downloadUrl, projectionUrl } from '$lib/client'
+import { type Projection, projectionUrl, propertiesUrl } from '$lib/client'
 import { BINS } from '$lib/color'
 import { PREDICTABLE, type Property } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
@@ -69,7 +69,7 @@ export class MosaicState {
 
   loadProperties(): Promise<unknown> {
     this.#properties ??= this.connect()
-      .exec(loadParquet('properties', downloadUrl('properties'), { replace: true }))
+      .exec(loadParquet('properties', propertiesUrl(), { replace: true }))
       .catch((error: unknown) => {
         this.#properties = null
         throw error

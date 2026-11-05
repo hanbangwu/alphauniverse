@@ -132,7 +132,7 @@
             </Table.Cell>
             {#if view.predictions.value}
               <Table.Cell class="py-1.5 pr-0 pl-3 text-right font-mono tabular-nums">
-                {format(row.template)}
+                {format(row.aion_prediction)}
               </Table.Cell>
             {/if}
           </Table.Row>

@@ -7,20 +7,20 @@ import modal
 import numpy as np
 import pyarrow.compute as pc
 import torch
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from tqdm import tqdm
 
-from app import observations, templates
+from app import aion_predictions, observations
 from app.config import (
-    CROP_PIXELS,
     DATASET_REVISION,
+    HSC_TABLE_COLUMNS,
     IMAGE_MODES,
+    LS_TABLE_COLUMNS,
     MODE_SURVEYS,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
     TABLE_MODES,
-    TABLE_VALUE_SURVEYS,
     artifact,
     device,
 )
@@ -29,16 +29,16 @@ from app.search import tokens
 from modal_app import CACHE_PATH, build_image, cache_volume
 from scripts.benchmarks.common import environment, git, memory
 
-app = modal.App("alphauniverse-template-quality")
+app = modal.App("alphauniverse-aion_prediction-quality")
 image = build_image.add_local_python_source("modal_app")
 
-REPORT = Path("docs/benchmarks/template_quality.json")
+REPORT = Path("docs/benchmarks/aion_prediction_quality.json")
 BATCH = 256
-RADII = np.arange(0, CROP_PIXELS // 2 + 4, 4)
+RADII = np.arange(0, MODALITY_INFO["tok_image"]["input_size"] // 2 + 4, 4)
 REST = np.arange(2000, 10600, 100)
 PERCENTILES = (5, 50, 95)
 QUARTILES = 4
-MODELS = ("template", "floor", "null")
+MODELS = ("aion_prediction", "floor", "null")
 
 
 def percentiles(values: np.ndarray) -> dict[str, float]:
@@ -85,7 +85,9 @@ class Profile:
 def summary(chi2: dict[str, np.ndarray]) -> dict[str, Any]:
     measured = np.all([np.isfinite(values) for values in chi2.values()], axis=0)
     chi2 = {model: values[measured] for model, values in chi2.items()}
-    recovered = (chi2["null"] - chi2["template"]) / (chi2["null"] - chi2["floor"])
+    recovered = (chi2["null"] - chi2["aion_prediction"]) / (
+        chi2["null"] - chi2["floor"]
+    )
     return {
         "galaxies": int(measured.sum()),
         "chi2": {model: percentiles(values) for model, values in chi2.items()},
@@ -104,11 +106,16 @@ def by_snr(chi2: dict[str, np.ndarray], snr: np.ndarray) -> list[dict[str, Any]]
 
 
 def image_quality(mode: str, survey: str) -> dict[str, Any]:
-    codec = templates.decoder(mode)
-    stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
+    codec = aion_predictions.decoder(mode)
+    stored = np.load(artifact(f"aion_prediction_{mode}"), mmap_mode="r")
     null = stored.mean(axis=0, dtype=np.float64)
-    centre = (CROP_PIXELS - 1) / 2
-    rows, columns = np.indices((CROP_PIXELS, CROP_PIXELS))
+    centre = (MODALITY_INFO["tok_image"]["input_size"] - 1) / 2
+    rows, columns = np.indices(
+        (
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        )
+    )
     radius = np.broadcast_to(
         np.hypot(rows - centre, columns - centre), stored.shape[1:]
     ).ravel()
@@ -118,10 +125,10 @@ def image_quality(mode: str, survey: str) -> dict[str, Any]:
     for start in tqdm(range(0, len(galaxies), BATCH), desc=mode):
         part = galaxies[start : start + BATCH]
         flux, ivar = observations.images(survey, part)
-        codes = torch.from_numpy(own_codes(mode, part, 0, N_IMAGE_TOKENS))
+        codes = torch.from_numpy(own_codes(mode, part, 0, LegacySurveyImage.num_tokens))
         models = {
-            "template": stored[part],
-            "floor": templates.decoded_images(
+            "aion_prediction": stored[part],
+            "floor": aion_predictions.decoded_images(
                 codec, codec.quantizer.decode(codes.to(device())), survey
             ),
             "null": null,
@@ -147,9 +154,9 @@ def image_quality(mode: str, survey: str) -> dict[str, Any]:
 
 
 def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
-    codec = templates.decoder(mode)
+    codec = aion_predictions.decoder(mode)
     grid = codec.latent_grid.wavelength.cpu().numpy()
-    stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
+    stored = np.load(artifact(f"aion_prediction_{mode}"), mmap_mode="r")
     null = stored.mean(axis=0, dtype=np.float64)
     value, _, warning = REDSHIFT_COLUMNS[survey]
     galaxies = observations.observed(mode)
@@ -159,10 +166,10 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
     for start in tqdm(range(0, len(galaxies), BATCH), desc=mode):
         part = galaxies[start : start + BATCH]
         spectra = observations.spectra(survey, part)
-        codes = torch.from_numpy(own_codes(mode, part, 1, N_SPECTRUM_TOKENS))
+        codes = torch.from_numpy(own_codes(mode, part, 1, DESISpectrum.num_tokens - 1))
         models = {
-            "template": stored[part],
-            "floor": templates.decoded_spectra(
+            "aion_prediction": stored[part],
+            "floor": aion_predictions.decoded_spectra(
                 codec, codec.quantizer.decode(codes.to(device()))
             ),
             "null": np.broadcast_to(null, (len(part), len(null))),
@@ -193,14 +200,18 @@ def spectrum_quality(mode: str, survey: str) -> dict[str, Any]:
 def table_quality(mode: str) -> dict[str, Any]:
     galaxies = observations.observed(mode)
     measured, errors = observations.table_values(mode, galaxies)
-    values = templates.bin_values(mode)
-    first = N_IMAGE_TOKENS if MODE_SURVEYS[mode] in IMAGE_MODES.values() else 0
+    values = aion_predictions.bin_values(mode)
+    first = (
+        LegacySurveyImage.num_tokens
+        if MODE_SURVEYS[mode] in IMAGE_MODES.values()
+        else 0
+    )
     own = np.concatenate(
         [own_codes(mode, part, first, len(values)) for part in chunks(galaxies)]
     )
-    stored = np.load(artifact(f"template_{mode}"), mmap_mode="r")
+    stored = np.load(artifact(f"aion_prediction_{mode}"), mmap_mode="r")
     models = {
-        "template": stored[galaxies],
+        "aion_prediction": stored[galaxies],
         "floor": values[np.arange(len(values)), own],
         "null": stored.mean(axis=0, dtype=np.float64),
     }
@@ -212,7 +223,9 @@ def table_quality(mode: str) -> dict[str, Any]:
     typical = {
         model: np.nanmedian(np.abs(pull), axis=0) for model, pull in pulls.items()
     }
-    names = TABLE_VALUE_SURVEYS.get(MODE_SURVEYS[mode], (mode,))
+    names = {"ls_table": LS_TABLE_COLUMNS, "hsc_table": HSC_TABLE_COLUMNS}.get(
+        mode, (mode,)
+    )
     return summary(
         {model: np.nanmean(pull**2, axis=1) for model, pull in pulls.items()}
     ) | {

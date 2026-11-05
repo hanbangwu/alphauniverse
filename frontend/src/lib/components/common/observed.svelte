@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { ANCHOR } from '$lib/data/modes'
   import { coverageQuery } from '$lib/data/queries'
   import { SURVEYS, type Survey } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
@@ -17,7 +16,7 @@
 
   const view = getView()
   const coverage = createQuery(() => coverageQuery(galaxy))
-  const matched = $derived(survey === ANCHOR || (coverage.data?.[survey] ?? false))
+  const matched = $derived(coverage.data?.[survey] ?? false)
 </script>
 
 {#if matched || (coverage.data && view.predictions.value)}

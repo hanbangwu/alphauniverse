@@ -3,15 +3,18 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
 from datasets import Dataset
 
 from app import observations
-from app.config import BANDS, CROP_PIXELS, TABLE_VALUE_SURVEYS, TOKEN_SURVEYS
+from app.config import HSC_BANDS, LS_TABLE_COLUMNS, TOKEN_SURVEYS
 
-SIZE = CROP_PIXELS + 8
+SIZE = MODALITY_INFO["tok_image"]["input_size"] + 8
 
 
-def test_gridded_spectra_keep_each_spectrum_s_inner_product_with_a_template() -> None:
+def test_gridded_spectra_keep_each_spectrum_s_inner_product_with_an_aion_prediction() -> (
+    None
+):
     grid = 3500 + 0.8 * np.arange(200)
     rng = np.random.default_rng(0)
     on_grid = grid[20:120]
@@ -29,15 +32,15 @@ def test_gridded_spectra_keep_each_spectrum_s_inner_product_with_a_template() ->
             for wavelength in (on_grid, logarithmic, grid[-30:])
         ]
     )
-    template = rng.random(len(grid))
+    aion_prediction = rng.random(len(grid))
 
     weighted, information, squares = observations.gridded(cells, grid)
 
     for row in range(len(cells)):
         wavelength, flux, ivar = observations.samples(cells, row)
-        shape = np.interp(wavelength, grid, template)
+        shape = np.interp(wavelength, grid, aion_prediction)
         assert len(flux) < len(cells[row]["flux"])
-        np.testing.assert_allclose(weighted[row] @ template, ivar * flux @ shape)
+        np.testing.assert_allclose(weighted[row] @ aion_prediction, ivar * flux @ shape)
         np.testing.assert_allclose(information[row].sum(), ivar.sum())
         np.testing.assert_allclose(squares[row], ivar @ flux**2)
 
@@ -45,7 +48,7 @@ def test_gridded_spectra_keep_each_spectrum_s_inner_product_with_a_template() ->
 @pytest.fixture
 def images(monkeypatch: pytest.MonkeyPatch) -> np.ndarray:
     rng = np.random.default_rng(1)
-    flux = rng.normal(size=(3, len(BANDS["hsc"]), SIZE, SIZE)).astype(np.float32)
+    flux = rng.normal(size=(3, len(HSC_BANDS), SIZE, SIZE)).astype(np.float32)
     ivar = rng.random(flux.shape).astype(np.float32)
     ivar[:, :, SIZE // 2, SIZE // 2] = 0
     flux[:, :, SIZE // 2, SIZE // 2] = np.nan
@@ -55,7 +58,7 @@ def images(monkeypatch: pytest.MonkeyPatch) -> np.ndarray:
                 None
                 if galaxy == 1
                 else {
-                    "band": [band.lower() for band in BANDS["hsc"]],
+                    "band": [band.lower() for band in HSC_BANDS],
                     "flux": flux[galaxy],
                     "ivar": ivar[galaxy],
                 }
@@ -70,8 +73,8 @@ def images(monkeypatch: pytest.MonkeyPatch) -> np.ndarray:
 def test_images_are_the_centre_crop_of_the_galaxies_observed(
     images: np.ndarray,
 ) -> None:
-    start = (SIZE - CROP_PIXELS) // 2
-    crop = slice(start, start + CROP_PIXELS)
+    start = (SIZE - MODALITY_INFO["tok_image"]["input_size"]) // 2
+    crop = slice(start, start + MODALITY_INFO["tok_image"]["input_size"])
 
     flux, _ = observations.images("hsc", np.array([0, 2]))
 
@@ -88,14 +91,14 @@ def test_measured_images_give_pixels_without_inverse_variance_no_weight(
     )
 
     assert np.isfinite(weighted).all() and np.isfinite(squares).all()
-    assert (information == 0).sum() == 2 * len(BANDS["hsc"])
+    assert (information == 0).sum() == 2 * len(HSC_BANDS)
     assert (weighted[information == 0] == 0).all()
 
 
 def test_table_errors_do_not_depend_on_which_galaxies_are_read(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    columns = TABLE_VALUE_SURVEYS["ls"]
+    columns = LS_TABLE_COLUMNS
     rng = np.random.default_rng(2)
     rows = Dataset.from_dict(
         {column: rng.lognormal(size=12).tolist() for column in columns}

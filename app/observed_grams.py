@@ -1,19 +1,11 @@
 import numpy as np
 import torch
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum
 from tqdm import tqdm
 
-from . import embeddings, observations, pql, templates
-from .config import (
-    CROP_PIXELS,
-    GRID,
-    IMAGE_MODES,
-    MODES,
-    N_SPECTRUM_TOKENS,
-    SPECTRUM_MODES,
-    TOKEN_GRAMS,
-    artifact,
-    device,
-)
+from . import aion_predictions, embeddings, observations, pql
+from .config import IMAGE_MODES, MODES, SPECTRUM_MODES, TOKEN_GRAMS, artifact, device
 from .grams import ROWS
 
 BATCH = 256
@@ -83,10 +75,17 @@ def saturation(
 
 def slotted(values: torch.Tensor, mode: str) -> torch.Tensor:
     if mode in IMAGE_MODES:
-        pixels = values.reshape(len(values), -1, CROP_PIXELS, CROP_PIXELS)
-        cells = torch.nn.functional.pixel_unshuffle(pixels, CROP_PIXELS // GRID)
+        pixels = values.reshape(
+            len(values),
+            -1,
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        )
+        cells = torch.nn.functional.pixel_unshuffle(
+            pixels, MODALITY_INFO["tok_image"]["patch_size"]
+        )
         return cells.flatten(2).transpose(1, 2)
-    return values.reshape(len(values), N_SPECTRUM_TOKENS, -1)
+    return values.reshape(len(values), DESISpectrum.num_tokens - 1, -1)
 
 
 def anywhere(left: torch.Tensor, right: torch.Tensor, symmetric: bool) -> torch.Tensor:
@@ -133,7 +132,7 @@ def data_features(
     )
 
 
-def template_features(
+def aion_prediction_features(
     scaled: torch.Tensor, mode: str, kept: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
     patches = slotted(scaled, mode)[:, kept]
@@ -145,7 +144,7 @@ def template_features(
     )
 
 
-def template_gram(
+def aion_prediction_gram(
     left: torch.Tensor, right: torch.Tensor | None = None
 ) -> torch.Tensor:
     left = left.double()
@@ -165,7 +164,7 @@ def covered(depth: torch.Tensor, mode: str) -> torch.Tensor:
     return slotted(depth[None], mode)[0].sum(-1) > 0
 
 
-def template_grams(
+def aion_prediction_grams(
     queries: torch.Tensor,
     depth: torch.Tensor,
     mode: str,
@@ -173,18 +172,18 @@ def template_grams(
 ) -> dict[str, torch.Tensor]:
     left = at_depth(queries, depth, mode)
     right = None if gallery is None else at_depth(gallery, depth, mode)
-    found = {mode: template_gram(left, right)}
+    found = {mode: aion_prediction_gram(left, right)}
     if len(TOKEN_GRAMS[mode]) > 1:
         kept = covered(depth, mode)
-        features = template_features(left, mode, kept)
+        features = aion_prediction_features(left, mode, kept)
         if right is not None:
-            features = features[0], template_features(right, mode, kept)[1]
+            features = features[0], aion_prediction_features(right, mode, kept)[1]
         found[f"{mode}_anywhere"] = anywhere(*features, symmetric=right is None)
     return found
 
 
 def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-    queries = embeddings.loaded(f"template_{mode}", torch.float32).flatten(1)
+    queries = embeddings.loaded(f"aion_prediction_{mode}", torch.float32).flatten(1)
     reference = queries.median(dim=0).values
     galaxies = observations.observed(mode)
     weighted, information, squares = gathered(mode, galaxies)
@@ -211,8 +210,8 @@ def grams(mode: str) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
     depth = information.median(dim=0).values.sqrt().float()
     references["depth"] = depth
     matrices |= {
-        f"template_gram_{name}": matrix
-        for name, matrix in template_grams(queries, depth, mode).items()
+        f"aion_prediction_gram_{name}": matrix
+        for name, matrix in aion_prediction_grams(queries, depth, mode).items()
     }
     if len(TOKEN_GRAMS[mode]) > 1:
         matrices[f"data_gram_{mode}_anywhere"] = anywhere(
@@ -245,18 +244,18 @@ def predictive_widths() -> dict[str, np.ndarray]:
     found = {mode: np.empty(count, np.float32) for mode in MODES}
     start = 0
     for rows in tqdm(pql.predictions().to_batches(), desc="widths"):
-        for mode, values in templates.widths(rows, depths).items():
+        for mode, values in aion_predictions.widths(rows, depths).items():
             found[mode][start : start + rows.num_rows] = values
         start += rows.num_rows
     return found
 
 
-def generate_template_embeddings() -> None:
+def generate_aion_prediction_embeddings() -> None:
     widths = predictive_widths()
     for mode, names in TOKEN_GRAMS.items():
         for name in tqdm(names, desc=mode):
             embeddings.saved(
-                f"template_embedding_{name}",
-                embeddings.embedding(embeddings.loaded(f"template_gram_{name}")),
+                f"aion_prediction_embedding_{name}",
+                embeddings.embedding(embeddings.loaded(f"aion_prediction_gram_{name}")),
                 widths=widths[mode],
             )

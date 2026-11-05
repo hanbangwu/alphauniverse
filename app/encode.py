@@ -6,6 +6,7 @@ import torch
 import torchvision.transforms.functional as F
 from aion import AION
 from aion.codecs import CodecManager
+from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import (
     HSCAG,
     HSCAI,
@@ -44,14 +45,14 @@ from aion.modalities import (
 from tqdm import tqdm
 
 from .config import (
-    ANCHOR,
-    BANDS,
-    CROP_PIXELS,
     FLAG_SURVEYS,
+    HSC_BANDS,
+    HSC_TABLE_COLUMNS,
+    LS_BANDS,
+    LS_TABLE_COLUMNS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     STORES,
-    TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
     device,
     store_schema,
@@ -77,7 +78,7 @@ LS_TABLE_VALUES = tuple(
             LegacySurveyShapeE1,
             LegacySurveyShapeE2,
         ),
-        TABLE_VALUE_SURVEYS[ANCHOR],
+        LS_TABLE_COLUMNS,
         strict=True,
     )
 )
@@ -99,7 +100,7 @@ HSC_TABLE_VALUES = tuple(
             HSCShape22,
             HSCShape12,
         ),
-        TABLE_VALUE_SURVEYS["hsc"],
+        HSC_TABLE_COLUMNS,
         strict=True,
     )
 )
@@ -115,13 +116,19 @@ def model() -> AION:
 
 
 def image(
-    modality: type[Image], row: dict[str, list], bands: list[str]
+    modality: type[Image], row: dict[str, list], bands: tuple[str, ...]
 ) -> torch.Tensor:
     by_band = {
         band.upper(): flux for band, flux in zip(row["band"], row["flux"], strict=True)
     }
     flux = np.asarray([[by_band[band] for band in bands]], dtype=np.float32)
-    crop = F.center_crop(torch.from_numpy(flux), output_size=[CROP_PIXELS, CROP_PIXELS])
+    crop = F.center_crop(
+        torch.from_numpy(flux),
+        output_size=[
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        ],
+    )
     return (
         codec()
         .encode(modality(flux=crop.to(device()), bands=bands))[modality.token_key]
@@ -163,11 +170,11 @@ def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
 @torch.inference_mode()
 def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
     groups = {
-        ANCHOR: {
+        "ls": {
             LegacySurveyImage.token_key: image(
                 LegacySurveyImage,
-                row[TOKEN_SURVEYS[ANCHOR]],
-                BANDS[ANCHOR],
+                row[TOKEN_SURVEYS["ls"]],
+                LS_BANDS,
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
@@ -180,7 +187,7 @@ def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
             HSCImage.token_key: image(
                 HSCImage,
                 row[TOKEN_SURVEYS["hsc"]],
-                BANDS["hsc"],
+                HSC_BANDS,
             ),
             **{
                 modality.token_key: scalar(modality, row[column])
@@ -217,13 +224,12 @@ def context(
 
 def encode(
     groups: dict[str, dict[str, torch.Tensor]],
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    encoded, encoder_tokens, _, modality_mask = context(
+) -> tuple[np.ndarray, np.ndarray]:
+    encoded, _, _, modality_mask = context(
         {key: slot for group in groups.values() for key, slot in group.items()}
     )
     return (
         encoded[0].cpu().numpy(),
-        encoder_tokens[0].cpu().numpy(),
         modality_mask[0].cpu().numpy(),
     )
 
@@ -254,14 +260,12 @@ def generate_embeddings() -> None:
     for galaxy in tqdm(range(len(data)), desc="encode"):
         row = data[galaxy]
         groups = tokenize(row)
-        context, codebook, modality_mask = encode(groups)
+        context, modality_mask = encode(groups)
         cells = {
-            role: {
+            "encoded": {
                 survey: list(vectors.astype(np.float16))
-                for survey, vectors in by_survey(values, groups, modality_mask).items()
-            }
-            for role, values in (("encoded", context), ("codebook", codebook))
-        } | {
+                for survey, vectors in by_survey(context, groups, modality_mask).items()
+            },
             "tokens": {
                 survey: np.concatenate(
                     [

@@ -10,17 +10,16 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import torch
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import embeddings
 from .config import (
     IMAGE_MODES,
-    IMAGE_VOCABULARY,
     KEPT,
     MODE_SURVEYS,
     MODES,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
     N_TABLE_VALUES,
     OBSERVATIONS,
     PREDICTIONS,
@@ -28,11 +27,9 @@ from .config import (
     SALIENCY_SAMPLE,
     SEARCH_RANK,
     SPECTRUM_MODES,
-    SPECTRUM_SURVEYS,
     SPECTRUM_TOKEN_RANK,
     TABLE_MODES,
     TOP_CODES,
-    VOCABULARY,
     GalaxyIndex,
     ModeName,
     TokenMode,
@@ -40,22 +37,22 @@ from .config import (
 )
 from .search import tokens
 
-SPECTRUM_TOKEN_FLOOR = 0.1 / VOCABULARY
+SPECTRUM_TOKEN_FLOOR = 0.1 / MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]
 OBSERVED_IN = {
     mode: survey for mode, survey in MODE_SURVEYS.items() if survey in OBSERVATIONS
 }
-QUERY_COLUMNS = [
+QUERY_COLUMNS = tuple(
     f"{survey}_{name}"
     for survey in IMAGE_MODES.values()
     for name in ("query_codes", "query_probabilities", "tails")
-]
-TABLE_SLOTS = [
+)
+TABLE_SLOTS = tuple(
     (mode, slot) for mode, (_, count, _) in TABLE_MODES.items() for slot in range(count)
-]
+)
 
 WIDTHS = (
-    dict.fromkeys(IMAGE_MODES, N_IMAGE_TOKENS)
-    | dict.fromkeys(SPECTRUM_MODES, N_SPECTRUM_TOKENS)
+    dict.fromkeys(IMAGE_MODES, LegacySurveyImage.num_tokens)
+    | dict.fromkeys(SPECTRUM_MODES, DESISpectrum.num_tokens - 1)
     | {mode: count for mode, (_, count, _) in TABLE_MODES.items()}
 )
 OFFSETS = {
@@ -71,12 +68,12 @@ BUILDING = Lock()
 THREADS = pa.cpu_count()
 
 ImageTokens = Annotated[
-    tuple[Annotated[int, Field(ge=0, lt=N_IMAGE_TOKENS)], ...],
-    Field(max_length=N_IMAGE_TOKENS),
+    tuple[Annotated[int, Field(ge=0, lt=LegacySurveyImage.num_tokens)], ...],
+    Field(max_length=LegacySurveyImage.num_tokens),
 ]
 SpectrumTokens = Annotated[
-    tuple[Annotated[int, Field(ge=0, lt=N_SPECTRUM_TOKENS)], ...],
-    Field(max_length=N_SPECTRUM_TOKENS),
+    tuple[Annotated[int, Field(ge=0, lt=DESISpectrum.num_tokens - 1)], ...],
+    Field(max_length=DESISpectrum.num_tokens - 1),
 ]
 
 
@@ -199,7 +196,7 @@ def prediction_basis() -> dict[str, tuple[np.ndarray, np.ndarray]]:
     with np.load(artifact("probability_basis")) as stored:
         return {
             survey: (stored[f"{survey}_mean"], stored[f"{survey}_directions"])
-            for survey in SPECTRUM_SURVEYS
+            for survey in SPECTRUM_MODES.values()
         }
 
 
@@ -240,12 +237,16 @@ def selection(query: Selection) -> dict[str, np.ndarray]:
 def top_image_tokens(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    codes = array(rows, f"{survey}_codes", N_IMAGE_TOKENS, KEPT)[:, slots]
-    probabilities = array(rows, f"{survey}_probabilities", N_IMAGE_TOKENS, KEPT)[
-        :, slots
-    ]
-    rest = array(rows, f"{survey}_rest", N_IMAGE_TOKENS)[:, slots]
-    return codes, probabilities, rest / (IMAGE_VOCABULARY - KEPT)
+    codes = array(rows, f"{survey}_codes", LegacySurveyImage.num_tokens, KEPT)[:, slots]
+    probabilities = array(
+        rows, f"{survey}_probabilities", LegacySurveyImage.num_tokens, KEPT
+    )[:, slots]
+    rest = array(rows, f"{survey}_rest", LegacySurveyImage.num_tokens)[:, slots]
+    return (
+        codes,
+        probabilities,
+        rest / (MODALITY_INFO["tok_image"]["vocab_size"] - KEPT),
+    )
 
 
 def query_image_tokens(
@@ -253,15 +254,17 @@ def query_image_tokens(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     codes, probabilities, _ = top_image_tokens(rows, survey, slots)
     width = TOP_CODES - KEPT
-    query_codes = array(rows, f"{survey}_query_codes", N_IMAGE_TOKENS, width)[:, slots]
-    query_probabilities = array(
-        rows, f"{survey}_query_probabilities", N_IMAGE_TOKENS, width
+    query_codes = array(
+        rows, f"{survey}_query_codes", LegacySurveyImage.num_tokens, width
     )[:, slots]
-    tails = array(rows, f"{survey}_tails", N_IMAGE_TOKENS)[:, slots]
+    query_probabilities = array(
+        rows, f"{survey}_query_probabilities", LegacySurveyImage.num_tokens, width
+    )[:, slots]
+    tails = array(rows, f"{survey}_tails", LegacySurveyImage.num_tokens)[:, slots]
     return (
         np.concatenate((codes, query_codes), axis=-1),
         np.concatenate((probabilities, query_probabilities), axis=-1),
-        tails / (IMAGE_VOCABULARY - TOP_CODES),
+        tails / (MODALITY_INFO["tok_image"]["vocab_size"] - TOP_CODES),
     )
 
 
@@ -269,7 +272,9 @@ def dense_image_tokens(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
     codes, probabilities, spread = query_image_tokens(rows, survey, slots)
-    dense = np.repeat(spread[..., None], IMAGE_VOCABULARY, axis=-1)
+    dense = np.repeat(
+        spread[..., None], MODALITY_INFO["tok_image"]["vocab_size"], axis=-1
+    )
     np.put_along_axis(dense, codes, probabilities, axis=-1)
     return dense
 
@@ -300,10 +305,10 @@ def spectrum_token_coefficients(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
     quantised = array(
-        rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
+        rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
     )[:, slots]
-    offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[:, slots]
-    steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[:, slots]
+    offsets = array(rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1)[:, slots]
+    steps = array(rows, f"{survey}_steps", DESISpectrum.num_tokens - 1)[:, slots]
     return offsets[..., None] + quantised * steps[..., None]
 
 
@@ -313,14 +318,14 @@ def spectrum_token_overlaps(
     _, _, mean_square, projected_mean = basis()[survey]
     weights = projected_mean + query
     quantised = array(
-        rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
+        rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
     )[:, slots]
     overlaps = (
         mean_square
         + np.einsum("...r,r->...", query, projected_mean)
-        + array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[:, slots]
+        + array(rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1)[:, slots]
         * weights.sum(axis=-1)
-        + array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[:, slots]
+        + array(rows, f"{survey}_steps", DESISpectrum.num_tokens - 1)[:, slots]
         * np.einsum("...r,...r->...", quantised, weights)
     )
     return np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR)
@@ -395,16 +400,16 @@ def cross_overlaps(
                 table,
                 per_sample_weights=weights[chunk].flatten(0, 1),
                 mode="sum",
-            ).view(-1, N_IMAGE_TOKENS, len(form))
+            ).view(-1, LegacySurveyImage.num_tokens, len(form))
             yield chunk, overlaps.addcmul_(spread[chunk, :, None], totals).numpy()
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
     quantised = array(
-        rows, f"{survey}_coefficients", N_SPECTRUM_TOKENS, SPECTRUM_TOKEN_RANK
+        rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
     )
-    offsets = array(rows, f"{survey}_offsets", N_SPECTRUM_TOKENS)[..., None]
-    steps = array(rows, f"{survey}_steps", N_SPECTRUM_TOKENS)[..., None]
+    offsets = array(rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1)[..., None]
+    steps = array(rows, f"{survey}_steps", DESISpectrum.num_tokens - 1)[..., None]
     weights = projected_mean + form
     base = mean_square + np.einsum("br,r->b", form, projected_mean)
     totals = weights.sum(axis=-1)

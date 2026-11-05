@@ -20,7 +20,7 @@ Galaxies are named by their Legacy Survey DR10 object ID. A galaxy shows its pos
 See what AION predicts
 ----------------------
 
-The **AION predictions** switch shows the galaxy's :term:`templates <template>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalogue values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalised. A template is AION's expectation, not a measurement.
+The **AION predictions** switch shows the galaxy's :term:`AION predictions <AION prediction>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalogue values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalised. An AION prediction is AION's expectation, not a measurement.
 
 Find similar galaxies
 ---------------------
@@ -46,8 +46,3 @@ Share a view
 ------------
 
 The address in the browser records what you see: the map's layout, colour, range and selection, the open galaxy, the last search and its display settings, and the text search. Copy it to return to the same view or to send it to someone.
-
-Download the data
------------------
-
-Every galaxy's AION embeddings, tokens and properties (redshift, stellar mass, star formation rates, g − r colour, size, brightness, shape, Hα equivalent width and Dn4000, measured and predicted) can be downloaded. :doc:`dev/reference` describes the files.

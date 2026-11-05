@@ -7,7 +7,7 @@ import {
   getSaliency,
   getSearch,
   getSpectrum,
-  getSpectrumTemplate,
+  getSpectrumAionPrediction,
   getSpectrumTokens,
   getTable,
   getTextSearch
@@ -114,14 +114,14 @@ export function spectrumQuery(galaxy: number | null, survey: SpectrumSurvey) {
   })
 }
 
-export function spectrumTemplateQuery(galaxy: number | null, survey: SpectrumSurvey) {
+export function spectrumAionPredictionQuery(galaxy: number | null, survey: SpectrumSurvey) {
   return queryOptions({
-    queryKey: ['spectrum', galaxy, survey, 'template'] as const,
+    queryKey: ['spectrum', galaxy, survey, 'aion_prediction'] as const,
     queryFn:
       galaxy === null
         ? skipToken
         : async () => {
-            const { data } = await getSpectrumTemplate({
+            const { data } = await getSpectrumAionPrediction({
               path: { galaxy, survey },
               throwOnError: true
             })

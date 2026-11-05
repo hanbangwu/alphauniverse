@@ -10,17 +10,16 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import torch
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from threadpoolctl import threadpool_info
 
 from app import pql
 from app.config import (
-    DESI,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
-    SDSS,
-    SPECTRUM_ORIGIN,
-    SPECTRUM_SURVEYS,
-    SPECTRUM_TOKEN_WIDTH,
+    AION_SPECTRUM_ORIGIN,
+    AION_SPECTRUM_TOKEN_WIDTH,
+    DATASET_DESI_SUFFIX,
+    DATASET_SDSS_SUFFIX,
+    SPECTRUM_MODES,
     TOKEN_GRAMS,
     galaxy_count,
 )
@@ -64,7 +63,7 @@ def queries(count: int, image_token_count: int, matches: int) -> list[pql.Query]
             ls_image=tuple(
                 int(image_token)
                 for image_token in rng.choice(
-                    N_IMAGE_TOKENS, image_token_count, replace=False
+                    LegacySurveyImage.num_tokens, image_token_count, replace=False
                 )
             ),
             matches=matches,
@@ -80,35 +79,42 @@ def standardised(scores: torch.Tensor) -> torch.Tensor:
 
 
 def with_spectrum() -> np.ndarray:
-    return np.logical_or.reduce([pql.observed(survey) for survey in SPECTRUM_SURVEYS])
+    return np.logical_or.reduce(
+        [pql.observed(survey) for survey in SPECTRUM_MODES.values()]
+    )
 
 
 def spectrum_query(galaxy: int, slots: tuple[int, ...]) -> pql.Query:
-    survey = next(survey for survey in SPECTRUM_SURVEYS if pql.observed(survey)[galaxy])
+    survey = next(
+        survey for survey in SPECTRUM_MODES.values() if pql.observed(survey)[galaxy]
+    )
     return pql.Query(galaxy=galaxy, **{f"{survey}_spectrum": slots})
 
 
 def redshifts() -> np.ndarray:
     columns = dataset().data
     return (
-        pc.coalesce(columns.column(f"Z{DESI}"), columns.column(f"Z{SDSS}"))
+        pc.coalesce(
+            columns.column(f"Z{DATASET_DESI_SUFFIX}"),
+            columns.column(f"Z{DATASET_SDSS_SUFFIX}"),
+        )
         .fill_null(np.nan)
         .to_numpy()
     )
 
 
 def wavelength(galaxy: int) -> np.ndarray:
-    tables = (spectrum(galaxy, survey) for survey in SPECTRUM_SURVEYS)
+    tables = (spectrum(galaxy, survey) for survey in SPECTRUM_MODES.values())
     found = next(table for table in tables if table is not None)
     return found.column("wavelength").to_numpy()
 
 
 def observed_spectrum_tokens(wavelength: np.ndarray) -> np.ndarray:
     first, last = np.floor(
-        (np.array([wavelength.min(), wavelength.max()]) - SPECTRUM_ORIGIN)
-        / SPECTRUM_TOKEN_WIDTH
+        (np.array([wavelength.min(), wavelength.max()]) - AION_SPECTRUM_ORIGIN)
+        / AION_SPECTRUM_TOKEN_WIDTH
     ).astype(int)
-    return np.arange(max(first, 0), min(last, N_SPECTRUM_TOKENS - 1) + 1)
+    return np.arange(max(first, 0), min(last, DESISpectrum.num_tokens - 2) + 1)
 
 
 def server() -> dict[str, Any]:

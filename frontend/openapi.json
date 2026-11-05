@@ -69,27 +69,10 @@
         }
       }
     },
-    "/downloads/{role}": {
+    "/galaxies/property": {
       "get": {
-        "summary": "Download Artifact",
-        "operationId": "download_artifact",
-        "parameters": [
-          {
-            "name": "role",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "encoded",
-                "codebook",
-                "tokens",
-                "properties"
-              ],
-              "type": "string",
-              "title": "Role"
-            }
-          }
-        ],
+        "summary": "Get Properties",
+        "operationId": "get_properties",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -98,16 +81,6 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -202,7 +175,6 @@
     "/galaxy/{galaxy}/image/{survey}": {
       "get": {
         "summary": "Get Image",
-        "description": "The central 96 by 96 px of the galaxy's image in one survey: the dataset's Legacy Survey colour image, or the HSC image coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy Survey's.",
         "operationId": "get_image",
         "parameters": [
           {
@@ -308,11 +280,10 @@
         }
       }
     },
-    "/galaxy/{galaxy}/image/{survey}/template": {
+    "/galaxy/{galaxy}/image/{survey}/aion_prediction": {
       "get": {
-        "summary": "Get Image Template",
-        "description": "AION's predicted image of the galaxy in one survey, 96 by 96 px, coloured from its g, r, i and z flux in nanomaggies by legacypipe's DR10 mapping, which made the Legacy Survey's colour images.",
-        "operationId": "get_image_template",
+        "summary": "Get Image Aion Prediction",
+        "operationId": "get_image_aion_prediction",
         "parameters": [
           {
             "name": "galaxy",
@@ -366,7 +337,6 @@
     "/galaxy/{galaxy}/spectrum/{survey}": {
       "get": {
         "summary": "Get Spectrum",
-        "description": "The galaxy's spectrum for display, its flux smoothed with a Gaussian of sigma 2 pixels; masked pixels stay NaN.",
         "operationId": "get_spectrum",
         "parameters": [
           {
@@ -472,11 +442,10 @@
         }
       }
     },
-    "/galaxy/{galaxy}/spectrum/{survey}/template": {
+    "/galaxy/{galaxy}/spectrum/{survey}/aion_prediction": {
       "get": {
-        "summary": "Get Spectrum Template",
-        "description": "AION's predicted spectrum of the galaxy in one survey on its codec's grid, from 3500 \u00c5 in 0.8 \u00c5 steps. For a galaxy with that survey's spectrum it is scaled to the flux, by the amplitude that fits the unmasked pixels in inverse-variance weighted least squares; otherwise it is the normalised shape AION predicts.",
-        "operationId": "get_spectrum_template",
+        "summary": "Get Spectrum Aion Prediction",
+        "operationId": "get_spectrum_aion_prediction",
         "parameters": [
           {
             "name": "galaxy",
@@ -530,7 +499,6 @@
     "/galaxy/{galaxy}/cosines/{mode}": {
       "get": {
         "summary": "Get Cosines",
-        "description": "The cosine between AION's predicted distributions at every pair of the galaxy's slots of one image or spectrum mode: n by n float32, row-major, n the mode's slot count.",
         "operationId": "get_cosines",
         "parameters": [
           {
@@ -587,7 +555,6 @@
     "/saliency": {
       "get": {
         "summary": "Get Saliency",
-        "description": "For the query galaxy, at every slot of every mode, the partial correlation over every other galaxy between its score on the selection and its agreement with the query galaxy at that slot, controlling for its mean agreement outside the selection. With anywhere, the correlation runs over 512 other galaxies drawn at random with the query galaxy as the seed, and a mode named in anywhere takes, at each slot, the best agreement at any slot of that mode. One row, one list column per map.",
         "operationId": "get_saliency",
         "parameters": [
           {
@@ -882,7 +849,6 @@
     "/search/modes": {
       "get": {
         "summary": "Get Mode Search",
-        "description": "Ranks every galaxy against the query galaxy over whole modes, from the stored token embeddings cut to 256 components: each mode's scores, at any position for a mode named in anywhere, are standardised over all galaxies, and a galaxy's score is their mean. The query galaxy comes first. A selected mode's contribution is its standardised score over the number of modes, so the contributions sum to the score; an unselected mode's is null. Each mode's map holds, at every slot, the galaxy's overlap with the query galaxy at the same place over the query galaxy's highest probability there. A flag per observation says whether the galaxy has it, and predicted lists the selected modes' observations it lacks.",
         "operationId": "get_mode_search",
         "parameters": [
           {
@@ -1108,9 +1074,9 @@
             "type": "string",
             "title": "Id"
           },
-          "galaxies": {
+          "galaxy_count": {
             "type": "integer",
-            "title": "Galaxies"
+            "title": "Galaxy Count"
           },
           "grid": {
             "type": "integer",
@@ -1123,24 +1089,16 @@
           "spectrum_width": {
             "type": "number",
             "title": "Spectrum Width"
-          },
-          "morphologies": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Morphologies"
           }
         },
         "type": "object",
         "required": [
           "author",
           "id",
-          "galaxies",
+          "galaxy_count",
           "grid",
           "spectrum_origin",
-          "spectrum_width",
-          "morphologies"
+          "spectrum_width"
         ],
         "title": "Meta"
       },
@@ -1187,7 +1145,7 @@
             ],
             "title": "Value"
           },
-          "template": {
+          "aion_prediction": {
             "anyOf": [
               {
                 "type": "number"
@@ -1196,7 +1154,7 @@
                 "type": "null"
               }
             ],
-            "title": "Template"
+            "title": "Aion Prediction"
           },
           "table_value": {
             "anyOf": [
@@ -1237,7 +1195,7 @@
           "section",
           "column",
           "value",
-          "template",
+          "aion_prediction",
           "table_value",
           "token",
           "excluded"

@@ -32,7 +32,7 @@ app = modal.App("alphauniverse-neighbour-quality")
 image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/neighbour_quality.json")
-ROLES = ("token", "template")
+ROLES = ("token", "aion_prediction")
 NEIGHBOURS = 10
 QUERIES = 2000
 BATCH = 1024
@@ -264,7 +264,7 @@ def measure() -> dict[str, Any]:
     joints = {
         "token": {"joint": torch.from_numpy(token)}
         | {f"pca_{width}": torch.from_numpy(reduced[:, :width]) for width in WIDTHS},
-        "template": {"joint": joint(families["template"])},
+        "aion_prediction": {"joint": joint(families["aion_prediction"])},
     }
     aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
     return {

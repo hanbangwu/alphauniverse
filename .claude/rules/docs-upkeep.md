@@ -15,7 +15,7 @@ paths:
   | Code                                                     | Pages                                                                          |
   | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
   | `app/encode.py`, `app/predictions.py`, `app/config.py`   | `concepts.rst`, `glossary.rst`, `dev/reference.rst`                            |
-  | `app/grams.py`, `app/embeddings.py`, `app/templates.py`  | `dev/reference.rst`, `glossary.rst`                                            |
+  | `app/grams.py`, `app/embeddings.py`, `app/aion_predictions.py` | `dev/reference.rst`, `glossary.rst`                                            |
   | `app/observations.py`, `app/observed_grams.py`           | `dev/reference.rst`, `glossary.rst`                                            |
   | `app/properties.py`                                      | `dev/reference.rst`, `glossary.rst`                                            |
   | `app/parametric_umap.py`, `app/maps.py`                  | `methods/map.rst`, `dev/reference.rst`                                         |

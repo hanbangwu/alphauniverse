@@ -5,18 +5,15 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 
 from app.config import (
-    ANCHOR,
-    IMAGE_VOCABULARY,
     KEPT,
-    N_IMAGE_TOKENS,
-    N_SPECTRUM_TOKENS,
     PREDICTIONS,
     REDSHIFT,
     STORE_COLUMNS,
     TOP_CODES,
-    VOCABULARY,
     artifact,
 )
 
@@ -46,7 +43,9 @@ def store(
 
 @pytest.fixture(scope="module")
 def distributions() -> np.ndarray:
-    return np.random.default_rng(0).dirichlet(np.full(VOCABULARY, 0.1), size=600)
+    return np.random.default_rng(0).dirichlet(
+        np.full(MODALITY_INFO["tok_spectrum_desi"]["vocab_size"], 0.1), size=600
+    )
 
 
 def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
@@ -60,16 +59,20 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
     np.testing.assert_allclose(redshift.reshape(galaxies, -1).sum(-1), 1, atol=0.02)
     for survey, keys in predictions_module.TABLE_VALUES.items():
         kept = column(table, f"{survey}_probabilities").reshape(
-            galaxies, N_IMAGE_TOKENS, -1
+            galaxies, LegacySurveyImage.num_tokens, -1
         )
         query = column(table, f"{survey}_query_probabilities").reshape(
-            galaxies, N_IMAGE_TOKENS, -1
+            galaxies, LegacySurveyImage.num_tokens, -1
         )
-        rest = column(table, f"{survey}_rest").reshape(galaxies, N_IMAGE_TOKENS)
+        rest = column(table, f"{survey}_rest").reshape(
+            galaxies, LegacySurveyImage.num_tokens
+        )
         tails = column(table, f"{survey}_tails")
         table_values = column(table, f"{survey}_table_values")
         np.testing.assert_allclose(
-            kept.sum(-1) + query.sum(-1) + tails.reshape(galaxies, N_IMAGE_TOKENS),
+            kept.sum(-1)
+            + query.sum(-1)
+            + tails.reshape(galaxies, LegacySurveyImage.num_tokens),
             1,
             atol=1e-3,
         )
@@ -79,12 +82,14 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
         )
     for survey in predictions_module.SPECTRA:
         quantised = column(table, f"{survey}_coefficients").reshape(
-            galaxies, N_SPECTRUM_TOKENS, -1
+            galaxies, DESISpectrum.num_tokens - 1, -1
         )
         offsets = column(table, f"{survey}_offsets").reshape(
-            galaxies, N_SPECTRUM_TOKENS, 1
+            galaxies, DESISpectrum.num_tokens - 1, 1
         )
-        steps = column(table, f"{survey}_steps").reshape(galaxies, N_SPECTRUM_TOKENS, 1)
+        steps = column(table, f"{survey}_steps").reshape(
+            galaxies, DESISpectrum.num_tokens - 1, 1
+        )
         spectrum_tokens = (
             basis[f"{survey}_mean"]
             + (offsets + quantised * steps) @ basis[f"{survey}_directions"]
@@ -94,7 +99,9 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
 
 def test_kept_image_token_codes_are_the_most_probable_in_descending_order() -> None:
     log_probabilities = np.log(
-        np.random.default_rng(1).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
+        np.random.default_rng(1).dirichlet(
+            np.full(MODALITY_INFO["tok_image"]["vocab_size"], 0.5), size=3
+        )
     )
 
     stored = predictions_module.image_token_codes(log_probabilities)
@@ -142,7 +149,7 @@ def test_a_redshift_token_joins_the_context_only_where_the_galaxy_has_one(
     redshift: list[int] | None,
 ) -> None:
     row = {survey: None for survey in STORE_COLUMNS} | {
-        ANCHOR: list(range(N_IMAGE_TOKENS + 12)),
+        "ls": list(range(LegacySurveyImage.num_tokens + 12)),
         REDSHIFT: redshift,
     }
 
@@ -208,7 +215,9 @@ def test_one_batched_decode_matches_decoding_each_block_of_slots_alone(
 
 def test_stored_image_probabilities_are_those_of_their_codes() -> None:
     log_probabilities = np.log(
-        np.random.default_rng(2).dirichlet(np.full(IMAGE_VOCABULARY, 0.5), size=3)
+        np.random.default_rng(2).dirichlet(
+            np.full(MODALITY_INFO["tok_image"]["vocab_size"], 0.5), size=3
+        )
     ).astype(np.float32)
 
     stored = predictions_module.image_token_codes(log_probabilities)
@@ -222,7 +231,9 @@ def test_stored_image_probabilities_are_those_of_their_codes() -> None:
 
 
 def test_probabilities_below_float32_range_are_stored_as_zero() -> None:
-    log_probabilities = np.full((1, IMAGE_VOCABULARY), -95, dtype=np.float32)
+    log_probabilities = np.full(
+        (1, MODALITY_INFO["tok_image"]["vocab_size"]), -95, dtype=np.float32
+    )
     log_probabilities[0, 0] = 0
 
     stored = predictions_module.image_token_codes(log_probabilities)

@@ -534,8 +534,8 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
 
     views = {}
     for modality in TEXT_SURVEYS:
-        galaxy, _, gemma = pairs(modality)
-        views[modality] = galaxy, centred(gemma.cpu().numpy())
+        galaxy, _, wemm = pairs(modality)
+        views[modality] = galaxy, centred(wemm.cpu().numpy())
     imaged = np.intersect1d(held, views["image"][0])
     reference = view_scorer(views, {"images": ("image",)})(queries["plain"], imaged)
     percentiles = {

@@ -128,38 +128,38 @@ Beside it are the same shares for positive-only :term:`classical MDS` of each ma
 
    show(token_embedding_quality())
 
-Templates
----------
+AION predictions
+----------------
 
-How closely does AION's predicted observation match a galaxy's own data? ``template_quality`` compares every galaxy's :term:`template` in each mode it was observed in with its data by the reduced :math:`\chi^2`: images over the central 96 × 96 px with each pixel's inverse variance; spectra on their own wavelength grid with a free amplitude; catalogue values and redshift with the dataset's errors where it has them (HSC magnitudes, redshift) and otherwise the population's robust scatter, 1.4826 times the median absolute deviation. A galaxy with nothing to compare in a mode, no valid pixel in the crop, fewer than two in a spectrum or no catalogue value with an error, is left out. Beside the template it scores two references: the floor, the codec's decoding of the galaxy's own tokens, and the null, the mean template over all galaxies. *Recovered* is :math:`(\chi^2_\text{null} - \chi^2_\text{template}) / (\chi^2_\text{null} - \chi^2_\text{floor})`: 1 when the template fits as well as the galaxy's own tokens, 0 when it fits no better than the mean template. The normalised residuals :math:`(x - \mu)\sqrt{w}` are averaged by radius for images and by rest wavelength for spectra with a usable redshift. Spectra are also split into quartiles of their median S/N per pixel, :math:`x\sqrt{w}` over the valid pixels: a faint spectrum leaves the null little room above the floor, so its recovered share is small whatever the template.
-
-.. bokeh-plot::
-   :source-position: none
-
-   from bokeh.plotting import show
-
-   from benchmark_plots import template_quality
-
-   show(template_quality())
-
-Template embeddings
--------------------
-
-How much of exact against-data search do the template embeddings keep? ``template_embedding_quality`` takes every galaxy as a query and the galaxies observed in each mode with data as the gallery, leaving the query out, and compares the top 10 and top 100 with four rankings: the :term:`against-data score` :math:`S`; :math:`S / S_\text{sat}`, the share of each gallery galaxy's :term:`saturation` the query's template reaches; :math:`S - S_\text{sat} = -\tfrac12 \chi^2`, the fit of the query's template to each gallery galaxy's data; and the :term:`template Gram`, which stands in for :math:`S - S_\text{sat}`: it replaces each gallery galaxy's data by its own template and its errors by the :term:`typical depth`, and compares spectra by shape alone. The template Gram's agreement with :math:`S - S_\text{sat}` measures these replacements, and with :math:`S` and :math:`S / S_\text{sat}` also the change of ranking; the stored vectors' agreement with the template Gram measures the components left out. At any position only :math:`S` and the template Gram are compared, since :math:`S` there has no saturation to bound it. For each galaxy observed in the mode, it also reports the rank of the galaxy's own data in its own row under each exact ranking.
+How closely does AION's predicted observation match a galaxy's own data? ``aion_prediction_quality`` compares every galaxy's :term:`AION prediction` in each mode it was observed in with its data by the reduced :math:`\chi^2`: images over the central 96 × 96 px with each pixel's inverse variance; spectra on their own wavelength grid with a free amplitude; catalogue values and redshift with the dataset's errors where it has them (HSC magnitudes, redshift) and otherwise the population's robust scatter, 1.4826 times the median absolute deviation. A galaxy with nothing to compare in a mode, no valid pixel in the crop, fewer than two in a spectrum or no catalogue value with an error, is left out. Beside the AION prediction it scores two references: the floor, the codec's decoding of the galaxy's own tokens, and the null, the mean AION prediction over all galaxies. *Recovered* is :math:`(\chi^2_\text{null} - \chi^2_\text{AION prediction}) / (\chi^2_\text{null} - \chi^2_\text{floor})`: 1 when the AION prediction fits as well as the galaxy's own tokens, 0 when it fits no better than the mean AION prediction. The normalised residuals :math:`(x - \mu)\sqrt{w}` are averaged by radius for images and by rest wavelength for spectra with a usable redshift. Spectra are also split into quartiles of their median S/N per pixel, :math:`x\sqrt{w}` over the valid pixels: a faint spectrum leaves the null little room above the floor, so its recovered share is small whatever the AION prediction.
 
 .. bokeh-plot::
    :source-position: none
 
    from bokeh.plotting import show
 
-   from benchmark_plots import template_embedding_quality
+   from benchmark_plots import aion_prediction_quality
 
-   show(template_embedding_quality())
+   show(aion_prediction_quality())
+
+AION prediction embeddings
+--------------------------
+
+How much of exact against-data search do the AION prediction embeddings keep? ``aion_prediction_embedding_quality`` takes every galaxy as a query and the galaxies observed in each mode with data as the gallery, leaving the query out, and compares the top 10 and top 100 with four rankings: the :term:`against-data score` :math:`S`; :math:`S / S_\text{sat}`, the share of each gallery galaxy's :term:`saturation` the query's AION prediction reaches; :math:`S - S_\text{sat} = -\tfrac12 \chi^2`, the fit of the query's AION prediction to each gallery galaxy's data; and the :term:`AION prediction Gram`, which stands in for :math:`S - S_\text{sat}`: it replaces each gallery galaxy's data by its own AION prediction and its errors by the :term:`typical depth`, and compares spectra by shape alone. The AION prediction Gram's agreement with :math:`S - S_\text{sat}` measures these replacements, and with :math:`S` and :math:`S / S_\text{sat}` also the change of ranking; the stored vectors' agreement with the AION prediction Gram measures the components left out. At any position only :math:`S` and the AION prediction Gram are compared, since :math:`S` there has no saturation to bound it. For each galaxy observed in the mode, it also reports the rank of the galaxy's own data in its own row under each exact ranking.
+
+.. bokeh-plot::
+   :source-position: none
+
+   from bokeh.plotting import show
+
+   from benchmark_plots import aion_prediction_embedding_quality
+
+   show(aion_prediction_embedding_quality())
 
 Retrieval from partial data
 ---------------------------
 
-Does a galaxy seen with less of its data still find itself? ``retrieval_quality`` encodes sampled galaxies again from part of their data, predicts every mode from that encoding, and ranks every galaxy, with all of its data, against it: by the encoding's row of each :term:`Gram matrix` and :term:`template Gram`, exactly and through the stored :term:`token embeddings <token embedding>` and :term:`template embeddings <template embedding>` cut to their first :math:`k` components, and by the :term:`cosine similarity` of :term:`mean embeddings <mean embedding>`. Each set holds up to 512 galaxies and keeps:
+Does a galaxy seen with less of its data still find itself? ``retrieval_quality`` encodes sampled galaxies again from part of their data, predicts every mode from that encoding, and ranks every galaxy, with all of its data, against it: by the encoding's row of each :term:`Gram matrix` and :term:`AION prediction Gram`, exactly and through the stored :term:`token embeddings <token embedding>` and :term:`AION prediction embeddings <AION prediction embedding>` cut to their first :math:`k` components, and by the :term:`cosine similarity` of :term:`mean embeddings <mean embedding>`. Each set holds up to 512 galaxies and keeps:
 
 - all of a galaxy's data;
 - the Legacy Survey image and values alone, or HSC's alone, of a galaxy with both;
@@ -208,7 +208,7 @@ How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` pre
 Neighbourhoods
 --------------
 
-Are a galaxy's nearest galaxies like it, and does one vector per galaxy show them? ``neighbour_quality`` asks three things of the stored :term:`token embeddings <token embedding>` and :term:`template embeddings <template embedding>`, cut to their first 256 components, of their :term:`joint embeddings <joint embedding>` over all modes, of the token one's first 1,408, 704 and 352 principal components, and of AION's :term:`mean embeddings <mean embedding>`:
+Are a galaxy's nearest galaxies like it, and does one vector per galaxy show them? ``neighbour_quality`` asks three things of the stored :term:`token embeddings <token embedding>` and :term:`AION prediction embeddings <AION prediction embedding>`, cut to their first 256 components, of their :term:`joint embeddings <joint embedding>` over all modes, of the token one's first 1,408, 704 and 352 principal components, and of AION's :term:`mean embeddings <mean embedding>`:
 
 * how far in :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate, :math:`\log_{10}` specific star formation rate and redshift a galaxy's 10 nearest are, against 10 at random: the galaxies with all four are both the queries and the gallery, ranked by full-object search at the same place, at any position and at the same place without the redshift mode, by Euclidean distance in each joint embedding and principal-component cut, and by the :term:`cosine similarity` of mean embeddings;
 * how much of each mode's search top 10 the Euclidean top 10 of its gallery vectors keeps, and of full-object search each joint embedding's and principal-component cut's, for 2,000 queries against every galaxy;

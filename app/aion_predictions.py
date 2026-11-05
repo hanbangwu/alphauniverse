@@ -4,6 +4,7 @@ import numpy as np
 import pyarrow as pa
 import torch
 from aion.codecs.base import Codec
+from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import (
     DESISpectrum,
     HSCImage,
@@ -16,21 +17,21 @@ from tqdm import tqdm
 
 from . import encode, pql
 from .config import (
-    ANCHOR,
-    BANDS,
+    HSC_BANDS,
+    HSC_ZERO_POINT,
     IMAGE_MODES,
-    IMAGE_VOCABULARY,
+    LS_BANDS,
+    LS_ZERO_POINT,
     REDSHIFT,
     SPECTRUM_MODES,
     TABLE_MODES,
     TOP_CODES,
-    VOCABULARY,
-    ZERO_POINTS,
+    ImageSurvey,
     artifact,
     device,
 )
 
-DECODED_BANDS = [*BANDS[ANCHOR], *BANDS["hsc"]]
+DECODED_BANDS = (*LS_BANDS, *HSC_BANDS)
 CENTRAL = (0.16, 0.84)
 MODALITIES = {
     "ls_image": LegacySurveyImage,
@@ -83,10 +84,16 @@ def spectrum_latents(
 
 
 @torch.inference_mode()
-def decoded_images(codec: Codec, latents: torch.Tensor, survey: str) -> np.ndarray:
+def decoded_images(
+    codec: Codec, latents: torch.Tensor, survey: ImageSurvey
+) -> np.ndarray:
     decoded = codec._decode(latents, bands=DECODED_BANDS).flux
-    channels = [DECODED_BANDS.index(band) for band in BANDS[survey]]
-    scale = codec.rescaler.convert_zeropoint(ZERO_POINTS[survey])
+    channels = [
+        DECODED_BANDS.index(band)
+        for band in (HSC_BANDS if survey == "hsc" else LS_BANDS)
+    ]
+    zero_point = HSC_ZERO_POINT if survey == "hsc" else LS_ZERO_POINT
+    scale = codec.rescaler.convert_zeropoint(zero_point)
     return (decoded[:, channels] * scale).cpu().numpy()
 
 
@@ -95,13 +102,21 @@ def decoded_spectra(codec: Codec, latents: torch.Tensor) -> np.ndarray:
     return (codec._decode(latents, normalization=None).flux + 1).cpu().numpy()
 
 
-def image_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarray:
-    latents = image_latents(rows, survey, codebook(codec, IMAGE_VOCABULARY))
+def image_aion_predictions(
+    codec: Codec, rows: pa.RecordBatch, survey: ImageSurvey
+) -> np.ndarray:
+    latents = image_latents(
+        rows, survey, codebook(codec, MODALITY_INFO["tok_image"]["vocab_size"])
+    )
     return decoded_images(codec, latents.transpose(1, 2), survey)
 
 
-def spectrum_templates(codec: Codec, rows: pa.RecordBatch, survey: str) -> np.ndarray:
-    latents = spectrum_latents(rows, survey, codebook(codec, VOCABULARY))
+def spectrum_aion_predictions(
+    codec: Codec, rows: pa.RecordBatch, survey: str
+) -> np.ndarray:
+    latents = spectrum_latents(
+        rows, survey, codebook(codec, MODALITY_INFO["tok_spectrum_desi"]["vocab_size"])
+    )
     return decoded_spectra(codec, latents.transpose(1, 2))
 
 
@@ -138,13 +153,16 @@ def sampled_image_codes(
 ) -> torch.Tensor:
     codes, probabilities, spread = pql.query_image_tokens(rows, survey, slice(None))
     codes = torch.from_numpy(codes.astype(np.int64)).to(device())
-    tail = spread[..., None] * (IMAGE_VOCABULARY - TOP_CODES)
+    tail = spread[..., None] * (MODALITY_INFO["tok_image"]["vocab_size"] - TOP_CODES)
     chosen = drawn(
         torch.from_numpy(np.concatenate((probabilities, tail), axis=-1)).to(device()),
         rng,
     )
     rank = torch.from_numpy(
-        rng.integers(IMAGE_VOCABULARY - TOP_CODES, size=tuple(chosen.shape))
+        rng.integers(
+            MODALITY_INFO["tok_image"]["vocab_size"] - TOP_CODES,
+            size=tuple(chosen.shape),
+        )
     ).to(device())
     shifted = codes.sort(dim=-1).values - torch.arange(TOP_CODES, device=device())
     beyond = rank + (shifted <= rank[..., None]).sum(dim=-1)
@@ -171,14 +189,14 @@ def sampled(rows: pa.RecordBatch, mode: str, rng: np.random.Generator) -> np.nda
     )
 
 
-def templates(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
+def aion_predictions(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
     return {
         **{
-            mode: image_templates(decoder(mode), rows, survey)
+            mode: image_aion_predictions(decoder(mode), rows, survey)
             for mode, survey in IMAGE_MODES.items()
         },
         **{
-            mode: spectrum_templates(decoder(mode), rows, survey)
+            mode: spectrum_aion_predictions(decoder(mode), rows, survey)
             for mode, survey in SPECTRUM_MODES.items()
         },
         **{
@@ -190,15 +208,15 @@ def templates(rows: pa.RecordBatch) -> dict[str, np.ndarray]:
     }
 
 
-def generate_templates() -> None:
+def generate_aion_predictions() -> None:
     torch.backends.cudnn.conv.fp32_precision = "ieee"
     count = pql.predictions().num_rows
     stored, start = {}, 0
-    for rows in tqdm(pql.predictions().to_batches(), desc="templates"):
-        for mode, found in templates(rows).items():
+    for rows in tqdm(pql.predictions().to_batches(), desc="aion_predictions"):
+        for mode, found in aion_predictions(rows).items():
             if mode not in stored:
                 stored[mode] = open_memmap(
-                    artifact(f"template_{mode}"),
+                    artifact(f"aion_prediction_{mode}"),
                     mode="w+",
                     dtype=np.float32,
                     shape=(count, *found.shape[1:]),
@@ -219,11 +237,13 @@ def widths(
 ) -> dict[str, np.ndarray]:
     found = {}
     for mode, survey in IMAGE_MODES.items():
-        vectors = codebook(decoder(mode), IMAGE_VOCABULARY)
+        vectors = codebook(decoder(mode), MODALITY_INFO["tok_image"]["vocab_size"])
         moments = torch.cat((vectors, vectors**2), dim=-1)
         found[mode] = deviation(image_latents(rows, survey, moments))
     for mode, survey in SPECTRUM_MODES.items():
-        vectors = codebook(decoder(mode), VOCABULARY)
+        vectors = codebook(
+            decoder(mode), MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]
+        )
         moments = torch.cat((vectors, vectors**2), dim=-1)
         found[mode] = deviation(spectrum_latents(rows, survey, moments))
     for mode in TABLE_MODES:

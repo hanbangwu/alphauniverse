@@ -4,13 +4,13 @@ from typing import NamedTuple
 import numpy as np
 import pyarrow as pa
 import torch
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import LegacySurveyImage
 from tqdm import tqdm
 
 from . import pql
 from .config import (
     IMAGE_MODES,
-    IMAGE_VOCABULARY,
-    N_IMAGE_TOKENS,
     PROBABILITY_FLOOR,
     SPECTRUM_MODES,
     TOKEN_GRAMS,
@@ -19,7 +19,7 @@ from .config import (
 )
 
 ALIGNMENT = 32
-ROWS = 64 * N_IMAGE_TOKENS
+ROWS = 64 * LegacySurveyImage.num_tokens
 
 
 class Forms(NamedTuple):
@@ -58,8 +58,10 @@ def image_forms(survey: str, table: pa.Table) -> Forms:
     codes, probabilities, spread = stacked(table, parts)
 
     def dense(part: slice) -> torch.Tensor:
-        tile = spread.new_zeros((*spread[part].shape, padded(IMAGE_VOCABULARY)))
-        tile[..., :IMAGE_VOCABULARY] = spread[part, :, None]
+        tile = spread.new_zeros(
+            (*spread[part].shape, padded(MODALITY_INFO["tok_image"]["vocab_size"]))
+        )
+        tile[..., : MODALITY_INFO["tok_image"]["vocab_size"]] = spread[part, :, None]
         return tile.scatter_(-1, codes[part], probabilities[part])
 
     return Forms(dense, 0.0, PROBABILITY_FLOOR, table.num_rows)

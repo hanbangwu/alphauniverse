@@ -312,13 +312,13 @@ def token_embedding_quality():
     )
 
 
-def template_embedding_quality():
-    found = report("template_embedding_quality")
+def aion_prediction_embedding_quality():
+    found = report("aion_prediction_embedding_quality")
     if found is None:
         return missing()
     ranks = found["ranks"]
     exact = {"score": "S", "share": "S / S_sat", "fit": "S − S_sat"}
-    truths = exact | {"template": "the template Gram"}
+    truths = exact | {"aion_prediction": "the AION prediction Gram"}
     charts = []
     for truth, label in truths.items():
         chart = figure(
@@ -359,7 +359,9 @@ def template_embedding_quality():
                 for truth, label in exact.items()
             },
             **{
-                f"template Gram's top 10 by {label}": block["template_gram"]
+                f"AION prediction Gram's top 10 by {label}": block[
+                    "aion_prediction_gram"
+                ]
                 .get(truth, {})
                 .get("top10")
                 for truth, label in exact.items()
@@ -405,7 +407,7 @@ def retrieval_quality():
         } | recalled(**measured["aion"])
         rows.append(row | {f"R@10 at k = {rank}": "" for rank in ranks})
         full.append(row)
-        for role in ("token", "template"):
+        for role in ("token", "aion_prediction"):
             for group in ("combined", "blocks"):
                 for name, exact in measured[role]["exact"][group].items():
                     row = {
@@ -486,7 +488,7 @@ def probe_quality():
     for target, measured in found["probes"].items():
         features = {"AION": measured["aion"]} | {
             f"{role} {kind}": probes
-            for role in ("token", "template")
+            for role in ("token", "aion_prediction")
             for kind, probes in measured[role].items()
         }
         curve = figure(
@@ -603,11 +605,11 @@ def neighbour_quality():
     share = f"share of its top {found['neighbours']}"
     agreement = [
         {"features": f"{role} blocks", "search": name, share: value}
-        for role in ("token", "template")
+        for role in ("token", "aion_prediction")
         for name, value in geometry[role]["blocks"].items()
     ] + [
         {"features": f"{role} {variant}", "search": combination, share: value}
-        for role in ("token", "template")
+        for role in ("token", "aion_prediction")
         for variant, shares in geometry[role]["joint"].items()
         for combination, value in shares.items()
     ]
@@ -663,8 +665,8 @@ def fitted(measured):
     }
 
 
-def template_quality():
-    found = report("template_quality")
+def aion_prediction_quality():
+    found = report("aion_prediction_quality")
     if found is None:
         return missing()
     modes = found["modes"]
@@ -701,7 +703,7 @@ def template_quality():
             (mode, model)
             for mode, measured in modes.items()
             if key in measured
-            for model in ("template", "floor")
+            for model in ("aion_prediction", "floor")
         ]
         for (mode, model), colour in zip(lines, Category10_10):
             chart.line(

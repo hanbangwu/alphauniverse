@@ -1,10 +1,13 @@
 import io
+from pathlib import Path
 from typing import get_args
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -12,24 +15,18 @@ from PIL import Image
 from app import dataset as dataset_module
 from app import pql
 from app.config import (
-    ANCHOR,
-    CROP_PIXELS,
-    DESI,
+    AION_SPECTRUM_GRID,
+    DATASET_DESI_SUFFIX,
+    DATASET_LS_SUFFIX,
+    DATASET_SDSS_SUFFIX,
     FLAG_SURVEYS,
-    GEMMA_DIM,
-    LS,
+    HSC_TABLE_COLUMNS,
     MODES,
-    N_IMAGE_TOKENS,
-    N_MORPHOLOGIES,
-    N_SPECTRUM_TOKENS,
     N_TABLE_VALUES,
     REDSHIFT,
     REDSHIFT_TABLE_VALUE,
-    SDSS,
-    SPECTRUM_GRID,
-    SPECTRUM_SURVEYS,
-    TABLE_VALUE_SURVEYS,
     TOKEN_SURVEYS,
+    WEMM_DIM,
     Projection,
     artifact,
 )
@@ -43,38 +40,38 @@ def _stored(role: str) -> pa.Table:
     return pa.ipc.open_file(artifact(role)).read_all()
 
 
-def _template(mode: str) -> np.ndarray:
-    return np.load(artifact(f"template_{mode}"))
+def _aion_prediction(mode: str) -> np.ndarray:
+    return np.load(artifact(f"aion_prediction_{mode}"))
 
 
 @pytest.fixture
 def identified(monkeypatch: pytest.MonkeyPatch, galaxies: int) -> Dataset:
     rows = Dataset.from_dict(
         {
-            f"object_id{LS}": [f"1501p020-{galaxy}" for galaxy in range(galaxies)],
-            f"ra{LS}": [150.0 + galaxy / 100 for galaxy in range(galaxies)],
-            f"dec{LS}": [2.0 - galaxy / 100 for galaxy in range(galaxies)],
+            f"object_id{DATASET_LS_SUFFIX}": [
+                f"1501p020-{galaxy}" for galaxy in range(galaxies)
+            ],
+            f"ra{DATASET_LS_SUFFIX}": [
+                150.0 + galaxy / 100 for galaxy in range(galaxies)
+            ],
+            f"dec{DATASET_LS_SUFFIX}": [
+                2.0 - galaxy / 100 for galaxy in range(galaxies)
+            ],
         }
     )
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
     return rows
 
 
-@pytest.mark.parametrize("role", ["encoded", "properties"])
-def test_artifact_downloads(client: TestClient, role: str) -> None:
-    response = client.get(f"/downloads/{role}")
+def test_properties_are_served_whole(client: TestClient) -> None:
+    response = client.get("/galaxies/property")
 
     assert response.status_code == 200
-    assert len(response.content) == artifact(role).stat().st_size
+    assert len(response.content) == artifact("properties").stat().st_size
 
 
-def test_meta_reports_a_count_per_morphology_without_the_dataset(
-    client: TestClient,
-) -> None:
-    response = client.get("/meta")
-
-    assert response.status_code == 200
-    assert len(response.json()["morphologies"]) == N_MORPHOLOGIES + 1
+def test_meta_is_served_without_the_dataset(client: TestClient) -> None:
+    assert client.get("/meta").status_code == 200
 
 
 @pytest.mark.parametrize("projection", get_args(Projection))
@@ -112,17 +109,15 @@ def test_successful_responses_must_be_revalidated_before_reuse(
     assert client.get("/galaxy/0").headers["cache-control"] == "no-cache"
 
 
-def test_internal_artifact_is_not_downloadable(client: TestClient) -> None:
-    assert client.get("/downloads/predictions").status_code == 422
+def test_missing_properties_file_is_not_found(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("app.main.artifact", lambda role: tmp_path / role)
+
+    assert client.get("/galaxies/property").status_code == 404
 
 
-def test_known_role_with_no_file_is_not_found(client: TestClient) -> None:
-    assert not artifact("codebook").exists()
-
-    assert client.get("/downloads/codebook").status_code == 404
-
-
-@pytest.mark.parametrize("survey", [ANCHOR, "hsc"])
+@pytest.mark.parametrize("survey", ["ls", "hsc"])
 def test_image_tokens_are_that_galaxys_stored_image_token_ids(
     client: TestClient, survey: str
 ) -> None:
@@ -134,17 +129,24 @@ def test_image_tokens_are_that_galaxys_stored_image_token_ids(
 
     assert response.status_code == 200
     served = np.frombuffer(response.content, dtype=np.uint32)
-    np.testing.assert_array_equal(served, np.asarray(cell.values)[:N_IMAGE_TOKENS])
+    np.testing.assert_array_equal(
+        served, np.asarray(cell.values)[: LegacySurveyImage.num_tokens]
+    )
 
 
-@pytest.mark.parametrize("survey", [ANCHOR, "hsc"])
-def test_image_template_is_a_png_of_the_crop(client: TestClient, survey: str) -> None:
-    response = client.get(f"/galaxy/0/image/{survey}/template")
+@pytest.mark.parametrize("survey", ["ls", "hsc"])
+def test_image_aion_prediction_is_a_png_of_the_crop(
+    client: TestClient, survey: str
+) -> None:
+    response = client.get(f"/galaxy/0/image/{survey}/aion_prediction")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     with Image.open(io.BytesIO(response.content)) as png:
-        assert png.size == (CROP_PIXELS, CROP_PIXELS)
+        assert png.size == (
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        )
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
@@ -164,9 +166,9 @@ def test_galaxy_is_named_by_its_legacy_survey_object_and_position(
     rows = client.get("/galaxy/3").json()
 
     assert (rows["object_id"], rows["ra"], rows["dec"]) == (
-        identified[3][f"object_id{LS}"],
-        identified[3][f"ra{LS}"],
-        identified[3][f"dec{LS}"],
+        identified[3][f"object_id{DATASET_LS_SUFFIX}"],
+        identified[3][f"ra{DATASET_LS_SUFFIX}"],
+        identified[3][f"dec{DATASET_LS_SUFFIX}"],
     )
 
 
@@ -174,8 +176,8 @@ def test_cosines_are_a_square_float32_table_of_the_mode_s_slots(
     client: TestClient,
 ) -> None:
     for mode, slots in (
-        ("ls_image", N_IMAGE_TOKENS),
-        ("desi_spectrum", N_SPECTRUM_TOKENS),
+        ("ls_image", LegacySurveyImage.num_tokens),
+        ("desi_spectrum", DESISpectrum.num_tokens - 1),
     ):
         response = client.get(f"/galaxy/0/cosines/{mode}")
 
@@ -214,22 +216,22 @@ def test_spectrum_tokens_drop_the_normalisation_token(
 
 
 @pytest.mark.parametrize("survey", ["desi", "sdss"])
-def test_spectrum_template_without_that_spectrum_is_the_shape_on_the_codec_grid(
+def test_spectrum_aion_prediction_without_that_spectrum_is_the_shape_on_the_codec_grid(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, survey: str
 ) -> None:
-    unobserved = Dataset.from_dict({SPECTRUM_SURVEYS[survey]: [None, None]})
+    unobserved = Dataset.from_dict({TOKEN_SURVEYS[survey]: [None, None]})
     monkeypatch.setattr(dataset_module, "dataset", lambda: unobserved)
 
-    response = client.get(f"/galaxy/1/spectrum/{survey}/template")
+    response = client.get(f"/galaxy/1/spectrum/{survey}/aion_prediction")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == ARROW
     table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
     np.testing.assert_array_equal(
-        table.column("wavelength").to_numpy(), SPECTRUM_GRID.astype(np.float32)
+        table.column("wavelength").to_numpy(), AION_SPECTRUM_GRID.astype(np.float32)
     )
     np.testing.assert_array_equal(
-        table.column("flux").to_numpy(), _template(f"{survey}_spectrum")[1]
+        table.column("flux").to_numpy(), _aion_prediction(f"{survey}_spectrum")[1]
     )
 
 
@@ -246,10 +248,10 @@ def test_search_returns_one_arrow_batch_with_every_mode(client: TestClient) -> N
     assert 1 < table.num_rows <= 6
     assert table.column("galaxy")[0].as_py() == 2
     widths = {
-        "ls_image": N_IMAGE_TOKENS,
-        "hsc_image": N_IMAGE_TOKENS,
-        "desi_spectrum": N_SPECTRUM_TOKENS,
-        "sdss_spectrum": N_SPECTRUM_TOKENS,
+        "ls_image": LegacySurveyImage.num_tokens,
+        "hsc_image": LegacySurveyImage.num_tokens,
+        "desi_spectrum": DESISpectrum.num_tokens - 1,
+        "sdss_spectrum": DESISpectrum.num_tokens - 1,
         "table_values": N_TABLE_VALUES,
     }
     for name, width in widths.items():
@@ -288,10 +290,10 @@ def test_saliency_returns_one_row_with_every_map(client: TestClient) -> None:
     table = pa.ipc.open_stream(io.BytesIO(response.content)).read_all()
     assert table.num_rows == 1
     assert {name: len(table.column(name)[0]) for name in table.column_names} == {
-        "ls_image": N_IMAGE_TOKENS,
-        "hsc_image": N_IMAGE_TOKENS,
-        "desi_spectrum": N_SPECTRUM_TOKENS,
-        "sdss_spectrum": N_SPECTRUM_TOKENS,
+        "ls_image": LegacySurveyImage.num_tokens,
+        "hsc_image": LegacySurveyImage.num_tokens,
+        "desi_spectrum": DESISpectrum.num_tokens - 1,
+        "sdss_spectrum": DESISpectrum.num_tokens - 1,
         "table_values": N_TABLE_VALUES,
     }
 
@@ -318,7 +320,7 @@ def test_has_flags_say_which_galaxies_observed_each_mode(client: TestClient) -> 
     galaxies = table.column("galaxy").to_numpy()
     stored = _stored("tokens")
 
-    for column in ("hsc", "desi", "sdss", REDSHIFT):
+    for column in ("ls", "hsc", "desi", "sdss", REDSHIFT):
         np.testing.assert_array_equal(
             table.column(f"has_{column}").to_numpy(zero_copy_only=False),
             stored.column(column).is_valid().to_numpy(zero_copy_only=False)[galaxies],
@@ -364,7 +366,7 @@ def test_whole_mode_search_on_a_mode_the_galaxy_lacks_returns_each_selected_cont
         if name.endswith("_contribution") and table.column(name).null_count == 0
     }
     assert contributed == {"ls_image_contribution", "desi_spectrum_contribution"}
-    assert len(table.column("ls_image")[0]) == N_IMAGE_TOKENS
+    assert len(table.column("ls_image")[0]) == LegacySurveyImage.num_tokens
 
 
 def test_whole_mode_search_takes_any_position_only_in_a_selected_mode(
@@ -391,13 +393,13 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
 ) -> None:
     rows = Dataset.from_dict(
         {
-            TABLE_VALUE_SURVEYS["hsc"][0]: [1.5],
-            f"Z{DESI}": [0.25],
-            f"ZERR{DESI}": [1e-4],
-            f"ZWARN{DESI}": [False],
-            f"Z{SDSS}": [0.26],
-            f"Z_ERR{SDSS}": [2e-4],
-            f"ZWARNING{SDSS}": [False],
+            HSC_TABLE_COLUMNS[0]: [1.5],
+            f"Z{DATASET_DESI_SUFFIX}": [0.25],
+            f"ZERR{DATASET_DESI_SUFFIX}": [1e-4],
+            f"ZWARN{DATASET_DESI_SUFFIX}": [False],
+            f"Z{DATASET_SDSS_SUFFIX}": [0.26],
+            f"Z_ERR{DATASET_SDSS_SUFFIX}": [2e-4],
+            f"ZWARNING{DATASET_SDSS_SUFFIX}": [False],
         }
     )
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
@@ -408,14 +410,19 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
 
     stored = _stored("tokens")
     hsc, redshift = (stored.column(name)[0] for name in ("hsc", REDSHIFT))
-    plain = {"template": None, "table_value": None, "token": None, "excluded": None}
+    plain = {
+        "aion_prediction": None,
+        "table_value": None,
+        "token": None,
+        "excluded": None,
+    }
     assert response.status_code == 200
     assert response.json() == [
         {
             "section": REDSHIFT,
             "column": "DESI Z",
             "value": 0.25,
-            "template": float(_template(REDSHIFT)[0, 0]),
+            "aion_prediction": float(_aion_prediction(REDSHIFT)[0, 0]),
             "table_value": REDSHIFT_TABLE_VALUE,
             "token": redshift.values[0].as_py(),
             "excluded": None,
@@ -426,7 +433,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             "section": REDSHIFT,
             "column": "SDSS Z",
             "value": 0.26,
-            "template": None,
+            "aion_prediction": None,
             "table_value": None,
             "token": None,
             "excluded": "AION takes one redshift: DESI's",
@@ -437,9 +444,9 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             "section": "hsc",
             "column": "a_g",
             "value": 1.5,
-            "template": float(_template("hsc_table")[0, 0]),
+            "aion_prediction": float(_aion_prediction("hsc_table")[0, 0]),
             "table_value": 13,
-            "token": hsc.values[N_IMAGE_TOKENS].as_py(),
+            "token": hsc.values[LegacySurveyImage.num_tokens].as_py(),
             "excluded": None,
         },
     ]
@@ -456,12 +463,12 @@ def test_aion_s_redshift_shows_beside_the_one_it_reads_or_else_desi_z(
 ) -> None:
     rows = Dataset.from_dict(
         {
-            f"Z{DESI}": [0.25],
-            f"ZERR{DESI}": [1e-4],
-            f"ZWARN{DESI}": [True],
-            f"Z{SDSS}": [0.26],
-            f"Z_ERR{SDSS}": [2e-4],
-            f"ZWARNING{SDSS}": [sdss_flagged],
+            f"Z{DATASET_DESI_SUFFIX}": [0.25],
+            f"ZERR{DATASET_DESI_SUFFIX}": [1e-4],
+            f"ZWARN{DATASET_DESI_SUFFIX}": [True],
+            f"Z{DATASET_SDSS_SUFFIX}": [0.26],
+            f"Z_ERR{DATASET_SDSS_SUFFIX}": [2e-4],
+            f"ZWARNING{DATASET_SDSS_SUFFIX}": [sdss_flagged],
         }
     )
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
@@ -470,10 +477,12 @@ def test_aion_s_redshift_shows_beside_the_one_it_reads_or_else_desi_z(
     response = client.get("/galaxy/0/table")
     table_columns.cache_clear()
 
-    templates = {row["column"]: row["template"] for row in response.json()}
-    assert templates == {
-        column: float(_template(REDSHIFT)[0, 0]) if column == beside else None
-        for column in templates
+    aion_predictions = {
+        row["column"]: row["aion_prediction"] for row in response.json()
+    }
+    assert aion_predictions == {
+        column: float(_aion_prediction(REDSHIFT)[0, 0]) if column == beside else None
+        for column in aion_predictions
     }
 
 
@@ -486,11 +495,11 @@ def test_search_without_a_selection_is_rejected(client: TestClient) -> None:
     [
         "/galaxy/{galaxy}/image/ls",
         "/galaxy/{galaxy}/image/hsc/tokens",
-        "/galaxy/{galaxy}/image/hsc/template",
+        "/galaxy/{galaxy}/image/hsc/aion_prediction",
         "/galaxy/{galaxy}",
         "/galaxy/{galaxy}/spectrum/sdss",
         "/galaxy/{galaxy}/spectrum/desi/tokens",
-        "/galaxy/{galaxy}/spectrum/sdss/template",
+        "/galaxy/{galaxy}/spectrum/sdss/aion_prediction",
         "/galaxy/{galaxy}/table",
         "/search?galaxy={galaxy}&ls_image=0",
     ],
@@ -516,7 +525,7 @@ def test_text_search_rejects_invalid_queries(client: TestClient, params: dict) -
 def test_text_search_returns_each_match_with_its_contribution_from_every_mode(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    query = np.random.default_rng(0).standard_normal((1, GEMMA_DIM)).astype(np.float32)
+    query = np.random.default_rng(0).standard_normal((1, WEMM_DIM)).astype(np.float32)
     monkeypatch.setitem(
         client.app.dependency_overrides, query_embedder, lambda: lambda _: query
     )
