@@ -206,7 +206,7 @@ def generate_projections() -> None:
 
 @app.function(
     image=build_image,
-    gpu="L4",
+    gpu="L40S",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),
     timeout=6 * 60 * 60,
