@@ -6,7 +6,8 @@ Browse the sky
 
 The **Sky** tab, the default, shows the Legacy Survey image of COSMOS with a ring on each galaxy in the dataset. Drag to pan, and scroll or pinch to zoom.
 
-- Hover over a galaxy's cutout to outline it and preview the galaxy. Click to open it. Sources with no outline are not in the dataset.
+- Hover over a ring to preview the galaxy. Click it to open the galaxy. Sources with no ring are not in the dataset.
+- Zoom in and a square appears around each galaxy: its cutout, divided into 24 × 24 patches. Hover to highlight a patch and click to select it or clear it, then press **Search** in the details panel. Selecting a patch on another galaxy opens that galaxy and starts a new selection.
 - Colour the rings and filter them to a range as on the UMAP tab. Faded rings are AION's predictions.
 
 Browse the UMAP

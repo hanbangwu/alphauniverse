@@ -6,10 +6,11 @@ The frontend's exact behaviour. :doc:`/using` is the visitor's summary.
 Sky
 ---
 
-- The default tab. Tiles are Legacy Survey DR10 south JPEGs from ``legacysurvey.org``, requested by the browser, native to zoom 14 and enlarged to zoom 16. The map fills the space between the panels, unlike the UMAP, which runs under them, so all of it stays clickable. It opens fitted to the dataset's extent plus one cutout width, panning stops there, and north stays up.
+- The default tab. Tiles are Legacy Survey DR10 south JPEGs from ``legacysurvey.org``, requested by the browser, native to zoom 14 and enlarged to zoom 17. The map fills the space between the panels, unlike the UMAP, which runs under them, so all of it stays clickable. It opens fitted to the dataset's extent plus one cutout width, panning stops there, and north stays up.
 - ``/positions`` gives each galaxy's ``ra`` and ``dec``, drawn at longitude 180° − RA and latitude Dec on the tiles' Web Mercator grid.
 - Rings appear once ``/positions`` loads, in the no-value colour, then take the colours of the UMAP's property and hide outside the legend's range.
-- Hover and click take the nearest shown galaxy whose 25″ Legacy Survey cutout holds the cursor, so overlapping cutouts go to the nearer galaxy. Hover outlines that cutout and shows the UMAP's tooltip; the open galaxy's cutout stays outlined.
+- Below zoom 16, hover and click take the nearest shown galaxy within its ring, or within 6 px for a smaller ring. Hover brightens that ring and shows the UMAP's tooltip. Click opens the galaxy and starts no search. The open galaxy's ring stays bright.
+- From zoom 16, the deepest being 17, every shown galaxy has a square: its 25″ Legacy Survey cutout. Hover and click take the nearest galaxy whose square holds the cursor, so overlapping squares go to the nearer galaxy. Hover draws that square's 24 × 24 grid and highlights the patch; click opens the galaxy and toggles the patch in the Legacy Survey image selection of the search dialog, which only the open galaxy can hold. Patches count from the top left of the north-up, east-left image.
 
 UMAP
 ----

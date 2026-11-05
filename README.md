@@ -9,7 +9,7 @@
 
 ## Features
 
-- **Sky**: every galaxy on the Legacy Survey image of COSMOS, shown as a ring coloured by the same properties as the UMAP; hover to preview a galaxy and click to open it.
+- **Sky**: every galaxy on the Legacy Survey image of COSMOS, shown as a ring coloured by the same properties as the UMAP; hover to preview a galaxy, click to open it, and zoom in to pick its image patches for a search.
 - **UMAP**: every galaxy placed by its neighbours under whole-mode search, at any position or the same place; coloured by redshift, stellar mass, star formation rate, specific star formation rate, g − r colour, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000, measured or predicted, and filtered to a range of it.
 - **Galaxy view**: crossmatches, and Legacy Survey and HSC images and DESI and SDSS spectra in groups that collapse.
 - **AION predictions**: shows what AION predicts for any galaxy in every survey, observed or not.
