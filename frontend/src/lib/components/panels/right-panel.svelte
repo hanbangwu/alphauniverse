@@ -2,6 +2,7 @@
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
   import Observed from '$lib/components/common/observed.svelte'
   import PredictionsSwitch from '$lib/components/common/predictions-switch.svelte'
+  import GalaxyName from '$lib/components/galaxy-name.svelte'
   import SimilarityDialog from '$lib/components/similarity/similarity-dialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS } from '$lib/data/modes'
@@ -30,9 +31,9 @@
     {:else}
       {@const galaxy = view.galaxy.value}
       {#if coverage.data}
-        {@const { object_id, ra, dec } = coverage.data}
+        {@const { ra, dec } = coverage.data}
         <div class="flex flex-col gap-0.5">
-          <span class="text-sm font-medium">{object_id}</span>
+          <span class="text-sm font-medium"><GalaxyName {galaxy} /></span>
           <a
             href="https://www.legacysurvey.org/viewer/cutout.jpg?ra={ra}&dec={dec}&layer=ls-dr10"
             target="_blank"
