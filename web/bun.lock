@@ -8,6 +8,7 @@
         "@tanstack/svelte-query": "^6.3.11",
         "@uwdata/mosaic-core": "0.29.2",
         "@uwdata/mosaic-sql": "0.29.0",
+        "@vercel/analytics": "^2.0.1",
         "apache-arrow": "^17.0.0",
         "d3-array": "3.2.4",
         "d3-color": "3.1.0",
@@ -306,6 +307,8 @@
     "@uwdata/vgplot": ["@uwdata/vgplot@0.35.0", "", { "dependencies": { "@uwdata/mosaic-core": "^0.35.0", "@uwdata/mosaic-inputs": "^0.35.0", "@uwdata/mosaic-plot": "^0.35.0", "@uwdata/mosaic-sql": "^0.35.0" } }, "sha512-O89XWWyn6y8/wBVCDR0M0pXk1YwQuw0uKjfbRP4aPZjkXhyY9tzQabeADEo6SGgmpgDtEfOlnuL3ciGk2hv7lQ=="],
 
     "@uwdata/wk-geojson": ["@uwdata/wk-geojson@0.0.1", "", {}, "sha512-4RpnKbdrphwzP+BwgzuGRqA/s03oT1rzHAKdU43Ozn8J1BCTwS+2iAGQ7YQAnrCkCi213WtQ7VYaFjVtvZotPQ=="],
+
+    "@vercel/analytics": ["@vercel/analytics@2.0.1", "", { "peerDependencies": { "@remix-run/react": "^2", "@sveltejs/kit": "^1 || ^2", "next": ">= 13", "nuxt": ">= 3", "react": "^18 || ^19 || ^19.0.0-rc", "svelte": ">= 4", "vue": "^3", "vue-router": "^4" }, "optionalPeers": ["@remix-run/react", "@sveltejs/kit", "next", "nuxt", "react", "svelte", "vue", "vue-router"] }, "sha512-MTQG6V9qQrt1tsDeF+2Uoo5aPjqbVPys1xvnIftXSJYG2SrwXRHnqEvVoYID7BTruDz4lCd2Z7rM1BdkUehk2g=="],
 
     "acorn": ["acorn@8.19.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-oJlA3XiRm7Cyk6qFD2Jn8ak9B7jSy0qy00ADO3+8dpT0LSjFihQYv4C02LFCSYJV3Q37xYwwRy5m+IpIiUzqWw=="],
 

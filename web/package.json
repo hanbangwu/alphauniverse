@@ -57,6 +57,7 @@
     "@tanstack/svelte-query": "^6.3.11",
     "@uwdata/mosaic-core": "0.29.2",
     "@uwdata/mosaic-sql": "0.29.0",
+    "@vercel/analytics": "^2.0.1",
     "apache-arrow": "^17.0.0",
     "d3-array": "3.2.4",
     "d3-color": "3.1.0",
