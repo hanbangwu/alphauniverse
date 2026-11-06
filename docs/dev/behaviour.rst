@@ -1,7 +1,7 @@
 Site behaviour
 ==============
 
-The frontend's exact behaviour. :doc:`/using` is the visitor's summary.
+The web app's exact behaviour. :doc:`/using` is the visitor's summary.
 
 Map
 ---

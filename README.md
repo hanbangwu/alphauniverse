@@ -23,5 +23,5 @@ Requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh).
 ```sh
 uv run python -m scripts.fixture           # synthetic artifacts in .cache
 uv run fastapi dev                         # API on 127.0.0.1:8000
-cd frontend && bun install && bun run dev  # frontend
+cd web && bun install && bun run dev       # web app
 ```

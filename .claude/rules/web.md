@@ -1,9 +1,9 @@
 ---
 paths:
-  - "frontend/**"
+  - "web/**"
 ---
 
-# Frontend
+# Web
 
 - A change to what the UI shows updates the README's feature list; `docs-upkeep.md` names the Sphinx pages.
 - `src/lib/components/ui` is owned code, styled as glass through the `glass` utility in `src/routes/layout.css`. Add a component with `bun x shadcn-svelte@latest add <name>`, never `--overwrite`, then edit it like any other file.

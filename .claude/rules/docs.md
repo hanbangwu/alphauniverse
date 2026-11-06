@@ -20,7 +20,7 @@ paths:
   - `docs/figures/`: schematics as SVG, drawn in `currentColor` and included with `.. raw:: html` so they follow the light and dark themes.
   - `docs/methods/`: how each feature works, one page each, without code names.
   - `docs/using.rst`: what a visitor can do and what each result means, by task, without the layout.
-  - `docs/dev/behaviour.rst`: the frontend's exact behaviour: limits, defaults, inputs and state.
+  - `docs/dev/behaviour.rst`: the web app's exact behaviour: limits, defaults, inputs and state.
   - `docs/dev/benchmarks.rst`: what each benchmark measures, with its figures drawn from its report.
   - `docs/dev/how-to.rst`: the commands.
   - `docs/dev/reference.rst`: the pipeline, which code runs each feature, the artifacts, the HTTP API, and the tests and CI.

@@ -8,7 +8,7 @@
 | `modal_app.py` | Modal deployment                                         |
 | `scripts/`     | Dataset build, OpenAPI export, test fixtures, benchmarks |
 | `tests/`       | pytest suite                                             |
-| `frontend/`    | Svelte app                                               |
+| `web/`         | Svelte app                                               |
 | `docs/`        | Sphinx documentation and the benchmark reports           |
 
 ## Commands
@@ -20,7 +20,7 @@ uv run --group build pytest                        # tests
 uv run ruff check app scripts tests modal_app.py   # lint
 uv run ruff format app scripts tests modal_app.py  # format
 uv run python -m scripts.fixture                   # build fixture tree
-uv run python -m scripts.openapi                   # regenerate frontend/openapi.json
+uv run python -m scripts.openapi                   # regenerate web/openapi.json
 ```
 
 ### Benchmarks
@@ -48,10 +48,10 @@ uv run --group build modal run -m scripts.benchmarks.neighbour_quality    # meas
 uv run --group docs make -C docs html
 ```
 
-### Frontend
+### Web
 
 ```sh
-cd frontend
+cd web
 bun install && bun run dev
 bun run check
 bun run lint
@@ -87,7 +87,7 @@ bun run lint
 ## Review and merge
 
 - A draft stays a draft until the person who ran the session has read it. They mark it ready, or Claude does and merges it once they comment that they are happy to merge.
-- Minor bug fixes, test-only changes, docs changes and backend changes `joshspeagle` approves in a comment merge without the other maintainer's review. Anything else, and anything touching `frontend/`, waits for it.
+- Minor bug fixes, test-only changes, docs changes and backend changes `joshspeagle` approves in a comment merge without the other maintainer's review. Anything else, and anything touching `web/`, waits for it.
 - Claude monitors every pull request it opens until it merges or closes (CI, comments, merge conflicts), checking in about an hour after opening.
 - Once a pull request is ready for review, push to it only when a maintainer asks, to fix a check Claude's own change broke, or to address Copilot's comments while no maintainer has pushed to the branch. Post anything else as a comment with the proposed fix, and wait.
 - In an emergency (production down, a secret exposed), comment first and put the fix in a new pull request.
