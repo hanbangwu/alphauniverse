@@ -40,6 +40,7 @@ uv run --group build modal run -m scripts.benchmarks.retrieval_quality    # meas
 uv run --group build modal run -m scripts.benchmarks.probe_quality        # measure PROVABGS probes on the stored vectors on Modal
 uv run --group build modal run -m scripts.benchmarks.redshift_quality     # measure AION's redshift without spectra on Modal
 uv run --group build modal run -m scripts.benchmarks.neighbour_quality    # measure the stored vectors' neighbourhoods and maps on Modal
+uv run --group build modal run -m scripts.benchmarks.shape_quality        # measure same-shape search on rotated copies and redshifts on Modal
 ```
 
 ### Docs

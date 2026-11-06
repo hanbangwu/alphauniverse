@@ -223,6 +223,13 @@ Are a galaxy's nearest galaxies like it, and does one vector per galaxy show the
 
    show(neighbour_quality())
 
+Same-shape search
+-----------------
+
+Does same-shape search find a galaxy turned or mirrored, and a spectrum at another redshift? ``shape_quality`` takes 32 Legacy Survey galaxies with a half-light radius in the top quarter and an ellipticity of at least 0.2, turns or mirrors each cutout (a quarter, half and three-quarter turn, a mirror, a mirror with a quarter turn, 30° and 45°, and the cutout unchanged), and encodes and predicts each copy with AION. It searches from the copy's central 4 × 4 cells, at the same place, at any position and with the same shape, and reports how often the original galaxy ranks first and in the top 10, its median rank, and, for the same shape, the median distance in cells between the best pose and where the transform put each selected cell. For quarter turns and mirrors it also reports how much of AION's agreement between a galaxy and itself survives the transform: :math:`(A_T - A_0) / (A_1 - A_0)`, with :math:`A_T` the mean log overlap between the copy's cells and the original's cells they came from, :math:`A_1` the same for the unchanged copy, and :math:`A_0` the unchanged copy against another galaxy.
+
+For 100 galaxies with a spectrum and a measured redshift, it searches 16 consecutive observed spectrum windows with the same shape and at the same place. Over the top 32 with a measured redshift, it reports the share whose best stretch :math:`a` meets :math:`|\ln a - \ln\frac{1 + z_g}{1 + z_q}| \le 0.01`, the share at another redshift, :math:`|\ln\frac{1 + z_g}{1 + z_q}| > 0.01`, and, at the same place, the share at the query's redshift. It has no committed report.
+
 Search speed
 ------------
 

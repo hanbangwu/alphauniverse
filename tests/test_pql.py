@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app import embeddings, pql
 from app.config import (
+    GRID,
     IMAGE_MODES,
     OBSERVATIONS,
     REDSHIFT,
@@ -19,6 +20,7 @@ from app.config import (
     TABLE_MODES,
     TOP_CODES,
 )
+from app.poses import image_poses, spectrum_poses
 
 GALAXY = 0
 SELECTION = {
@@ -189,12 +191,16 @@ def test_a_search_reads_what_the_agreement_matrix_holds(query: pql.Query) -> Non
         )
 
 
-def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+def cross_overlaps(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
     own = dense(table.slice(GALAXY, 1), mode, TOP_CODES)[0, list(slots)]
     overlaps = dense(table, mode, pql.KEPT) @ own.T
     if mode in SPECTRUM_MODES:
         overlaps = np.maximum(overlaps, pql.SPECTRUM_TOKEN_FLOOR)
-    return np.log(overlaps).max(axis=1).sum(axis=1)
+    return overlaps
+
+
+def best_overlap_sums(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+    return np.log(cross_overlaps(table, mode, slots)).max(axis=1).sum(axis=1)
 
 
 def test_a_position_independent_mode_sums_each_selected_slot_s_best_overlap(
@@ -544,3 +550,58 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
         ]
         for galaxy in found.galaxies.tolist()
     ]
+
+
+def pose_reference(table: pa.Table, mode: str, slots: tuple[int, ...]) -> np.ndarray:
+    overlaps = cross_overlaps(table, mode, slots)
+    if mode in IMAGE_MODES:
+        quarters = image_poses(np.array(slots)).quarters
+        return interpolated_sums(overlaps, *bilinear(quarters / 4))
+    found = spectrum_poses(np.array(slots))
+    return interpolated_sums(overlaps, found.indices, found.weights)
+
+
+def bilinear(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    start = np.floor(positions).astype(int)
+    fraction = positions - start
+    indices, weights = [], []
+    for row in (0, 1):
+        for column in (0, 1):
+            cell = np.minimum(start + (row, column), GRID - 1)
+            indices.append(cell[..., 0] * GRID + cell[..., 1])
+            weights.append(
+                np.abs(1 - row - fraction[..., 0])
+                * np.abs(1 - column - fraction[..., 1])
+            )
+    return np.stack(indices, axis=-1), np.stack(weights, axis=-1)
+
+
+def interpolated_sums(
+    overlaps: np.ndarray, indices: np.ndarray, weights: np.ndarray
+) -> np.ndarray:
+    each = np.arange(overlaps.shape[-1])[None, :, None]
+    mixed = (overlaps[:, indices, each] * weights).sum(axis=-1)
+    return np.log(np.maximum(mixed, pql.PROBABILITY_FLOOR)).sum(axis=-1)
+
+
+SHAPES = [("ls_image", (275, 276, 300)), ("desi_spectrum", (40, 41, 42))]
+
+
+@pytest.mark.parametrize(("mode", "slots"), SHAPES)
+def test_a_same_shape_mode_keeps_each_galaxy_s_best_pose_of_the_whole_selection(
+    table: pa.Table,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    slots: tuple[int, ...],
+) -> None:
+    monkeypatch.setattr(pql, "CHUNK", 2)
+
+    found = pql.shape_sum(GALAXY, mode, slots)
+
+    expected = pose_reference(table, mode, slots)
+    np.testing.assert_allclose(found.totals, expected.max(axis=1), rtol=1e-4)
+    np.testing.assert_allclose(
+        np.take_along_axis(expected, found.poses[:, None], axis=1)[:, 0],
+        found.totals,
+        rtol=1e-4,
+    )

@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import embeddings
 from .config import (
+    GRID,
     IMAGE_MODES,
     KEPT,
     MODE_SURVEYS,
@@ -35,6 +36,7 @@ from .config import (
     TokenMode,
     artifact,
 )
+from .poses import QUARTERS, image_poses, spectrum_poses
 from .search import tokens
 
 SPECTRUM_TOKEN_FLOOR = 0.1 / MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]
@@ -66,6 +68,15 @@ CHUNK = 16
 BLOCK = 8192
 BUILDING = Lock()
 THREADS = pa.cpu_count()
+
+QUARTER_WEIGHTS = torch.tensor(
+    [
+        [(1 - row) * (1 - column), (1 - row) * column, row * (1 - column), row * column]
+        for row in np.arange(QUARTERS) / QUARTERS
+        for column in np.arange(QUARTERS) / QUARTERS
+    ],
+    dtype=torch.float32,
+)
 
 ImageTokens = Annotated[
     tuple[Annotated[int, Field(ge=0, lt=LegacySurveyImage.num_tokens)], ...],
@@ -147,6 +158,11 @@ class Results(NamedTuple):
     predicted: list[list[str]]
     maps: dict[str, np.ndarray]
     positions: dict[str, np.ndarray]
+
+
+class Shapes(NamedTuple):
+    totals: np.ndarray
+    poses: np.ndarray
 
 
 class ModeResults(NamedTuple):
@@ -479,6 +495,107 @@ def basket_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> np.ndarray:
             lambda rows: best_log_overlaps(rows, mode, form).sum(axis=1),
             predictions().to_batches(),
         )
+
+
+class ImageReads(NamedTuple):
+    indices: torch.Tensor
+    weights: torch.Tensor
+
+
+class SpectrumReads(NamedTuple):
+    indices: torch.Tensor
+    weights: torch.Tensor
+
+
+def image_reads(slots: tuple[int, ...]) -> ImageReads:
+    quarters = image_poses(np.array(slots)).quarters.astype(np.int32)
+    cells, parts = np.divmod(quarters, QUARTERS)
+    offsets = parts[..., 0] * QUARTERS + parts[..., 1]
+    used = np.flatnonzero(np.bincount(offsets.ravel(), minlength=QUARTERS**2))
+    lookup = np.full(QUARTERS**2, -1, np.int32)
+    lookup[used] = np.arange(len(used))
+    flat = lookup[offsets] * N_IMAGE_TOKENS + cells[..., 0] * GRID + cells[..., 1]
+    return ImageReads(
+        torch.from_numpy(flat * len(slots) + np.arange(len(slots), dtype=np.int32)),
+        QUARTER_WEIGHTS[used],
+    )
+
+
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def pose_reads(mode: str, slots: tuple[int, ...]) -> ImageReads | SpectrumReads:
+    if mode in IMAGE_MODES:
+        return image_reads(slots)
+    found = spectrum_poses(np.array(slots))
+    flat = found.indices * len(slots) + np.arange(len(slots))[:, None]
+    reads = found.indices.shape[-1]
+    return SpectrumReads(
+        torch.from_numpy(flat.reshape(-1, reads).astype(np.int32)),
+        torch.from_numpy(found.weights.reshape(-1, reads)),
+    )
+
+
+def quarter_table(overlaps: np.ndarray, reads: ImageReads) -> torch.Tensor:
+    count = overlaps.shape[-1]
+    grid = torch.from_numpy(overlaps).view(-1, GRID, GRID, count).permute(0, 3, 1, 2)
+    padded = torch.nn.functional.pad(grid, (0, 1, 0, 1), mode="replicate")
+    corners = (
+        padded[..., :GRID, :GRID],
+        padded[..., :GRID, 1:],
+        padded[..., 1:, :GRID],
+        padded[..., 1:, 1:],
+    )
+    used = reads.weights.any(dim=0)
+    mixed = torch.einsum(
+        "oc,cgsrw->orwsg",
+        reads.weights[:, used],
+        torch.stack([corner for corner, kept in zip(corners, used) if kept]),
+    )
+    return mixed.clamp_(min=PROBABILITY_FLOOR).log_().reshape(-1, len(overlaps))
+
+
+def spectrum_totals(overlaps: np.ndarray, reads: SpectrumReads) -> torch.Tensor:
+    table = torch.from_numpy(np.ascontiguousarray(overlaps.transpose(1, 2, 0)))
+    mixed = torch.nn.functional.embedding_bag(
+        reads.indices, table.flatten(0, 1), per_sample_weights=reads.weights, mode="sum"
+    )
+    totals = mixed.clamp_(min=PROBABILITY_FLOOR).log_()
+    return totals.view(-1, overlaps.shape[-1], len(overlaps)).sum(dim=1)
+
+
+def best_poses(
+    rows: pa.RecordBatch,
+    mode: str,
+    form: np.ndarray,
+    reads: ImageReads | SpectrumReads,
+) -> np.ndarray:
+    best = np.empty((rows.num_rows, 2))
+    for chunk, overlaps in cross_overlaps(rows, mode, form):
+        if isinstance(reads, SpectrumReads):
+            values, poses = spectrum_totals(overlaps, reads).max(dim=0)
+        else:
+            table = quarter_table(overlaps, reads)
+            totals = torch.nn.functional.embedding_bag(reads.indices, table, mode="sum")
+            values, poses = totals.max(dim=0)
+        best[chunk] = np.c_[values.numpy(), poses.numpy()]
+    return best
+
+
+def shaped(
+    galaxy: int,
+    mode: str,
+    slots: tuple[int, ...],
+    batches: list[pa.RecordBatch],
+) -> Shapes:
+    form = query_forms(row(galaxy), {mode: np.array(slots)})[mode]
+    reads = pose_reads(mode, slots)
+    found = threaded(partial(best_poses, mode=mode, form=form, reads=reads), batches)
+    return Shapes(found[:, 0], found[:, 1].astype(np.int64))
+
+
+@lru_cache(maxsize=AGREEMENT_GALAXIES)
+def shape_sum(galaxy: int, mode: str, slots: tuple[int, ...]) -> Shapes:
+    with BUILDING:
+        return shaped(galaxy, mode, slots, predictions().to_batches())
 
 
 def distributions(mode: str, form: np.ndarray) -> np.ndarray:
