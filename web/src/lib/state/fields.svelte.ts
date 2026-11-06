@@ -6,18 +6,11 @@ export class EnumField<T extends string> extends Field<T> {
   readonly members: readonly T[]
   readonly choices: readonly Choice<T>[]
 
-  constructor(
-    private readonly labels: Labels<T>,
-    source: Source<T>
-  ) {
+  constructor(labels: Labels<T>, source: Source<T>) {
     const members = Object.keys(labels) as T[]
     super(must(members[0], 'a first member to fall back to'), source)
     this.members = members
     this.choices = members.map((value) => ({ value, ...labels[value] }))
-  }
-
-  get label(): string {
-    return this.labels[this.value].label
   }
 }
 
