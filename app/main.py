@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import secrets
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from io import BytesIO
@@ -11,9 +13,9 @@ import pyarrow as pa
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import LegacySurveyImage
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.routing import APIRoute
+from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from . import pql
@@ -164,27 +166,47 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+PASSWORD_COOKIE = "password"
+PASSWORD_COOKIE_AGE = 30 * 24 * 60 * 60
+
+cookie_password = APIKeyCookie(name=PASSWORD_COOKIE, auto_error=False)
+bearer_password = HTTPBearer(auto_error=False)
+
+
+def require_password(
+    cookie: Annotated[str | None, Depends(cookie_password)],
+    bearer: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_password)],
+) -> None:
+    supplied = bearer.credentials if bearer else cookie
+    expected = os.environ["ACCESS_PASSWORD"]
+    if supplied is None or not secrets.compare_digest(
+        supplied.encode(), expected.encode()
+    ):
+        raise HTTPException(401, "Password required", {"WWW-Authenticate": "Bearer"})
+
+
 app = FastAPI(
     title="alphauniverse",
     lifespan=lifespan,
     generate_unique_id_function=lambda route: route.name,
+    dependencies=[Depends(require_password)],
 )
 app.router.route_class = RevalidatedRoute
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=(
-        "https://alphauniverse.aiforscientists.org",
-        "https://alphauniverse-surp.vercel.app",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ),
-    allow_origin_regex=r"https://alphauniverse[a-z0-9-]*\.vercel\.app",
-    allow_methods=["GET", "HEAD"],
-    allow_headers=["*"],
-    expose_headers=["Content-Length", "Content-Range", "Accept-Ranges"],
-    max_age=86400,
-)
+
+@app.post("/login")
+def login(
+    bearer: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())],
+    response: Response,
+) -> None:
+    response.set_cookie(
+        PASSWORD_COOKIE,
+        bearer.credentials,
+        max_age=PASSWORD_COOKIE_AGE,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
 
 
 @app.get(

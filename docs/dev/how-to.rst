@@ -6,15 +6,15 @@ Every command runs from the repository root and needs `uv <https://docs.astral.s
 Run the site locally
 --------------------
 
-Serve the API from a small synthetic artifact tree and dataset in the production schemas, then the web app, which calls ``http://127.0.0.1:8000``:
+Serve the API from a small synthetic artifact tree and dataset in the production schemas, then the web app, which reaches ``http://127.0.0.1:8000`` through Vite's ``/api`` proxy:
 
 .. code-block:: sh
 
    uv run python -m scripts.fixture
-   uv run fastapi dev app/main.py
+   ACCESS_PASSWORD=local uv run fastapi dev app/main.py
    cd web && bun install && bun run dev
 
-The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
+Enter the same password at ``/login``. The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
 
 Build the dataset and the artifacts
 -----------------------------------

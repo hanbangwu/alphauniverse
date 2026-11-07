@@ -24,10 +24,17 @@ def tree(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="session")
-def client(tree: Path) -> Iterator[TestClient]:
+def password() -> str:
+    os.environ["ACCESS_PASSWORD"] = "test-password"
+    return os.environ["ACCESS_PASSWORD"]
+
+
+@pytest.fixture(scope="session")
+def client(tree: Path, password: str) -> Iterator[TestClient]:
     from app.main import app
 
-    with TestClient(app) as opened:
+    headers = {"Authorization": f"Bearer {password}"}
+    with TestClient(app, headers=headers) as opened:
         yield opened
 
 

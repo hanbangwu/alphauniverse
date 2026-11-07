@@ -1,6 +1,11 @@
 Using the site
 ==============
 
+Enter the password
+------------------
+
+The site asks for a password on your first visit and remembers it in that browser for 30 days.
+
 Browse the map
 --------------
 

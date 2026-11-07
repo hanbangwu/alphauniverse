@@ -31,7 +31,7 @@ from app.config import (
     artifact,
 )
 from app.dataset import table_columns
-from app.main import query_embedder
+from app.main import PASSWORD_COOKIE, query_embedder
 
 ARROW = "application/vnd.apache.arrow.stream"
 
@@ -72,6 +72,41 @@ def test_properties_are_served_whole(client: TestClient) -> None:
 
 def test_meta_is_served_without_the_dataset(client: TestClient) -> None:
     assert client.get("/meta").status_code == 200
+
+
+def test_a_request_without_the_password_is_rejected(client: TestClient) -> None:
+    assert TestClient(client.app).get("/meta").status_code == 401
+
+
+def test_a_wrong_bearer_password_is_rejected(client: TestClient) -> None:
+    headers = {"Authorization": "Bearer wrong"}
+
+    assert client.get("/meta", headers=headers).status_code == 401
+
+
+def test_a_wrong_cookie_is_rejected(client: TestClient) -> None:
+    cookies = {PASSWORD_COOKIE: "wrong"}
+    visitor = TestClient(client.app, cookies=cookies)
+
+    assert visitor.get("/meta").status_code == 401
+
+
+def test_login_sets_a_cookie_that_authenticates(
+    client: TestClient, password: str
+) -> None:
+    visitor = TestClient(client.app, base_url="https://testserver")
+    headers = {"Authorization": f"Bearer {password}"}
+
+    assert visitor.post("/login", headers=headers).status_code == 200
+    assert visitor.get("/meta").status_code == 200
+
+
+def test_login_with_a_wrong_password_sets_no_cookie(client: TestClient) -> None:
+    visitor = TestClient(client.app, base_url="https://testserver")
+    headers = {"Authorization": "Bearer wrong"}
+
+    assert visitor.post("/login", headers=headers).status_code == 401
+    assert not visitor.cookies
 
 
 @pytest.mark.parametrize("projection", get_args(Projection))

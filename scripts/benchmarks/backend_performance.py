@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from itertools import cycle
@@ -6,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import modal
 import numpy as np
 import pyarrow.compute as pc
 from aion.modalities import LegacySurveyImage
@@ -41,12 +43,20 @@ def time_it(runs: int, call: Callable[[], Any]) -> dict[str, Any]:
     return summary([elapsed(call) for _ in range(runs)])
 
 
-@app.function(image=image, cpu=1, timeout=60 * 60, volumes={CACHE_PATH: cache_volume})
+@app.function(
+    image=image,
+    cpu=1,
+    timeout=60 * 60,
+    volumes={CACHE_PATH: cache_volume},
+    secrets=[modal.Secret.from_name("access-password")],
+)
 def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
     rng = np.random.default_rng(0)
     texts = cycle(TEXTS)
 
-    with httpx.Client(base_url=url, timeout=None) as session:
+    password = os.environ["ACCESS_PASSWORD"]
+    headers = {"Authorization": f"Bearer {password}"}
+    with httpx.Client(base_url=url, headers=headers, timeout=None) as session:
 
         def get(path: str, **params: Any) -> None:
             session.get(path, params=params).raise_for_status()

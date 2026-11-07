@@ -309,6 +309,7 @@ serving_image = (
     volumes={CACHE_PATH: cache_volume},
     max_containers=SERVING_MAX_CONTAINERS,
     scaledown_window=SERVING_SCALEDOWN_WINDOW,
+    secrets=[modal.Secret.from_name("access-password")],
 )
 @modal.concurrent(max_inputs=SERVING_MAX_INPUTS)
 @modal.asgi_app()

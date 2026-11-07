@@ -3,6 +3,13 @@ Site behaviour
 
 The web app's exact behaviour. :doc:`/using` is the visitor's summary.
 
+Password
+--------
+
+- A page request without the ``password`` cookie redirects to ``/login``, and the app makes no API request. The server hook checks only that the cookie exists.
+- A correct password opens the map. A wrong one shows **Incorrect password.** Any other failure shows **The server is unavailable. Try again in a moment.**
+- A ``401`` from an SDK call returns to ``/login``.
+
 Map
 ---
 

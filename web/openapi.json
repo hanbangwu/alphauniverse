@@ -5,6 +5,30 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/login": {
+      "post": {
+        "summary": "Login",
+        "operationId": "login",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/meta": {
       "get": {
         "summary": "Get Meta",
@@ -20,13 +44,29 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/projections/{projection}": {
       "get": {
         "summary": "Get Projections",
         "operationId": "get_projections",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "projection",
@@ -85,13 +125,29 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/galaxy/{galaxy}": {
       "get": {
         "summary": "Get Galaxy",
         "operationId": "get_galaxy",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -132,6 +188,14 @@
       "get": {
         "summary": "Get Table",
         "operationId": "get_table",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -176,6 +240,14 @@
       "get": {
         "summary": "Get Image",
         "operationId": "get_image",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -230,6 +302,14 @@
       "get": {
         "summary": "Get Image Tokens",
         "operationId": "get_image_tokens",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -284,6 +364,14 @@
       "get": {
         "summary": "Get Image Aion Prediction",
         "operationId": "get_image_aion_prediction",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -338,6 +426,14 @@
       "get": {
         "summary": "Get Spectrum",
         "operationId": "get_spectrum",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -392,6 +488,14 @@
       "get": {
         "summary": "Get Spectrum Tokens",
         "operationId": "get_spectrum_tokens",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -446,6 +550,14 @@
       "get": {
         "summary": "Get Spectrum Aion Prediction",
         "operationId": "get_spectrum_aion_prediction",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -500,6 +612,14 @@
       "get": {
         "summary": "Get Cosines",
         "operationId": "get_cosines",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -556,6 +676,14 @@
       "get": {
         "summary": "Get Saliency",
         "operationId": "get_saliency",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -697,6 +825,14 @@
       "get": {
         "summary": "Get Search",
         "operationId": "get_search",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -850,6 +986,14 @@
       "get": {
         "summary": "Get Mode Search",
         "operationId": "get_mode_search",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "galaxy",
@@ -946,6 +1090,14 @@
       "get": {
         "summary": "Get Text Search",
         "operationId": "get_text_search",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "text",
@@ -1287,6 +1439,17 @@
           "type"
         ],
         "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "password"
+      },
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }
