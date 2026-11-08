@@ -10,8 +10,17 @@ Password
 - A correct password opens the map. A wrong one shows **Incorrect password.** Any other failure shows **The server is unavailable. Try again in a moment.**
 - A ``401`` from an SDK call returns to ``/login``.
 
-Map
+Sky
 ---
+
+- The default tab. Tiles are Legacy Survey DR10 south JPEGs from ``legacysurvey.org``, requested by the browser, native to zoom 14 and enlarged to zoom 17. The map fills the space between the panels, unlike the UMAP, which runs under them, so all of it stays clickable. It opens fitted to the dataset's extent plus one cutout width, panning stops there, and north stays up.
+- ``/positions`` gives each galaxy's ``ra`` and ``dec``, drawn at longitude 180° − RA and latitude Dec on the tiles' Web Mercator grid.
+- Below zoom 16, every galaxy is drawn once ``/positions`` loads as a white 5 px dot whose copy grows to twice its radius on a cubic ease-out and fades every 1 s, all in step. The colour and range controls show only on the UMAP tab.
+- Below zoom 16, hover and click take the nearest galaxy within 6 px. Hover rings that dot in red and shows the galaxy's image and name. Click opens the galaxy and starts no search. The open galaxy's dot stays ringed.
+- From zoom 16, the deepest being 17, dots hide and every galaxy has its 25″ Legacy Survey cutout drawn as a 24 × 24 grid, the open galaxy's brighter and on top. Hover and click take the open galaxy when its grid holds the cursor, else the nearest galaxy whose grid does. Hover highlights the patch; click opens the galaxy and toggles the patch in the Legacy Survey image selection of the search dialog, which only the open galaxy can hold. Patches count from the top left of the north-up, east-left image.
+
+UMAP
+----
 
 - **Any position**, the default, draws ``any_position_points``; **Same place** draws ``same_place_points``.
 - A property is coloured on 32 viridis bins from its 1st to its 99th percentile; values beyond either end take that end's colour. Redshift is the default. g − r is only measured.

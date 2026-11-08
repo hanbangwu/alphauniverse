@@ -6,10 +6,18 @@ Enter the password
 
 The site asks for a password on your first visit and remembers it in that browser for 30 days.
 
-Browse the map
+Browse the sky
 --------------
 
-Each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
+The **Sky** tab, the default, shows the Legacy Survey image of COSMOS with a pulsing dot on each galaxy in the dataset. Drag to pan, and scroll or pinch to zoom.
+
+- Hover over a dot to preview the galaxy. Click it to open the galaxy. Sources with no dot are not in the dataset.
+- Zoom in and the dots give way to each galaxy's cutout, drawn as a grid of 24 × 24 patches, the open galaxy's on top. Hover to highlight a patch and click to select it or clear it, then press **Search** in the details panel. Selecting a patch on another galaxy opens that galaxy and starts a new selection.
+
+Browse the UMAP
+---------------
+
+On the **UMAP** tab, each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
 
 - **Any position** groups galaxies whose features match wherever they sit in the image or spectrum. **Same place** groups them only when the features are in the same place.
 - Colour the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r colour, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. **Measured first** uses the measured value where there is one and AION's prediction, faded, elsewhere. **Predicted** uses AION's prediction for every galaxy.

@@ -54,6 +54,7 @@ from .dataset import (
     fitted,
     identity,
     image,
+    positions,
     predicted_image,
     redshift,
     smoothed,
@@ -267,6 +268,15 @@ def get_properties(request: Request) -> Response:
 @app.head("/galaxies/property", include_in_schema=False)
 def head_properties(request: Request) -> Response:
     return get_properties(request)
+
+
+@app.get(
+    "/positions",
+    response_class=Response,
+    responses={200: {"content": ARROW_STREAM}},
+)
+def get_positions() -> Response:
+    return arrow(positions())
 
 
 @app.get(

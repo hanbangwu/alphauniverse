@@ -6,7 +6,7 @@
 
   interface Props {
     tooltip: DataPoint
-    label: string
+    label?: string
   }
 
   let { tooltip, label }: Props = $props()

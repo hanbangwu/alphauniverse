@@ -184,6 +184,18 @@ def test_image_aion_prediction_is_a_png_of_the_crop(
         )
 
 
+@pytest.mark.usefixtures("identified")
+def test_positions_are_in_galaxy_order(client: TestClient) -> None:
+    response = client.get("/positions")
+    positions = pa.ipc.open_stream(response.content).read_all()
+
+    assert response.headers["content-type"] == ARROW
+    assert positions.num_rows == client.get("/meta").json()["galaxy_count"]
+    galaxy = client.get("/galaxy/6").json()
+    assert positions.column("ra")[6].as_py() == galaxy["ra"]
+    assert positions.column("dec")[6].as_py() == galaxy["dec"]
+
+
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 @pytest.mark.usefixtures("identified")
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:

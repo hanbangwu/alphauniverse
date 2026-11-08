@@ -46,7 +46,7 @@ export const schema = z.object({
   spectrum_threshold: threshold,
   spectrum_match_threshold: threshold,
   table_threshold: threshold,
-  tab: z.enum(['umap', 'text']).catch('umap'),
+  tab: z.enum(['sky', 'umap', 'text']).catch('sky'),
   text: z.string().nullable().catch(null),
   ...byMode(() => indices),
   table_values: indices,

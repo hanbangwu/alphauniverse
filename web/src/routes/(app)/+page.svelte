@@ -2,13 +2,13 @@
   import LeftPanel from '$lib/components/panels/left-panel.svelte'
   import ProjectionView from '$lib/components/panels/projection-view.svelte'
   import RightPanel from '$lib/components/panels/right-panel.svelte'
+  import SkyView from '$lib/components/panels/sky-view.svelte'
   import TextSearch from '$lib/components/panels/text-search.svelte'
   import * as Resizable from '$lib/components/ui/resizable'
   import * as Tabs from '$lib/components/ui/tabs'
-  import { Field } from '$lib/state/field.svelte'
-  import { DEFAULTS, stored } from '$lib/state/params.svelte'
+  import { getView } from '$lib/state/app.svelte'
 
-  const tab = new Field(DEFAULTS.tab, stored('tab'))
+  const { tab } = getView()
   let rightPanel = $state(20)
 </script>
 
@@ -30,9 +30,13 @@
 
     <Resizable.Pane defaultSize={60} minSize={32} class="relative">
       <Tabs.List class="pointer-events-auto absolute top-3 left-1/2 z-10 -translate-x-1/2">
-        <Tabs.Trigger value="umap">Map</Tabs.Trigger>
+        <Tabs.Trigger value="sky">Sky</Tabs.Trigger>
+        <Tabs.Trigger value="umap">UMAP</Tabs.Trigger>
         <Tabs.Trigger value="text">Text Search</Tabs.Trigger>
       </Tabs.List>
+      <Tabs.Content value="sky" class="pointer-events-auto absolute inset-0">
+        <SkyView />
+      </Tabs.Content>
       <Tabs.Content value="text" class="pointer-events-auto h-full overflow-y-auto pt-12">
         <TextSearch />
       </Tabs.Content>
