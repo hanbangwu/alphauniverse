@@ -8,6 +8,7 @@ import pytest
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 
+from app import config
 from app.config import (
     KEPT,
     PREDICTIONS,
@@ -31,7 +32,7 @@ def store(
 ) -> tuple[pa.Table, dict[str, np.ndarray]]:
     tokens = artifact("tokens")
     with pytest.MonkeyPatch.context() as patch:
-        patch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path_factory.mktemp("store")))
+        patch.setattr(config, "BUILD_DIR", tmp_path_factory.mktemp("store"))
         shutil.copy(tokens, artifact("tokens"))
         predictions_module.generate_predictions()
         table = pa.ipc.open_file(

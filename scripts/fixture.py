@@ -1,3 +1,4 @@
+import shutil
 from collections.abc import Callable
 from itertools import batched
 from pathlib import Path
@@ -9,6 +10,7 @@ from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset, Features, Sequence, Value
 
+from app import config
 from app.config import (
     AION_EMBEDDING_DIM,
     AION_SPECTRUM_GRID,
@@ -40,7 +42,6 @@ from app.config import (
     VIEW_TYPES,
     WEMM_DIM,
     artifact,
-    build_dir,
     dataset_dir,
     galaxy_count,
     points,
@@ -469,8 +470,9 @@ def forget() -> None:
 
 
 def build(galaxies: int) -> Path:
-    target = build_dir()
-    target.mkdir(parents=True, exist_ok=True)
+    target = config.BUILD_DIR
+    shutil.rmtree(target, ignore_errors=True)
+    target.mkdir(parents=True)
 
     rng = np.random.default_rng(SEED)
     centres = rng.standard_normal((CLUSTERS, AION_EMBEDDING_DIM)).astype(np.float32)
@@ -531,17 +533,3 @@ def build(galaxies: int) -> Path:
 
     forget()
     return target
-
-
-def main() -> None:
-    target = build(GALAXIES)
-
-    files = sorted(path for path in target.rglob("*") if path.is_file())
-    total = sum(path.stat().st_size for path in files)
-    print(f"{GALAXIES} galaxies -> {target} ({total / 1e6:.1f} MB)")
-    for path in files:
-        print(f"  {path.relative_to(target)!s:24} {path.stat().st_size / 1e6:8.2f} MB")
-
-
-if __name__ == "__main__":
-    main()

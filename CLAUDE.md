@@ -6,7 +6,7 @@
 | -------------- | -------------------------------------------------------- |
 | `app/`         | Build pipeline and the FastAPI app                       |
 | `modal_app.py` | Modal deployment                                         |
-| `scripts/`     | Dataset build, OpenAPI export, test fixtures, benchmarks |
+| `scripts/`     | Dataset build, OpenAPI export, dev subset, test fixture, benchmarks |
 | `tests/`       | pytest suite                                             |
 | `web/`         | Svelte app                                               |
 | `docs/`        | Sphinx documentation and the benchmark reports           |
@@ -19,7 +19,7 @@
 uv run --group build pytest                        # tests
 uv run ruff check app scripts tests modal_app.py   # lint
 uv run ruff format app scripts tests modal_app.py  # format
-uv run python -m scripts.fixture                   # build fixture tree
+uv run python -m scripts.dev_subset                # build the dev subset on Modal and download it
 uv run python -m scripts.openapi                   # regenerate web/openapi.json
 ```
 
@@ -113,7 +113,7 @@ bun run lint
 ## Measurements
 
 - State only measured figures, or figures computed from them with the computation shown and consistent units.
-- The fixture tests correctness; never use it to measure or extrapolate production behaviour.
+- The fixture and the dev subset test correctness; never use them to measure or extrapolate production behaviour.
 - A measurement records what produced it. Figures from different machines or thread layouts do not compare, so a table that mixes runs is wrong.
 
 ## Writing

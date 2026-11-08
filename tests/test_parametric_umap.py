@@ -8,6 +8,7 @@ import pyarrow.parquet as pq
 import pytest
 from datasets import Dataset
 
+from app import config
 from app.config import FLAG_SURVEYS, POINTS, artifact, galaxy_count
 from scripts.fixture import build, forget
 
@@ -23,7 +24,7 @@ def runs(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> Iterator[list[dict[str, pa.Table]]]:
     with pytest.MonkeyPatch.context() as patch:
-        patch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path_factory.mktemp("umap")))
+        patch.setattr(config, "BUILD_DIR", tmp_path_factory.mktemp("umap"))
         patch.setattr(umap_module, "WANDB_MODE", "disabled")
         patch.setattr(umap_module, "EPOCHS", 1)
         patch.setattr(

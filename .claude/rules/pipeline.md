@@ -24,4 +24,5 @@ paths:
 
 - A pull request that changes what a `generate_*` job writes names the jobs that must be rerun, in order, before the change can deploy.
 - A change to an artifact's schema updates `scripts/fixture.py` and the artifact's prose in `docs/dev/reference.rst` together.
+- A new artifact that is not one row per galaxy is added to `COPIED` in `scripts/dev_subset.py`, or given its own cut.
 - Code that reads an artifact larger than one batch reads it in batches into preallocated arrays, and never holds a second copy of it.

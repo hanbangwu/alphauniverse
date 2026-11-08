@@ -16,11 +16,13 @@ def galaxies() -> int:
 
 
 @pytest.fixture(scope="session")
-def tree(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def tree() -> Iterator[Path]:
+    from app import config
     from scripts.fixture import GALAXIES, build
 
-    os.environ["ALPHAUNIVERSE_CACHE"] = str(tmp_path_factory.mktemp("artifacts"))
-    return build(GALAXIES)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(config, "BUILD_DIR", Path(__file__).parent.parent / ".fixtures")
+        yield build(GALAXIES)
 
 
 @pytest.fixture(scope="session")

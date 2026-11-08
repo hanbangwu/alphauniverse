@@ -1,5 +1,6 @@
 __pycache__
 .cache
+.fixtures
 wandb
 .DS_Store
 .idea

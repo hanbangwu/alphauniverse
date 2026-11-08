@@ -21,7 +21,7 @@
 Requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh).
 
 ```sh
-uv run python -m scripts.fixture           # synthetic artifacts in .cache
+uv run python -m scripts.dev_subset       # 128 real galaxies in .cache, from Modal
 ACCESS_PASSWORD=local uv run fastapi dev   # API on 127.0.0.1:8000
 cd web && bun install && bun run dev       # web app
 ```

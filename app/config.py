@@ -5,6 +5,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
 
+import modal
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -395,20 +396,19 @@ def points(galaxy: np.ndarray, coordinates: np.ndarray, category: pa.Array) -> p
     )
 
 
-def build_dir() -> Path:
-    return Path(
-        os.environ.get(
-            "ALPHAUNIVERSE_CACHE", Path(__file__).resolve().parent.parent / ".cache"
-        )
-    )
+BUILD_DIR = (
+    Path(__file__).resolve().parent.parent / ".cache"
+    if modal.is_local()
+    else Path("/cache")
+)
 
 
 def dataset_dir() -> Path:
-    return build_dir() / "dataset"
+    return BUILD_DIR / "dataset"
 
 
 def artifact(role: str) -> Path:
-    return build_dir() / f"{role}.{ARTIFACTS[role]}"
+    return BUILD_DIR / f"{role}.{ARTIFACTS[role]}"
 
 
 @cache

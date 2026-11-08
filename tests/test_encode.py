@@ -7,6 +7,7 @@ import pytest
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 
+from app import config
 from app.config import (
     FLAG_SURVEYS,
     REDSHIFT,
@@ -141,7 +142,7 @@ def test_generated_stores_have_their_schemas_and_a_vector_per_token(
         galaxy(1, hsc=False, desi=False, sdss=False),
         galaxy(2, hsc=False, desi=False, sdss=True),
     ]
-    monkeypatch.setenv("ALPHAUNIVERSE_CACHE", str(tmp_path))
+    monkeypatch.setattr(config, "BUILD_DIR", tmp_path)
     monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
     forget()
 

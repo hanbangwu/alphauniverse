@@ -21,7 +21,6 @@ app = modal.App("alphauniverse")
 cache_volume = modal.Volume.from_name("alphauniverse-cache", create_if_missing=True)
 
 environment = {
-    "ALPHAUNIVERSE_CACHE": CACHE_PATH,
     "HF_HOME": CACHE_PATH,
     "WANDB_DIR": CACHE_PATH,
 }
@@ -44,10 +43,8 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
-    from app.config import build_dir
     from app.encode import generate_embeddings
 
-    build_dir().mkdir(parents=True, exist_ok=True)
     generate_embeddings()
     cache_volume.commit()
 
@@ -61,10 +58,8 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_predictions() -> None:
-    from app.config import build_dir
     from app.predictions import generate_predictions
 
-    build_dir().mkdir(parents=True, exist_ok=True)
     generate_predictions()
     cache_volume.commit()
 
@@ -196,10 +191,8 @@ def generate_aion_prediction_embeddings() -> None:
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def generate_projections() -> None:
-    from app.config import build_dir
     from app.parametric_umap import generate_projections
 
-    build_dir().mkdir(parents=True, exist_ok=True)
     generate_projections()
     cache_volume.commit()
 
@@ -213,10 +206,8 @@ def generate_projections() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_pairs() -> None:
-    from app.config import build_dir
     from app.text_search import generate_pairs
 
-    build_dir().mkdir(parents=True, exist_ok=True)
     generate_pairs()
     cache_volume.commit()
 

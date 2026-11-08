@@ -6,15 +6,15 @@ Every command runs from the repository root and needs `uv <https://docs.astral.s
 Run the site locally
 --------------------
 
-Serve the API from a small synthetic artifact tree and dataset in the production schemas, then the web app, which reaches ``http://127.0.0.1:8000`` through Vite's ``/api`` proxy:
+Build the dev subset on Modal and download it into ``.cache``, then serve the API from it and the web app, which reaches ``http://127.0.0.1:8000`` through Vite's ``/api`` proxy:
 
 .. code-block:: sh
 
-   uv run python -m scripts.fixture
+   uv run python -m scripts.dev_subset   # --galaxies, default 128
    ACCESS_PASSWORD=local uv run fastapi dev app/main.py
    cd web && bun install && bun run dev
 
-Enter the same password at ``/login``. The fixture's 12 galaxies are synthetic: develop against it, never measure with it. Its ``dataset`` directory holds the columns the API serves, so images, spectra and the catalogue table need no download; without that directory the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
+Enter the same password at ``/login``. ``MODAL_ENVIRONMENT=dev`` before the first command builds the dev subset from the ``dev`` volume. Develop against the dev subset, never measure with it. Without ``.cache/dataset`` the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
 
 Build the dataset and the artifacts
 -----------------------------------
@@ -82,7 +82,7 @@ Run the tests and linters
    uv run ruff format app scripts tests modal_app.py
    cd web && bun run lint && bun run check
 
-Tests need no Modal, GPU or network.
+Tests need no Modal, GPU or network. Each run replaces ``.fixtures`` with the fixture.
 
 Run a benchmark
 ---------------
