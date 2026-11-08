@@ -10,6 +10,7 @@
   import Map from 'ol/Map'
   import Overlay from 'ol/Overlay'
   import View from 'ol/View'
+  import ScaleLine from 'ol/control/ScaleLine'
   import { defaults } from 'ol/control/defaults'
   import type { Coordinate } from 'ol/coordinate'
   import type { Extent } from 'ol/extent'
@@ -26,6 +27,7 @@
   import XYZ from 'ol/source/XYZ'
   import { Fill, Stroke, Style } from 'ol/style'
   import { onMount } from 'svelte'
+  import { prefersReducedMotion } from 'svelte/motion'
 
   interface Target {
     galaxy: number
@@ -35,6 +37,7 @@
   const TILES = 'https://www.legacysurvey.org/viewer/ls-dr10-south/1/{z}/{x}/{y}.jpg'
   const CREDIT = '<a href="https://www.legacysurvey.org/viewer">Legacy Surveys</a>'
   const NATIVE_ZOOM = 14
+  const DOT_ZOOM = 12
   const PATCH_ZOOM = 16
   const MAX_ZOOM = 17
   const REACH = 6
@@ -43,17 +46,21 @@
   const FOCUSED = ['any', ...['hovered', 'selected'].map(focus)]
   const PHASE = ['%', ['/', ['time'], PULSE_SECONDS], 1]
   const EASED = ['-', 1, ['^', ['-', 1, PHASE], 3]]
+  const DOT = { 'circle-radius': DOT_RADIUS, 'circle-fill-color': 'white' }
+  const DOTTED = ['>', ['zoom'], DOT_ZOOM]
   const SKY_STYLE = [
     {
+      filter: DOTTED,
       style: [
         {
           'circle-radius': ['*', DOT_RADIUS, ['+', 1, EASED]],
           'circle-fill-color': 'white',
-          'circle-opacity': ['*', 0.6, ['-', 1, PHASE]]
+          'circle-opacity': ['*', ['var', 'pulsing'], 0.6, ['-', 1, PHASE]]
         },
-        { 'circle-radius': DOT_RADIUS, 'circle-fill-color': 'white' }
+        DOT
       ]
     },
+    { filter: ['all', ['!', DOTTED], focus('selected')], style: DOT },
     {
       filter: FOCUSED,
       style: {
@@ -146,7 +153,7 @@
   const rings = new WebGLVectorLayer({
     source: galaxies,
     style: SKY_STYLE,
-    variables: { hovered: -1, selected: -1 },
+    variables: { hovered: -1, selected: -1, pulsing: 1 },
     maxZoom: PATCH_ZOOM - 0.001
   })
   const squares = new VectorLayer({
@@ -166,13 +173,14 @@
   function pick(map: Map, pixel: Pixel, coordinate: Coordinate): Target | null {
     const closest = galaxies.getClosestFeatureToCoordinate(coordinate)
     if (!closest) return null
-    if ((map.getView().getZoom() ?? 0) >= PATCH_ZOOM) {
+    if (squares.isVisible(map.getView())) {
       const open = view.galaxy.value
       return (
         (open === null ? null : patchTarget(galaxies.getFeatureById(open), coordinate)) ??
         patchTarget(closest, coordinate)
       )
     }
+    if ((map.getView().getZoom() ?? 0) <= DOT_ZOOM) return null
     const [x, y] = map.getPixelFromCoordinate(closest.getGeometry()!.getCoordinates())
     return Math.hypot(pixel[0] - x, pixel[1] - y) <= REACH
       ? { galaxy: closest.getId() as number, patch: null }
@@ -180,6 +188,7 @@
   }
 
   function hover(next: Target | null): void {
+    if (next?.galaxy === hovered?.galaxy && next?.patch === hovered?.patch) return
     hovered = next
     element.style.cursor = next ? 'pointer' : ''
   }
@@ -201,10 +210,15 @@
         })
       ],
       overlays: [overlay],
-      controls: defaults({ zoom: false, rotate: false, attributionOptions: { collapsible: false } })
+      controls: defaults({
+        zoom: false,
+        rotate: false,
+        attributionOptions: { collapsible: false }
+      }).extend([new ScaleLine({ units: 'degrees' })])
     })
     rings.on('postrender', () => {
-      if ((created.getView().getZoom() ?? 0) < PATCH_ZOOM) created.render()
+      if (!prefersReducedMotion.current && (created.getView().getZoom() ?? 0) > DOT_ZOOM)
+        created.render()
     })
     created.on('pointermove', (event) => {
       if (event.dragging) return
@@ -213,8 +227,8 @@
     })
     created.on('click', (event) => {
       const picked = pick(created, event.pixel, event.coordinate)
+      view.select(picked?.galaxy ?? null)
       if (!picked) return
-      view.select(picked.galaxy)
       if (picked.patch !== null) view.tokens.ls_image.toggle(picked.patch)
     })
     const leave = () => {
@@ -260,7 +274,8 @@
   $effect(() => {
     rings.updateStyleVariables({
       hovered: hovered?.galaxy ?? -1,
-      selected: view.galaxy.value ?? -1
+      selected: view.galaxy.value ?? -1,
+      pulsing: prefersReducedMotion.current ? 0 : 1
     })
     squares.changed()
   })

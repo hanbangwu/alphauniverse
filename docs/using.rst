@@ -9,7 +9,7 @@ The site asks for a password on your first visit and remembers it in that browse
 Browse the sky
 --------------
 
-The **Sky** tab, the default, shows the Legacy Survey image of COSMOS with a pulsing dot on each galaxy in the dataset. Drag to pan, and scroll or pinch to zoom.
+The **Sky** tab, the default, shows the Legacy Survey image of COSMOS and, once you zoom in, a pulsing dot on each galaxy in the dataset. Drag to pan, and scroll or pinch to zoom.
 
 - Hover over a dot to preview the galaxy. Click it to open the galaxy. Sources with no dot are not in the dataset.
 - Zoom in and the dots give way to each galaxy's cutout, drawn as a grid of 24 × 24 patches, the open galaxy's on top. Hover to highlight a patch and click to select it or clear it, then press **Search** in the details panel. Selecting a patch on another galaxy opens that galaxy and starts a new selection.
