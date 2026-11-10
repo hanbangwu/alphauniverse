@@ -10,6 +10,7 @@
   import Map from 'ol/Map'
   import Overlay from 'ol/Overlay'
   import View from 'ol/View'
+  import MousePosition from 'ol/control/MousePosition'
   import ScaleLine from 'ol/control/ScaleLine'
   import { defaults } from 'ol/control/defaults'
   import type { Coordinate } from 'ol/coordinate'
@@ -98,6 +99,11 @@
 
   function focus(name: string) {
     return ['==', ['get', 'galaxy'], ['var', name]]
+  }
+
+  function skyPosition([lon, lat]: Coordinate = []): string {
+    const ra = (((180 - lon) % 360) + 360) % 360
+    return `RA ${ra.toFixed(5)}°, Dec ${lat.toFixed(5)}°`
   }
 
   function patchArea(place: Coordinate, patch: number): Extent {
@@ -214,7 +220,16 @@
         zoom: false,
         rotate: false,
         attributionOptions: { collapsible: false }
-      }).extend([new ScaleLine({ units: 'degrees' })])
+      }).extend([
+        new ScaleLine({ units: 'degrees' }),
+        new MousePosition({
+          projection: 'EPSG:4326',
+          coordinateFormat: skyPosition,
+          placeholder: '',
+          className:
+            'absolute bottom-9 left-2 rounded-sm bg-(--ol-partial-background-color) px-1 text-[10px] text-(--ol-foreground-color) tabular-nums empty:hidden'
+        })
+      ])
     })
     rings.on('postrender', () => {
       if (!prefersReducedMotion.current && (created.getView().getZoom() ?? 0) > DOT_ZOOM)
@@ -250,8 +265,6 @@
     const sky = new View({
       center: getCenter(area),
       maxZoom: MAX_ZOOM,
-      extent: area,
-      showFullExtent: true,
       enableRotation: false
     })
     map.updateSize()

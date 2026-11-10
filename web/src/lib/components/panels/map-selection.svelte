@@ -30,38 +30,34 @@
 </script>
 
 <section
-  class="absolute top-3 right-[calc(var(--right-panel)+0.75rem)] flex w-64 flex-col gap-2 glass rounded-xl p-2 text-xs"
+  class="absolute top-3 right-3 flex w-64 flex-col gap-2 glass rounded-xl p-2 text-xs"
   aria-label="Selected galaxies"
 >
   <span class="font-medium">{galaxies.length} galaxies selected</span>
-  {#if galaxies.length}
-    <div class="max-h-40 overflow-y-auto">
-      <Table.Root class="text-xs">
-        <Table.Header>
-          <Table.Row class="hover:bg-transparent">
-            <Table.Head class="h-7 px-0 font-normal">Object ID</Table.Head>
+  <div class="max-h-40 overflow-y-auto">
+    <Table.Root class="text-xs">
+      <Table.Header>
+        <Table.Row class="hover:bg-transparent">
+          <Table.Head class="h-7 px-0 font-normal">Object ID</Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {#each galaxies as galaxy (galaxy)}
+          <Table.Row class="last:border-0">
+            <Table.Cell class="p-0">
+              <button
+                type="button"
+                class="w-full cursor-pointer py-1.5 text-left font-mono outline-none aria-pressed:font-semibold focus-visible:ring-2 focus-visible:ring-ring/50"
+                aria-pressed={view.galaxy.value === galaxy}
+                onclick={() => view.select(galaxy)}><GalaxyName {galaxy} /></button
+              >
+            </Table.Cell>
           </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {#each galaxies as galaxy (galaxy)}
-            <Table.Row class="last:border-0">
-              <Table.Cell class="p-0">
-                <button
-                  type="button"
-                  class="w-full cursor-pointer py-1.5 text-left font-mono outline-none aria-pressed:font-semibold focus-visible:ring-2 focus-visible:ring-ring/50"
-                  aria-pressed={view.galaxy.value === galaxy}
-                  onclick={() => view.select(galaxy)}><GalaxyName {galaxy} /></button
-                >
-              </Table.Cell>
-            </Table.Row>
-          {/each}
-        </Table.Body>
-      </Table.Root>
-    </div>
-    <Button variant="secondary" size="xs" disabled={loading} onclick={download}
-      >Export as CSV</Button
-    >
-  {/if}
+        {/each}
+      </Table.Body>
+    </Table.Root>
+  </div>
+  <Button variant="secondary" size="xs" disabled={loading} onclick={download}>Export as CSV</Button>
   {#if error}
     <p role="alert" class="text-destructive">{error}</p>
   {/if}

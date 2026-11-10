@@ -96,11 +96,7 @@
   let highlighted = $derived(circled?.filter(inRange))
 </script>
 
-<div
-  class="relative size-full overflow-hidden [&>div:first-child>div>div:last-child]:right-(--right-panel)!"
-  bind:clientWidth={width}
-  bind:clientHeight={height}
->
+<div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
   {#if coloured && shades && mode.current && width > 0 && height > 0}
     {#key coloured.table}
       <EmbeddingViewMosaic
@@ -137,11 +133,11 @@
     {#if region.value && selected.isError}
       <p
         role="alert"
-        class="absolute top-3 right-[calc(var(--right-panel)+0.75rem)] text-xs text-destructive"
+        class="pointer-events-none absolute inset-0 grid place-content-center text-sm text-destructive"
       >
         {errorMessage(selected.error)}
       </p>
-    {:else if region.value && selected.data}
+    {:else if region.value && selected.data?.length}
       <MapSelection galaxies={selected.data} loading={selected.isFetching} />
     {/if}
   {:else if shown.isError || colouring.isError}

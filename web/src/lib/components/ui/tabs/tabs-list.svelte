@@ -6,6 +6,7 @@
     variants: {
       variant: {
         default: 'glass',
+        bare: '',
         line: 'gap-1 bg-transparent'
       }
     },

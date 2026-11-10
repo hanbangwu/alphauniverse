@@ -10,10 +10,16 @@ Password
 - A correct password opens the map. A wrong one shows **Incorrect password.** Any other failure shows **The server is unavailable. Try again in a moment.**
 - A ``401`` from an SDK call returns to ``/login``.
 
+Layout
+------
+
+- A glass dock at the top holds the logo, the tabs, a theme toggle and icon links to GitHub and ``/docs``, each icon named in a tooltip on hover.
+- The UMAP controls sit in a non-modal drawer on the left, open while the UMAP tab shows unless hidden with its button. The open galaxy shows in a non-modal drawer on the right; closing it closes the galaxy. Neither closes on a click outside or by dragging.
+
 Sky
 ---
 
-- The default tab. Tiles are Legacy Survey DR10 south JPEGs from ``legacysurvey.org``, requested by the browser, native to zoom 14 and enlarged to zoom 17. The map fills the space between the panels, unlike the UMAP, which runs under them, so all of it stays clickable. It opens fitted to the dataset's extent plus one cutout width, panning stops there, and north stays up. A scale bar in the bottom left gives angular size in degrees, arcminutes or arcseconds.
+- The default tab. Tiles are Legacy Survey DR10 south JPEGs from ``legacysurvey.org``, requested by the browser, native to zoom 14 and enlarged to zoom 17. The map, like the UMAP, fills the window under the drawers. It opens fitted to the dataset's extent plus one cutout width, pans and zooms freely across the survey from there, and keeps north up. A scale bar in the bottom left gives angular size in degrees, arcminutes or arcseconds, and above it the RA and Dec under the cursor show to five decimal places, RA wrapped to 0° to 360°.
 - ``/positions`` gives each galaxy's ``ra`` and ``dec``, drawn at longitude 180° − RA and latitude Dec on the tiles' Web Mercator grid.
 - Above zoom 12 and below zoom 16, every galaxy is drawn once ``/positions`` loads as a white 5 px dot whose copy grows to twice its radius on a cubic ease-out and fades every 1 s, all in step; with reduced motion set, the dots stay still. At zoom 12 and below, only the open galaxy is drawn, as a still dot, and none can be hovered or clicked. The colour and range controls show only on the UMAP tab.
 - While dots show, hover and click take the nearest galaxy within 6 px. Hover rings that dot in red and shows the galaxy's image and name. Click opens the galaxy and starts no search. The open galaxy's dot stays ringed.
@@ -27,7 +33,7 @@ UMAP
 - A property is coloured on 32 viridis bins from its 1st to its 99th percentile; values beyond either end take that end's colour. Redshift is the default. g − r is only measured.
 - The legend gives the range, its unit and how many galaxies have a measured value, a prediction or none.
 - The slider moves in 200 steps across the legend's range and counts the galaxies in range. A thumb left at its end also keeps the values beyond that side, and the readout then shows only the other bound. The range resets when the property or source changes. The map circles only search matches in range.
-- Box and lasso selections keep only galaxies in range, list them by object ID, each clickable, and export their ``object_id``, ``ra`` and ``dec`` as CSV. A selection belongs to the map it was drawn on and drops when the layout changes or on a click elsewhere on the map.
+- Box and lasso selections keep only galaxies in range, list them by object ID, each clickable (an empty selection shows nothing), and export their ``object_id``, ``ra`` and ``dec`` as CSV. A selection belongs to the map it was drawn on and drops when the layout changes or on a click elsewhere on the map.
 - Hover shows the galaxy's image and property, with the prediction's width when the value is AION's.
 
 Galaxy
