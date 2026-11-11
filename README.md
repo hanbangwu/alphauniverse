@@ -9,20 +9,18 @@
 
 ## Features
 
-- **Sky**: every galaxy on the Legacy Survey image of COSMOS, shown as a pulsing dot; hover to preview a galaxy, click to open it, and zoom in to pick its image patches for a search.
-- **UMAP**: every galaxy placed by its neighbours under whole-mode search, at any position or the same place; coloured by redshift, stellar mass, star formation rate, specific star formation rate, g − r colour, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000, measured or predicted, and filtered to a range of it.
-- **Galaxy view**: crossmatches, and Legacy Survey and HSC images and DESI and SDSS spectra in groups that collapse.
-- **AION predictions**: shows what AION predicts for any galaxy in every survey, observed or not.
-- **Similarity search**: pick image regions, wavelengths, and catalogue values of a galaxy in any of its surveys, and search with predictive query likelihood over AION's predictions.
-- **Text search**: search galaxies using natural language, with each mode's contribution to each match.
-- **Export**: Export any search results through CSV or [ECSV](https://docs.astropy.org/en/stable/io/ascii/ecsv.html).
+- **Sky**: Find galaxies through a [Legacy Survey](https://www.legacysurvey.org/viewer)-style interface
+- **Parametric UMAP**: Select galaxies with similar features through AION embeddings projected using a parametric UMAP.
+- **Text search**: search galaxies using natural language
+- **Similarity search**: pick image regions, wavelengths, and catalogue values of a galaxy in any of its surveys and search with predictive query likelihood over AION predictions.
+- **Export**: export search results through CSV or [ECSV](https://docs.astropy.org/en/stable/io/ascii/ecsv.html)
 
-## Running locally
+## Running
 
 Requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh).
 
 ```sh
-uv run python -m scripts.dev_subset       # 128 real galaxies in .cache, from Modal
-ACCESS_PASSWORD=local uv run fastapi dev   # API on 127.0.0.1:8000
-cd web && bun install && bun run dev       # web app
+uv run python -m scripts.dev_subset       # generate a small subset for dev
+ACCESS_PASSWORD=local uv run fastapi dev  # start the server with password "local"
+cd web && bun install && bun run dev      # start the web app
 ```
