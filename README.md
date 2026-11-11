@@ -9,11 +9,11 @@
 
 ## Features
 
-- **Sky**: Find galaxies through a [Legacy Survey](https://www.legacysurvey.org/viewer)-style interface
-- **Parametric UMAP**: Select galaxies with similar features through AION embeddings projected using a parametric UMAP.
-- **Text search**: search galaxies using natural language
+- **Sky**: find galaxies through a [Legacy Survey](https://www.legacysurvey.org/viewer)-style interface.
+- **Parametric UMAP**: select galaxies with similar features through AION embeddings projected using a parametric UMAP.
+- **Text search**: search galaxies using natural language.
 - **Similarity search**: pick image regions, wavelengths, and catalogue values of a galaxy in any of its surveys and search with predictive query likelihood over AION predictions.
-- **Export**: export search results through CSV or [ECSV](https://docs.astropy.org/en/stable/io/ascii/ecsv.html)
+- **Export**: export search results through CSV or [ECSV](https://docs.astropy.org/en/stable/io/ascii/ecsv.html).
 
 ## Running
 
