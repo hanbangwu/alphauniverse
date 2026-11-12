@@ -1,13 +1,14 @@
-import importlib
 from pathlib import Path
 
 import numpy as np
 import pyarrow.compute as pc
 import pytest
+import torch
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 
 from app import config
+from app import encode as encode_module
 from app.config import (
     FLAG_SURVEYS,
     REDSHIFT,
@@ -19,9 +20,6 @@ from app.config import (
 )
 from app.search import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, source
 from scripts.fixture import TOKENS, forget
-
-torch = pytest.importorskip("torch")
-encode_module = importlib.import_module("app.encode")
 
 pytestmark = pytest.mark.usefixtures("random_weights")
 

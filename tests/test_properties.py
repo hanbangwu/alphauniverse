@@ -84,7 +84,7 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     value, error, warning = REDSHIFT_COLUMNS["desi"]
     rows = Dataset.from_dict(
         {
-            value: [None if np.isnan(z) else z for z in redshift],
+            value: [None if np.isnan(found) else found for found in redshift],
             error: [1e-4] * galaxies,
             warning: [False] * galaxies,
             **{column: [None] * galaxies for column in REDSHIFT_COLUMNS["sdss"]},
@@ -94,7 +94,7 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
             f"SHAPE_E1{DATASET_LS_SUFFIX}": first.tolist(),
             f"SHAPE_E2{DATASET_LS_SUFFIX}": second.tolist(),
             TOKEN_SURVEYS["desi"]: [
-                None if np.isnan(z) else spectrum for z in redshift
+                None if np.isnan(found) else spectrum for found in redshift
             ],
             f"LOG_MSTAR{DATASET_PROVABGS_SUFFIX}": [
                 float(mass) if kept else None

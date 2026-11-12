@@ -1,14 +1,16 @@
-import importlib
 import shutil
 from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
 import pytest
+import torch
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 
 from app import config
+from app import encode as encode_module
+from app import predictions as predictions_module
 from app.config import (
     KEPT,
     PREDICTIONS,
@@ -17,9 +19,6 @@ from app.config import (
     TOP_CODES,
     artifact,
 )
-
-pytest.importorskip("torch")
-predictions_module = importlib.import_module("app.predictions")
 
 
 def column(table: pa.Table, name: str) -> np.ndarray:
@@ -180,8 +179,6 @@ def test_every_mode_gives_a_normalised_distribution_per_slot_over_its_vocabulary
 def test_one_batched_decode_matches_decoding_each_block_of_slots_alone(
     tree: Path, random_weights: None
 ) -> None:
-    torch = importlib.import_module("torch")
-    encode_module = importlib.import_module("app.encode")
     aion = encode_module.model()
     row = predictions_module.source("tokens").head(1).to_pylist()[0]
     encoded, _, encoder_mask, _ = encode_module.context(predictions_module.inputs(row))

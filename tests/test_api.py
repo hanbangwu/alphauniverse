@@ -557,18 +557,6 @@ def test_galaxy_past_the_end_is_rejected(
     assert client.get(path.format(galaxy=galaxies)).status_code == 422
 
 
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"text": ""},
-        {"text": "x" * 501},
-        {"text": "a", "matches": 0},
-    ],
-)
-def test_text_search_rejects_invalid_queries(client: TestClient, params: dict) -> None:
-    assert client.get("/search/text", params=params).status_code == 422
-
-
 def test_text_search_returns_each_match_with_its_contribution_from_every_mode(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

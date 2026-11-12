@@ -8,8 +8,9 @@ from typing import Any, NamedTuple
 import modal
 import numpy as np
 import torch
+from scipy.stats import pearsonr, rankdata
 
-from app import pql, predictions
+from app import config, pql, predictions
 from app.config import (
     DATASET_REVISION,
     PROBABILITY_FLOOR,
@@ -240,19 +241,9 @@ def anywhere_forms(
     return [scheme.decode(scheme.encode(own), side="query")[0] for own in rows]
 
 
-def ranks(scores: torch.Tensor) -> torch.Tensor:
-    ordered = scores.sort(dim=-1).values.contiguous()
-    values = scores.contiguous()
-    low = torch.searchsorted(ordered, values)
-    high = torch.searchsorted(ordered, values, right=True)
-    return (low + high - 1).float() / 2
-
-
 def spearman(first: torch.Tensor, second: torch.Tensor) -> torch.Tensor:
-    first, second = ranks(first), ranks(second)
-    first = first - first.mean(dim=-1, keepdim=True)
-    second = second - second.mean(dim=-1, keepdim=True)
-    return (first * second).sum(dim=-1) / (first.norm(dim=-1) * second.norm(dim=-1))
+    first, second = (rankdata(part.cpu().numpy(), axis=-1) for part in (first, second))
+    return torch.from_numpy(pearsonr(first, second, axis=-1).statistic)
 
 
 def chosen(scores: torch.Tensor, top: int) -> torch.Tensor:
@@ -325,7 +316,7 @@ def summary(
 )
 def measure(name: str, sample: int, queries: int) -> dict[str, Any]:
     mode = next(mode for mode in predictions.MODES if mode.name == name)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = config.device()
     galaxies = draw(sample)
     gallery = predict(galaxies, mode)
     seen = np.flatnonzero(pql.observed(mode.survey)[galaxies])

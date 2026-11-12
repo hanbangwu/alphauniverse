@@ -1,4 +1,3 @@
-import importlib
 import json
 import os
 from collections.abc import Iterator
@@ -42,9 +41,10 @@ def client(tree: Path, password: str) -> Iterator[TestClient]:
 
 @pytest.fixture(scope="module")
 def random_weights() -> Iterator[None]:
-    torch = pytest.importorskip("torch")
-    encode_module = importlib.import_module("app.encode")
-    codec_config = importlib.import_module("aion.codecs.config")
+    import torch
+    from aion.codecs import config as codec_config
+
+    from app import encode as encode_module
     from app.config import device
 
     configs = Path(__file__).parent / "aion"

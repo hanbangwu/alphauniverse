@@ -1,15 +1,13 @@
-import importlib
-
 import numpy as np
 import pyarrow as pa
 import pytest
+import torch
 
 from app import pql
+from app import predictions as predictions_module
 from app.config import PREDICTIONS, SPECTRUM_TOKEN_RANK
+from scripts.benchmarks import compression, compression_quality
 
-torch = pytest.importorskip("torch")
-predictions_module = importlib.import_module("app.predictions")
-compression = importlib.import_module("scripts.benchmarks.compression")
 Mode = predictions_module.Mode
 
 SLOTS = 6
@@ -108,13 +106,12 @@ def test_the_current_scheme_reads_gallery_and_query_images_as_search_does() -> N
 def test_exact_log_overlaps_match_float64_where_float32_probabilities_underflow() -> (
     None
 ):
-    quality = importlib.import_module("scripts.benchmarks.compression_quality")
     mode = Mode("ls_table", ("key",), np.arange(SLOTS), 300, "ls")
     gallery = np.full((4, SLOTS, mode.vocabulary), -120.0, dtype=np.float32)
     gallery[np.arange(4), :, np.arange(4)] = 0
     queries = np.asarray([0, 2])
 
-    overlaps = quality.log_overlaps(
+    overlaps = compression_quality.log_overlaps(
         None, mode, gallery, queries, gallery[queries], torch.device("cpu")
     )
 

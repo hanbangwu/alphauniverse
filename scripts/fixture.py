@@ -9,6 +9,7 @@ import pyarrow.parquet as pq
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset, Features, Sequence, Value
+from scipy.special import softmax
 
 from app import config
 from app.config import (
@@ -30,6 +31,7 @@ from app.config import (
     PROPERTIES,
     REDSHIFT,
     REDSHIFT_COLUMNS,
+    SEED,
     SPECTRUM_MODES,
     SPECTRUM_TOKEN_RANK,
     STORE_COLUMNS,
@@ -83,7 +85,6 @@ STRIDE: dict[str, int] = {
 }
 
 GALAXIES = 12
-SEED = 42
 CLUSTERS = 64
 NOISE = 0.05
 
@@ -143,11 +144,6 @@ def _store(
         )
 
 
-def _softmax(logits: np.ndarray) -> np.ndarray:
-    exponentials = np.exp(logits - logits.max(axis=-1, keepdims=True))
-    return exponentials / exponentials.sum(axis=-1, keepdims=True)
-
-
 def _predictions(rng: np.random.Generator, galaxies: int) -> None:
     ones = np.ones((MODALITY_INFO["tok_spectrum_desi"]["vocab_size"], 1))
     orthogonal, _ = np.linalg.qr(
@@ -179,7 +175,7 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
     for galaxy in range(galaxies):
         values = {
             "galaxy": np.asarray([galaxy], dtype=np.int32),
-            REDSHIFT: _softmax(
+            REDSHIFT: softmax(
                 3 * rng.standard_normal(MODALITY_INFO["tok_z"]["vocab_size"])
             ).astype(np.float32),
         }
@@ -214,14 +210,15 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
             ).astype(np.float32)
             values[f"{survey}_tails"] = mass[:, -1].astype(np.float32)
             values[f"{survey}_table_values"] = (
-                _softmax(
+                softmax(
                     3
                     * rng.standard_normal(
                         (
                             len(table_values),
                             MODALITY_INFO["tok_spectrum_desi"]["vocab_size"],
                         )
-                    )
+                    ),
+                    axis=-1,
                 )
                 .astype(np.float32)
                 .reshape(-1)

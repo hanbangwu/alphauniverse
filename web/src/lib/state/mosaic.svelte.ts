@@ -1,29 +1,16 @@
 import { type Projection, projectionUrl, propertiesUrl } from '$lib/client'
 import { BINS } from '$lib/color'
+import { extent } from '$lib/data/scores'
 import { PREDICTABLE, type Property } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
 import { Query, column, count, isBetween, loadParquet } from '@uwdata/mosaic-sql'
+import { polygonContains } from 'd3-polygon'
 import type { Point, Rectangle } from 'embedding-atlas'
 
 function bounds(polygon: Point[]): Rectangle {
-  const xs = polygon.map(({ x }) => x)
-  const ys = polygon.map(({ y }) => y)
-  return {
-    xMin: Math.min(...xs),
-    xMax: Math.max(...xs),
-    yMin: Math.min(...ys),
-    yMax: Math.max(...ys)
-  }
-}
-
-function inside(x: number, y: number, polygon: Point[]): boolean {
-  let crossed = false
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[i]
-    const b = polygon[j]
-    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) crossed = !crossed
-  }
-  return crossed
+  const [xMin, xMax] = extent(polygon.map(({ x }) => x))
+  const [yMin, yMax] = extent(polygon.map(({ y }) => y))
+  return { xMin, xMax, yMin, yMax }
 }
 
 export interface Values {
@@ -165,8 +152,9 @@ export class MosaicState {
     const rows = await this.connect().query(
       Query.from(table).select('galaxy', 'x', 'y').where(where).orderby('galaxy')
     )
+    const corners = 'xMin' in region ? null : region.map(({ x, y }): [number, number] => [x, y])
     return Array.from(rows)
-      .filter(({ x, y }) => 'xMin' in region || inside(x, y, region))
+      .filter(({ x, y }) => !corners || polygonContains(corners, [x, y]))
       .map(({ galaxy }) => Number(galaxy))
   }
 

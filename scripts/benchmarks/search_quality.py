@@ -7,6 +7,7 @@ from typing import Any
 import modal
 import numpy as np
 import pyarrow as pa
+from scipy.stats import bootstrap
 
 from app import pql
 from app.config import DATASET_REVISION, REDSHIFT, SPECTRUM_MODES, TOKEN_SURVEYS
@@ -39,7 +40,6 @@ TOP = 10
 POOL = 32
 FLIPS = 20
 NEAR = 0.01
-RESAMPLES = 10_000
 
 
 def selections(galaxy: int, rng: np.random.Generator) -> dict[str, pql.Query]:
@@ -112,10 +112,9 @@ def interval(values: list[float]) -> dict[str, Any]:
     finite = finite[np.isfinite(finite)]
     if not len(finite):
         return {"queries": 0}
-    draws = np.random.default_rng(0).integers(
-        len(finite), size=(RESAMPLES, len(finite))
-    )
-    low, high = np.percentile(finite[draws].mean(axis=1), [2.5, 97.5])
+    low, high = bootstrap(
+        (finite,), np.mean, method="percentile", rng=0
+    ).confidence_interval
     return {
         "queries": len(finite),
         "mean": round(float(finite.mean()), 4),

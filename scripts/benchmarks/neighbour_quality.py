@@ -98,7 +98,9 @@ def physics(
     aion: np.ndarray,
 ) -> dict[str, Any]:
     values = targets()
-    labelled = np.flatnonzero(np.all([np.isfinite(v) for v in values.values()], 0))
+    labelled = np.flatnonzero(
+        np.all([np.isfinite(column) for column in values.values()], 0)
+    )
     values = {name: column[labelled] for name, column in values.items()}
     own = np.arange(len(labelled))
     rankings = {}

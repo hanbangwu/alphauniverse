@@ -9,7 +9,7 @@ from app.text_search import TextQuery, embed_queries, text_search
 
 
 def test_galaxies_rank_by_their_mean_cosine_and_each_mode_s_contribution_sums_to_its_lead(
-    tree: Path, monkeypatch: pytest.MonkeyPatch
+    tree: Path,
 ) -> None:
     query = np.random.default_rng(0).standard_normal(WEMM_DIM).astype(np.float32)
     found = text_search(TextQuery(text="a galaxy", matches=5), lambda _: query[None])

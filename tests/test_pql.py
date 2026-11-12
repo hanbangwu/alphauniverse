@@ -302,7 +302,7 @@ def partial_correlations(values: np.ndarray, chosen: np.ndarray) -> list[float]:
     design = np.c_[np.ones(len(values)), control]
 
     def residual(target: np.ndarray) -> np.ndarray:
-        return target - design @ np.linalg.lstsq(design, target, rcond=None)[0]
+        return target - design @ np.linalg.lstsq(design, target)[0]
 
     return [
         np.corrcoef(residual(score), residual(values[:, column]))[0, 1]

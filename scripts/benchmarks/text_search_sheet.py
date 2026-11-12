@@ -86,10 +86,12 @@ def described(galaxies: set[int]) -> dict[str, Any]:
         "galaxies": {
             str(galaxy): {
                 "image": picture,
-                "r": None if np.isnan(r) else round(float(r), 1),
+                "r": None if np.isnan(r_magnitude) else round(float(r_magnitude), 1),
                 "trained": bool(flag),
             }
-            for galaxy, picture, r, flag in zip(chosen, pictures, magnitude, trained)
+            for galaxy, picture, r_magnitude, flag in zip(
+                chosen, pictures, magnitude, trained
+            )
         },
     }
 

@@ -19,7 +19,7 @@ ANCHOR = "hugging-science/mmu_legacysurvey_dr10_south_21"
 
 
 if __name__ == "__main__":
-    client = Client(n_workers=4, threads_per_worker=4, memory_limit="auto")
+    client = Client(n_workers=4, threads_per_worker=4)
 
     matched = lsdb.open_catalog(f"hf://datasets/{ANCHOR}", search_filter=COSMOS)
 

@@ -1,4 +1,3 @@
-import importlib
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -9,11 +8,9 @@ import pytest
 from datasets import Dataset
 
 from app import config
+from app import parametric_umap as umap_module
 from app.config import FLAG_SURVEYS, POINTS, artifact, galaxy_count
 from scripts.fixture import build, forget
-
-pytest.importorskip("torch")
-umap_module = importlib.import_module("app.parametric_umap")
 
 LABELS = [1, None, 3, 0]
 PROJECTIONS = ("mean_points", "full_points")

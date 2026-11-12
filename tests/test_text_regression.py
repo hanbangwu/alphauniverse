@@ -1,4 +1,3 @@
-import importlib
 import json
 import math
 from itertools import combinations
@@ -8,8 +7,9 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import torch
 
-from app import embeddings, text_views
+from app import embeddings, text_regression, text_views
 from app.config import (
     ARTIFACTS,
     GRAM_NAMES,
@@ -21,9 +21,6 @@ from app.config import (
     WEMM_DIM,
     galaxy_count,
 )
-
-torch = pytest.importorskip("torch")
-text_regression = importlib.import_module("app.text_regression")
 
 
 def identity_bases(width: int) -> dict[str, torch.Tensor]:

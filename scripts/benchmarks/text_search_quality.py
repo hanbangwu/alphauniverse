@@ -382,7 +382,8 @@ def image_percentile(
 
 def shared(first: tuple[str, ...], second: tuple[str, ...], pages: dict) -> float:
     found = [
-        len(np.intersect1d(pages[a], pages[b])) / PAGE for a, b in zip(first, second)
+        len(np.intersect1d(pages[mine], pages[other])) / PAGE
+        for mine, other in zip(first, second)
     ]
     return round(float(np.mean(found)), 4)
 
