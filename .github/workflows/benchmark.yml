@@ -1,11 +1,9 @@
 name: Benchmark
 run-name: ${{ inputs.script }} on ${{ github.ref_name }}
-
 on:
   workflow_dispatch:
     inputs:
       script:
-        description: Measurement to run on Modal
         type: choice
         options:
           - search_performance
@@ -21,16 +19,12 @@ on:
           - redshift_quality
           - probe_quality
           - neighbour_quality
-      args:
-        description: Arguments for the script, such as --runs 50; empty keeps its defaults
-        type: string
-
+      args: {}
 env:
   UV_LOCKED: "1"
-
+  UV_PYTHON: "3.12"
 jobs:
   measure:
-    name: ${{ inputs.script }}
     runs-on: ubuntu-latest
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
@@ -38,28 +32,12 @@ jobs:
       SCRIPT: ${{ inputs.script }}
       ARGS: ${{ inputs.args }}
       REPORT: docs/benchmarks/${{ inputs.script }}.json
-
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
-
-      - name: Run on Modal
-        run: uv run --python 3.12 --group build modal run -m "scripts.benchmarks.$SCRIPT" $ARGS
-
-      - name: Report
-        run: |
-          if [ "$(stat -c %s "$REPORT")" -lt 1000000 ]; then
-            {
-              echo '```json'
-              cat "$REPORT"
-              echo '```'
-            } | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            echo "The report is over the step summary's 1 MiB limit; it is in the run's artifact." | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv run --group build modal run -m "scripts.benchmarks.$SCRIPT" $ARGS
       - uses: actions/upload-artifact@v7
         with:
           path: ${{ env.REPORT }}

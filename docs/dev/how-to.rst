@@ -106,7 +106,7 @@ Run a benchmark
 
 Each writes its report to ``docs/benchmarks/<script>.json``.
 
-From GitHub, start the Benchmark workflow from the Actions tab, pick a branch, a script and optionally its flags. The report appears in the run's summary and as its artifact; the workflow does not commit it. A job past six hours stops without a report.
+From GitHub, start the Benchmark workflow from the Actions tab, pick a branch, a script and optionally its flags. The report is the run's artifact; the workflow does not commit it. A job past six hours stops without a report.
 
 Build this documentation
 ------------------------
