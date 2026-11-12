@@ -1,7 +1,7 @@
 import type { CosineMode } from '$lib/client'
 import { TOKEN_MODES, byMode } from '$lib/data/modes'
 import type { SearchQuery } from '$lib/data/similarity'
-import { MODES, POINT_SETS, PROPERTIES, SOURCES } from '$lib/labels'
+import { MODES, POINT_SETS, PROPERTIES, SKY_LAYERS, SOURCES } from '$lib/labels'
 import type { Source } from './field.svelte'
 import { rangeOf } from './schema'
 import { Context } from 'runed'
@@ -47,6 +47,7 @@ export const schema = z.object({
   spectrum_match_threshold: threshold,
   table_threshold: threshold,
   tab: z.enum(['sky', 'umap', 'text']).catch('sky'),
+  sky: choice(SKY_LAYERS),
   text: z.string().nullable().catch(null),
   ...byMode(() => indices),
   table_values: indices,

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { SELECTED } from '$lib/color'
+  import * as NativeSelect from '$lib/components/ui/native-select'
   import { Spinner } from '$lib/components/ui/spinner'
-  import { positionsQuery } from '$lib/data/queries'
+  import { patternsQuery, positionsQuery } from '$lib/data/queries'
   import { errorMessage } from '$lib/errors'
   import { getApp } from '$lib/state/app.svelte'
   import GalaxyTooltip from './galaxy-tooltip.svelte'
@@ -18,12 +19,14 @@
   import { boundingExtent, buffer, containsCoordinate, getCenter } from 'ol/extent'
   import { MultiLineString, Point } from 'ol/geom'
   import { fromExtent } from 'ol/geom/Polygon'
+  import ImageLayer from 'ol/layer/Image'
   import TileLayer from 'ol/layer/Tile'
   import VectorLayer from 'ol/layer/Vector'
   import WebGLVectorLayer from 'ol/layer/WebGLVector'
   import 'ol/ol.css'
   import type { Pixel } from 'ol/pixel'
   import { fromLonLat } from 'ol/proj'
+  import ImageCanvasSource from 'ol/source/ImageCanvas'
   import VectorSource from 'ol/source/Vector'
   import XYZ from 'ol/source/XYZ'
   import { Fill, Stroke, Style } from 'ol/style'
@@ -89,6 +92,9 @@
   const { grid } = meta
 
   const positions = createQuery(() => positionsQuery)
+  const similarity = $derived(view.skyLayer.value === 'similarity')
+  const coloured = $derived(view.skyLayer.value === 'embeddings')
+  const patterns = createQuery(() => ({ ...patternsQuery, enabled: coloured }))
 
   const places = $derived(
     positions.data &&
@@ -96,6 +102,55 @@
         fromLonLat([180 - ra, positions.data.dec[galaxy]])
       )
   )
+
+  const stamps = $derived(
+    patterns.data &&
+      places &&
+      Array.from(patterns.data.galaxy, (galaxy, row) => ({
+        place: places[galaxy],
+        canvas: stampCanvas(patterns.data.colours, row)
+      }))
+  )
+
+  function stampCanvas(colours: Uint8Array, row: number): HTMLCanvasElement {
+    const patches = grid * grid
+    const image = new ImageData(grid, grid)
+    for (let patch = 0; patch < patches; patch++) {
+      const start = (row * patches + patch) * 3
+      image.data.set(colours.subarray(start, start + 3), patch * 4)
+      image.data[patch * 4 + 3] = 255
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = grid
+    canvas.height = grid
+    canvas.getContext('2d')!.putImageData(image, 0, 0)
+    return canvas
+  }
+
+  function drawStamps(
+    extent: Extent,
+    resolution: number,
+    pixelRatio: number,
+    [width, height]: number[]
+  ): HTMLCanvasElement {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')!
+    context.imageSmoothingEnabled = false
+    const scale = pixelRatio / resolution
+    const side = 2 * HALF_STAMP * scale
+    for (const { place, canvas: stamp } of stamps ?? []) {
+      context.drawImage(
+        stamp,
+        (place[0] - HALF_STAMP - extent[0]) * scale,
+        (extent[3] - place[1] - HALF_STAMP) * scale,
+        side,
+        side
+      )
+    }
+    return canvas
+  }
 
   function focus(name: string) {
     return ['==', ['get', 'galaxy'], ['var', name]]
@@ -162,6 +217,14 @@
     variables: { hovered: -1, selected: -1, pulsing: 1 },
     maxZoom: PATCH_ZOOM - 0.001
   })
+  const embeddings = new ImageLayer({
+    source: new ImageCanvasSource({ canvasFunction: drawStamps })
+  })
+  const marked = new VectorLayer({
+    source: marks,
+    style: (feature) => MARKS[feature.get('kind')],
+    minZoom: PATCH_ZOOM - 0.001
+  })
   const squares = new VectorLayer({
     source: galaxies,
     style: (feature) => (feature.getId() === view.galaxy.value ? GRIDS.open : GRIDS.other),
@@ -177,6 +240,7 @@
   }
 
   function pick(map: Map, pixel: Pixel, coordinate: Coordinate): Target | null {
+    if (!similarity) return null
     const closest = galaxies.getClosestFeatureToCoordinate(coordinate)
     if (!closest) return null
     if (squares.isVisible(map.getView())) {
@@ -207,13 +271,10 @@
         new TileLayer({
           source: new XYZ({ url: TILES, maxZoom: NATIVE_ZOOM, attributions: CREDIT })
         }),
+        embeddings,
         rings,
         squares,
-        new VectorLayer({
-          source: marks,
-          style: (feature) => MARKS[feature.get('kind')],
-          minZoom: PATCH_ZOOM - 0.001
-        })
+        marked
       ],
       overlays: [overlay],
       controls: defaults({
@@ -241,6 +302,7 @@
       overlay.setPosition(hovered?.patch === null ? event.coordinate : undefined)
     })
     created.on('click', (event) => {
+      if (!similarity) return
       const picked = pick(created, event.pixel, event.coordinate)
       view.select(picked?.galaxy ?? null)
       if (!picked) return
@@ -282,6 +344,16 @@
         return feature
       })
     )
+  })
+
+  $effect(() => {
+    if (stamps) embeddings.getSource()!.changed()
+  })
+
+  $effect(() => {
+    embeddings.setVisible(coloured)
+    for (const layer of [rings, squares, marked]) layer.setVisible(similarity)
+    if (!similarity) hover(null)
   })
 
   $effect(() => {
@@ -329,12 +401,22 @@
   {/if}
 </div>
 
-{#if positions.error}
+<NativeSelect.Root
+  bind:value={view.skyLayer.value}
+  aria-label="Sky layer"
+  class="glass absolute top-3 left-3 rounded-2xl"
+>
+  {#each view.skyLayer.choices as { value, label } (value)}
+    <NativeSelect.Option {value}>{label}</NativeSelect.Option>
+  {/each}
+</NativeSelect.Root>
+
+{#if positions.error || (coloured && patterns.error)}
   <p
     role="alert"
     class="pointer-events-none absolute inset-0 grid place-content-center text-sm text-destructive"
   >
-    {errorMessage(positions.error)}
+    {errorMessage(positions.error ?? patterns.error)}
   </p>
 {:else if !places}
   <div class="pointer-events-none absolute inset-0 grid place-content-center">

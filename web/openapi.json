@@ -163,6 +163,33 @@
         ]
       }
     },
+    "/patterns": {
+      "get": {
+        "summary": "Get Patterns",
+        "operationId": "get_patterns",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/galaxy/{galaxy}": {
       "get": {
         "summary": "Get Galaxy",

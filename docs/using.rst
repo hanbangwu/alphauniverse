@@ -9,10 +9,10 @@ The site asks for a password on your first visit and remembers it in that browse
 Browse the sky
 --------------
 
-The **Sky** tab, the default, shows the Legacy Survey image of COSMOS and, once you zoom in, a pulsing dot on each galaxy in the dataset. Drag to pan, and scroll or pinch to zoom; you can browse anywhere in the survey, but only dataset galaxies have dots. The RA and Dec under the cursor are shown as you move.
+The **Sky** tab, the default, shows the Legacy Survey image of COSMOS. Drag to pan, and scroll or pinch to zoom; you can browse anywhere in the survey. The RA and Dec under the cursor are shown as you move. Choose a view to draw the dataset's galaxies over the sky:
 
-- Hover over a dot to preview the galaxy. Click it to open the galaxy. Sources with no dot are not in the dataset.
-- Zoom in and the dots give way to each galaxy's cutout, drawn as a grid of 24 × 24 patches, the open galaxy's on top. Hover to highlight a patch and click to select it or clear it, then press **Search** in the galaxy drawer. Selecting a patch on another galaxy opens that galaxy and starts a new selection.
+- **Similarity search**: once you zoom in, a pulsing dot marks each galaxy in the dataset; sources with no dot are not in it. Hover over a dot to preview the galaxy and click it to open the galaxy. Zoom in further and the dots give way to each galaxy's cutout, drawn as a grid of 24 × 24 patches, the open galaxy's on top. Hover to highlight a patch and click to select it or clear it, then press **Search** in the galaxy drawer. Selecting a patch on another galaxy opens that galaxy and starts a new selection.
+- **Coloured embeddings**: each galaxy's 24 × 24 patches are coloured by AION's embedding of them, so patches with similar embeddings get similar colours. The three colours are the embeddings' three strongest directions of variation across the dataset (a :term:`principal component analysis`). Nothing can be selected in this view.
 
 Browse the UMAP
 ---------------

@@ -57,6 +57,14 @@ export const POINT_SETS = {
 
 export type PointSet = keyof typeof POINT_SETS
 
+export const SKY_LAYERS = {
+  none: { label: 'Sky only' },
+  similarity: { label: 'Similarity search' },
+  embeddings: { label: 'Coloured embeddings' }
+}
+
+export type SkyLayer = keyof typeof SKY_LAYERS
+
 export const PROPERTIES = {
   redshift: { label: 'Redshift' },
   mass: { label: 'Stellar mass' },

@@ -82,6 +82,9 @@ Glossary
    partial correlation
       The correlation between two quantities after removing, from each, the part a third quantity explains linearly. See :doc:`methods/query-maps`.
 
+   principal component analysis
+      Finding the directions along which a set of vectors varies most; projecting a vector onto the first few summarises it in a few numbers.
+
    prediction
       The probability AION assigns to each :term:`code` at a :term:`slot`, given the galaxy's tokens. See :doc:`concepts`.
 

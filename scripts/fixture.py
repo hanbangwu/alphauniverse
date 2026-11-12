@@ -52,6 +52,7 @@ from app.config import (
 )
 from app.dataset import dataset, table_columns
 from app.embeddings import generate_token_search
+from app.pca import generate_patterns
 from app.pql import (
     agreements,
     basis,
@@ -483,6 +484,7 @@ def build(galaxies: int) -> Path:
 
     _store("encoded", embeddings, galaxies, flags)
     _store("tokens", token_cells, galaxies, flags)
+    generate_patterns()
 
     category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labelled)
 

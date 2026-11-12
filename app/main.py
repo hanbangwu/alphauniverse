@@ -280,6 +280,15 @@ def get_positions() -> Response:
 
 
 @app.get(
+    "/patterns",
+    response_class=FileResponse,
+    responses={200: {"content": BINARY_OCTET}},
+)
+def get_patterns(request: Request) -> Response:
+    return file(artifact("patterns"), request)
+
+
+@app.get(
     "/galaxy/{galaxy}",
 )
 def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:

@@ -138,6 +138,20 @@ def generate_maps() -> None:
 
 @app.function(
     image=build_image,
+    cpu=4,
+    memory=(8 * 1024, 32 * 1024),
+    timeout=30 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def generate_patterns() -> None:
+    from app.pca import generate_patterns
+
+    generate_patterns()
+    cache_volume.commit()
+
+
+@app.function(
+    image=build_image,
     gpu="L4",
     cpu=4,
     memory=(8 * 1024, 32 * 1024),

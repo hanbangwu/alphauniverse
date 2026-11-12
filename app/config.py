@@ -288,6 +288,7 @@ ARTIFACTS: dict[str, str] = {
     **{f"aion_prediction_embedding_{name}": "npz" for name in GRAM_NAMES},
     "joint_embedding": "npy",
     "properties": "parquet",
+    "patterns": "arrow",
     **{f"{name}_points": "parquet" for name in MAPS},
 }
 

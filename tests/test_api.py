@@ -196,6 +196,17 @@ def test_positions_are_in_galaxy_order(client: TestClient) -> None:
     assert positions.column("dec")[6].as_py() == galaxy["dec"]
 
 
+@pytest.mark.usefixtures("identified")
+def test_patterns_give_every_galaxy_a_colour_per_patch(client: TestClient) -> None:
+    response = client.get("/patterns")
+    patterns = pa.ipc.open_file(response.content).read_all()
+
+    assert patterns.column("galaxy").to_pylist() == list(
+        range(client.get("/meta").json()["galaxy_count"])
+    )
+    assert patterns.schema.field("colours").type.list_size == 24 * 24 * 3
+
+
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
 @pytest.mark.usefixtures("identified")
 def test_coverage_reports_every_survey(client: TestClient, galaxy: int) -> None:

@@ -4,6 +4,7 @@ import {
   getImageTokens,
   getMeta,
   getModeSearch,
+  getPatterns,
   getPositions,
   getSaliency,
   getSearch,
@@ -30,9 +31,11 @@ import { keepPreviousData, queryOptions, skipToken } from '@tanstack/svelte-quer
 import { Query, column, isIn } from '@uwdata/mosaic-sql'
 import {
   type Float32,
+  type FixedSizeList,
   type Float64,
   type Int32,
   type Table,
+  type Uint8,
   type Utf8,
   type Vector,
   tableFromIPC
@@ -58,6 +61,21 @@ export const positionsQuery = queryOptions({
       new Uint8Array(await data.arrayBuffer())
     )
     return { ra: table.getChild('ra')!.toArray(), dec: table.getChild('dec')!.toArray() }
+  },
+  ...FOREVER
+})
+
+export const patternsQuery = queryOptions({
+  queryKey: ['patterns'] as const,
+  queryFn: async () => {
+    const { data } = await getPatterns({ throwOnError: true })
+    const table = tableFromIPC<{ galaxy: Int32; colours: FixedSizeList<Uint8> }>(
+      new Uint8Array(await data.arrayBuffer())
+    )
+    return {
+      galaxy: table.getChild('galaxy')!.toArray(),
+      colours: table.getChild('colours')!.getChildAt<Uint8>(0)!.toArray()
+    }
   },
   ...FOREVER
 })

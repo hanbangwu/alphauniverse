@@ -39,6 +39,7 @@ The artifacts are built on Modal, in this order; see :doc:`reference` for what e
    uv run modal run modal_app.py::generate_joint_embedding
    uv run modal run modal_app.py::generate_properties
    uv run modal run modal_app.py::generate_maps
+   uv run modal run modal_app.py::generate_patterns
    uv run modal run modal_app.py::generate_projections
    uv run modal run modal_app.py::generate_pairs
    uv run modal run modal_app.py::generate_text_views --parts 200

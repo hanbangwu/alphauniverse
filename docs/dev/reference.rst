@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to the root of a volume mounted at ``/cache``, so changing ``DATASET_REVISION`` overwrites them. ``app.config.BUILD_DIR`` is ``/cache`` on Modal and ``.cache`` elsewhere, a copy of all or part of the volume. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit web app, deployed on Vercel, calls it through a rewrite of ``/api``. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Sixteen Modal jobs write artifacts to the root of a volume mounted at ``/cache``, so changing ``DATASET_REVISION`` overwrites them. ``app.config.BUILD_DIR`` is ``/cache`` on Modal and ``.cache`` elsewhere, a copy of all or part of the volume. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit web app, deployed on Vercel, calls it through a rewrite of ``/api``. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 =================================== =========================================== =========================================
 Job                                 Reads                                       Writes
@@ -34,6 +34,7 @@ generate_properties                 the dataset, probabilities,                 
 generate_maps                       the dataset, joint_embedding,               same_place_points,
                                     token_search_<mode>,                        any_position_points
                                     token_search_<mode>_anywhere
+generate_patterns                   encoded                                     patterns
 generate_projections                the dataset, encoded                        mean_points, full_points,
                                                                                 parametric_umap
 generate_pairs                      the dataset, encoded                        pairs_<modality>
@@ -133,6 +134,8 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
 - from the spectrum of the survey whose redshift is used, moved to the rest frame: Hα's equivalent width over 6,554.6 to 6,574.6 Å, against the mean of the median fluxes over 6,490 to 6,530 Å and 6,600 to 6,640 Å, positive for emission; and the Dn4000, the mean of :math:`f_\lambda \lambda^2` over 4,000 to 4,100 Å divided by its mean over 3,850 to 3,950 Å. Each band must lie inside the spectrum's unmasked pixels with at least 5 of them, and the continuum and both of the Dn4000's means must exceed three times their errors. So Hα is measured up to redshift 9,824 / 6,640 − 1 = 0.48 in DESI and 9,221.5 / 6,640 − 1 = 0.39 in SDSS.
 
 The redshift's prediction is the median of AION's predicted distribution, and its width half the range from the distribution's 16th to its 84th percentile. Both spread each bin's probability evenly over the redshifts its token covers, from the bin below up to its own value: a distribution in one bin, 0.0059 wide, predicts the bin's centre with a width of 0.0020, where the redshift :term:`AION prediction` takes the bin's top. A galaxy with a measured redshift read it, so its prediction is close to it; ``redshift_quality`` measures predictions without it. Likewise the joint embedding reads the Legacy Survey catalogue values, so the radius, r magnitude and axis ratio predictions are close to the measured ones. The others come from ridge regression on the joint embedding, its penalty chosen by leave-one-out, fitted to the galaxies with a measured value. Those galaxies' own predictions come from 5-fold cross-validation, so none is fitted to its own value, and the RMS error of those predictions is the width, the same for every galaxy. PROVABGS fits DESI spectra, so its widths are measured only on galaxies DESI observed, and the spectral ones only on galaxies with a spectrum. ``g_r`` is the observed Legacy Survey colour, :math:`-2.5 \log_{10}` of the g to r flux ratio, null where either flux is not positive. ``/galaxies/property`` serves it.
+
+``patterns`` is an Arrow IPC file of each galaxy's ``galaxy`` and ``colours``, 24 × 24 × 3 ``uint8``. ``generate_patterns`` fits scikit-learn's ``PCA`` with 3 components to 100,000 Legacy Survey image patch embeddings from ``encoded`` (768 numbers each), drawn at random with ``SEED`` from every galaxy's 576, then projects every patch, 256 galaxies per batch. Each component, clipped at its 2nd and 98th percentiles over all patches and scaled to 0 to 255, is one of red, green and blue. ``/patterns`` serves the file.
 
 .. autodata:: app.config.PROPERTIES
    :no-index:

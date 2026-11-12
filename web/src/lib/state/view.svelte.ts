@@ -6,7 +6,9 @@ import {
   PROPERTIES,
   type PointSet,
   type Property,
+  SKY_LAYERS,
   SOURCES,
+  type SkyLayer,
   type Source
 } from '$lib/labels'
 import { Field } from './field.svelte'
@@ -16,6 +18,7 @@ import { PersistedState } from 'runed'
 
 export class ViewState {
   readonly tab: Field<Values['tab']>
+  readonly skyLayer: EnumField<SkyLayer>
   readonly pointSet: EnumField<PointSet>
   readonly property: EnumField<Property>
   readonly source: EnumField<Source>
@@ -37,6 +40,7 @@ export class ViewState {
 
   constructor() {
     this.tab = new Field(DEFAULTS.tab, stored('tab'))
+    this.skyLayer = new EnumField(SKY_LAYERS, stored('sky'))
     this.pointSet = new EnumField(POINT_SETS, stored('projection'))
     this.property = new EnumField(PROPERTIES, stored('property'))
     this.source = new EnumField(SOURCES, stored('source'))
