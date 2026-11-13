@@ -24,7 +24,7 @@
     <button
       type="button"
       aria-pressed={selected}
-      aria-label="Search on the whole {MODES[mode].label}"
+      aria-label="Search on the whole {MODES[mode]}"
       onclick={() => view.modes.toggle(mode)}
       class="absolute -inset-1 cursor-pointer rounded-lg outline-offset-0 hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50"
       style:outline={selected ? `2px solid ${SELECTED}` : undefined}

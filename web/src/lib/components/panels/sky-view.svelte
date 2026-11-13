@@ -1,8 +1,8 @@
 <script lang="ts">
   import { SELECTED } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
+  import { IMAGE_GRID } from '$lib/data/modes'
   import { positionsQuery } from '$lib/data/queries'
-  import { errorMessage } from '$lib/errors'
   import { getApp } from '$lib/state/app.svelte'
   import GalaxyTooltip from './galaxy-tooltip.svelte'
   import { createQuery } from '@tanstack/svelte-query'
@@ -85,8 +85,7 @@
   }
   const [HALF_STAMP] = fromLonLat([(96 * 0.262) / 2 / 3600, 0])
 
-  const { view, meta } = getApp()
-  const { grid } = meta
+  const { view } = getApp()
 
   const positions = createQuery(() => positionsQuery)
 
@@ -107,17 +106,17 @@
   }
 
   function patchArea(place: Coordinate, patch: number): Extent {
-    const size = (2 * HALF_STAMP) / grid
-    const left = place[0] - HALF_STAMP + (patch % grid) * size
-    const top = place[1] + HALF_STAMP - Math.floor(patch / grid) * size
+    const size = (2 * HALF_STAMP) / IMAGE_GRID
+    const left = place[0] - HALF_STAMP + (patch % IMAGE_GRID) * size
+    const top = place[1] + HALF_STAMP - Math.floor(patch / IMAGE_GRID) * size
     return [left, top - size, left + size, top]
   }
 
   function patchAt(place: Coordinate, [x, y]: Coordinate): number {
-    const size = (2 * HALF_STAMP) / grid
+    const size = (2 * HALF_STAMP) / IMAGE_GRID
     const column = Math.floor((x - place[0] + HALF_STAMP) / size)
     const row = Math.floor((place[1] + HALF_STAMP - y) / size)
-    return row * grid + column
+    return row * IMAGE_GRID + column
   }
 
   function gridStyle(color: string, zIndex: number): Style {
@@ -130,8 +129,8 @@
 
   function gridLines([x, y]: Coordinate): MultiLineString {
     const steps = Array.from(
-      { length: grid + 1 },
-      (_, step) => -HALF_STAMP + (2 * HALF_STAMP * step) / grid
+      { length: IMAGE_GRID + 1 },
+      (_, step) => -HALF_STAMP + (2 * HALF_STAMP * step) / IMAGE_GRID
     )
     return new MultiLineString(
       steps.flatMap((step) => [
@@ -149,6 +148,7 @@
 
   let element: HTMLDivElement
   let tip: HTMLDivElement
+  let overlay: Overlay
   let map = $state<Map | null>(null)
   let width = $state(0)
   let framed = false
@@ -196,11 +196,15 @@
   function hover(next: Target | null): void {
     if (next?.galaxy === hovered?.galaxy && next?.patch === hovered?.patch) return
     hovered = next
-    element.style.cursor = next ? 'pointer' : ''
+  }
+
+  function leave(): void {
+    hover(null)
+    overlay.setPosition(undefined)
   }
 
   onMount(() => {
-    const overlay = new Overlay({ element: tip, offset: [16, 16], stopEvent: false })
+    overlay = new Overlay({ element: tip, offset: [16, 16], stopEvent: false })
     const created = new Map({
       target: element,
       layers: [
@@ -246,16 +250,8 @@
       if (!picked) return
       if (picked.patch !== null) view.tokens.ls_image.toggle(picked.patch)
     })
-    const leave = () => {
-      hover(null)
-      overlay.setPosition(undefined)
-    }
-    element.addEventListener('pointerleave', leave)
     map = created
-    return () => {
-      element.removeEventListener('pointerleave', leave)
-      created.setTarget(undefined)
-    }
+    return () => created.setTarget(undefined)
   })
 
   $effect(() => {
@@ -318,6 +314,8 @@
 <div
   bind:this={element}
   bind:clientWidth={width}
+  style:cursor={hovered ? 'pointer' : undefined}
+  onpointerleave={leave}
   role="application"
   aria-label="Sky map of the galaxies in the dataset"
   class="size-full bg-black"
@@ -334,7 +332,7 @@
     role="alert"
     class="pointer-events-none absolute inset-0 grid place-content-center text-sm text-destructive"
   >
-    {errorMessage(positions.error)}
+    {positions.error.message}
   </p>
 {:else if !places}
   <div class="pointer-events-none absolute inset-0 grid place-content-center">

@@ -3,7 +3,6 @@
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
   import { spectrumQuery, spectrumAionPredictionQuery } from '$lib/data/queries'
-  import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
   import { createQuery } from '@tanstack/svelte-query'
@@ -22,7 +21,7 @@
   const prediction = createQuery(() =>
     spectrumAionPredictionQuery(view.predictions.value ? galaxy : null, survey)
   )
-  const label = $derived(SURVEYS[survey].label)
+  const label = $derived(SURVEYS[survey])
 </script>
 
 <PanelFrame busy={spectrum.isFetching || prediction.isFetching} class="aspect-2/1 bg-card">
@@ -40,11 +39,11 @@
 
 {#if spectrum.isError}
   <p class="text-xs leading-relaxed text-destructive">
-    {errorMessage(spectrum.error)}
+    {spectrum.error.message}
   </p>
 {/if}
 {#if prediction.isError}
   <p class="text-xs leading-relaxed text-destructive">
-    {errorMessage(prediction.error)}
+    {prediction.error.message}
   </p>
 {/if}

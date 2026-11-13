@@ -18,7 +18,7 @@
 <dl class="grid max-w-md grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1 text-xs">
   {#each similarity.contributionModes as mode (mode)}
     {@const value = similarity.contributionAt(mode, index)}
-    <dt class="text-muted-foreground">{MODES[mode].label}</dt>
+    <dt class="text-muted-foreground">{MODES[mode]}</dt>
     <dd class="relative h-2 rounded-sm bg-muted" aria-hidden="true">
       <div class="absolute inset-y-0 left-1/2 w-px bg-foreground/40"></div>
       <div

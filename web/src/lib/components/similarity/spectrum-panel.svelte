@@ -8,7 +8,6 @@
     spectrumAionPredictionQuery,
     spectrumTokensQuery
   } from '$lib/data/queries'
-  import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
@@ -41,12 +40,12 @@
 
   const cells = $derived(map ?? tokens.data ?? null)
   const palette = $derived(map ? heat : tokens.data ? tokenColors(tokens.data) : null)
-  const label = $derived(SURVEYS[survey].label)
+  const label = $derived(SURVEYS[survey])
   const message = $derived(
     spectrum.isError
-      ? errorMessage(spectrum.error)
+      ? spectrum.error.message
       : prediction.isError
-        ? errorMessage(prediction.error)
+        ? prediction.error.message
         : error
   )
 </script>

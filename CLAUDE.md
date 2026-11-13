@@ -73,6 +73,7 @@ uv run --group docs make -C docs html
 - No hand-rolling: if appropriate, use library rather than writing our own code.
 - No linter-ignore rules, except excluding generated or vendored paths and settings a tool's documentation recommends.
 - Do not add comments or docstrings (leave ones from generated, vendored, or scaffold files alone).
+- Maximize usage of OpenAPI. If it exists on both the backend and the web, it goes in OpenAPI.
 
 ### Modal
 

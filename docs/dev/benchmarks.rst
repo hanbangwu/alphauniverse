@@ -240,7 +240,7 @@ In a container built like the server, ``search_performance`` times the checked-o
 Request speed
 -------------
 
-``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``/meta``, a similarity search, a whole-mode search over all seven modes, a text search, a galaxy's image, its spectrum and its catalogue table, it times the first request of each kind to a freshly started server (cold, paying for what that request loads first) and then 30 more to the running server (warm).
+``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``GET /login``, a similarity search, a whole-mode search over all seven modes, a text search, a galaxy's image, its spectrum and its catalogue table, it times the first request of each kind to a freshly started server (cold, paying for what that request loads first) and then 30 more to the running server (warm).
 
 .. bokeh-plot::
    :source-position: none

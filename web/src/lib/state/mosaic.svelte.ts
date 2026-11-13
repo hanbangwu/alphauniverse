@@ -1,11 +1,13 @@
-import { type Projection, projectionUrl, propertiesUrl } from '$lib/client'
+import type { GetProjectionsData, GetPropertiesData } from '$lib/api'
+import { type Projection, client } from '$lib/client'
 import { BINS } from '$lib/color'
 import { extent } from '$lib/data/scores'
-import { PREDICTABLE, type Property } from '$lib/labels'
+import type { Property } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
 import { Query, column, count, isBetween, loadParquet } from '@uwdata/mosaic-sql'
 import { polygonContains } from 'd3-polygon'
 import type { Point, Rectangle } from 'embedding-atlas'
+import { SvelteSet } from 'svelte/reactivity'
 
 function bounds(polygon: Point[]): Rectangle {
   const [xMin, xMax] = extent(polygon.map(({ x }) => x))
@@ -34,6 +36,8 @@ export class MosaicState {
   readonly coordinator = new Coordinator()
   readonly filter = Selection.intersect()
 
+  readonly predictable = new SvelteSet<string>()
+
   #connected = false
   #properties: Promise<unknown> | null = null
   readonly #tables: Record<string, Promise<Values>> = {}
@@ -49,19 +53,43 @@ export class MosaicState {
   async load(projection: Projection): Promise<string> {
     const table = `${projection}_points`
     const database = this.connect()
-    await database.exec(loadParquet(table, projectionUrl(projection), { replace: true }))
+    await database.exec(
+      loadParquet(
+        table,
+        client.buildUrl<GetProjectionsData>({
+          url: '/projections/{projection}',
+          path: { projection }
+        }),
+        { replace: true }
+      )
+    )
     database.clear({ clients: false, cache: true })
     return table
   }
 
   loadProperties(): Promise<unknown> {
     this.#properties ??= this.connect()
-      .exec(loadParquet('properties', propertiesUrl(), { replace: true }))
+      .exec(
+        loadParquet(
+          'properties',
+          client.buildUrl<GetPropertiesData>({ url: '/galaxies/property' }),
+          { replace: true }
+        )
+      )
+      .then(() => this.#readPredictable())
       .catch((error: unknown) => {
         this.#properties = null
         throw error
       })
     return this.#properties
+  }
+
+  async #readPredictable(): Promise<void> {
+    const columns = await this.connect().query(`SELECT column_name FROM (DESCRIBE properties)`)
+    for (const { column_name } of columns) {
+      const name = String(column_name)
+      if (name.endsWith('_predicted')) this.predictable.add(name.slice(0, -'_predicted'.length))
+    }
   }
 
   #values(property: Property, everywhere: boolean): Promise<Values> {
@@ -76,7 +104,7 @@ export class MosaicState {
   async #build(name: string, property: Property, everywhere: boolean): Promise<Values> {
     await this.loadProperties()
     const database = this.connect()
-    const predictable = PREDICTABLE.includes(property)
+    const predictable = this.predictable.has(property)
     const measured = predictable ? `${property}_measured` : property
     const prediction = predictable ? `${property}_predicted` : 'NULL'
     const width = predictable ? `${property}_width` : 'NULL'

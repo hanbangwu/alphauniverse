@@ -23,6 +23,7 @@
 <script lang="ts">
   import type { RGB } from '$lib/color'
   import { TAP_RADIUS, TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
+  import { IMAGE_GRID } from '$lib/data/modes'
   import type {
     CustomSeriesRenderItemAPI,
     CustomSeriesRenderItemParams,
@@ -32,7 +33,6 @@
 
   interface Props {
     values: ArrayLike<number>
-    grid: number
     color: (value: number) => RGB
     mask?: ArrayLike<number> | null
     opacity?: (picked: boolean) => number
@@ -46,7 +46,6 @@
 
   let {
     values,
-    grid,
     color,
     mask,
     opacity = () => 1,
@@ -67,7 +66,9 @@
   let press: number[]
   let cursor = $state<number | null>(null)
 
-  const cells = $derived(Array.from(values, (_, index) => [index % grid, Math.floor(index / grid)]))
+  const cells = $derived(
+    Array.from(values, (_, index) => [index % IMAGE_GRID, Math.floor(index / IMAGE_GRID)])
+  )
   const chosen = $derived(new Set(selected))
 
   function cell(
@@ -95,8 +96,8 @@
   const option = $derived<Option>({
     animationDurationUpdate: 150,
     grid: { left: 0, right: 0, top: 0, bottom: 0 },
-    xAxis: { type: 'value', min: 0, max: grid, show: false },
-    yAxis: { type: 'value', min: 0, max: grid, inverse: true, show: false },
+    xAxis: { type: 'value', min: 0, max: IMAGE_GRID, show: false },
+    yAxis: { type: 'value', min: 0, max: IMAGE_GRID, inverse: true, show: false },
     tooltip: title
       ? {
           ...TOOLTIP,
@@ -115,8 +116,8 @@
   }
 
   function paint([column, row]: number[]): void {
-    const index = row * grid + column
-    if (Math.min(column, row) < 0 || Math.max(column, row) >= grid) return
+    const index = row * IMAGE_GRID + column
+    if (Math.min(column, row) < 0 || Math.max(column, row) >= IMAGE_GRID) return
     if (chosen.has(index) !== adding && !painted.includes(index)) painted = [...painted, index]
   }
 
@@ -130,8 +131,8 @@
     pointer = event.pointerId
     press = [event.clientX, event.clientY]
     last = position(event)
-    const [column, row] = last.map((value) => Math.min(Math.floor(value), grid - 1))
-    adding = !selected.includes(row * grid + column)
+    const [column, row] = last.map((value) => Math.min(Math.floor(value), IMAGE_GRID - 1))
+    adding = !selected.includes(row * IMAGE_GRID + column)
     paint([column, row])
   }
 
@@ -184,13 +185,13 @@
     if (!step || event.altKey || event.ctrlKey || event.metaKey) return
     event.preventDefault()
     if (cursor === null) {
-      const middle = Math.floor(grid / 2)
-      point(middle * grid + middle)
+      const middle = Math.floor(IMAGE_GRID / 2)
+      point(middle * IMAGE_GRID + middle)
       return
     }
     const [column, row] = cells[cursor]
-    const clamp = (value: number) => Math.min(Math.max(value, 0), grid - 1)
-    point(clamp(row + step[1]) * grid + clamp(column + step[0]))
+    const clamp = (value: number) => Math.min(Math.max(value, 0), IMAGE_GRID - 1)
+    point(clamp(row + step[1]) * IMAGE_GRID + clamp(column + step[0]))
   }
 
   function activate(event: MouseEvent): void {

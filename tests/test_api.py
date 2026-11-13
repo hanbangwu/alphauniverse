@@ -8,6 +8,7 @@ import pyarrow.compute as pc
 import pytest
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
+from astropy.table import Table
 from datasets import Dataset
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -29,6 +30,7 @@ from app.config import (
     WEMM_DIM,
     Projection,
     artifact,
+    galaxy_count,
 )
 from app.dataset import table_columns
 from app.main import PASSWORD_COOKIE, query_embedder
@@ -70,25 +72,25 @@ def test_properties_are_served_whole(client: TestClient) -> None:
     assert len(response.content) == artifact("properties").stat().st_size
 
 
-def test_meta_is_served_without_the_dataset(client: TestClient) -> None:
-    assert client.get("/meta").status_code == 200
+def test_the_login_check_answers_without_the_dataset(client: TestClient) -> None:
+    assert client.get("/login").status_code == 204
 
 
 def test_a_request_without_the_password_is_rejected(client: TestClient) -> None:
-    assert TestClient(client.app).get("/meta").status_code == 401
+    assert TestClient(client.app).get("/login").status_code == 401
 
 
 def test_a_wrong_bearer_password_is_rejected(client: TestClient) -> None:
     headers = {"Authorization": "Bearer wrong"}
 
-    assert client.get("/meta", headers=headers).status_code == 401
+    assert client.get("/login", headers=headers).status_code == 401
 
 
 def test_a_wrong_cookie_is_rejected(client: TestClient) -> None:
     cookies = {PASSWORD_COOKIE: "wrong"}
     visitor = TestClient(client.app, cookies=cookies)
 
-    assert visitor.get("/meta").status_code == 401
+    assert visitor.get("/login").status_code == 401
 
 
 def test_login_sets_a_cookie_that_authenticates(
@@ -98,7 +100,7 @@ def test_login_sets_a_cookie_that_authenticates(
     headers = {"Authorization": f"Bearer {password}"}
 
     assert visitor.post("/login", headers=headers).status_code == 200
-    assert visitor.get("/meta").status_code == 200
+    assert visitor.get("/login").status_code == 204
 
 
 def test_login_with_a_wrong_password_sets_no_cookie(client: TestClient) -> None:
@@ -190,7 +192,7 @@ def test_positions_are_in_galaxy_order(client: TestClient) -> None:
     positions = pa.ipc.open_stream(response.content).read_all()
 
     assert response.headers["content-type"] == ARROW
-    assert positions.num_rows == client.get("/meta").json()["galaxy_count"]
+    assert positions.num_rows == galaxy_count()
     galaxy = client.get("/galaxy/6").json()
     assert positions.column("ra")[6].as_py() == galaxy["ra"]
     assert positions.column("dec")[6].as_py() == galaxy["dec"]
@@ -413,6 +415,7 @@ def test_whole_mode_search_on_a_mode_the_galaxy_lacks_returns_each_selected_cont
         if name.endswith("_contribution") and table.column(name).null_count == 0
     }
     assert contributed == {"ls_image_contribution", "desi_spectrum_contribution"}
+    assert "DESI spectrum" in table.column("predicted")[0].as_py()
     assert len(table.column("ls_image")[0]) == LegacySurveyImage.num_tokens
 
 
@@ -425,6 +428,24 @@ def test_whole_mode_search_takes_any_position_only_in_a_selected_mode(
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.usefixtures("identified")
+@pytest.mark.parametrize(
+    ("path", "query"),
+    [
+        ("/search/download", {"ls_image": [25]}),
+        ("/search/modes/download", {"modes": ["redshift"]}),
+    ],
+)
+def test_search_downloads_are_ecsv_with_the_galaxy_and_its_matches(
+    client: TestClient, path: str, query: dict
+) -> None:
+    response = client.get(path, params={"galaxy": 2, "matches": 5, **query})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert len(Table.read(response.text, format="ascii.ecsv")) == 6
 
 
 def test_the_redshift_is_searchable_for_a_galaxy_with_a_usable_redshift(
@@ -555,6 +576,24 @@ def test_galaxy_past_the_end_is_rejected(
     client: TestClient, galaxies: int, path: str
 ) -> None:
     assert client.get(path.format(galaxy=galaxies)).status_code == 422
+
+
+@pytest.mark.usefixtures("identified")
+def test_text_search_download_is_csv_with_each_match(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    query = np.random.default_rng(0).standard_normal((1, WEMM_DIM)).astype(np.float32)
+    monkeypatch.setitem(
+        client.app.dependency_overrides, query_embedder, lambda: lambda _: query
+    )
+
+    response = client.get(
+        "/search/text/download", params={"text": "a galaxy", "matches": 3}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert len(Table.read(response.text, format="ascii.csv")) == 3
 
 
 def test_text_search_returns_each_match_with_its_contribution_from_every_mode(

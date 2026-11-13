@@ -21,7 +21,7 @@
     contributions
       .filter(([, value]) => lead > 0 && value >= 0.1 * lead)
       .toSorted(([, first], [, second]) => second - first)
-      .map(([name, value]) => `${MODES[name].label} ${Math.round((100 * value) / lead)}%`)
+      .map(([name, value]) => `${MODES[name]} ${Math.round((100 * value) / lead)}%`)
   )
 </script>
 

@@ -4,13 +4,13 @@
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
   import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
+  import { IMAGE_GRID } from '$lib/data/modes'
   import { getView } from '$lib/state/app.svelte'
   import type { Snippet } from 'svelte'
 
   interface Props {
     label: string
     values: ArrayLike<number> | null
-    grid: number
     color: ((value: number) => RGB) | null
     mask?: ArrayLike<number> | null
     opacity?: (picked: boolean) => number
@@ -28,7 +28,6 @@
   let {
     label,
     values,
-    grid,
     color,
     mask,
     opacity,
@@ -51,12 +50,12 @@
     const chosen = new Set(selected).symmetricDifference(new Set(painted))
     const edges: string[] = []
     for (const index of chosen) {
-      const column = index % grid
-      const row = Math.floor(index / grid)
-      if (!chosen.has(index - grid)) edges.push(`M${column} ${row}h1`)
-      if (!chosen.has(index + grid)) edges.push(`M${column} ${row + 1}h1`)
+      const column = index % IMAGE_GRID
+      const row = Math.floor(index / IMAGE_GRID)
+      if (!chosen.has(index - IMAGE_GRID)) edges.push(`M${column} ${row}h1`)
+      if (!chosen.has(index + IMAGE_GRID)) edges.push(`M${column} ${row + 1}h1`)
       if (column === 0 || !chosen.has(index - 1)) edges.push(`M${column} ${row}v1`)
-      if (column === grid - 1 || !chosen.has(index + 1)) edges.push(`M${column + 1} ${row}v1`)
+      if (column === IMAGE_GRID - 1 || !chosen.has(index + 1)) edges.push(`M${column + 1} ${row}v1`)
     }
     return edges.join('')
   })
@@ -76,7 +75,6 @@
       {#if values && color}
         <ImageTokenGrid
           {values}
-          {grid}
           {color}
           {mask}
           {opacity}
@@ -97,7 +95,7 @@
         </div>
       {/if}
       <svg
-        viewBox="0 0 {grid} {grid}"
+        viewBox="0 0 {IMAGE_GRID} {IMAGE_GRID}"
         class="pointer-events-none absolute inset-0 size-full"
         stroke-linecap="square"
         aria-hidden="true"

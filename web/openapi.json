@@ -6,17 +6,12 @@
   },
   "paths": {
     "/login": {
-      "post": {
-        "summary": "Login",
-        "operationId": "login",
+      "get": {
+        "summary": "Check Login",
+        "operationId": "check_login",
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           }
         },
         "security": [
@@ -27,20 +22,16 @@
             "HTTPBearer": []
           }
         ]
-      }
-    },
-    "/meta": {
-      "get": {
-        "summary": "Get Meta",
-        "operationId": "get_meta",
+      },
+      "post": {
+        "summary": "Login",
+        "operationId": "login",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Meta"
-                }
+                "schema": {}
               }
             }
           }
@@ -1113,6 +1104,269 @@
         }
       }
     },
+    "/search/download": {
+      "get": {
+        "summary": "Get Search Download",
+        "operationId": "get_search_download",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "ls_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Ls Image"
+            }
+          },
+          {
+            "name": "hsc_image",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 576
+              },
+              "maxItems": 576,
+              "default": [],
+              "title": "Hsc Image"
+            }
+          },
+          {
+            "name": "desi_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Desi Spectrum"
+            }
+          },
+          {
+            "name": "sdss_spectrum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 272
+              },
+              "maxItems": 272,
+              "default": [],
+              "title": "Sdss Spectrum"
+            }
+          },
+          {
+            "name": "table_values",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 26
+              },
+              "maxItems": 26,
+              "default": [],
+              "title": "Table Values"
+            }
+          },
+          {
+            "name": "anywhere",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum"
+                ],
+                "type": "string"
+              },
+              "maxItems": 4,
+              "default": [],
+              "title": "Anywhere"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/modes/download": {
+      "get": {
+        "summary": "Get Mode Search Download",
+        "operationId": "get_mode_search_download",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "modes",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum",
+                  "redshift",
+                  "ls_table",
+                  "hsc_table"
+                ],
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Modes"
+            }
+          },
+          {
+            "name": "anywhere",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ls_image",
+                  "hsc_image",
+                  "desi_spectrum",
+                  "sdss_spectrum"
+                ],
+                "type": "string"
+              },
+              "default": [],
+              "title": "Anywhere"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search/text": {
       "get": {
         "summary": "Get Text Search",
@@ -1157,6 +1411,67 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TextMatches"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/text/download": {
+      "get": {
+        "summary": "Get Text Search Download",
+        "operationId": "get_text_search_download",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "text",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "title": "Text"
+            }
+          },
+          {
+            "name": "matches",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 128,
+              "minimum": 1,
+              "default": 32,
+              "title": "Matches"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1242,44 +1557,6 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
-      },
-      "Meta": {
-        "properties": {
-          "author": {
-            "type": "string",
-            "title": "Author"
-          },
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "galaxy_count": {
-            "type": "integer",
-            "title": "Galaxy Count"
-          },
-          "grid": {
-            "type": "integer",
-            "title": "Grid"
-          },
-          "spectrum_origin": {
-            "type": "number",
-            "title": "Spectrum Origin"
-          },
-          "spectrum_width": {
-            "type": "number",
-            "title": "Spectrum Width"
-          }
-        },
-        "type": "object",
-        "required": [
-          "author",
-          "id",
-          "galaxy_count",
-          "grid",
-          "spectrum_origin",
-          "spectrum_width"
-        ],
-        "title": "Meta"
       },
       "TableRow": {
         "properties": {

@@ -71,7 +71,7 @@
           {#each IMAGE_SURVEYS as survey (survey)}
             <Observed {galaxy} {survey} kind="image">
               <div class="flex flex-col gap-1">
-                <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
+                <span class="text-xs text-muted-foreground">{SURVEYS[survey]}</span>
                 <DetailImage {galaxy} {survey} />
               </div>
             </Observed>
@@ -83,7 +83,7 @@
             <Observed {galaxy} {survey} kind="spectrum">
               {#snippet children(matched)}
                 <div class="flex flex-col gap-1">
-                  <span class="text-xs text-muted-foreground">{SURVEYS[survey].label}</span>
+                  <span class="text-xs text-muted-foreground">{SURVEYS[survey]}</span>
                   <DetailSpectrum {galaxy} {survey} {matched} />
                 </div>
               {/snippet}

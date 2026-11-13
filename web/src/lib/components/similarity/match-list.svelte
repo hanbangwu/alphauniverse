@@ -1,55 +1,43 @@
 <script lang="ts">
+  import type { GetModeSearchDownloadData, GetSearchDownloadData } from '$lib/api'
+  import { client } from '$lib/client'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
-  import { tableQuery } from '$lib/data/queries'
-  import { galaxyRows, saveEcsv } from '$lib/download'
-  import { errorMessage } from '$lib/errors'
+  import { isModeQuery } from '$lib/data/similarity'
   import { must } from '$lib/invariant'
   import { getApp } from '$lib/state/app.svelte'
   import MaskControls from './mask-controls.svelte'
   import MatchRow from './match-row.svelte'
-  import { searchEcsv } from './search-export'
   import { getSimilarity } from './similarity.svelte'
-  import { useQueryClient } from '@tanstack/svelte-query'
 
   const similarity = getSimilarity()
-  const { view, mask: display, meta } = getApp()
-  const queryClient = useQueryClient()
+  const { view, mask: display } = getApp()
 
   const predicted = $derived(similarity.predictedAt(0))
-
-  let downloadError = $state<string | null>(null)
-
-  async function download(): Promise<void> {
-    const result = must(similarity.result, 'the search result')
-    try {
-      const [identities, tableRows] = await Promise.all([
-        galaxyRows(queryClient, Array.from(result.galaxies)),
-        queryClient.fetchQuery(tableQuery(result.request.galaxy))
-      ])
-      saveEcsv(
-        'alphauniverse-search.ecsv',
-        searchEcsv(result, meta, identities, tableRows, location.href)
-      )
-      downloadError = null
-    } catch (caught) {
-      downloadError = errorMessage(caught)
-    }
-  }
+  const download = $derived.by(() => {
+    const { request } = must(similarity.result, 'the search result')
+    return isModeQuery(request)
+      ? client.buildUrl<GetModeSearchDownloadData>({
+          url: '/search/modes/download',
+          query: request
+        })
+      : client.buildUrl<GetSearchDownloadData>({ url: '/search/download', query: request })
+  })
 </script>
 
 <div class="flex items-center justify-between gap-2">
   <span class="text-sm font-medium">Whole dataset</span>
   {#if similarity.scales && !similarity.error}
-    <Button variant="secondary" size="sm" disabled={similarity.stale} onclick={download}
-      >Export as ECSV</Button
+    <Button
+      variant="secondary"
+      size="sm"
+      disabled={similarity.stale}
+      href={download}
+      download="alphauniverse-search.ecsv">Export as ECSV</Button
     >
   {/if}
 </div>
-{#if downloadError}
-  <p role="alert" class="text-sm text-destructive">{downloadError}</p>
-{/if}
 {#if similarity.wholeResult}
   <p class="text-xs text-muted-foreground">
     Each match's score is the mean over the chosen modes of its standardised score in each; the bars

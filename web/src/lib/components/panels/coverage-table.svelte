@@ -33,7 +33,7 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each Object.entries(SURVEYS) as [survey, { label }] (survey)}
+        {#each Object.entries(SURVEYS) as [survey, label] (survey)}
           <Table.Row class="last:border-0">
             <Table.Cell class="px-0 py-1.5">{label}</Table.Cell>
             <Table.Cell class="px-0 py-1.5">

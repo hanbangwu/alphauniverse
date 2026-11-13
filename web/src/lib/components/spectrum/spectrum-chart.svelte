@@ -26,7 +26,6 @@
   import { TAP_RADIUS, TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
   import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
   import { must } from '$lib/invariant'
-  import { getMeta } from '$lib/state/app.svelte'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
   import type { ECharts } from 'echarts/core'
   import { mode } from 'mode-watcher'
@@ -59,8 +58,6 @@
     label
   }: Props = $props()
 
-  const meta = getMeta()
-
   const interactive = $derived(Boolean(ontoggle))
   const ink = $derived(chartInk(mode.current ?? 'light'))
 
@@ -92,7 +89,7 @@
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
     const cells = Array.from(values, (value, index): Areas[number] => {
-      const [low, high] = spectrumTokenOf(meta, index)
+      const [low, high] = spectrumTokenOf(index)
       const [r, g, b] = color(value)
       return [
         {
@@ -113,11 +110,11 @@
     const outlines = runs.flatMap(([first, last]) =>
       OUTLINE.map(({ stroke, width }, layer): Areas[number] => [
         {
-          xAxis: spectrumTokenOf(meta, first)[0],
+          xAxis: spectrumTokenOf(first)[0],
           itemStyle: { color: 'transparent', borderColor: stroke, borderWidth: width },
           z2: layer + 1
         },
-        { xAxis: spectrumTokenOf(meta, last)[1] }
+        { xAxis: spectrumTokenOf(last)[1] }
       ])
     )
     return [...cells, ...outlines]
@@ -128,7 +125,7 @@
       number,
       number
     ]
-    const index = spectrumTokenAt(meta, wavelength)
+    const index = spectrumTokenAt(wavelength)
     const value = values?.[index]
     return [
       `${wavelength.toFixed(1)} Å`,
@@ -191,7 +188,7 @@
   function windowAt(event: PointerEvent): number {
     const [wavelength] = instance.convertFromPixel('grid', pixel(instance, event))
     const [low, high] = visible
-    return spectrumTokenAt(meta, Math.min(Math.max(wavelength, low), high))
+    return spectrumTokenAt(Math.min(Math.max(wavelength, low), high))
   }
 
   function paint(index: number): void {
@@ -265,7 +262,7 @@
       instance.dispatchAction({ type: 'showTip', x: -1, y: -1 })
       return
     }
-    const [low, high] = spectrumTokenOf(meta, index)
+    const [low, high] = spectrumTokenOf(index)
     const left = Math.max(low, first)
     const right = Math.min(high, last)
     const y = instance.getHeight() / 2
@@ -287,12 +284,10 @@
     event.preventDefault()
     if (cursor === null) {
       const [from, to] = shown()
-      point(spectrumTokenAt(meta, (from + to) / 2))
+      point(spectrumTokenAt((from + to) / 2))
       return
     }
-    point(
-      Math.min(Math.max(cursor + step, spectrumTokenAt(meta, first)), spectrumTokenAt(meta, last))
-    )
+    point(Math.min(Math.max(cursor + step, spectrumTokenAt(first)), spectrumTokenAt(last)))
   }
 
   function activate(event: MouseEvent): void {

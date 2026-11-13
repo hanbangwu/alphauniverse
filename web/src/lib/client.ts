@@ -1,14 +1,17 @@
-import type {
-  GetCosinesData,
-  GetImageData,
-  GetProjectionsData,
-  GetPropertiesData,
-  GetSpectrumData
-} from './api'
+import type { GetCosinesData, GetImageData, GetProjectionsData, GetSpectrumData } from './api'
+import type { HttpValidationError } from './api'
 import { login } from './api'
 import { client } from './api/client.gen'
 
 export { client }
+
+client.interceptors.error.use((error, response) => {
+  if (error instanceof Error) return error
+  const { detail } = (error ?? {}) as { detail?: string | HttpValidationError['detail'] }
+  if (typeof detail === 'string') return new Error(detail)
+  if (detail) return new Error(detail.map(({ msg }) => msg).join('; '))
+  return new Error(response?.statusText || 'The request failed.')
+})
 
 export type Projection = GetProjectionsData['path']['projection']
 
@@ -21,15 +24,4 @@ export type SpectrumSurvey = GetSpectrumData['path']['survey']
 export async function signIn(password: string): Promise<Response | undefined> {
   const { response } = await login({ headers: { Authorization: `Bearer ${password}` } })
   return response
-}
-
-export function projectionUrl(projection: Projection): string {
-  return client.buildUrl<GetProjectionsData>({
-    url: '/projections/{projection}',
-    path: { projection }
-  })
-}
-
-export function propertiesUrl(): string {
-  return client.buildUrl<GetPropertiesData>({ url: '/galaxies/property' })
 }

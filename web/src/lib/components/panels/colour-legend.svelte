@@ -54,10 +54,10 @@
 
 <figure
   class="flex flex-col gap-1.5 text-xs"
-  aria-label="{PROPERTIES[coloured.property].label} colour scale"
+  aria-label="{PROPERTIES[coloured.property]} colour scale"
 >
   <figcaption class="flex justify-between font-medium">
-    <span>{PROPERTIES[coloured.property].label}</span>
+    <span>{PROPERTIES[coloured.property]}</span>
     <span class="text-muted-foreground">{UNITS[coloured.property]}</span>
   </figcaption>
   <div class="flex justify-between font-mono tabular-nums">

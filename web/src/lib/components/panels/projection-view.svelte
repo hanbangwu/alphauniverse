@@ -38,7 +38,6 @@
     similarityQuery,
     valuesQuery
   } from '$lib/data/queries'
-  import { errorMessage } from '$lib/errors'
   import { PROPERTIES } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import { Field } from '$lib/state/field.svelte'
@@ -118,7 +117,7 @@
         config={{ colorScheme: mode.current, autoLabelEnabled: false }}
         customTooltip={{
           class: Tooltip,
-          props: { label: PROPERTIES[coloured.property].label }
+          props: { label: PROPERTIES[coloured.property] }
         }}
         onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
@@ -135,14 +134,14 @@
         role="alert"
         class="pointer-events-none absolute inset-0 grid place-content-center text-sm text-destructive"
       >
-        {errorMessage(selected.error)}
+        {selected.error.message}
       </p>
     {:else if region.value && selected.data?.length}
       <MapSelection galaxies={selected.data} loading={selected.isFetching} />
     {/if}
   {:else if shown.isError || colouring.isError}
     <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">
-      {errorMessage(shown.error ?? colouring.error)}
+      {(shown.error ?? colouring.error)?.message}
     </p>
   {:else}
     <div class="absolute inset-0 grid place-content-center">

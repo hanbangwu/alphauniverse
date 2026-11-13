@@ -5,7 +5,6 @@
   import * as Table from '$lib/components/ui/table'
   import { TABLE_MODES } from '$lib/data/modes'
   import { tableQuery } from '$lib/data/queries'
-  import { errorMessage } from '$lib/errors'
   import { SECTIONS } from '$lib/labels'
   import { getMask, getView } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
@@ -25,12 +24,7 @@
   const view = getView()
   const table = createQuery(() => tableQuery(galaxy))
 
-  const order = Object.keys(SECTIONS)
-  const groups = $derived(
-    [...Map.groupBy(table.data ?? [], (row) => row.section)].sort(
-      ([first], [second]) => order.indexOf(first) - order.indexOf(second)
-    )
-  )
+  const groups = $derived([...Map.groupBy(table.data ?? [], (row) => row.section)])
 
   const mask = $derived(
     similarity.tableValueMap &&
@@ -74,14 +68,14 @@
 
 {#snippet sectionTable(section: TableRow['section'], rows: TableRow[])}
   <div class="max-h-96 overflow-y-auto rounded-lg border px-3">
-    <Table.Root class="text-xs" aria-label={SECTIONS[section].label}>
+    <Table.Root class="text-xs" aria-label={SECTIONS[section]}>
       <Table.Header>
         <Table.Row class="hover:bg-transparent">
           <Table.Head class="h-7 w-8 px-0 font-normal"
             ><span class="sr-only">Query</span></Table.Head
           >
           <Table.Head class="h-7 px-0 font-normal text-muted-foreground uppercase">
-            <span aria-hidden="true">{SECTIONS[section].label}</span>
+            <span aria-hidden="true">{SECTIONS[section]}</span>
             <span class="sr-only">Name</span>
           </Table.Head>
           <Table.Head class="h-7 px-0 text-right font-normal">Value</Table.Head>
@@ -146,7 +140,7 @@
   <Spinner class="my-3 size-4 text-muted-foreground" />
 {:else if table.isError}
   <p role="alert" class="py-3 text-xs leading-relaxed text-destructive">
-    {errorMessage(table.error)}
+    {table.error.message}
   </p>
 {:else}
   <div class="grid w-full items-start gap-5 md:grid-cols-2">

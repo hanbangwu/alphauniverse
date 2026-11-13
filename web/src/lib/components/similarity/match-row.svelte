@@ -43,9 +43,8 @@
             <div class="grid items-end gap-5 md:grid-cols-2">
               <DetailImage {galaxy} {survey} />
               <ImageTokenPanel
-                label={SURVEYS[survey].label}
+                label={SURVEYS[survey]}
                 {values}
-                grid={similarity.grid}
                 color={similarity.scales?.[mode]?.heat ?? null}
                 mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
                 title={similarity.score}

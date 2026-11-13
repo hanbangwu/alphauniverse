@@ -47,6 +47,9 @@ SPECTRUM_SMOOTHING_SIGMA = 2
 SPECTRUM_SURVEY = "desi"
 
 AION_EMBEDDING_DIM = 768
+IMAGE_GRID = (
+    MODALITY_INFO["tok_image"]["input_size"] // MODALITY_INFO["tok_image"]["patch_size"]
+)
 
 
 SpectrumSurvey = Literal["desi", "sdss"]

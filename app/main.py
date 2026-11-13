@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 import pyarrow as pa
-from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import LegacySurveyImage
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
@@ -21,10 +20,6 @@ from pydantic import BaseModel
 from . import pql
 from .config import (
     AION_SPECTRUM_GRID,
-    AION_SPECTRUM_ORIGIN,
-    AION_SPECTRUM_TOKEN_WIDTH,
-    DATASET_AUTHOR,
-    DATASET_NAME,
     FLAG_SURVEYS,
     GRAM_NAMES,
     IMAGE_MODES,
@@ -61,6 +56,7 @@ from .dataset import (
     spectrum,
     table,
 )
+from .export import search_ecsv, text_search_csv
 from .search import (
     FIRST_LS_TABLE_VALUE,
     aion_predictions,
@@ -73,15 +69,6 @@ from .text_search import TextQuery, embed_queries, text_search
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Coroutine
     from pathlib import Path
-
-
-class Meta(BaseModel):
-    author: str
-    id: str
-    galaxy_count: int
-    grid: int
-    spectrum_origin: float
-    spectrum_width: float
 
 
 class Galaxy(BaseModel):
@@ -121,6 +108,8 @@ ARROW_STREAM: dict[str, Any] = {
     }
 }
 PNG: dict[str, Any] = {"image/png": {"schema": {"type": "string", "format": "binary"}}}
+ECSV: dict[str, Any] = {"text/plain": {"schema": {"type": "string"}}}
+CSV: dict[str, Any] = {"text/csv": {"schema": {"type": "string"}}}
 
 
 def arrow(data: pa.RecordBatch | pa.Table) -> Response:
@@ -195,6 +184,11 @@ app = FastAPI(
 app.router.route_class = RevalidatedRoute
 
 
+@app.get("/login", status_code=204)
+def check_login() -> None:
+    pass
+
+
 @app.post("/login")
 def login(
     bearer: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())],
@@ -207,21 +201,6 @@ def login(
         httponly=True,
         secure=True,
         samesite="lax",
-    )
-
-
-@app.get(
-    "/meta",
-)
-def get_meta() -> Meta:
-    return Meta(
-        author=DATASET_AUTHOR,
-        id=DATASET_NAME,
-        galaxy_count=galaxy_count(),
-        grid=MODALITY_INFO["tok_image"]["input_size"]
-        // MODALITY_INFO["tok_image"]["patch_size"],
-        spectrum_origin=AION_SPECTRUM_ORIGIN,
-        spectrum_width=AION_SPECTRUM_TOKEN_WIDTH,
     )
 
 
@@ -498,7 +477,10 @@ def search_response(
     columns = [
         *columns,
         *(pa.array(pql.observed(column)[galaxies]) for column in OBSERVATIONS),
-        pa.array(predicted, observations),
+        pa.array(
+            [[OBSERVATIONS[column] for column in row] for row in predicted],
+            observations,
+        ),
     ]
     return arrow(pa.record_batch(columns, schema=pa.schema(fields)))
 
@@ -584,6 +566,32 @@ def get_mode_search(query: Annotated[pql.ModeQuery, Query()]) -> Response:
     return search_response(fields, columns, results.galaxies, results.predicted)
 
 
+@app.get(
+    "/search/download",
+    response_class=Response,
+    responses={200: {"content": ECSV}},
+)
+def get_search_download(query: Annotated[pql.Query, Query()]) -> Response:
+    results = pql.search(query)
+    return Response(
+        search_ecsv(results.galaxies, results.similarity, results.maps, query),
+        media_type="text/plain",
+    )
+
+
+@app.get(
+    "/search/modes/download",
+    response_class=Response,
+    responses={200: {"content": ECSV}},
+)
+def get_mode_search_download(query: Annotated[pql.ModeQuery, Query()]) -> Response:
+    results = pql.mode_search(query)
+    return Response(
+        search_ecsv(results.galaxies, results.scores, results.maps, query),
+        media_type="text/plain",
+    )
+
+
 def query_embedder() -> Callable[[list[str]], np.ndarray]:
     return embed_queries
 
@@ -598,4 +606,22 @@ def get_text_search(
         galaxies=found.galaxies.tolist(),
         scores=found.scores.tolist(),
         contributions=dict(zip(MODES, found.contributions.T.tolist())),
+    )
+
+
+@app.get(
+    "/search/text/download",
+    response_class=Response,
+    responses={200: {"content": CSV}},
+)
+def get_text_search_download(
+    query: Annotated[TextQuery, Query()],
+    embed: Annotated[Callable[[list[str]], np.ndarray], Depends(query_embedder)],
+) -> Response:
+    found = text_search(query, embed)
+    return Response(
+        text_search_csv(
+            found.galaxies.numpy(force=True), found.scores.numpy(force=True)
+        ),
+        media_type="text/csv",
     )

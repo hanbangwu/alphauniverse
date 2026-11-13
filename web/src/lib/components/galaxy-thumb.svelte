@@ -32,7 +32,7 @@
 {#if failed !== src}
   <img
     {src}
-    alt={`${predicted ? "AION's predicted " : ''}${SURVEYS[survey].label} image of galaxy ${coverage.data?.object_id ?? ''}`}
+    alt={`${predicted ? "AION's predicted " : ''}${SURVEYS[survey]} image of galaxy ${coverage.data?.object_id ?? ''}`}
     loading="lazy"
     onload={() => (loaded = src)}
     onerror={() => (failed = src)}

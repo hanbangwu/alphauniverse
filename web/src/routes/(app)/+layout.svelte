@@ -1,14 +1,17 @@
 <script lang="ts">
   import { browser } from '$app/environment'
+  import { goto } from '$app/navigation'
+  import { resolve } from '$app/paths'
   import markDark from '$lib/assets/alphauniverse-mark-dark.svg'
   import markLight from '$lib/assets/alphauniverse-mark-light.svg'
   import { client } from '$lib/client'
-  import AppRoot from '$lib/components/app-root.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Spinner } from '$lib/components/ui/spinner'
-  import { metaQuery, pointsQuery, propertiesQuery } from '$lib/data/queries'
+  import { loginQuery, pointsQuery, propertiesQuery } from '$lib/data/queries'
   import { POINT_SETS, type PointSet } from '$lib/labels'
+  import { AppState, setApp } from '$lib/state/app.svelte'
   import { MosaicState } from '$lib/state/mosaic.svelte'
+  import { setParams } from '$lib/state/params.svelte'
   import XIcon from '@lucide/svelte/icons/x'
   import { QueryClient, QueryClientProvider, createQuery } from '@tanstack/svelte-query'
   import { PersistedState } from 'runed'
@@ -20,24 +23,29 @@
     "This is a research prototype. We don't guarantee accuracy nor reliability (for now)."
 
   const queries = new QueryClient({ defaultOptions: { queries: { enabled: browser } } })
-  const meta = createQuery(
-    () => metaQuery,
+  const login = createQuery(
+    () => loginQuery,
     () => queries
   )
   const mosaic = new MosaicState()
+  setParams()
+  setApp(new AppState(mosaic)).start()
 
   createQuery(
-    () => pointsQuery(mosaic, Object.keys(POINT_SETS)[0] as PointSet),
+    () => ({
+      ...pointsQuery(mosaic, Object.keys(POINT_SETS)[0] as PointSet),
+      enabled: login.isSuccess
+    }),
     () => queries
   )
   createQuery(
-    () => propertiesQuery(mosaic),
+    () => ({ ...propertiesQuery(mosaic), enabled: login.isSuccess }),
     () => queries
   )
   onDestroy(() => mosaic.destroy())
 
   function requirePassword(response: Response): Response {
-    if (response.status === 401) location.assign('/login')
+    if (response.status === 401) goto(resolve('/login'))
     return response
   }
 
@@ -49,7 +57,7 @@
 
 <QueryClientProvider client={queries}>
   <div class="flex h-dvh flex-col overflow-hidden">
-    {#if showDisclaimer.current && !meta.isPending}
+    {#if showDisclaimer.current && !login.isPending}
       <div class="flex items-center border-b bg-muted px-4 py-1 text-xs text-muted-foreground">
         <p class="flex-1 text-center">{disclaimer}</p>
         <Button
@@ -63,11 +71,9 @@
       </div>
     {/if}
     <div class="min-h-0 flex-1">
-      {#if meta.data}
-        <AppRoot meta={meta.data} {mosaic}>
-          {@render children()}
-        </AppRoot>
-      {:else if meta.isError}
+      {#if login.isSuccess}
+        {@render children()}
+      {:else if login.isError}
         <p role="alert" class="grid h-full place-content-center text-sm text-muted-foreground">
           The server is unavailable. Reload the page to try again.
         </p>

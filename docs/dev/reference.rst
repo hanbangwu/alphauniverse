@@ -155,7 +155,7 @@ The redshift's prediction is the median of AION's predicted distribution, and it
 HTTP API
 --------
 
-Every endpoint needs the password in the ``access-password`` Modal secret's ``ACCESS_PASSWORD``, sent as ``Authorization: Bearer <password>`` or in the ``password`` cookie, and otherwise answers ``401``. ``POST /login`` takes the bearer header and sets that cookie for 30 days, ``HttpOnly``, ``Secure`` and ``SameSite=Lax``. ``/docs``, ``/redoc`` and ``/openapi.json`` are public.
+Every endpoint needs the password in the ``access-password`` Modal secret's ``ACCESS_PASSWORD``, sent as ``Authorization: Bearer <password>`` or in the ``password`` cookie, and otherwise answers ``401``. ``POST /login`` takes the bearer header and sets that cookie for 30 days, ``HttpOnly``, ``Secure`` and ``SameSite=Lax``. ``GET /login`` answers ``204`` with a valid password; the web app calls it first and loads nothing else until it succeeds, and any ``401`` sends the visitor to the login page. ``/docs``, ``/redoc`` and ``/openapi.json`` are public.
 
 Every other endpoint is ``GET``; ``/projections/{projection}`` and ``/galaxies/property`` also answer ``HEAD``. A request whose ``If-None-Match`` matches the response's ETag gets ``304 Not Modified``. Artifact files carry Starlette's ETag, from size and modification time; every other response's ETag is an MD5 of its body. Every response carries ``Cache-Control: no-cache``.
 

@@ -12,9 +12,8 @@ import {
   type SimilarityResult,
   isModeQuery
 } from '$lib/data/similarity'
-import { errorMessage } from '$lib/errors'
 import { must } from '$lib/invariant'
-import { MODES, OBSERVATIONS, SIMILARITY } from '$lib/labels'
+import { MODES } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
 import { Field } from '$lib/state/field.svelte'
 import { DECIMALS, type Threshold } from '$lib/state/mask.svelte'
@@ -72,13 +71,12 @@ class ModeLayer {
 
   get error(): string | null {
     if (!this.#own()) return null
-    return this.#cosines.isError ? errorMessage(this.#cosines.error) : null
+    return this.#cosines.isError ? this.#cosines.error.message : null
   }
 }
 
 export class Similarity {
   readonly galaxy: number
-  readonly grid: number
 
   readonly #app: AppState = getApp()
   readonly #result: CreateQueryResult<SimilarityResult>
@@ -106,7 +104,6 @@ export class Similarity {
     const { view, search } = this.#app
     this.galaxy = galaxy
     this.layer = new Field(DEFAULTS.layer, stored('layer'))
-    this.grid = this.#app.meta.grid
 
     const whole = $derived(view.wholeModes.value)
     const selections = $derived(byMode((mode) => view.tokens[mode].value))
@@ -206,12 +203,12 @@ export class Similarity {
   }
 
   get error(): string | null {
-    return this.#result.isError ? errorMessage(this.#result.error) : null
+    return this.#result.isError ? this.#result.error.message : null
   }
 
   get saliencyError(): string | null {
     if (this.layer.value === 'galaxy') return null
-    return this.#saliency.isError ? errorMessage(this.#saliency.error) : null
+    return this.#saliency.isError ? this.#saliency.error.message : null
   }
 
   layerOf(mode: CosineMode): Layered | null {
@@ -283,8 +280,7 @@ export class Similarity {
     return request !== undefined && isModeQuery(request)
   }
 
-  readonly score = (value: number): string =>
-    `${SIMILARITY.short} ${Math.min(1, value).toFixed(DECIMALS)}`
+  readonly score = (value: number): string => `similarity ${Math.min(1, value).toFixed(DECIMALS)}`
 
   readonly total = (value: number): string =>
     this.wholeResult ? `score ${value.toFixed(DECIMALS)}` : this.score(value)
@@ -300,7 +296,7 @@ export class Similarity {
   readonly caption: Caption = (value) => `token ${value}`
 
   predictedAt(index: number): string[] {
-    return (this.#result.data?.predicted[index] ?? []).map((column) => OBSERVATIONS[column])
+    return this.#result.data?.predicted[index] ?? []
   }
 
   scoreAt(index: number): number {

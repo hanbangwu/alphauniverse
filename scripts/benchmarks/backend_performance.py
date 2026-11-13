@@ -12,7 +12,7 @@ import numpy as np
 import pyarrow.compute as pc
 from aion.modalities import LegacySurveyImage
 
-from app.config import DATASET_REVISION, MODES, SPECTRUM_SURVEY
+from app.config import DATASET_REVISION, MODES, SPECTRUM_SURVEY, galaxy_count
 from app.search import source
 from modal_app import CACHE_PATH, app, cache_volume, fastapi_app, serving_image
 from scripts.benchmarks.common import (
@@ -61,8 +61,8 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         def get(path: str, **params: Any) -> None:
             session.get(path, params=params).raise_for_status()
 
-        cold = {"meta": round(elapsed(lambda: get("/meta")), 3)}
-        galaxies = session.get("/meta").raise_for_status().json()["galaxy_count"]
+        cold = {"login": round(elapsed(lambda: get("/login")), 3)}
+        galaxies = galaxy_count()
         cells = source("tokens").to_table(columns=[SPECTRUM_SURVEY])
         holders = np.flatnonzero(pc.is_valid(cells.column(SPECTRUM_SURVEY)))
 
@@ -70,7 +70,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
             return int(rng.integers(galaxies))
 
         calls = {
-            "meta": lambda: get("/meta"),
+            "login": lambda: get("/login"),
             "search": lambda: get(
                 "/search",
                 galaxy=galaxy(),
@@ -92,7 +92,7 @@ def benchmark_backend_performance(url: str, runs: int) -> dict[str, Any]:
         cold |= {
             name: round(elapsed(call), 3)
             for name, call in calls.items()
-            if name != "meta"
+            if name != "login"
         }
         warm = {name: time_it(runs, call) for name, call in calls.items()}
         return {"environment": environment(), "cold_ms": cold, "warm": warm}

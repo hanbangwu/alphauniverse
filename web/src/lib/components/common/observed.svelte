@@ -22,5 +22,5 @@
 {#if matched || (coverage.data && view.predictions.value)}
   {@render children(matched)}
 {:else if coverage.data}
-  <p class="text-xs text-muted-foreground">No {SURVEYS[survey].label} {kind}</p>
+  <p class="text-xs text-muted-foreground">No {SURVEYS[survey]} {kind}</p>
 {/if}

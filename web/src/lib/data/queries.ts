@@ -2,7 +2,7 @@ import {
   getCosines,
   getGalaxy,
   getImageTokens,
-  getMeta,
+  checkLogin,
   getModeSearch,
   getPositions,
   getSaliency,
@@ -41,11 +41,11 @@ import type { Point, Rectangle } from 'embedding-atlas'
 
 const FOREVER = { staleTime: Infinity, gcTime: Infinity } as const
 
-export const metaQuery = queryOptions({
-  queryKey: ['meta'] as const,
+export const loginQuery = queryOptions({
+  queryKey: ['login'] as const,
   queryFn: async () => {
-    const { data } = await getMeta({ throwOnError: true })
-    return data
+    await checkLogin({ throwOnError: true })
+    return true
   },
   ...FOREVER
 })

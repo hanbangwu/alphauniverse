@@ -4,7 +4,6 @@
   import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { imageMode } from '$lib/data/modes'
   import { tokensQuery } from '$lib/data/queries'
-  import { errorMessage } from '$lib/errors'
   import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
@@ -25,7 +24,7 @@
   const tokens = createQuery(() => tokensQuery(matched ? similarity.galaxy : null, survey))
   const palette = $derived(tokens.data ? tokenColors(tokens.data) : null)
   const layer = $derived(similarity.layerOf(mode))
-  const error = $derived(tokens.isError ? errorMessage(tokens.error) : similarity.layerError(mode))
+  const error = $derived(tokens.isError ? tokens.error.message : similarity.layerError(mode))
 
   let hovered = $state(false)
 </script>
@@ -33,9 +32,8 @@
 <div class="grid items-end gap-5 md:grid-cols-2">
   <DetailImage galaxy={similarity.galaxy} {survey} />
   <ImageTokenPanel
-    label={SURVEYS[survey].label}
+    label={SURVEYS[survey]}
     values={layer?.values ?? tokens.data ?? null}
-    grid={similarity.grid}
     color={layer?.heat ?? palette}
     mask={layer &&
       similarity.maskOf(layer.values, similarity.imageLayerDomain, display.images.query)}

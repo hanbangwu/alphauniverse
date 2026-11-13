@@ -2,7 +2,6 @@ import { IMAGE_MODES, SPECTRUM_MODES, TOKEN_MODES, byMode } from '$lib/data/mode
 import { type ModeName, type SearchQuery, isModeQuery } from '$lib/data/similarity'
 import {
   POINT_SETS,
-  PREDICTABLE,
   PROPERTIES,
   type PointSet,
   type Property,
@@ -11,6 +10,7 @@ import {
 } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField, ListField } from './fields.svelte'
+import type { MosaicState } from './mosaic.svelte'
 import { DEFAULTS, type Values, searched, stored } from './params.svelte'
 import { PersistedState } from 'runed'
 
@@ -35,7 +35,7 @@ export class ViewState {
     catalogue: true
   })
 
-  constructor() {
+  constructor(private readonly mosaic: MosaicState) {
     this.tab = new Field(DEFAULTS.tab, stored('tab'))
     this.pointSet = new EnumField(POINT_SETS, stored('projection'))
     this.property = new EnumField(PROPERTIES, stored('property'))
@@ -48,7 +48,7 @@ export class ViewState {
   }
 
   get predictable(): boolean {
-    return PREDICTABLE.includes(this.property.value)
+    return this.mosaic.predictable.has(this.property.value)
   }
 
   get everywhere(): boolean {
