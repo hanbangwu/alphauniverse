@@ -5,6 +5,7 @@ from app.config import (
     AION_SPECTRUM_TOKEN_WIDTH,
     IMAGE_GRID,
     LS_TABLE_COLUMNS,
+    REDSHIFT,
 )
 from app.search import pql
 from app.search.export import masked, selection
@@ -30,5 +31,5 @@ def test_the_selection_names_grid_cells_wavelengths_and_catalogue_values() -> No
                 AION_SPECTRUM_ORIGIN + 4 * AION_SPECTRUM_TOKEN_WIDTH,
             ]
         ],
-        "table_values": ["redshift", LS_TABLE_COLUMNS[0].partition("-")[0]],
+        "table_values": [REDSHIFT, LS_TABLE_COLUMNS[0].partition("-")[0]],
     }

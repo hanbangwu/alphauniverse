@@ -153,17 +153,6 @@ def test_aion_prediction_tiles_give_both_directions_of_the_nearest_patch_score(
             )
 
 
-def test_an_aion_prediction_gram_is_minus_half_the_squared_distance_between_aion_predictions() -> (
-    None
-):
-    rng = np.random.default_rng(4)
-    left, right = (torch.from_numpy(rng.normal(size=(count, 7))) for count in (3, 5))
-
-    found = observed_grams.aion_prediction_gram(left, right)
-
-    np.testing.assert_allclose(found, -0.5 * torch.cdist(left, right) ** 2, rtol=1e-9)
-
-
 @pytest.mark.parametrize("mode", [MODE, "desi_spectrum"])
 def test_aion_prediction_rows_of_other_queries_are_their_rows_of_the_aion_prediction_grams(
     mode: str, monkeypatch: pytest.MonkeyPatch

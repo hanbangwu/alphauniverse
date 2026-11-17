@@ -133,7 +133,7 @@ def test_has_flags_say_which_galaxies_observed_each_mode(client: TestClient) -> 
 @pytest.mark.parametrize(
     ("selection", "missing"),
     [
-        ({"table_values": [13]}, "HSC match"),
+        ({"table_values": [pql.TABLE_SLOTS.index(("hsc_table", 0))]}, "HSC match"),
         ({"hsc_image": [0]}, "HSC match"),
         ({"desi_spectrum": [0]}, "DESI spectrum"),
         ({"table_values": [REDSHIFT_TABLE_VALUE]}, "usable redshift"),

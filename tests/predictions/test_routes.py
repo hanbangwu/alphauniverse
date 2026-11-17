@@ -21,6 +21,7 @@ from app.config import (
 )
 from app.dataset import dataset as dataset_module
 from app.dataset.dataset import table_columns
+from app.search import pql
 
 ARROW = "application/vnd.apache.arrow.stream"
 
@@ -125,7 +126,7 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_
             "column": "a_g",
             "value": 1.5,
             "aion_prediction": float(_aion_prediction("hsc_table")[0, 0]),
-            "table_value": 13,
+            "table_value": pql.TABLE_SLOTS.index(("hsc_table", 0)),
             "token": hsc.values[LegacySurveyImage.num_tokens].as_py(),
             "excluded": None,
         },

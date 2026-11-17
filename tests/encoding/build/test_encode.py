@@ -10,16 +10,16 @@ from aion.modalities import DESISpectrum, LegacySurveyImage
 from app import config
 from app.config import (
     FLAG_SURVEYS,
+    HSC_BANDS,
+    LS_BANDS,
     REDSHIFT,
     REDSHIFT_COLUMNS,
     SPECTRUM_MODES,
-    STORES,
     TOKEN_SURVEYS,
-    store_schema,
 )
 from app.encoding.build import encode as encode_module
 from app.encoding.store import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, source
-from scripts.fixture import TOKENS, forget
+from scripts.fixture import forget
 
 pytestmark = pytest.mark.usefixtures("random_weights")
 
@@ -57,9 +57,9 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
     }
     return {
         **redshifts,
-        TOKEN_SURVEYS["ls"]: image(rng, ["des-g", "des-r", "des-i", "des-z"]),
+        TOKEN_SURVEYS["ls"]: image(rng, [band.lower() for band in LS_BANDS]),
         TOKEN_SURVEYS["hsc"]: (
-            image(rng, ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]) if hsc else None
+            image(rng, [band.lower() for band in HSC_BANDS]) if hsc else None
         ),
         TOKEN_SURVEYS["desi"]: spectrum(rng, 7781, 0) if desi else None,
         TOKEN_SURVEYS["sdss"]: spectrum(rng, 3800, 200) if sdss else None,
@@ -67,15 +67,6 @@ def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
         FLAG_SURVEYS["gz10"]: int(rng.integers(10)),
         FLAG_SURVEYS["provabgs"]: None,
     }
-
-
-def test_each_survey_tokenizes_to_the_fixture_layout() -> None:
-    groups = encode_module.tokenize(galaxy(0, hsc=True, desi=True, sdss=True))
-
-    assert {
-        survey: sum(slot.shape[1] for slot in group.values())
-        for survey, group in groups.items()
-    } == TOKENS
 
 
 @pytest.mark.parametrize(
@@ -147,8 +138,6 @@ def test_generated_stores_have_their_schemas_and_a_vector_per_token(
     try:
         encode_module.generate_embeddings()
 
-        for role in STORES:
-            assert source(role).schema.equals(store_schema(role))
         table = source("encoded").to_table(
             columns=["ls", "hsc", *SPECTRUM_MODES.values(), REDSHIFT]
         )

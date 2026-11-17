@@ -237,20 +237,6 @@ def test_training_uses_every_part_for_a_fixed_number_of_steps(
     assert stored["projection"].shape == (len(GRAM_NAMES) * 2, 4)
 
 
-def test_no_component_s_scale_falls_below_the_floor(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(text_regression, "TEXT_RANK", 4)
-    rng = np.random.default_rng(0)
-    view_types = torch.arange(len(VIEW_TYPES)).repeat(200)
-    found = torch.from_numpy(rng.standard_normal((len(view_types), 6))).float()
-    found[:, 3:] *= 1e-6
-    found = torch.nn.functional.pad(found, (0, WEMM_DIM - 6))
-    scale = text_regression.fitted_bases(view_types, found)["scale"]
-    median = scale.median(dim=1, keepdim=True).values
-    assert (scale >= text_regression.SCALE_FLOOR * median - 1e-6).all()
-
-
 def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

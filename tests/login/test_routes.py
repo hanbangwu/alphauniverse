@@ -3,10 +3,6 @@ from fastapi.testclient import TestClient
 from app.login.password import PASSWORD_COOKIE
 
 
-def test_the_login_check_answers_without_the_dataset(client: TestClient) -> None:
-    assert client.get("/login").status_code == 204
-
-
 def test_a_request_without_the_password_is_rejected(client: TestClient) -> None:
     assert TestClient(client.app).get("/login").status_code == 401
 

@@ -11,7 +11,12 @@ from app.config import (
     AION_SPECTRUM_GRID,
     DATASET_LS_SUFFIX,
     FLAG_SURVEYS,
+    HSC_BANDS,
+    HSC_ZERO_POINT,
+    LS_BANDS,
+    LS_ZERO_POINT,
     REDSHIFT_COLUMNS,
+    REDSHIFT_LIMIT,
     TABLE_VALUE_COLUMNS,
     TOKEN_SURVEYS,
 )
@@ -134,7 +139,7 @@ def test_ls_images_colour_their_flux_as_predicted_images_do(
     size = MODALITY_INFO["tok_image"]["input_size"]
     flux = np.random.default_rng(0).uniform(0, 0.5, (4, size, size))
     flux = flux.astype(np.float32)
-    bands = ["des-g", "des-r", "des-i", "des-z"]
+    bands = [name.lower() for name in LS_BANDS]
     rows = Dataset.from_dict(
         {TOKEN_SURVEYS["ls"]: [{"band": bands, "flux": flux.tolist()}]}
     )
@@ -147,7 +152,7 @@ def test_ls_images_colour_their_flux_as_predicted_images_do(
 def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
     monkeypatch: pytest.MonkeyPatch, band: str, channel: int
 ) -> None:
-    bands = ["hsc-g", "hsc-r", "hsc-i", "hsc-z", "hsc-y"]
+    bands = [name.lower() for name in HSC_BANDS]
     flux = np.zeros(
         (
             len(bands),
@@ -190,7 +195,7 @@ def test_an_hsc_aion_prediction_is_coloured_from_nanomaggies_as_a_legacy_survey_
     )
     hsc = np.concatenate(
         [
-            flux * 10**1.8,
+            flux * 10 ** (0.4 * (HSC_ZERO_POINT - LS_ZERO_POINT)),
             rng.uniform(
                 0,
                 50,
@@ -261,7 +266,7 @@ def test_table_keeps_numeric_catalogue_columns(
     [
         ((0.5, False), (0.51, False), "desi"),
         ((0.5, True), (0.51, False), "sdss"),
-        ((6.5, False), (0.51, False), "sdss"),
+        ((REDSHIFT_LIMIT + 0.5, False), (0.51, False), "sdss"),
         ((float("nan"), False), (0.51, False), "sdss"),
         ((-0.001, False), (None, None), "desi"),
         ((1.5, False), (None, None), "desi"),

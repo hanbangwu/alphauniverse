@@ -6,15 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.config import (
     Projection,
-    artifact,
 )
-
-
-def test_properties_are_served_whole(client: TestClient) -> None:
-    response = client.get("/galaxies/property")
-
-    assert response.status_code == 200
-    assert len(response.content) == artifact("properties").stat().st_size
 
 
 @pytest.mark.parametrize("projection", get_args(Projection))

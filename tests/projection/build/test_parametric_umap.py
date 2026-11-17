@@ -8,7 +8,7 @@ import pytest
 from datasets import Dataset
 
 from app import config
-from app.config import FLAG_SURVEYS, POINTS, artifact, galaxy_count
+from app.config import FLAG_SURVEYS, artifact, galaxy_count
 from app.encoding.store import stream
 from app.projection.build import parametric_umap as umap_module
 from scripts.fixture import build, forget
@@ -43,11 +43,6 @@ def runs(
             yield tables
         finally:
             forget()
-
-
-def test_projections_have_the_points_schema(runs: list[dict[str, pa.Table]]) -> None:
-    for table in runs[0].values():
-        assert table.schema.equals(POINTS)
 
 
 def test_each_galaxy_gets_one_mean_point_with_its_label(

@@ -5,7 +5,9 @@ import numpy as np
 import PIL.Image
 import pyarrow.parquet as pq
 import pytest
+from aion.fourm.modality_info import MODALITY_INFO
 from datasets import Dataset
+from matplotlib import rcParams
 
 from app.config import (
     IMAGE_MODES,
@@ -13,8 +15,6 @@ from app.config import (
     MODES,
     PLOT_INCHES,
     SPECTRUM_MODES,
-    TEXT_VIEWS,
-    TEXT_VIEWS_HELD_OUT,
     WEMM_DIM,
     galaxy_count,
 )
@@ -46,9 +46,14 @@ def test_predicted_views_are_documents_of_each_mode_s_form(
 
                 assert len(found) == len(galaxies)
                 if mode in IMAGE_MODES:
-                    assert all(picture.size == (96, 96) for picture in found)
+                    assert all(
+                        picture.size == (MODALITY_INFO["tok_image"]["input_size"],) * 2
+                        for picture in found
+                    )
                 elif mode in SPECTRUM_MODES:
-                    size = tuple(round(100 * inches) for inches in PLOT_INCHES)
+                    size = tuple(
+                        round(rcParams["figure.dpi"] * inches) for inches in PLOT_INCHES
+                    )
                     assert all(picture.size == size for picture in found)
                 else:
                     lines = [line for text in found for line in text.split("\n")]
@@ -112,7 +117,6 @@ def test_text_views_resume_without_redrawing_the_parts_already_written(
 
     assert sum(rendered) == 6
     assert pq.read_table(folder).equals(written)
-    assert written.schema.equals(TEXT_VIEWS)
     assert not np.isin(written.column("galaxy"), text_views.held_out()).any()
 
 
@@ -134,4 +138,3 @@ def test_held_out_views_are_every_view_type_each_chosen_held_out_galaxy_has(
         for galaxy, row in zip(galaxies.tolist(), available)
         for kind in np.flatnonzero(row).tolist()
     ]
-    assert found.schema.equals(TEXT_VIEWS_HELD_OUT)

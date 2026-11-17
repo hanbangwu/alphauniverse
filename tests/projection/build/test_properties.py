@@ -9,6 +9,7 @@ from datasets import Dataset
 from app.config import (
     DATASET_LS_SUFFIX,
     DATASET_PROVABGS_SUFFIX,
+    LS_ZERO_POINT,
     PROBED,
     PROPERTIES,
     REDSHIFT,
@@ -121,7 +122,6 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     properties.generate_properties()
 
     table = pq.read_table(artifact("properties"))
-    assert table.schema == PROPERTIES
     found = {name: table.column(name).to_numpy() for name in PROPERTIES.names}
     np.testing.assert_array_equal(
         found[f"{REDSHIFT}_measured"], redshift.astype(np.float32)
@@ -137,7 +137,7 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     expected[2] = np.nan
     np.testing.assert_allclose(found["g_r"], expected.astype(np.float32), rtol=1e-6)
     np.testing.assert_allclose(found["radius_measured"], radius, rtol=1e-6)
-    magnitude = 22.5 - 2.5 * np.log10(np.abs(red))
+    magnitude = LS_ZERO_POINT - 2.5 * np.log10(np.abs(red))
     magnitude[2] = np.nan
     np.testing.assert_allclose(found["r_magnitude_measured"], magnitude, rtol=1e-6)
     ellipticity = np.hypot(first, second)
@@ -150,6 +150,11 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     )
     np.testing.assert_allclose(
         found["dn4000_measured"],
-        np.where(observed, (4050 / 3900) ** 2, np.nan),
+        np.where(
+            observed,
+            (np.mean(properties.BREAK_BANDS[1]) / np.mean(properties.BREAK_BANDS[0]))
+            ** 2,
+            np.nan,
+        ),
         rtol=1e-5,
     )

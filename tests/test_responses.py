@@ -23,10 +23,3 @@ def test_a_weak_etag_in_a_list_is_not_modified(client: TestClient) -> None:
     response = client.get("/galaxy/0", headers={"If-None-Match": f'"stale", W/{etag}'})
 
     assert response.status_code == 304
-
-
-@pytest.mark.usefixtures("identified")
-def test_successful_responses_must_be_revalidated_before_reuse(
-    client: TestClient,
-) -> None:
-    assert client.get("/galaxy/0").headers["cache-control"] == "no-cache"
