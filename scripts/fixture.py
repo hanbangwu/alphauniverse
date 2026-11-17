@@ -50,22 +50,14 @@ from app.config import (
     store_schema,
     store_writer,
 )
-from app.dataset import dataset, table_columns
-from app.embeddings import generate_token_search
-from app.pql import (
-    agreements,
-    basis,
-    basket_sum,
-    observed,
-    prediction_basis,
-    prediction_batch,
-    predictions,
-    sampled,
-    save_prediction_basis,
-    stored,
-)
-from app.search import aion_predictions, source, tokens
-from app.text_search import text_vectors
+from app.dataset.dataset import dataset, table_columns
+from app.encoding.store import observed, source, tokens
+from app.predictions.build.embeddings import generate_token_search
+from app.predictions.build.predictions import prediction_batch, save_prediction_basis
+from app.predictions.store import aion_predictions, basis, prediction_basis, predictions
+from app.predictions.whole_mode import stored
+from app.search.pql import agreements, basket_sum, sampled
+from app.text_search.text_search import text_vectors
 
 N_MORPHOLOGIES = 10
 TOKENS: dict[str, int] = {

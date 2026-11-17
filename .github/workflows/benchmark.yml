@@ -6,19 +6,19 @@ on:
       script:
         type: choice
         options:
-          - search_performance
-          - search_quality
+          - search.search_performance
+          - search.search_quality
           - backend_performance
-          - projection_quality
-          - text_search_quality
-          - compression_quality
-          - token_embedding_quality
-          - aion_prediction_quality
-          - aion_prediction_embedding_quality
-          - retrieval_quality
-          - redshift_quality
-          - probe_quality
-          - neighbour_quality
+          - projection.build.projection_quality
+          - text_search.text_search_quality
+          - predictions.build.compression_quality
+          - predictions.build.token_embedding_quality
+          - predictions.build.aion_prediction_quality
+          - predictions.build.aion_prediction_embedding_quality
+          - predictions.build.retrieval_quality
+          - predictions.build.redshift_quality
+          - predictions.build.probe_quality
+          - projection.build.neighbour_quality
       args: {}
 env:
   UV_LOCKED: "1"
@@ -31,13 +31,13 @@ jobs:
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
       SCRIPT: ${{ inputs.script }}
       ARGS: ${{ inputs.args }}
-      REPORT: docs/benchmarks/${{ inputs.script }}.json
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.3.3
-      - run: uv run --group build modal run -m "scripts.benchmarks.$SCRIPT" $ARGS
+      - run: echo "REPORT=docs/benchmarks/${SCRIPT##*.}.json" >> "$GITHUB_ENV"
+      - run: uv run --group build modal run -m "benchmarks.$SCRIPT" $ARGS
       - uses: actions/upload-artifact@v7
         with:
           path: ${{ env.REPORT }}

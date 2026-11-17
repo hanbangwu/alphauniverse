@@ -24,6 +24,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "import-linter>=2.16",
     "pytest>=9.1.1",
     "ruff>=0.16.10",
     "threadpoolctl>=3.7.0",
@@ -50,7 +51,37 @@ docs = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers --import-mode=importlib"
+norecursedirs = [
+    "*.egg",
+    ".*",
+    "_darcs",
+    "CVS",
+    "dist",
+    "node_modules",
+    "venv",
+    "{arch}",
+]
+
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "The server imports no build code"
+type = "forbidden"
+source_modules = ["app.main"]
+forbidden_modules = [
+    "app.*.build",
+    "fla",
+    "kernels",
+    "matplotlib",
+    "scipy",
+    "sklearn",
+    "torchvision",
+    "umap",
+    "wandb",
+]
 
 [tool.pyright]
 venvPath = "."

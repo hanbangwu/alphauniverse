@@ -2,24 +2,26 @@
 
 ## Layout
 
-| Path       | Description                                                  |
-| ---------- | ------------------------------------------------------------ |
-| `app/`     | Build pipeline and the FastAPI app                           |
-| `scripts/` | Dataset build, OpenAPI, dev subset, test fixture, benchmarks |
-| `tests/`   | pytest suite                                                 |
-| `web/`     | Web app                                                      |
-| `docs/`    | Sphinx documentation and benchmark reports                   |
+| Path          | Description                                       |
+| ------------- | ------------------------------------------------- |
+| `app/`        | Build pipeline and the FastAPI app                |
+| `scripts/`    | Dataset build, OpenAPI, dev subset, test fixture  |
+| `benchmarks/` | Benchmarks on Modal                               |
+| `tests/`      | pytest suite, in the folders of the code it tests |
+| `web/`        | Web app                                           |
+| `docs/`       | Sphinx documentation and benchmark reports        |
 
 ## Commands
 
 ### Backend
 
 ```sh
-uv run --group build pytest                        # tests
-uv run ruff check app scripts tests modal_app.py   # lint
-uv run ruff format app scripts tests modal_app.py  # format
-uv run python -m scripts.dev_subset                # build the dev subset on Modal and download it
-uv run python -m scripts.openapi                   # regenerate web/openapi.json
+uv run --group build pytest                                   # tests
+uv run ruff check app benchmarks scripts tests modal_app.py   # lint
+uv run ruff format app benchmarks scripts tests modal_app.py  # format
+uv run lint-imports                                           # check import contracts
+uv run python -m scripts.dev_subset                           # build the dev subset on Modal and download it
+uv run python -m scripts.openapi                              # regenerate web/openapi.json
 ```
 
 ### Web
@@ -34,20 +36,20 @@ bun run lint
 ### Benchmarks
 
 ```sh
-uv run modal run -m scripts.benchmarks.search_performance                     # time similarity search on Modal
-uv run modal run -m scripts.benchmarks.search_quality                         # measure similarity search on Modal
-uv run modal run -m scripts.benchmarks.backend_performance                    # time the HTTP endpoints on Modal
-uv run modal run -m scripts.benchmarks.projection_quality                     # measure projection quality on Modal
-uv run modal run -m scripts.benchmarks.text_search_quality                    # measure text search on Modal
-uv run modal run -m scripts.benchmarks.text_search_sheet                      # draw text search's contact sheet on Modal
-uv run --group build modal run -m scripts.benchmarks.compression_quality      # measure prediction storage on Modal
-uv run modal run -m scripts.benchmarks.token_embedding_quality                # measure token embeddings on Modal
-uv run --group build modal run -m scripts.benchmarks.aion_prediction_quality  # measure AION predictions against data on Modal
-uv run modal run -m scripts.benchmarks.aion_prediction_embedding_quality      # measure AION prediction embeddings against data on Modal
-uv run --group build modal run -m scripts.benchmarks.retrieval_quality        # measure retrieval from partial data on Modal
-uv run --group build modal run -m scripts.benchmarks.probe_quality            # measure PROVABGS probes on the stored vectors on Modal
-uv run --group build modal run -m scripts.benchmarks.redshift_quality         # measure AION's redshift without spectra on Modal
-uv run --group build modal run -m scripts.benchmarks.neighbour_quality        # measure the stored vectors' neighbourhoods and maps on Modal
+uv run modal run -m benchmarks.search.search_performance                                # time similarity search on Modal
+uv run modal run -m benchmarks.search.search_quality                                    # measure similarity search on Modal
+uv run modal run -m benchmarks.backend_performance                                      # time the HTTP endpoints on Modal
+uv run modal run -m benchmarks.projection.build.projection_quality                      # measure projection quality on Modal
+uv run modal run -m benchmarks.text_search.text_search_quality                          # measure text search on Modal
+uv run modal run -m benchmarks.text_search.text_search_sheet                            # draw text search's contact sheet on Modal
+uv run --group build modal run -m benchmarks.predictions.build.compression_quality      # measure prediction storage on Modal
+uv run modal run -m benchmarks.predictions.build.token_embedding_quality                # measure token embeddings on Modal
+uv run --group build modal run -m benchmarks.predictions.build.aion_prediction_quality  # measure AION predictions against data on Modal
+uv run modal run -m benchmarks.predictions.build.aion_prediction_embedding_quality      # measure AION prediction embeddings against data on Modal
+uv run --group build modal run -m benchmarks.predictions.build.retrieval_quality        # measure retrieval from partial data on Modal
+uv run --group build modal run -m benchmarks.predictions.build.probe_quality            # measure PROVABGS probes on the stored vectors on Modal
+uv run --group build modal run -m benchmarks.predictions.build.redshift_quality         # measure AION's redshift without spectra on Modal
+uv run --group build modal run -m benchmarks.projection.build.neighbour_quality         # measure the stored vectors' neighbourhoods and maps on Modal
 ```
 
 ### Docs

@@ -11,7 +11,7 @@ import pyarrow.parquet as pq
 from modal.volume import FileEntryType
 
 from app.config import ARTIFACTS, BUILD_DIR, MODES, SEED, artifact
-from app.dataset import dataset
+from app.dataset.dataset import dataset
 from modal_app import CACHE_PATH, build_image, cache_volume
 
 FOLDER = ".dev_subset"

@@ -54,20 +54,22 @@ Every artifact with one row per galaxy holds them in dataset row order, and the 
 Features in code
 ----------------
 
+``app/`` has a package per module, in this order: ``login``, ``dataset``, ``encoding``, ``predictions``, ``search``, ``text_search`` and ``projection``. A module imports only from modules before it, ``app/config.py`` and ``app/responses.py``. Each serves its routes from its ``routes.py``, which ``app/main.py`` includes; ``login`` also holds the password check every route depends on. Each Modal job's code sits in its module's ``build`` package. An import-linter contract in ``pyproject.toml`` fails CI if ``app.main`` reaches a ``build`` package or a library of the ``build`` dependency group, which the serving image lacks.
+
 =========================== ========================================
 Feature                     Code
 =========================== ========================================
-Similarity search           ``app.pql.search``
-Whole-mode search           ``app.pql.mode_search``
-This galaxy map             ``app.pql.cosines``
-Population map              ``app.pql.saliency``
-Text search                 ``app.text_search.text_search``
-The map                     ``app.maps``, run by ``generate_maps``
+Similarity search           ``app.search.pql.search``
+Whole-mode search           ``app.search.pql.mode_search``
+This galaxy map             ``app.search.pql.cosines``
+Population map              ``app.search.pql.saliency``
+Text search                 ``app.text_search.text_search.text_search``
+The map                     ``app.projection.build.maps``, run by ``generate_maps``
 =========================== ========================================
 
 A :term:`whole-mode search` ranks from the mode's :term:`token embedding`: :math:`q`'s query vector times every galaxy's gallery vector, both from ``token_search_<mode>`` at 256 components, plus the offsets, gives the mode's :term:`Gram matrix` row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardised over all galaxies, one mode's too, and averaged.
 
-``generate_maps`` scores every galaxy against every other with ``app.pql.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbour graph (:doc:`/methods/map`).
+``generate_maps`` scores every galaxy against every other with ``app.predictions.whole_mode.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbour graph (:doc:`/methods/map`).
 
 Artifacts
 ---------
@@ -166,6 +168,6 @@ The first Same place Population map (``/saliency``) on a galaxy builds its agree
 Tests and CI
 ------------
 
-Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds into ``.fixtures`` in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, WeMM-Embedding, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the web app has no tests.
+``tests/`` repeats the folders of the code each file tests, so ``tests/search/test_pql.py`` tests ``app/search/pql.py``. Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds into ``.fixtures`` in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, WeMM-Embedding, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbours but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbours, and the web app has no tests.
 
 Continuous integration lints and tests every pull request, checks that ``web/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's ``main`` environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets. Vercel builds every branch: production builds from ``main`` and calls the ``main`` app, and preview builds from every other branch call the ``dev`` app, whose URL ``PUBLIC_API_URL`` holds in each Vercel environment. ``web/vercel.ts`` reads it at build time to rewrite ``/api`` to that app, so the browser keeps one origin and sends the cookie with every request, including DuckDB's. Each Modal environment needs its own ``access-password`` secret. The ``dev`` app runs whichever branch last ran the workflow, so previews share it.

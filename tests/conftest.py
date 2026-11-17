@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from datasets import Dataset
 from fastapi.testclient import TestClient
 
 
@@ -44,8 +45,8 @@ def random_weights() -> Iterator[None]:
     import torch
     from aion.codecs import config as codec_config
 
-    from app import encode as encode_module
     from app.config import device
+    from app.encoding.build import encode as encode_module
 
     configs = Path(__file__).parent / "aion"
 
@@ -66,3 +67,25 @@ def random_weights() -> Iterator[None]:
         patch.setattr(encode_module, "model", lambda: network)
         yield
     encode_module.CodecManager._load_codec_from_hf.cache_clear()
+
+
+@pytest.fixture
+def identified(monkeypatch: pytest.MonkeyPatch, galaxies: int) -> Dataset:
+    from app.config import DATASET_LS_SUFFIX
+    from app.dataset import dataset as dataset_module
+
+    rows = Dataset.from_dict(
+        {
+            f"object_id{DATASET_LS_SUFFIX}": [
+                f"1501p020-{galaxy}" for galaxy in range(galaxies)
+            ],
+            f"ra{DATASET_LS_SUFFIX}": [
+                150.0 + galaxy / 100 for galaxy in range(galaxies)
+            ],
+            f"dec{DATASET_LS_SUFFIX}": [
+                2.0 - galaxy / 100 for galaxy in range(galaxies)
+            ],
+        }
+    )
+    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
+    return rows

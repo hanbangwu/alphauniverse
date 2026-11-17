@@ -63,7 +63,7 @@ The branch's Vercel preview then calls that app.
 Update the API schema
 ---------------------
 
-After changing a route or response model in ``app/main.py``:
+After changing a route or response model in ``app/main.py`` or a module's ``routes.py``:
 
 .. code-block:: sh
 
@@ -78,8 +78,9 @@ Run the tests and linters
 .. code-block:: sh
 
    uv run --group build pytest
-   uv run ruff check app scripts tests modal_app.py
-   uv run ruff format app scripts tests modal_app.py
+   uv run ruff check app benchmarks scripts tests modal_app.py
+   uv run ruff format app benchmarks scripts tests modal_app.py
+   uv run lint-imports
    cd web && bun run lint && bun run check
 
 Tests need no Modal, GPU or network. Each run replaces ``.fixtures`` with the fixture.
@@ -89,20 +90,20 @@ Run a benchmark
 
 .. code-block:: sh
 
-   uv run modal run -m scripts.benchmarks.search_performance                 # --runs, default 30
-   uv run modal run -m scripts.benchmarks.search_quality                     # --sample, default 1000
-   uv run modal run -m scripts.benchmarks.backend_performance                # --runs, default 30
-   uv run modal run -m scripts.benchmarks.projection_quality
-   uv run modal run -m scripts.benchmarks.text_search_quality                # --half, default development, or sealed
-   uv run modal run -m scripts.benchmarks.text_search_sheet                  # --out, default text_search_sheet.html; --earlier, an earlier sheet's .json
-   uv run --group build modal run -m scripts.benchmarks.compression_quality  # --sample 1024, --queries 200, --modes every mode
-   uv run modal run -m scripts.benchmarks.token_embedding_quality
-   uv run --group build modal run -m scripts.benchmarks.aion_prediction_quality
-   uv run modal run -m scripts.benchmarks.aion_prediction_embedding_quality
-   uv run --group build modal run -m scripts.benchmarks.retrieval_quality
-   uv run --group build modal run -m scripts.benchmarks.redshift_quality
-   uv run --group build modal run -m scripts.benchmarks.probe_quality
-   uv run --group build modal run -m scripts.benchmarks.neighbour_quality
+   uv run modal run -m benchmarks.search.search_performance                            # --runs, default 30
+   uv run modal run -m benchmarks.search.search_quality                                # --sample, default 1000
+   uv run modal run -m benchmarks.backend_performance                                  # --runs, default 30
+   uv run modal run -m benchmarks.projection.build.projection_quality
+   uv run modal run -m benchmarks.text_search.text_search_quality                      # --half, default development, or sealed
+   uv run modal run -m benchmarks.text_search.text_search_sheet                        # --out, default text_search_sheet.html; --earlier, an earlier sheet's .json
+   uv run --group build modal run -m benchmarks.predictions.build.compression_quality  # --sample 1024, --queries 200, --modes every mode
+   uv run modal run -m benchmarks.predictions.build.token_embedding_quality
+   uv run --group build modal run -m benchmarks.predictions.build.aion_prediction_quality
+   uv run modal run -m benchmarks.predictions.build.aion_prediction_embedding_quality
+   uv run --group build modal run -m benchmarks.predictions.build.retrieval_quality
+   uv run --group build modal run -m benchmarks.predictions.build.redshift_quality
+   uv run --group build modal run -m benchmarks.predictions.build.probe_quality
+   uv run --group build modal run -m benchmarks.projection.build.neighbour_quality
 
 Each writes its report to ``docs/benchmarks/<script>.json``.
 

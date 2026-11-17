@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, get_args
 import modal
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
+import pyarrow.dataset as ds
 from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from annotated_types import Predicate
@@ -191,6 +191,7 @@ TEXT_VIEWS_HELD_OUT = pa.schema(
 TOP_CODES = 64
 KEPT = 16
 PROBABILITY_FLOOR = float(np.finfo(np.float32).tiny)
+SPECTRUM_TOKEN_FLOOR = 0.1 / MODALITY_INFO["tok_spectrum_desi"]["vocab_size"]
 SALIENCY_SAMPLE = 512
 SPECTRUM_TOKEN_RANK = 256
 IMAGE_MODES = {f"{survey}_image": survey for survey in get_args(ImageSurvey)}
@@ -219,6 +220,11 @@ OBSERVATIONS = {
 }
 
 MODES = (*IMAGE_MODES, *SPECTRUM_MODES, *TABLE_MODES)
+WIDTHS = (
+    dict.fromkeys(IMAGE_MODES, LegacySurveyImage.num_tokens)
+    | dict.fromkeys(SPECTRUM_MODES, DESISpectrum.num_tokens - 1)
+    | {mode: count for mode, (_, count, _) in TABLE_MODES.items()}
+)
 VIEW_KINDS = ("observed", "aion_prediction", "sample")
 VIEW_COMBINATIONS = {
     "images": tuple(IMAGE_MODES),
@@ -416,7 +422,7 @@ def artifact(role: str) -> Path:
 
 @cache
 def galaxy_count() -> int:
-    return pq.read_metadata(artifact("mean_points")).num_rows
+    return ds.dataset(artifact("tokens"), format=ARTIFACTS["tokens"]).count_rows()
 
 
 GalaxyIndex = Annotated[

@@ -7,6 +7,6 @@ paths:
 
 - A change to what the UI shows updates the README's feature list; `docs-upkeep.md` names the Sphinx pages.
 - `src/lib/components/ui` is owned code, styled as glass through the `glass` utility in `src/routes/layout.css`. Add a component with `bun x shadcn-svelte@latest add <name>`, never `--overwrite`, then edit it like any other file.
-- `src/lib/api` is generated from `openapi.json`, and `openapi.json` from `app/main.py`. When needed, regenerate through `uv run python -m scripts.openapi` then `bun run check`.
+- `src/lib/api` is generated from `openapi.json`, and `openapi.json` from `app/main.py` and each module's `routes.py`. When needed, regenerate through `uv run python -m scripts.openapi` then `bun run check`.
 - Components never call the API. Each call goes through the generated SDK in `$lib/api`, wrapped as TanStack Query options in `src/lib/data/queries.ts`.
 - App-wide state is a class in `src/lib/state/*.svelte.ts`, reached through the getters in `app.svelte.ts`. State shared by one group of components lives beside them as a `*.svelte.ts` class with its own `Context`, as `components/similarity/similarity.svelte.ts` does.

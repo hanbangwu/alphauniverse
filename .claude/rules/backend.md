@@ -1,10 +1,15 @@
 ---
 paths:
   - "app/main.py"
-  - "app/search.py"
-  - "app/pql.py"
-  - "app/text_search.py"
-  - "app/dataset.py"
+  - "app/responses.py"
+  - "app/*/routes.py"
+  - "app/login/password.py"
+  - "app/dataset/dataset.py"
+  - "app/encoding/store.py"
+  - "app/predictions/store.py"
+  - "app/predictions/whole_mode.py"
+  - "app/search/pql.py"
+  - "app/text_search/text_search.py"
   - "app/config.py"
   - "modal_app.py"
 ---

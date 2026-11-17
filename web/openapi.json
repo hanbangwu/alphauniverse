@@ -7,6 +7,9 @@
   "paths": {
     "/login": {
       "get": {
+        "tags": [
+          "login"
+        ],
         "summary": "Check Login",
         "operationId": "check_login",
         "responses": {
@@ -24,6 +27,9 @@
         ]
       },
       "post": {
+        "tags": [
+          "login"
+        ],
         "summary": "Login",
         "operationId": "login",
         "responses": {
@@ -48,6 +54,9 @@
     },
     "/projections/{projection}": {
       "get": {
+        "tags": [
+          "projection"
+        ],
         "summary": "Get Projections",
         "operationId": "get_projections",
         "security": [
@@ -102,6 +111,9 @@
     },
     "/galaxies/property": {
       "get": {
+        "tags": [
+          "projection"
+        ],
         "summary": "Get Properties",
         "operationId": "get_properties",
         "responses": {
@@ -129,6 +141,9 @@
     },
     "/positions": {
       "get": {
+        "tags": [
+          "dataset"
+        ],
         "summary": "Get Positions",
         "operationId": "get_positions",
         "responses": {
@@ -154,108 +169,11 @@
         ]
       }
     },
-    "/galaxy/{galaxy}": {
-      "get": {
-        "summary": "Get Galaxy",
-        "operationId": "get_galaxy",
-        "security": [
-          {
-            "APIKeyCookie": []
-          },
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "galaxy",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Galaxy"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/galaxy/{galaxy}/table": {
-      "get": {
-        "summary": "Get Table",
-        "operationId": "get_table",
-        "security": [
-          {
-            "APIKeyCookie": []
-          },
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "galaxy",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TableRow"
-                  },
-                  "title": "Response Get Table"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/galaxy/{galaxy}/image/{survey}": {
       "get": {
+        "tags": [
+          "dataset"
+        ],
         "summary": "Get Image",
         "operationId": "get_image",
         "security": [
@@ -316,132 +234,11 @@
         }
       }
     },
-    "/galaxy/{galaxy}/image/{survey}/tokens": {
-      "get": {
-        "summary": "Get Image Tokens",
-        "operationId": "get_image_tokens",
-        "security": [
-          {
-            "APIKeyCookie": []
-          },
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "galaxy",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          },
-          {
-            "name": "survey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "ls",
-                "hsc"
-              ],
-              "type": "string",
-              "title": "Survey"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/galaxy/{galaxy}/image/{survey}/aion_prediction": {
-      "get": {
-        "summary": "Get Image Aion Prediction",
-        "operationId": "get_image_aion_prediction",
-        "security": [
-          {
-            "APIKeyCookie": []
-          },
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "galaxy",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          },
-          {
-            "name": "survey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "ls",
-                "hsc"
-              ],
-              "type": "string",
-              "title": "Survey"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "image/png": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/galaxy/{galaxy}/spectrum/{survey}": {
       "get": {
+        "tags": [
+          "dataset"
+        ],
         "summary": "Get Spectrum",
         "operationId": "get_spectrum",
         "security": [
@@ -502,8 +299,127 @@
         }
       }
     },
+    "/galaxy/{galaxy}": {
+      "get": {
+        "tags": [
+          "encoding"
+        ],
+        "summary": "Get Galaxy",
+        "operationId": "get_galaxy",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Galaxy"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxy/{galaxy}/image/{survey}/tokens": {
+      "get": {
+        "tags": [
+          "encoding"
+        ],
+        "summary": "Get Image Tokens",
+        "operationId": "get_image_tokens",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/galaxy/{galaxy}/spectrum/{survey}/tokens": {
       "get": {
+        "tags": [
+          "encoding"
+        ],
         "summary": "Get Spectrum Tokens",
         "operationId": "get_spectrum_tokens",
         "security": [
@@ -564,8 +480,131 @@
         }
       }
     },
+    "/galaxy/{galaxy}/table": {
+      "get": {
+        "tags": [
+          "predictions"
+        ],
+        "summary": "Get Table",
+        "operationId": "get_table",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TableRow"
+                  },
+                  "title": "Response Get Table"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/galaxy/{galaxy}/image/{survey}/aion_prediction": {
+      "get": {
+        "tags": [
+          "predictions"
+        ],
+        "summary": "Get Image Aion Prediction",
+        "operationId": "get_image_aion_prediction",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Galaxy"
+            }
+          },
+          {
+            "name": "survey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "ls",
+                "hsc"
+              ],
+              "type": "string",
+              "title": "Survey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/galaxy/{galaxy}/spectrum/{survey}/aion_prediction": {
       "get": {
+        "tags": [
+          "predictions"
+        ],
         "summary": "Get Spectrum Aion Prediction",
         "operationId": "get_spectrum_aion_prediction",
         "security": [
@@ -628,6 +667,9 @@
     },
     "/galaxy/{galaxy}/cosines/{mode}": {
       "get": {
+        "tags": [
+          "search"
+        ],
         "summary": "Get Cosines",
         "operationId": "get_cosines",
         "security": [
@@ -692,6 +734,9 @@
     },
     "/saliency": {
       "get": {
+        "tags": [
+          "search"
+        ],
         "summary": "Get Saliency",
         "operationId": "get_saliency",
         "security": [
@@ -841,6 +886,9 @@
     },
     "/search": {
       "get": {
+        "tags": [
+          "search"
+        ],
         "summary": "Get Search",
         "operationId": "get_search",
         "security": [
@@ -1002,6 +1050,9 @@
     },
     "/search/modes": {
       "get": {
+        "tags": [
+          "search"
+        ],
         "summary": "Get Mode Search",
         "operationId": "get_mode_search",
         "security": [
@@ -1106,6 +1157,9 @@
     },
     "/search/download": {
       "get": {
+        "tags": [
+          "search"
+        ],
         "summary": "Get Search Download",
         "operationId": "get_search_download",
         "security": [
@@ -1266,6 +1320,9 @@
     },
     "/search/modes/download": {
       "get": {
+        "tags": [
+          "search"
+        ],
         "summary": "Get Mode Search Download",
         "operationId": "get_mode_search_download",
         "security": [
@@ -1369,6 +1426,9 @@
     },
     "/search/text": {
       "get": {
+        "tags": [
+          "text search"
+        ],
         "summary": "Get Text Search",
         "operationId": "get_text_search",
         "security": [
@@ -1430,6 +1490,9 @@
     },
     "/search/text/download": {
       "get": {
+        "tags": [
+          "text search"
+        ],
         "summary": "Get Text Search Download",
         "operationId": "get_text_search_download",
         "security": [

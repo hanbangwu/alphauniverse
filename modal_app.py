@@ -43,7 +43,7 @@ build_image = (
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_embeddings() -> None:
-    from app.encode import generate_embeddings
+    from app.encoding.build.encode import generate_embeddings
 
     generate_embeddings()
     cache_volume.commit()
@@ -58,7 +58,7 @@ def generate_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_predictions() -> None:
-    from app.predictions import generate_predictions
+    from app.predictions.build.predictions import generate_predictions
 
     generate_predictions()
     cache_volume.commit()
@@ -73,7 +73,7 @@ def generate_predictions() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_token_grams() -> None:
-    from app.grams import generate_token_grams
+    from app.predictions.build.grams import generate_token_grams
 
     generate_token_grams()
     cache_volume.commit()
@@ -88,7 +88,7 @@ def generate_token_grams() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_token_embeddings() -> None:
-    from app.embeddings import generate_token_embeddings
+    from app.predictions.build.embeddings import generate_token_embeddings
 
     generate_token_embeddings()
     cache_volume.commit()
@@ -102,7 +102,7 @@ def generate_token_embeddings() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_joint_embedding() -> None:
-    from app.embeddings import generate_joint_embedding
+    from app.predictions.build.embeddings import generate_joint_embedding
 
     generate_joint_embedding()
     cache_volume.commit()
@@ -116,7 +116,7 @@ def generate_joint_embedding() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_properties() -> None:
-    from app.properties import generate_properties
+    from app.projection.build.properties import generate_properties
 
     generate_properties()
     cache_volume.commit()
@@ -130,7 +130,7 @@ def generate_properties() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_maps() -> None:
-    from app.maps import generate_maps
+    from app.projection.build.maps import generate_maps
 
     generate_maps()
     cache_volume.commit()
@@ -145,7 +145,7 @@ def generate_maps() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_aion_predictions() -> None:
-    from app.aion_predictions import generate_aion_predictions
+    from app.predictions.build.aion_predictions import generate_aion_predictions
 
     generate_aion_predictions()
     cache_volume.commit()
@@ -160,7 +160,7 @@ def generate_aion_predictions() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_observed_grams() -> None:
-    from app.observed_grams import generate_observed_grams
+    from app.predictions.build.observed_grams import generate_observed_grams
 
     generate_observed_grams()
     cache_volume.commit()
@@ -175,7 +175,7 @@ def generate_observed_grams() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_aion_prediction_embeddings() -> None:
-    from app.observed_grams import generate_aion_prediction_embeddings
+    from app.predictions.build.observed_grams import generate_aion_prediction_embeddings
 
     generate_aion_prediction_embeddings()
     cache_volume.commit()
@@ -191,7 +191,7 @@ def generate_aion_prediction_embeddings() -> None:
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def generate_projections() -> None:
-    from app.parametric_umap import generate_projections
+    from app.projection.build.parametric_umap import generate_projections
 
     generate_projections()
     cache_volume.commit()
@@ -206,7 +206,7 @@ def generate_projections() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_pairs() -> None:
-    from app.text_search import generate_pairs
+    from app.text_search.build.alignment import generate_pairs
 
     generate_pairs()
     cache_volume.commit()
@@ -221,7 +221,7 @@ def generate_pairs() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_text_views(parts: int) -> None:
-    from app.text_views import generate_text_views
+    from app.text_search.build.text_views import generate_text_views
 
     generate_text_views(parts)
     cache_volume.commit()
@@ -237,7 +237,7 @@ def generate_text_views(parts: int) -> None:
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def train_text_regression() -> None:
-    from app.text_regression import train_text_regression
+    from app.text_search.build.text_regression import train_text_regression
 
     train_text_regression()
     cache_volume.commit()
@@ -252,7 +252,7 @@ def train_text_regression() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_text_vectors() -> None:
-    from app.text_regression import generate_text_vectors
+    from app.text_search.build.text_regression import generate_text_vectors
 
     generate_text_vectors()
     cache_volume.commit()
@@ -272,13 +272,13 @@ def generate_text_vectors() -> None:
 class QueryEmbedder:
     @modal.enter(snap=True)
     def load(self) -> None:
-        from app.text_search import embed_queries
+        from app.text_search.text_search import embed_queries
 
         embed_queries(["a galaxy"])
 
     @modal.method()
     def embed(self, texts: list[str]) -> np.ndarray:
-        from app.text_search import embed_queries
+        from app.text_search.text_search import embed_queries
 
         return embed_queries(texts)
 
@@ -305,7 +305,8 @@ serving_image = (
 @modal.concurrent(max_inputs=SERVING_MAX_INPUTS)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
-    from app.main import app, query_embedder
+    from app.main import app
+    from app.text_search.routes import query_embedder
 
     embed = QueryEmbedder().embed.remote
     app.dependency_overrides[query_embedder] = lambda: embed

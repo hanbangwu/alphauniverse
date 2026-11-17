@@ -1,6 +1,6 @@
 ---
 paths:
-  - "scripts/benchmarks/**"
+  - "benchmarks/**"
   - "docs/dev/benchmarks.rst"
   - "modal_app.py"
   - "docs/benchmarks/**"
