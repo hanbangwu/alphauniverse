@@ -5,13 +5,14 @@ from fastapi.testclient import TestClient
 
 from app.config import (
     MODES,
+    QUERY_PREFIX,
     WEMM_DIM,
 )
 from app.text_search.routes import query_embedder
 
 
 @pytest.mark.usefixtures("identified")
-def test_text_search_download_is_csv_with_each_match(
+def test_text_search_download_is_ecsv_with_each_match_and_its_query(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     query = np.random.default_rng(0).standard_normal((1, WEMM_DIM)).astype(np.float32)
@@ -24,8 +25,11 @@ def test_text_search_download_is_csv_with_each_match(
     )
 
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/csv")
-    assert len(Table.read(response.text, format="ascii.csv")) == 3
+    assert response.headers["content-type"].startswith("text/plain")
+    table = Table.read(response.text, format="ascii.ecsv")
+    assert len(table) == 3
+    assert table.meta["raw_query"] == "a galaxy"
+    assert table.meta["augmented_query"] == QUERY_PREFIX.format("a galaxy")
 
 
 def test_text_search_returns_each_match_with_its_contribution_from_every_mode(

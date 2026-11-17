@@ -23,7 +23,6 @@ ARROW_STREAM: dict[str, Any] = {
 }
 PNG: dict[str, Any] = {"image/png": {"schema": {"type": "string", "format": "binary"}}}
 ECSV: dict[str, Any] = {"text/plain": {"schema": {"type": "string"}}}
-CSV: dict[str, Any] = {"text/csv": {"schema": {"type": "string"}}}
 
 
 def arrow(data: pa.RecordBatch | pa.Table) -> Response:

@@ -53,7 +53,7 @@ Open a galaxy, start a search and pick what should match: image cells, spectrum 
 Search by text
 --------------
 
-Describe a galaxy in a sentence. The site returns the 32 galaxies whose predicted views the description is closest to on average, each with its mean cosine and, as percentages of its lead over the average galaxy, the :term:`contributions <contribution>` of the modes that carry at least a tenth of it (:doc:`methods/text-search`). Export the matches as CSV with their object ID, position and mean cosine.
+Describe a galaxy in a sentence. The site returns the 32 galaxies whose predicted views the description is closest to on average, each with its mean cosine and, as percentages of its lead over the average galaxy, the :term:`contributions <contribution>` of the modes that carry at least a tenth of it (:doc:`methods/text-search`). Export the matches as :term:`ECSV` with their object ID, position and mean cosine, and the query in the header.
 
 Share a view
 ------------

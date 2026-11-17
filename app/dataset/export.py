@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from io import StringIO
 
 import astropy.units as u
@@ -13,7 +14,10 @@ def identities(galaxies: np.ndarray) -> Table:
     return table
 
 
-def written(table: Table, format: str) -> str:
+def written(table: Table) -> str:
+    table.meta = {
+        "created": datetime.now(UTC).isoformat(timespec="seconds")
+    } | table.meta
     text = StringIO()
-    table.write(text, format=format)
+    table.write(text, format="ascii.ecsv")
     return text.getvalue()

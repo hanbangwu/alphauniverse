@@ -45,7 +45,7 @@
         size="sm"
         disabled={results.isPlaceholderData}
         href={download}
-        download="alphauniverse-text-search.csv">Export as CSV</Button
+        download="alphauniverse-text-search.ecsv">Export as ECSV</Button
       >
     {/if}
   </form>

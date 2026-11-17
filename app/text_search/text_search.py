@@ -72,11 +72,15 @@ def text_model() -> SentenceTransformer:
     return model
 
 
+def augmented(text: str) -> str:
+    return QUERY_PREFIX.format(text)
+
+
 def embed_queries(texts: list[str]) -> np.ndarray:
     with LOADING:
         model = text_model()
     return model.encode_query(
-        [QUERY_PREFIX.format(text) for text in texts], normalize_embeddings=True
+        [augmented(text) for text in texts], normalize_embeddings=True
     )
 
 

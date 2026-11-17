@@ -7,8 +7,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.config import MODES, ModeName
-from app.responses import CSV, RevalidatedRoute
-from app.text_search.export import text_search_csv
+from app.responses import ECSV, RevalidatedRoute
+from app.text_search.export import text_search_ecsv
 from app.text_search.text_search import TextQuery, embed_queries, text_search
 
 router = APIRouter(tags=["text search"], route_class=RevalidatedRoute)
@@ -40,7 +40,7 @@ def get_text_search(
 @router.get(
     "/search/text/download",
     response_class=Response,
-    responses={200: {"content": CSV}},
+    responses={200: {"content": ECSV}},
 )
 def get_text_search_download(
     query: Annotated[TextQuery, Query()],
@@ -48,8 +48,8 @@ def get_text_search_download(
 ) -> Response:
     found = text_search(query, embed)
     return Response(
-        text_search_csv(
-            found.galaxies.numpy(force=True), found.scores.numpy(force=True)
+        text_search_ecsv(
+            found.galaxies.numpy(force=True), found.scores.numpy(force=True), query
         ),
-        media_type="text/csv",
+        media_type="text/plain",
     )
