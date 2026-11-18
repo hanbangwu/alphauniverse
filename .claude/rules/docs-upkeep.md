@@ -23,12 +23,12 @@ paths:
   | `app/search/pql.py`, `app/predictions/whole_mode.py`                                    | `methods/similarity-search.rst`, `methods/query-maps.rst`, `dev/reference.rst` |
   | `app/text_search/text_search.py`, `app/text_search/build/alignment.py`                  | `methods/text-search.rst`, `dev/reference.rst`                                 |
   | `app/text_search/build/{text_views,text_regression}.py`                                 | `dev/reference.rst`, `glossary.rst`                                            |
-  | `app/main.py`, `app/responses.py`, `app/*/routes.py`, `app/login/password.py`           | `dev/reference.rst`, `dev/behaviour.rst`                                       |
+  | `app/main.py`, `app/responses.py`, `app/*/routes.py`, `app/login/password.py`           | `dev/reference.rst`, `dev/behavior.rst`                                       |
   | `app/dataset/dataset.py`, `scripts/alphauniverse_cosmos.py`                             | `index.rst`                                                                    |
   | `modal_app.py`                                                                          | `dev/reference.rst`, `dev/how-to.rst`                                          |
   | `benchmarks/**`                                                                         | `dev/benchmarks.rst`, `benchmark_plots.py`, `dev/how-to.rst`                   |
   | `tests/**`, `scripts/fixture.py`, `scripts/dev_subset.py`, `.github/workflows/**`       | `dev/reference.rst`, `dev/how-to.rst`                                          |
-  | `web/src/**`                                                                            | `using.rst`, `dev/behaviour.rst`, the matching `methods/` page                 |
+  | `web/src/**`                                                                            | `using.rst`, `dev/behavior.rst`, the matching `methods/` page                 |
 
 - A term a page introduces gets a `glossary.rst` entry, and the page links it with `:term:`.
 - A schematic whose subject changes is redrawn in the same pull request.

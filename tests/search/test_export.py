@@ -18,7 +18,7 @@ def test_an_unobserved_galaxy_masks_its_whole_map_and_nothing_else() -> None:
     assert not column.mask[[0, 2]].any()
 
 
-def test_the_selection_names_grid_cells_wavelengths_and_catalogue_values() -> None:
+def test_the_selection_names_grid_cells_wavelengths_and_catalog_values() -> None:
     query = pql.Query.model_construct(
         galaxy=0, ls_image=(IMAGE_GRID + 2,), desi_spectrum=(3,), table_values=(0, 1)
     )

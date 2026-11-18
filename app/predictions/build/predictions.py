@@ -283,10 +283,10 @@ def record(
             np.exp(np.concatenate([predicted[key][0] for key in TABLE_VALUES[survey]]))
         )
     for survey, key in SPECTRA.items():
-        quantised, offsets, steps = coefficients(
+        quantized, offsets, steps = coefficients(
             np.exp(predicted[key]), *fitted[survey]
         )
-        values[f"{survey}_coefficients"] = quantised.reshape(-1)
+        values[f"{survey}_coefficients"] = quantized.reshape(-1)
         values[f"{survey}_offsets"] = offsets
         values[f"{survey}_steps"] = steps
     return values

@@ -49,7 +49,7 @@ uv run modal run -m benchmarks.predictions.build.aion_prediction_embedding_quali
 uv run --group build modal run -m benchmarks.predictions.build.retrieval_quality        # measure retrieval from partial data on Modal
 uv run --group build modal run -m benchmarks.predictions.build.probe_quality            # measure PROVABGS probes on the stored vectors on Modal
 uv run --group build modal run -m benchmarks.predictions.build.redshift_quality         # measure AION's redshift without spectra on Modal
-uv run --group build modal run -m benchmarks.projection.build.neighbour_quality         # measure the stored vectors' neighbourhoods and maps on Modal
+uv run --group build modal run -m benchmarks.projection.build.neighbor_quality         # measure the stored vectors' neighborhoods and maps on Modal
 ```
 
 ### Docs
@@ -110,7 +110,7 @@ uv run --group docs make -C docs html
 
 - The documentation is both for the user to read and serves as internal documentation (readable by the public, but contains details on specific implementations and behind-the-scenes processes, decisions, and assumptions).
 - State only measured figures, or figures computed from them with the computation shown and consistent units.
-- Only use the full dataset (never the fixture or the dev subset) to measure production behaviour.
+- Only use the full dataset (never the fixture or the dev subset) to measure production behavior.
 - Do not mix figures from different machines or thread layouts in the same table.
 
 ## Writing
@@ -118,3 +118,4 @@ uv run --group docs make -C docs html
 - Spartan: what is true now, in the fewest words that stay exact. No restatement, hedges, needless background or lists of what did not change.
 - Literal over metaphor: "a parameter worth varying", not "a dial worth turning".
 - No em dashes.
+- American spelling everywhere.

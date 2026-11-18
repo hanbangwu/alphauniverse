@@ -50,7 +50,7 @@ def magnitudes(galaxies: np.ndarray, band: str) -> np.ndarray:
         return np.where(flux > 0, LS_ZERO_POINT - 2.5 * np.log10(flux), np.nan)
 
 
-def colours(galaxies: np.ndarray) -> np.ndarray:
+def colors(galaxies: np.ndarray) -> np.ndarray:
     return magnitudes(galaxies, "G") - magnitudes(galaxies, "R")
 
 
@@ -150,10 +150,10 @@ def predicted_redshifts() -> tuple[np.ndarray, np.ndarray]:
 
 def probed(features: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]:
     known = np.isfinite(values)
-    labelled, targets = features[known], values[known]
+    labeled, targets = features[known], values[known]
     model = RidgeCV(alphas=ALPHAS)
-    held_out = cross_val_predict(model, labelled, targets, cv=FOLDS)
-    predicted = model.fit(labelled, targets).predict(features)
+    held_out = cross_val_predict(model, labeled, targets, cv=FOLDS)
+    predicted = model.fit(labeled, targets).predict(features)
     predicted[known] = held_out
     return predicted, root_mean_squared_error(targets, held_out)
 
@@ -167,7 +167,7 @@ def generate_properties() -> None:
         f"{REDSHIFT}_measured": redshifts,
         f"{REDSHIFT}_predicted": predicted,
         f"{REDSHIFT}_width": width,
-        "g_r": colours(galaxies),
+        "g_r": colors(galaxies),
     }
     measured = (
         provabgs(galaxies)

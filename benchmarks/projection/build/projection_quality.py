@@ -13,7 +13,7 @@ from modal_app import CACHE_PATH, build_image, cache_volume
 app = modal.App("alphauniverse-projection")
 image = build_image.add_local_python_source("modal_app")
 
-NEIGHBOURS = (15, 100)
+NEIGHBORS = (15, 100)
 SIZE = 10_000
 REPORT = Path("docs/benchmarks/projection_quality.json")
 
@@ -65,7 +65,7 @@ def benchmark_projection_quality() -> dict[str, Any]:
     return {
         "environment": environment(),
         "size": SIZE,
-        "neighbours": {
+        "neighbors": {
             count: {
                 "preservation": round(preservation(embedded, projected, count), 4),
                 "trustworthiness": round(
@@ -77,7 +77,7 @@ def benchmark_projection_quality() -> dict[str, Any]:
                     4,
                 ),
             }
-            for count in NEIGHBOURS
+            for count in NEIGHBORS
         },
         "memory": memory(),
     }

@@ -23,7 +23,7 @@ from benchmarks.common import (
     environment,
     git,
     memory,
-    standardised,
+    standardized,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 
@@ -77,7 +77,7 @@ def positive_rows(rows: slice, positions, diagonal):
 
 
 def combined_rows(rows: slice, parts: list[Callable]):
-    return sum(standardised(part(rows)) for part in parts)
+    return sum(standardized(part(rows)) for part in parts)
 
 
 @app.function(
@@ -98,7 +98,7 @@ def measure() -> dict[str, Any]:
         ).square().sum()
         grams[name] = gram.float()
         del gram
-        eigenvalues, eigenvectors = torch.linalg.eigh(embeddings.centred(symmetric))
+        eigenvalues, eigenvectors = torch.linalg.eigh(embeddings.centered(symmetric))
         positions = (
             eigenvectors[:, -TOKEN_EMBEDDING_RANK:]
             * eigenvalues[-TOKEN_EMBEDDING_RANK:].clamp_min(0).sqrt()

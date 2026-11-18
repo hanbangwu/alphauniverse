@@ -73,7 +73,7 @@ def queries(count: int, image_token_count: int, matches: int) -> list[pql.Query]
     ]
 
 
-def standardised(scores: torch.Tensor) -> torch.Tensor:
+def standardized(scores: torch.Tensor) -> torch.Tensor:
     return (scores - scores.mean(dim=1, keepdim=True)) / scores.std(
         dim=1, correction=0, keepdim=True
     )

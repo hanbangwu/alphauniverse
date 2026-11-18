@@ -24,17 +24,17 @@ from app.predictions import whole_mode
 from app.predictions.build import embeddings
 from app.projection.build.maps import placed
 from app.projection.build.parametric_umap import scan
-from benchmarks.common import COMBINED, environment, git, memory, standardised
+from benchmarks.common import COMBINED, environment, git, memory, standardized
 from benchmarks.predictions.build.probe_quality import WIDTHS, principal, targets
 from benchmarks.projection.build import projection_quality
 from modal_app import CACHE_PATH, build_image, cache_volume
 
-app = modal.App("alphauniverse-neighbour-quality")
+app = modal.App("alphauniverse-neighbor-quality")
 image = build_image.add_local_python_source("modal_app")
 
-REPORT = Path("docs/benchmarks/neighbour_quality.json")
+REPORT = Path("docs/benchmarks/neighbor_quality.json")
 ROLES = ("token", "aion_prediction")
-NEIGHBOURS = 10
+NEIGHBORS = 10
 QUERIES = 2000
 BATCH = 1024
 SAME_PLACE = COMBINED["same_place"]
@@ -71,7 +71,7 @@ def searched(
     queries: np.ndarray,
 ) -> torch.Tensor:
     return sum(
-        standardised(
+        standardized(
             whole_mode.scores(
                 blocks[name]["queries"][queries], blocks[name], SEARCH_RANK
             ).double()
@@ -99,33 +99,33 @@ def physics(
     aion: np.ndarray,
 ) -> dict[str, Any]:
     values = targets()
-    labelled = np.flatnonzero(
+    labeled = np.flatnonzero(
         np.all([np.isfinite(column) for column in values.values()], 0)
     )
-    values = {name: column[labelled] for name, column in values.items()}
-    own = np.arange(len(labelled))
+    values = {name: column[labeled] for name, column in values.items()}
+    own = np.arange(len(labeled))
     rankings = {}
     for role, blocks in families.items():
         subset = {
-            name: {part: block[part][labelled] for part in block}
+            name: {part: block[part][labeled] for part in block}
             for name, block in blocks.items()
         }
         for combination, names in COMBINATIONS.items():
             scores = searched(subset, names, own)
-            rankings[f"{role}_{combination}"] = top(scores, own, NEIGHBOURS).indices
+            rankings[f"{role}_{combination}"] = top(scores, own, NEIGHBORS).indices
     for role, variants in joints.items():
         for variant, embedded in variants.items():
-            found = embedded[labelled]
+            found = embedded[labeled]
             rankings[f"{role}_{variant}"] = top(
-                -torch.cdist(found, found), own, NEIGHBOURS
+                -torch.cdist(found, found), own, NEIGHBORS
             ).indices
     unit = torch.nn.functional.normalize(
-        torch.from_numpy(aion[labelled]).double(), dim=1
+        torch.from_numpy(aion[labeled]).double(), dim=1
     )
-    rankings["aion"] = top(unit @ unit.T, own, NEIGHBOURS).indices
+    rankings["aion"] = top(unit @ unit.T, own, NEIGHBORS).indices
     rng = np.random.default_rng(SEED)
     rankings["random"] = np.stack(
-        [rng.choice(np.delete(own, row), NEIGHBOURS, replace=False) for row in own]
+        [rng.choice(np.delete(own, row), NEIGHBORS, replace=False) for row in own]
     )
     differences = {
         name: {
@@ -135,7 +135,7 @@ def physics(
         for name, found in rankings.items()
     }
     return {
-        "galaxies": len(labelled),
+        "galaxies": len(labeled),
         "rankings": {
             name: {
                 target: {
@@ -165,20 +165,20 @@ def geometry(
             galleries = blocks[name]["galleries"]
             searches[name] = searched(blocks, (name,), chosen)
             overlaps[name] = overlap(
-                top(searches[name], chosen, NEIGHBOURS).indices,
+                top(searches[name], chosen, NEIGHBORS).indices,
                 top(
-                    -torch.cdist(galleries[chosen], galleries), chosen, NEIGHBOURS
+                    -torch.cdist(galleries[chosen], galleries), chosen, NEIGHBORS
                 ).indices,
             )
         combined = {
             combination: top(
-                sum(searches[name] for name in names), chosen, NEIGHBOURS
+                sum(searches[name] for name in names), chosen, NEIGHBORS
             ).indices
             for combination, names in COMBINED.items()
         }
         nearest = {
             variant: top(
-                -torch.cdist(embedded[chosen], embedded), chosen, NEIGHBOURS
+                -torch.cdist(embedded[chosen], embedded), chosen, NEIGHBORS
             ).indices
             for variant, embedded in joints[role].items()
         }
@@ -194,7 +194,7 @@ def geometry(
         }
     return {
         "queries": len(chosen),
-        "random": round(NEIGHBOURS / (count - 1), 6),
+        "random": round(NEIGHBORS / (count - 1), 6),
     } | found
 
 
@@ -219,7 +219,7 @@ def maps(
     joints: dict[str, dict[str, torch.Tensor]],
     aion: np.ndarray,
 ) -> dict[str, Any]:
-    largest = max(projection_quality.NEIGHBOURS)
+    largest = max(projection_quality.NEIGHBORS)
     searches = {
         role: nearest_by_search(blocks, largest) for role, blocks in families.items()
     }
@@ -246,7 +246,7 @@ def maps(
         found[name] = {
             search: {
                 str(count): overlap(indices[:, :count], kept[:, :count])
-                for count in projection_quality.NEIGHBOURS
+                for count in projection_quality.NEIGHBORS
             }
             for search, indices in nearest.items()
         }
@@ -274,8 +274,8 @@ def measure() -> dict[str, Any]:
         "environment": environment(),
         "rank": SEARCH_RANK,
         "widths": WIDTHS,
-        "neighbours": NEIGHBOURS,
-        "preserved": projection_quality.NEIGHBOURS,
+        "neighbors": NEIGHBORS,
+        "preserved": projection_quality.NEIGHBORS,
         "physics": physics(families, joints, aion),
         "geometry": geometry(families, joints),
         "maps": maps(families, joints, aion),

@@ -19,14 +19,14 @@ Observation          Tokens                                     Codes
 Image                24 × 24 grid over the 96 × 96 px cutout,   4375 per token
                      one per 4 × 4 px cell (576)
 Spectrum             one per 25.6 Å from 3500 Å (272), plus one 1024 per token
-                     for the flux normalisation
-Catalogue value      one per value: 12 Legacy Survey, 13 HSC    1024
+                     for the flux normalization
+Catalog value      one per value: 12 Legacy Survey, 13 HSC    1024
 Redshift             one                                        1025, up to 6
 ==================== ========================================== ==============
 
-Each place a token can occupy is a :term:`slot`: one cell of one survey's image, one 25.6 Å window of one survey's spectrum, one catalogue value, or the redshift. A galaxy has 1,722 slots: 576 per image survey, 272 per spectrum survey, 25 catalogue values and the redshift. The normalisation token sets a spectrum's overall flux; AION reads it but never predicts it, so it has no slot.
+Each place a token can occupy is a :term:`slot`: one cell of one survey's image, one 25.6 Å window of one survey's spectrum, one catalog value, or the redshift. A galaxy has 1,722 slots: 576 per image survey, 272 per spectrum survey, 25 catalog values and the redshift. The normalization token sets a spectrum's overall flux; AION reads it but never predicts it, so it has no slot.
 
-The slots fall into seven :term:`modes <mode>`, one per kind of observation from one survey: the Legacy Survey and HSC images, the DESI and SDSS spectra, the Legacy Survey and HSC catalogue values, and the redshift.
+The slots fall into seven :term:`modes <mode>`, one per kind of observation from one survey: the Legacy Survey and HSC images, the DESI and SDSS spectra, the Legacy Survey and HSC catalog values, and the redshift.
 
 Embeddings
 ----------

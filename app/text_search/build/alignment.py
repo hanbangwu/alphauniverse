@@ -64,7 +64,7 @@ def spectrum_plot(spectrum: dict[str, np.ndarray]) -> PIL.Image.Image:
     figure = Figure(figsize=PLOT_INCHES)
     canvas = FigureCanvasAgg(figure)
     axes = figure.subplots()
-    axes.plot(spectrum["wavelength"], smoothed(spectrum["flux"]), color="grey")
+    axes.plot(spectrum["wavelength"], smoothed(spectrum["flux"]), color="gray")
     axes.set_xlim(
         AION_SPECTRUM_ORIGIN,
         AION_SPECTRUM_ORIGIN

@@ -18,7 +18,7 @@ on:
           - predictions.build.retrieval_quality
           - predictions.build.redshift_quality
           - predictions.build.probe_quality
-          - projection.build.neighbour_quality
+          - projection.build.neighbor_quality
       args: {}
 env:
   UV_LOCKED: "1"

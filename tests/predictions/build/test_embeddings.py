@@ -11,7 +11,7 @@ GALAXIES = 40
 RANK = 5
 
 
-def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centred_gram(
+def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centered_gram(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
@@ -23,10 +23,10 @@ def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centred_gra
     for name in GRAM_NAMES:
         gram = np.load(artifact(f"token_gram_{name}")).astype(np.float64)
         found = np.load(artifact(f"token_embedding_{name}"))
-        centred = (
+        centered = (
             gram - gram.mean(axis=1, keepdims=True) - gram.mean(axis=0) + gram.mean()
         )
-        residual = centred - found["queries"] @ found["galleries"].T
+        residual = centered - found["queries"] @ found["galleries"].T
         singular_values = found["singular_values"]
         np.testing.assert_allclose(
             (residual**2).sum(),
@@ -92,8 +92,8 @@ def test_the_joint_embedding_is_every_block_scaled_side_by_side(
 
     scaled = []
     for block in blocks.values():
-        centred = block - block.mean(axis=0)
-        scaled.append(centred / np.sqrt((centred**2).sum(axis=1).mean()))
+        centered = block - block.mean(axis=0)
+        scaled.append(centered / np.sqrt((centered**2).sum(axis=1).mean()))
     np.testing.assert_allclose(
         np.load(artifact("joint_embedding")), np.concatenate(scaled, axis=1)
     )

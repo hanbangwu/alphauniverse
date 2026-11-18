@@ -10,7 +10,7 @@ from datasets import Dataset, load_dataset, load_from_disk
 
 from app.config import (
     AION_SPECTRUM_GRID,
-    CATALOGUES,
+    CATALOGS,
     DATASET_AUTHOR,
     DATASET_LS_SUFFIX,
     DATASET_NAME,
@@ -23,7 +23,7 @@ from app.config import (
     REDSHIFT_LIMIT,
     SPECTRUM_SMOOTHING_SIGMA,
     TOKEN_SURVEYS,
-    Catalogue,
+    Catalog,
     ImageSurvey,
     SpectrumSurvey,
     dataset_dir,
@@ -67,7 +67,7 @@ def encode(image: PIL.Image.Image) -> bytes:
     return buffer.getvalue()
 
 
-def colour(flux: np.ndarray, bands: list[str]) -> bytes:
+def color(flux: np.ndarray, bands: list[str]) -> bytes:
     mapped = [band for band in bands if band in RGB_SCALES]
     scales = np.array([RGB_SCALES[band] for band in mapped])[:, None, None]
     scaled = flux[[bands.index(band) for band in mapped]] * scales + RGB_SOFTENING
@@ -90,7 +90,7 @@ def image(galaxy: int, survey: ImageSurvey) -> bytes | None:
     bands = [band.partition("-")[2] for band in cell["band"].as_py()]
     rows = cell["flux"].values.flatten()
     flux = rows.flatten().to_numpy().reshape(len(bands), len(rows) // len(bands), -1)
-    return colour(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
+    return color(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
 
 
 def predicted_image(flux: np.ndarray, survey: ImageSurvey) -> bytes:
@@ -98,7 +98,7 @@ def predicted_image(flux: np.ndarray, survey: ImageSurvey) -> bytes:
         band.partition("-")[2].lower()
         for band in (HSC_BANDS if survey == "hsc" else LS_BANDS)
     ]
-    return colour(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
+    return color(flux * (HSC_TO_NANOMAGGIES if survey == "hsc" else 1), bands)
 
 
 def samples(cell: pa.StructScalar) -> dict[str, np.ndarray]:
@@ -134,9 +134,9 @@ def fitted(shape: np.ndarray, galaxy: int, survey: SpectrumSurvey) -> np.ndarray
     return amplitude * shape
 
 
-def catalogue(column: str) -> Catalogue | None:
+def catalog(column: str) -> Catalog | None:
     _, separator, suffix = column.partition("-")
-    return CATALOGUES.get(separator + suffix)
+    return CATALOGS.get(separator + suffix)
 
 
 @cache
@@ -149,7 +149,7 @@ def table_columns() -> tuple[str, ...]:
             or pa.types.is_floating(field.type)
             or pa.types.is_boolean(field.type)
         )
-        and catalogue(field.name) is not None
+        and catalog(field.name) is not None
     )
 
 

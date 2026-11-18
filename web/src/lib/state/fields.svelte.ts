@@ -30,7 +30,7 @@ export class ListField<T> extends Field<T[]> {
 }
 
 export class IndexListField extends ListField<number> {
-  protected normalise(value: number[]): number[] {
+  protected normalize(value: number[]): number[] {
     return value
       .filter(
         (entry, index) => Number.isInteger(entry) && entry >= 0 && value.indexOf(entry) === index

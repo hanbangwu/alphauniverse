@@ -16,12 +16,12 @@ def loaded(role: str, dtype: torch.dtype = torch.float64) -> torch.Tensor:
     return gram
 
 
-def centred(gram: torch.Tensor) -> torch.Tensor:
+def centered(gram: torch.Tensor) -> torch.Tensor:
     return gram - gram.mean(dim=1, keepdim=True) - gram.mean(dim=0) + gram.mean()
 
 
 def embedding(gram: torch.Tensor) -> dict[str, torch.Tensor]:
-    matrix = centred(gram)
+    matrix = centered(gram)
     values, vectors = torch.linalg.eigh(matrix.T @ matrix)
     singular_values = values.flip(0).clamp_min(0).sqrt()
     rank = min(TOKEN_EMBEDDING_RANK, len(gram) - 1)
@@ -76,8 +76,8 @@ def galleries(role: str) -> np.ndarray:
 
 
 def scaled(block: np.ndarray) -> np.ndarray:
-    centred = block - block.mean(axis=0)
-    return centred / np.sqrt((centred**2).sum(axis=1).mean())
+    centered = block - block.mean(axis=0)
+    return centered / np.sqrt((centered**2).sum(axis=1).mean())
 
 
 def generate_joint_embedding() -> None:

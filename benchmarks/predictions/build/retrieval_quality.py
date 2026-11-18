@@ -38,7 +38,7 @@ from benchmarks.common import (
     environment,
     git,
     memory,
-    standardised,
+    standardized,
 )
 from modal_app import CACHE_PATH, build_image, cache_volume
 
@@ -213,7 +213,7 @@ def family(
             },
             "combined": {
                 combination: recall(
-                    ranks(sum(standardised(blocks[name]) for name in names), sources)
+                    ranks(sum(standardized(blocks[name]) for name in names), sources)
                 )
                 for combination, names in COMBINED.items()
             },

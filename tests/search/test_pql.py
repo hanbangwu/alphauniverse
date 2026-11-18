@@ -529,13 +529,13 @@ def test_a_whole_mode_search_ranks_by_the_mean_standardised_score_of_its_modes(
 
     found = pql.mode_search(query)
 
-    standardised = []
+    standardized = []
     for name in ("ls_image", "desi_spectrum_anywhere", REDSHIFT):
         stored = whole_mode.stored(name)
         row = whole_mode.scores(stored["queries"][[1]], stored, SEARCH_RANK)[0]
         row = row.double().numpy()
-        standardised.append((row - row.mean()) / row.std())
-    expected = np.mean(standardised, axis=0)
+        standardized.append((row - row.mean()) / row.std())
+    expected = np.mean(standardized, axis=0)
     others = np.delete(np.arange(len(expected)), 1)
     best = others[np.argsort(-expected[others], kind="stable")][:5]
     assert found.galaxies.tolist() == [1, *best.tolist()]

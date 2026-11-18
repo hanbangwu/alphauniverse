@@ -86,12 +86,12 @@ def query_image_tokens(
 def spectrum_token_coefficients(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:
-    quantised = array(
+    quantized = array(
         rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
     )[:, slots]
     offsets = array(rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1)[:, slots]
     steps = array(rows, f"{survey}_steps", DESISpectrum.num_tokens - 1)[:, slots]
-    return offsets[..., None] + quantised * steps[..., None]
+    return offsets[..., None] + quantized * steps[..., None]
 
 
 def table_value_probabilities(rows: pa.RecordBatch, mode: str) -> np.ndarray:

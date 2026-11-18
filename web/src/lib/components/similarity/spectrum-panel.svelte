@@ -72,7 +72,7 @@
           ? `Scroll to zoom, Shift-drag to pan, click or drag across ${label} spectrum tokens to select them`
           : matched
             ? `${label} spectrum of galaxy ${galaxy}`
-            : `AION's predicted ${label} spectrum of galaxy ${galaxy}, normalised`}
+            : `AION's predicted ${label} spectrum of galaxy ${galaxy}, normalized`}
         class="absolute inset-0"
       />
     {/if}

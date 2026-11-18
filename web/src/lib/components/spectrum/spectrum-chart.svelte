@@ -151,7 +151,7 @@
     yAxis: {
       type: 'value',
       scale: true,
-      name: spectrum ? 'Flux (10^-17 erg/s/cm^2/Å)' : 'Normalised flux',
+      name: spectrum ? 'Flux (10^-17 erg/s/cm^2/Å)' : 'Normalized flux',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
       axisLabel: { color: ink.muted },
@@ -319,6 +319,6 @@
     class="pointer-events-none absolute top-1.5 right-3 flex items-center gap-1 rounded-sm bg-card/80 px-1 text-[10px] text-muted-foreground"
   >
     <span class="h-0.5 w-3" style:background-color={PREDICTED}></span>
-    {spectrum ? 'AION' : 'AION prediction, normalised'}
+    {spectrum ? 'AION' : 'AION prediction, normalized'}
   </span>
 {/if}

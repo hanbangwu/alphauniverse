@@ -42,7 +42,7 @@ def test_predicted_views_are_documents_of_each_mode_s_form(
     with ThreadPoolExecutor(1) as pool:
         for mode in MODES:
             for kind in ("aion_prediction", "sample"):
-                found = text_views.realised(mode, kind, galaxies, rng, pool)
+                found = text_views.realized(mode, kind, galaxies, rng, pool)
 
                 assert len(found) == len(galaxies)
                 if mode in IMAGE_MODES:

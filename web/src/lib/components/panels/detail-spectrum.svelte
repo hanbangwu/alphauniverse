@@ -31,7 +31,7 @@
       prediction={prediction.data}
       label={matched
         ? `${label} spectrum of galaxy ${galaxy}${prediction.data ? ", with AION's prediction" : ''}`
-        : `AION's predicted ${label} spectrum of galaxy ${galaxy}, normalised`}
+        : `AION's predicted ${label} spectrum of galaxy ${galaxy}, normalized`}
       class="absolute inset-0"
     />
   {/if}

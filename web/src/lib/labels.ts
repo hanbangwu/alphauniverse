@@ -19,8 +19,8 @@ export const MODES: Record<ModeName, string> = {
   desi_spectrum: 'DESI spectrum',
   sdss_spectrum: 'SDSS spectrum',
   redshift: 'Redshift',
-  ls_table: 'Legacy Survey catalogue',
-  hsc_table: 'HSC catalogue'
+  ls_table: 'Legacy Survey catalog',
+  hsc_table: 'HSC catalog'
 }
 
 export const SECTIONS: Record<TableRow['section'], string> = { ...SURVEYS, redshift: 'Redshift' }

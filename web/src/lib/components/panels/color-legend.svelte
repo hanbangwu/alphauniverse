@@ -5,31 +5,31 @@
   import { withinQuery } from '$lib/data/queries'
   import { PROPERTIES, UNITS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
-  import type { Coloured } from '$lib/state/mosaic.svelte'
+  import type { Colored } from '$lib/state/mosaic.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
-    coloured: Coloured
+    colored: Colored
     scheme: Scheme
   }
 
-  let { coloured, scheme }: Props = $props()
+  let { colored, scheme }: Props = $props()
 
   const { filters, mosaic } = getApp()
 
   const format = (value: number) => value.toPrecision(3)
   const STEPS = 200
-  const span = $derived(coloured.high - coloured.low)
-  const at = (step: number) => coloured.low + (span * step) / STEPS
+  const span = $derived(colored.high - colored.low)
+  const at = (step: number) => colored.low + (span * step) / STEPS
   const bound = (step: number) =>
-    step === 0 ? coloured.least : step === STEPS ? coloured.most : at(step)
+    step === 0 ? colored.least : step === STEPS ? colored.most : at(step)
   const stepOf = (value: number) =>
-    value <= coloured.least
+    value <= colored.least
       ? 0
-      : value >= coloured.most
+      : value >= colored.most
         ? STEPS
-        : Math.min(STEPS - 1, Math.max(1, Math.round(((value - coloured.low) / span) * STEPS)))
-  const committed = $derived((filters.range.value ?? [coloured.least, coloured.most]).map(stepOf))
+        : Math.min(STEPS - 1, Math.max(1, Math.round(((value - colored.low) / span) * STEPS)))
+  const committed = $derived((filters.range.value ?? [colored.least, colored.most]).map(stepOf))
   let dragged = $state<number[] | null>(null)
   const steps = $derived(dragged ?? committed)
   const readout = $derived.by(() => {
@@ -38,7 +38,7 @@
     if (steps[0] !== 0 && steps[1] === STEPS) return `≥ ${low}`
     return `${low} to ${high}`
   })
-  const within = createQuery(() => withinQuery(mosaic, coloured.name, filters.range.value))
+  const within = createQuery(() => withinQuery(mosaic, colored.name, filters.range.value))
 </script>
 
 {#snippet bar(shades: string[], label: string)}
@@ -54,21 +54,21 @@
 
 <figure
   class="flex flex-col gap-1.5 text-xs"
-  aria-label="{PROPERTIES[coloured.property]} colour scale"
+  aria-label="{PROPERTIES[colored.property]} color scale"
 >
   <figcaption class="flex justify-between font-medium">
-    <span>{PROPERTIES[coloured.property]}</span>
-    <span class="text-muted-foreground">{UNITS[coloured.property]}</span>
+    <span>{PROPERTIES[colored.property]}</span>
+    <span class="text-muted-foreground">{UNITS[colored.property]}</span>
   </figcaption>
   <div class="flex justify-between font-mono tabular-nums">
-    <span>{format(coloured.low)}</span>
-    <span>{format(coloured.high)}</span>
+    <span>{format(colored.low)}</span>
+    <span>{format(colored.high)}</span>
   </div>
-  {#if coloured.measured}
-    {@render bar(SHADES, `measured: ${coloured.measured}`)}
+  {#if colored.measured}
+    {@render bar(SHADES, `measured: ${colored.measured}`)}
   {/if}
-  {#if coloured.predicted}
-    {@render bar(coloured.faded ? fadedShades(scheme) : SHADES, `AION: ${coloured.predicted}`)}
+  {#if colored.predicted}
+    {@render bar(colored.faded ? fadedShades(scheme) : SHADES, `AION: ${colored.predicted}`)}
   {/if}
   <div class="flex flex-col gap-1.5 pt-1">
     <Slider
@@ -90,10 +90,10 @@
       </div>
     {/if}
   </div>
-  {#if coloured.missing}
+  {#if colored.missing}
     <span class="flex items-center gap-1.5 text-muted-foreground">
       <span class="size-2 rounded-sm" style:background={NO_VALUE[scheme]}></span>
-      no value: {coloured.missing}
+      no value: {colored.missing}
     </span>
   {/if}
 </figure>

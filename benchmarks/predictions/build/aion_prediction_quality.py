@@ -74,7 +74,7 @@ class Profile:
     def report(self) -> dict[str, list[float]]:
         shown = self.counts > 0
         return {
-            "centres": ((self.edges[:-1] + self.edges[1:]) / 2)[shown].tolist(),
+            "centers": ((self.edges[:-1] + self.edges[1:]) / 2)[shown].tolist(),
             **{
                 model: np.round(sums[shown] / self.counts[shown], 4).tolist()
                 for model, sums in self.sums.items()
@@ -109,7 +109,7 @@ def image_quality(mode: str, survey: str) -> dict[str, Any]:
     codec = aion_predictions.decoder(mode)
     stored = np.load(artifact(f"aion_prediction_{mode}"), mmap_mode="r")
     null = stored.mean(axis=0, dtype=np.float64)
-    centre = (MODALITY_INFO["tok_image"]["input_size"] - 1) / 2
+    center = (MODALITY_INFO["tok_image"]["input_size"] - 1) / 2
     rows, columns = np.indices(
         (
             MODALITY_INFO["tok_image"]["input_size"],
@@ -117,7 +117,7 @@ def image_quality(mode: str, survey: str) -> dict[str, Any]:
         )
     )
     radius = np.broadcast_to(
-        np.hypot(rows - centre, columns - centre), stored.shape[1:]
+        np.hypot(rows - center, columns - center), stored.shape[1:]
     ).ravel()
     galaxies = observations.observed(mode)
     profile = Profile(RADII)

@@ -69,7 +69,7 @@ def test_spectrum_aion_prediction_without_that_spectrum_is_the_shape_on_the_code
     )
 
 
-def test_table_rows_lead_with_the_redshifts_then_name_their_catalogue_and_table_value(
+def test_table_rows_lead_with_the_redshifts_then_name_their_catalog_and_table_value(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rows = Dataset.from_dict(

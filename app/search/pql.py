@@ -205,7 +205,7 @@ def spectrum_token_overlaps(
 ) -> np.ndarray:
     _, _, mean_square, projected_mean = basis()[survey]
     weights = projected_mean + query
-    quantised = array(
+    quantized = array(
         rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
     )[:, slots]
     overlaps = (
@@ -214,7 +214,7 @@ def spectrum_token_overlaps(
         + array(rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1)[:, slots]
         * weights.sum(axis=-1)
         + array(rows, f"{survey}_steps", DESISpectrum.num_tokens - 1)[:, slots]
-        * np.einsum("...r,...r->...", quantised, weights)
+        * np.einsum("...r,...r->...", quantized, weights)
     )
     return np.maximum(overlaps, SPECTRUM_TOKEN_FLOOR)
 
@@ -288,7 +288,7 @@ def cross_overlaps(
         return
     survey = SPECTRUM_MODES[mode]
     _, _, mean_square, projected_mean = basis()[survey]
-    quantised = array(
+    quantized = array(
         rows, f"{survey}_coefficients", DESISpectrum.num_tokens - 1, SPECTRUM_TOKEN_RANK
     )
     offsets = array(rows, f"{survey}_offsets", DESISpectrum.num_tokens - 1)[..., None]
@@ -298,7 +298,7 @@ def cross_overlaps(
     totals = weights.sum(axis=-1)
     for start in range(0, rows.num_rows, CHUNK):
         chunk = slice(start, start + CHUNK)
-        overlaps = quantised[chunk].astype(np.float32) @ weights.T
+        overlaps = quantized[chunk].astype(np.float32) @ weights.T
         overlaps *= steps[chunk]
         overlaps += offsets[chunk] * totals
         overlaps += base

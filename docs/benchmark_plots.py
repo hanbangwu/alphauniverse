@@ -54,27 +54,27 @@ def projection_quality():
     if found is None:
         return missing()
     rows = [
-        {"neighbours": neighbours, "metric": metric, "value": value}
-        for neighbours, values in found["neighbours"].items()
+        {"neighbors": neighbors, "metric": metric, "value": value}
+        for neighbors, values in found["neighbors"].items()
         for metric, value in values.items()
     ]
     source = ColumnDataSource(
-        {key: [row[key] for row in rows] for key in ("neighbours", "metric", "value")}
+        {key: [row[key] for row in rows] for key in ("neighbors", "metric", "value")}
     )
-    source.data["factor"] = list(zip(source.data["neighbours"], source.data["metric"]))
+    source.data["factor"] = list(zip(source.data["neighbors"], source.data["metric"]))
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         y_range=(0, 1),
         height=300,
-        title="Neighbours kept, by k",
-        tooltips=[("k", "@neighbours"), ("metric", "@metric"), ("value", "@value")],
+        title="Neighbors kept, by k",
+        tooltips=[("k", "@neighbors"), ("metric", "@metric"), ("value", "@value")],
         **WIDTH,
     )
     chart.vbar(x="factor", top="value", width=0.8, source=source)
     return column(
         heading(found, f"{found['size']:,} embeddings", cpus(found)),
         chart,
-        table(rows, ("neighbours", "metric", "value")),
+        table(rows, ("neighbors", "metric", "value")),
         **WIDTH,
     )
 
@@ -125,7 +125,7 @@ def text_search_quality():
         y_range=FactorRange(*reversed(methods)),
         height=80 + 22 * len(methods),
         x_axis_location="above",
-        title="Mean specificity (colour) and the phrasings that pass (text)",
+        title="Mean specificity (color) and the phrasings that pass (text)",
         tooltips=[
             ("method", "@method"),
             ("specificity", "@specificity"),
@@ -277,12 +277,12 @@ def token_embedding_quality():
         title="Share of the exact top 10 found with the stored vectors, by k",
         **WIDTH,
     )
-    for (name, curve), colour in zip(curves.items(), Category20_20):
+    for (name, curve), color in zip(curves.items(), Category20_20):
         chart.line(
             ranks,
             [curve[str(rank)]["top10"] for rank in ranks],
             legend_label=name,
-            color=colour,
+            color=color,
             line_width=2,
         )
     chart.legend.location = "bottom_right"
@@ -330,13 +330,13 @@ def aion_prediction_embedding_quality():
             title=f"Share of the top 10 by {label} found with the stored vectors, by k",
             **WIDTH,
         )
-        for (name, block), colour in zip(found["blocks"].items(), Category20_20):
+        for (name, block), color in zip(found["blocks"].items(), Category20_20):
             if truth in block["stored"][str(ranks[0])]:
                 chart.line(
                     ranks,
                     [block["stored"][str(rank)][truth]["top10"] for rank in ranks],
                     legend_label=name,
-                    color=colour,
+                    color=color,
                     line_width=2,
                 )
         chart.legend.location = "bottom_right"
@@ -500,7 +500,7 @@ def probe_quality():
             title=f"{target}: ridge R² on a held-out fifth, mean and standard deviation of {found['draws']} draws",
             **WIDTH,
         )
-        for (name, probes), colour in zip(
+        for (name, probes), color in zip(
             features.items(), Category20_20[::2] + Category20_20[1::2]
         ):
             row = {"target": target, "features": name, "galaxies": measured["galaxies"]}
@@ -524,7 +524,7 @@ def probe_quality():
                 "r2",
                 source=spread,
                 legend_label=name,
-                color=colour,
+                color=color,
                 line_width=2,
             )
             curve.add_layout(
@@ -533,7 +533,7 @@ def probe_quality():
                     lower="lower",
                     upper="upper",
                     source=spread,
-                    line_color=colour,
+                    line_color=color,
                 )
             )
         curve.add_layout(curve.legend[0], "right")
@@ -559,8 +559,8 @@ def probe_quality():
     chart = figure(
         x_range=FactorRange(*source.data["factor"]),
         height=420,
-        title=f"R² of ridge regression (bars) and of the {found['neighbours']} nearest neighbours (dots)",
-        tooltips=[("ridge", "@ridge"), ("neighbours", "@knn")],
+        title=f"R² of ridge regression (bars) and of the {found['neighbors']} nearest neighbors (dots)",
+        tooltips=[("ridge", "@ridge"), ("neighbors", "@knn")],
         **WIDTH,
     )
     chart.vbar(x="factor", top="ridge", width=0.8, source=source)
@@ -586,8 +586,8 @@ def probe_quality():
     )
 
 
-def neighbour_quality():
-    found = report("neighbour_quality")
+def neighbor_quality():
+    found = report("neighbor_quality")
     if found is None:
         return missing()
     rankings = [
@@ -603,7 +603,7 @@ def neighbour_quality():
         for name, entry in found["physics"]["rankings"].items()
     ]
     geometry = found["geometry"]
-    share = f"share of its top {found['neighbours']}"
+    share = f"share of its top {found['neighbors']}"
     agreement = [
         {"features": f"{role} blocks", "search": name, share: value}
         for role in ("token", "aion_prediction")
@@ -696,7 +696,7 @@ def aion_prediction_quality():
         chart = figure(
             height=300,
             x_axis_label=key.replace("_", " "),
-            y_axis_label="mean normalised residual",
+            y_axis_label="mean normalized residual",
             title=f"Residuals by {key.replace('_', ' ')}",
             **WIDTH,
         )
@@ -706,12 +706,12 @@ def aion_prediction_quality():
             if key in measured
             for model in ("aion_prediction", "floor")
         ]
-        for (mode, model), colour in zip(lines, Category10_10):
+        for (mode, model), color in zip(lines, Category10_10):
             chart.line(
-                modes[mode][key]["centres"],
+                modes[mode][key]["centers"],
                 modes[mode][key][model],
                 legend_label=f"{mode} {model}",
-                color=colour,
+                color=color,
                 line_width=2,
             )
         chart.legend.click_policy = "hide"

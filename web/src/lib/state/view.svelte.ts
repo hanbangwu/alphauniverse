@@ -32,7 +32,7 @@ export class ViewState {
   readonly open = new PersistedState('open-groups', {
     images: true,
     spectra: true,
-    catalogue: true
+    catalog: true
   })
 
   constructor(private readonly mosaic: MosaicState) {

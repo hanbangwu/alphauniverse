@@ -18,7 +18,7 @@ export class Field<T> {
   }
 
   set value(next: T) {
-    const value = this.normalise(next)
+    const value = this.normalize(next)
     if (this.source) this.source.set(value)
     else this.#value = value
   }
@@ -27,7 +27,7 @@ export class Field<T> {
     this.value = this.fallback
   }
 
-  protected normalise(value: T): T {
+  protected normalize(value: T): T {
     return value
   }
 }

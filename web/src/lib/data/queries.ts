@@ -196,15 +196,15 @@ export function propertiesQuery(mosaic: MosaicState) {
   })
 }
 
-export function colouringQuery(
+export function coloringQuery(
   mosaic: MosaicState,
   points: string | null,
   property: Property,
   everywhere: boolean
 ) {
   return queryOptions({
-    queryKey: ['colouring', points, property, everywhere] as const,
-    queryFn: points === null ? skipToken : () => mosaic.colour(points, property, everywhere),
+    queryKey: ['coloring', points, property, everywhere] as const,
+    queryFn: points === null ? skipToken : () => mosaic.color(points, property, everywhere),
     ...FOREVER
   })
 }

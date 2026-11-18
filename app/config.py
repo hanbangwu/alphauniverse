@@ -122,8 +122,8 @@ REDSHIFT_COLUMNS: dict[SpectrumSurvey, tuple[str, str, str]] = {
 }
 STORE_COLUMNS = (*TOKEN_SURVEYS, REDSHIFT)
 
-Catalogue = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
-CATALOGUES: dict[str, Catalogue] = {
+Catalog = Literal["ls", "hsc", "desi", "sdss", "gz10", "provabgs"]
+CATALOGS: dict[str, Catalog] = {
     DATASET_LS_SUFFIX: "ls",
     DATASET_HSC_SUFFIX: "hsc",
     DATASET_DESI_SUFFIX: "desi",
@@ -134,7 +134,7 @@ CATALOGUES: dict[str, Catalogue] = {
 
 WEMM = "tencent/WeMM-Embedding-9B"
 WEMM_DIM = 1024
-QUERY_PREFIX = "Search galaxy spectra, images and catalogue measurements for: {}"
+QUERY_PREFIX = "Search galaxy spectra, images and catalog measurements for: {}"
 TextModality = Literal["image", "spectrum"]
 PLOT_INCHES = (16.8, 3.84)
 TEXT_SURVEYS: dict[TextModality, str] = {
@@ -229,7 +229,7 @@ VIEW_KINDS = ("observed", "aion_prediction", "sample")
 VIEW_COMBINATIONS = {
     "images": tuple(IMAGE_MODES),
     "spectra": tuple(SPECTRUM_MODES),
-    "catalogues": tuple(TABLE_MODES),
+    "catalogs": tuple(TABLE_MODES),
     "image_and_spectrum": ("ls_image", "desi_spectrum"),
     "everything": MODES,
 }

@@ -1,7 +1,7 @@
 Similarity search
 =================
 
-You pick a galaxy :math:`q` and a selection: image cells, spectrum windows, catalogue values, or any mix. The selected slots of each :term:`mode` :math:`m` form a set :math:`S_m`. alphaUniverse ranks every other galaxy :math:`g` by how well AION's predictions for it agree with its predictions for :math:`q` at those slots.
+You pick a galaxy :math:`q` and a selection: image cells, spectrum windows, catalog values, or any mix. The selected slots of each :term:`mode` :math:`m` form a set :math:`S_m`. alphaUniverse ranks every other galaxy :math:`g` by how well AION's predictions for it agree with its predictions for :math:`q` at those slots.
 
 Why predictions, not embeddings
 -------------------------------
@@ -26,9 +26,9 @@ Two confident predictions that agree score highest, two that disagree score lowe
 
    T_m(g) = \sum_{s \in S_m} \log O_s(q, g).
 
-Neighbouring slots are not independent, so many adjacent slots count some evidence more than once.
+Neighboring slots are not independent, so many adjacent slots count some evidence more than once.
 
-So that 30 image cells do not outweigh one redshift, each mode's score is standardised over all galaxies and the :math:`M` modes are averaged:
+So that 30 image cells do not outweigh one redshift, each mode's score is standardized over all galaxies and the :math:`M` modes are averaged:
 
 .. math::
 
@@ -63,4 +63,4 @@ This finds a feature wherever it sits, but each selected slot matches on its own
 Whole modes
 -----------
 
-A :term:`whole-mode search` selects every slot of each chosen mode. It reads each mode's score from a precomputed summary of every pair of galaxies, which matches :math:`T_m` up to a constant that standardisation cancels. Each match shows each mode's standardised score divided by :math:`M`, its contribution, so the contributions sum to the score.
+A :term:`whole-mode search` selects every slot of each chosen mode. It reads each mode's score from a precomputed summary of every pair of galaxies, which matches :math:`T_m` up to a constant that standardization cancels. Each match shows each mode's standardized score divided by :math:`M`, its contribution, so the contributions sum to the score.

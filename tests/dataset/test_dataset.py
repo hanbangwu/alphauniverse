@@ -22,7 +22,7 @@ from app.config import (
 )
 from app.dataset import dataset as dataset_module
 from app.dataset.dataset import (
-    colour,
+    color,
     encode,
     fitted,
     image,
@@ -59,7 +59,7 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
 
 
-def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
+def test_a_rectangular_source_is_cropped_about_its_center() -> None:
     width, height = (
         MODALITY_INFO["tok_image"]["input_size"] + 104,
         MODALITY_INFO["tok_image"]["input_size"] + 8,
@@ -93,7 +93,7 @@ def test_a_rectangular_source_is_cropped_about_its_centre() -> None:
         )
 
 
-def test_colour_maps_bands_by_letter_g_to_blue_and_z_to_red() -> None:
+def test_color_maps_bands_by_letter_g_to_blue_and_z_to_red() -> None:
     half = MODALITY_INFO["tok_image"]["input_size"] // 2
     flux = np.zeros(
         (
@@ -107,7 +107,7 @@ def test_colour_maps_bands_by_letter_g_to_blue_and_z_to_red() -> None:
     flux[3, :, :half] = 1
     flux[4] = 1
 
-    with Image.open(BytesIO(colour(flux, ["z", "i", "r", "g", "y"]))) as png:
+    with Image.open(BytesIO(color(flux, ["z", "i", "r", "g", "y"]))) as png:
         left, right = (
             png.getpixel((0, 0)),
             png.getpixel((MODALITY_INFO["tok_image"]["input_size"] - 1, 0)),
@@ -133,7 +133,7 @@ def test_samples_drop_padding_and_blank_masked_flux() -> None:
     assert kept["flux"].dtype == np.float32
 
 
-def test_ls_images_colour_their_flux_as_predicted_images_do(
+def test_ls_images_color_their_flux_as_predicted_images_do(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     size = MODALITY_INFO["tok_image"]["input_size"]
@@ -149,7 +149,7 @@ def test_ls_images_colour_their_flux_as_predicted_images_do(
 
 
 @pytest.mark.parametrize(("band", "channel"), [("g", 2), ("r", 1), ("i", 1), ("z", 0)])
-def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
+def test_hsc_images_color_each_filter_in_place_in_the_center_crop(
     monkeypatch: pytest.MonkeyPatch, band: str, channel: int
 ) -> None:
     bands = [name.lower() for name in HSC_BANDS]
@@ -180,7 +180,7 @@ def test_hsc_images_colour_each_filter_in_place_in_the_centre_crop(
     assert pixels[0, 1].argmax() == channel
 
 
-def test_an_hsc_aion_prediction_is_coloured_from_nanomaggies_as_a_legacy_survey_one() -> (
+def test_an_hsc_aion_prediction_is_colored_from_nanomaggies_as_a_legacy_survey_one() -> (
     None
 ):
     rng = np.random.default_rng(0)
@@ -243,7 +243,7 @@ def test_unmatched_survey_has_no_spectrum(stored: None) -> None:
     assert spectrum(0, "sdss").column("wavelength").to_pylist() == [4000.0]
 
 
-def test_table_keeps_numeric_catalogue_columns(
+def test_table_keeps_numeric_catalog_columns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     rows = Dataset.from_dict(

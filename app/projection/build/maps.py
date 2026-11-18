@@ -10,7 +10,7 @@ from app.dataset.dataset import dataset
 from app.predictions.build.embeddings import BATCH
 from app.predictions.whole_mode import contributions, whole_mode_totals
 
-NEIGHBOURS = UMAP().n_neighbors - 1
+NEIGHBORS = UMAP().n_neighbors - 1
 
 
 def nearest(
@@ -31,7 +31,7 @@ def nearest(
 def placed(
     found: tuple[torch.Tensor, torch.Tensor], features: np.ndarray
 ) -> np.ndarray:
-    scores, indices = (part[:, :NEIGHBOURS].numpy() for part in found)
+    scores, indices = (part[:, :NEIGHBORS].numpy() for part in found)
     own = np.arange(len(features))[:, None]
     knn = (
         np.hstack([own, indices]),
@@ -50,7 +50,7 @@ def generate_maps() -> None:
         pq.write_table(
             points(
                 galaxy,
-                placed(nearest(len(features), anywhere, NEIGHBOURS), features),
+                placed(nearest(len(features), anywhere, NEIGHBORS), features),
                 category,
             ),
             artifact(f"{name}_points"),

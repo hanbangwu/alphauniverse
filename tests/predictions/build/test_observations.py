@@ -70,7 +70,7 @@ def images(monkeypatch: pytest.MonkeyPatch) -> np.ndarray:
     return flux
 
 
-def test_images_are_the_centre_crop_of_the_galaxies_observed(
+def test_images_are_the_center_crop_of_the_galaxies_observed(
     images: np.ndarray,
 ) -> None:
     start = (SIZE - MODALITY_INFO["tok_image"]["input_size"]) // 2

@@ -22,11 +22,11 @@ export class FilterState {
 
   start(): void {
     $effect(() => this.#pushRange(this.range.value))
-    const colouring = () => `${this.view.property.value} ${this.view.everywhere}`
-    let shown = colouring()
+    const coloring = () => `${this.view.property.value} ${this.view.everywhere}`
+    let shown = coloring()
     $effect(() => {
-      if (colouring() === shown) return
-      shown = colouring()
+      if (coloring() === shown) return
+      shown = coloring()
       untrack(() => this.range.reset())
     })
     onDestroy(() => this.#pushRange(null))

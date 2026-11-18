@@ -6,7 +6,7 @@ Each benchmark runs on Modal against the production artifacts and writes ``docs/
 Projection quality
 ------------------
 
-How faithfully does the :term:`parametric UMAP` projection behind ``mean_points`` and ``full_points`` keep neighbours? ``projection_quality`` takes 10,000 embeddings held out of the projector's training, projects them, and compares each embedding's :math:`k` nearest neighbours by cosine distance in 768 dimensions, :math:`N_k(i)`, with its :math:`k` nearest on the map, :math:`\hat N_k(i)`, for :math:`k = 15` and :math:`100`:
+How faithfully does the :term:`parametric UMAP` projection behind ``mean_points`` and ``full_points`` keep neighbors? ``projection_quality`` takes 10,000 embeddings held out of the projector's training, projects them, and compares each embedding's :math:`k` nearest neighbors by cosine distance in 768 dimensions, :math:`N_k(i)`, with its :math:`k` nearest on the map, :math:`\hat N_k(i)`, for :math:`k = 15` and :math:`100`:
 
 .. math::
 
@@ -15,7 +15,7 @@ How faithfully does the :term:`parametric UMAP` projection behind ``mean_points`
    \text{trustworthiness} = 1 - \frac{2}{n k (2n - 3k - 1)}
    \sum_i \sum_{j \in \hat N_k(i)} \max\bigl(0,\, r(i, j) - k\bigr),
 
-where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbours in 768 dimensions. Preservation is 1 when the map keeps every neighbour; random positions would keep :math:`k / (n - 1)`. Trustworthiness penalises points that look close on the map but are far apart in 768 dimensions; random positions score near 0.5.
+where :math:`r(i, j)` is :math:`j`'s rank among :math:`i`'s neighbors in 768 dimensions. Preservation is 1 when the map keeps every neighbor; random positions would keep :math:`k / (n - 1)`. Trustworthiness penalizes points that look close on the map but are far apart in 768 dimensions; random positions score near 0.5.
 
 .. bokeh-plot::
    :source-position: none
@@ -34,7 +34,7 @@ Does a query find the galaxies it describes, rather than the galaxies any query 
 ============== ================================ =======
 Pair           Value                            Mode
 ============== ================================ =======
-colour         g − r                            images
+color         g − r                            images
 size           :term:`half-light radius`        images
 brightness     r magnitude                      images
 shape          :term:`axis ratio`               images
@@ -47,7 +47,7 @@ mass           stellar mass
 
 Each side has six phrasings: the first, third and fifth form the *development* half, which chooses a method, and the others the *sealed* half, which judges it once. The first six pairs describe what a mode shows; the last three are physical properties.
 
-A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`/methods/text-search`, over a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogues* (the catalogue values and redshift).
+A method scores galaxy :math:`g` for the query direction :math:`\tilde t` of :doc:`/methods/text-search`, over a set of modes: *everything*, *images* (the Legacy Survey and HSC images), *spectra* (DESI and SDSS) or *catalogs* (the catalog values and redshift).
 
 - *search*: :math:`\tilde t` against the sum of the stored vectors over the set's modes, the set's share of :math:`s(g \mid t)`, which includes its part of the combination views; over every mode, :math:`s(g \mid t)` as text search ranks.
 - *search framed*: the same, with the query written after its mode set's framing, none for everything, "an image of", "the spectrum of" or "the photometry of", and less the mean of the generic queries with that framing.
@@ -83,7 +83,7 @@ Five morphology classes have six phrasings each, split into halves as above: spi
 Similarity search quality
 -------------------------
 
-Does similarity search find galaxies that are physically alike? ``search_quality`` samples galaxies with a spectrum and a redshift, searches from each with four kinds of selection (16 consecutive spectrum tokens, every observed spectrum token, four Legacy Survey catalogue values, four HSC catalogue values) and reports, as a mean over queries with a 95% bootstrap interval:
+Does similarity search find galaxies that are physically alike? ``search_quality`` samples galaxies with a spectrum and a redshift, searches from each with four kinds of selection (16 consecutive spectrum tokens, every observed spectrum token, four Legacy Survey catalog values, four HSC catalog values) and reports, as a mean over queries with a 95% bootstrap interval:
 
 - **redshift**: the median :math:`|\Delta z| / (1 + z)` between the query and its top 10 matches; lower is better. Its redshift is DESI's, else SDSS's, without the flag or limit AION's input uses.
 - **identity**: the fraction of queries whose own galaxy, with its spectra and redshift hidden and predicted again, ranks in the top 10; higher is better.
@@ -115,9 +115,9 @@ How much does compressing AION's predictions change search results? ``compressio
 Token embeddings
 ----------------
 
-How much of a full-object search do the :term:`token embeddings <token embedding>` keep? ``token_embedding_quality`` ranks every galaxy against every other galaxy as a query, once from each mode's :term:`Gram matrix` and once from its stored vectors cut to their first :math:`k` components, and reports the share of the exact top 10 and top 100 that the vectors find. It does this for each matrix and for two full-object scores, each mode standardised per query as search combines modes: the seven same-place matrices, and the four any-position matrices with the catalogue values and redshift.
+How much of a full-object search do the :term:`token embeddings <token embedding>` keep? ``token_embedding_quality`` ranks every galaxy against every other galaxy as a query, once from each mode's :term:`Gram matrix` and once from its stored vectors cut to their first :math:`k` components, and reports the share of the exact top 10 and top 100 that the vectors find. It does this for each matrix and for two full-object scores, each mode standardized per query as search combines modes: the seven same-place matrices, and the four any-position matrices with the catalog values and redshift.
 
-Beside it are the same shares for positive-only :term:`classical MDS` of each matrix's double-centred symmetric part, which keeps the components with positive eigenvalues and ranks by :math:`-\tfrac12 \lVert E_q - E_g \rVert^2 + \tfrac12 K(g, g)`, with :math:`E_g` galaxy :math:`g`'s coordinates; the share of that part's spectrum, :math:`\sum |\lambda|`, in negative eigenvalues, which no Euclidean embedding holds; the share of the squared singular values in the first :math:`k`; and, at any position, the share of the matrix's variance about its mean in its antisymmetric part, with the share of the exact top 10 that its symmetric part finds.
+Beside it are the same shares for positive-only :term:`classical MDS` of each matrix's double-centered symmetric part, which keeps the components with positive eigenvalues and ranks by :math:`-\tfrac12 \lVert E_q - E_g \rVert^2 + \tfrac12 K(g, g)`, with :math:`E_g` galaxy :math:`g`'s coordinates; the share of that part's spectrum, :math:`\sum |\lambda|`, in negative eigenvalues, which no Euclidean embedding holds; the share of the squared singular values in the first :math:`k`; and, at any position, the share of the matrix's variance about its mean in its antisymmetric part, with the share of the exact top 10 that its symmetric part finds.
 
 .. bokeh-plot::
    :source-position: none
@@ -131,7 +131,7 @@ Beside it are the same shares for positive-only :term:`classical MDS` of each ma
 AION predictions
 ----------------
 
-How closely does AION's predicted observation match a galaxy's own data? ``aion_prediction_quality`` compares every galaxy's :term:`AION prediction` in each mode it was observed in with its data by the reduced :math:`\chi^2`: images over the central 96 × 96 px with each pixel's inverse variance; spectra on their own wavelength grid with a free amplitude; catalogue values and redshift with the dataset's errors where it has them (HSC magnitudes, redshift) and otherwise the population's robust scatter, 1.4826 times the median absolute deviation. A galaxy with nothing to compare in a mode, no valid pixel in the crop, fewer than two in a spectrum or no catalogue value with an error, is left out. Beside the AION prediction it scores two references: the floor, the codec's decoding of the galaxy's own tokens, and the null, the mean AION prediction over all galaxies. *Recovered* is :math:`(\chi^2_\text{null} - \chi^2_\text{AION prediction}) / (\chi^2_\text{null} - \chi^2_\text{floor})`: 1 when the AION prediction fits as well as the galaxy's own tokens, 0 when it fits no better than the mean AION prediction. The normalised residuals :math:`(x - \mu)\sqrt{w}` are averaged by radius for images and by rest wavelength for spectra with a usable redshift. Spectra are also split into quartiles of their median S/N per pixel, :math:`x\sqrt{w}` over the valid pixels: a faint spectrum leaves the null little room above the floor, so its recovered share is small whatever the AION prediction.
+How closely does AION's predicted observation match a galaxy's own data? ``aion_prediction_quality`` compares every galaxy's :term:`AION prediction` in each mode it was observed in with its data by the reduced :math:`\chi^2`: images over the central 96 × 96 px with each pixel's inverse variance; spectra on their own wavelength grid with a free amplitude; catalog values and redshift with the dataset's errors where it has them (HSC magnitudes, redshift) and otherwise the population's robust scatter, 1.4826 times the median absolute deviation. A galaxy with nothing to compare in a mode, no valid pixel in the crop, fewer than two in a spectrum or no catalog value with an error, is left out. Beside the AION prediction it scores two references: the floor, the codec's decoding of the galaxy's own tokens, and the null, the mean AION prediction over all galaxies. *Recovered* is :math:`(\chi^2_\text{null} - \chi^2_\text{AION prediction}) / (\chi^2_\text{null} - \chi^2_\text{floor})`: 1 when the AION prediction fits as well as the galaxy's own tokens, 0 when it fits no better than the mean AION prediction. The normalized residuals :math:`(x - \mu)\sqrt{w}` are averaged by radius for images and by rest wavelength for spectra with a usable redshift. Spectra are also split into quartiles of their median S/N per pixel, :math:`x\sqrt{w}` over the valid pixels: a faint spectrum leaves the null little room above the floor, so its recovered share is small whatever the AION prediction.
 
 .. bokeh-plot::
    :source-position: none
@@ -180,7 +180,7 @@ For each mode and for the two full-object scores of ``token_embedding_quality``,
 Redshift without spectra
 ------------------------
 
-How well does AION predict a redshift from images and catalogue values alone? ``redshift_quality`` encodes every galaxy with a usable spectroscopic redshift again from its Legacy Survey and HSC data, with its spectra and redshift hidden, and predicts the redshift. It compares the median of the predicted distribution, with each bin's probability spread over the redshifts its token covers as ``properties`` takes it, with the measured value, DESI's where usable and otherwise SDSS's. For :math:`\Delta = (z_\text{AION} - z) / (1 + z)` it reports the bias, the median of :math:`\Delta`; the scatter, 1.4826 times its median absolute deviation; and the outlier rate, the share with :math:`|\Delta| > 0.15`. The redshifts ``properties`` predicts from the stored predictions, which read the spectra and redshift, are scored the same way as the reference, over all galaxies and by survey.
+How well does AION predict a redshift from images and catalog values alone? ``redshift_quality`` encodes every galaxy with a usable spectroscopic redshift again from its Legacy Survey and HSC data, with its spectra and redshift hidden, and predicts the redshift. It compares the median of the predicted distribution, with each bin's probability spread over the redshifts its token covers as ``properties`` takes it, with the measured value, DESI's where usable and otherwise SDSS's. For :math:`\Delta = (z_\text{AION} - z) / (1 + z)` it reports the bias, the median of :math:`\Delta`; the scatter, 1.4826 times its median absolute deviation; and the outlier rate, the share with :math:`|\Delta| > 0.15`. The redshifts ``properties`` predicts from the stored predictions, which read the spectra and redshift, are scored the same way as the reference, over all galaxies and by survey.
 
 .. bokeh-plot::
    :source-position: none
@@ -194,7 +194,7 @@ How well does AION predict a redshift from images and catalogue values alone? ``
 Property probes
 ---------------
 
-How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate, :math:`\log_{10}` specific star formation rate and redshift for the galaxies that have them, from three kinds of features: AION's mean embeddings; the :term:`joint embedding`, each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes; and the first 1,408, 704 and 352 principal components of that concatenation over all galaxies. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbours, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode's vectors, but every feature comes from an encoding that read the galaxy's redshift where it has one, so it measures how much of that input the features keep. To show how few examples each needs, it also fits each set to 32, 128 and 512 galaxies and reports :math:`R^2` on a fixed fifth of the others, the mean and standard deviation over 20 draws, with the median ridge penalty and how often it sits at an end of the grid it is chosen from. The same draws fit each mode's vectors alone, and a stack of them: ridge on each mode, combined with non-negative weights fitted to the modes' cross-validated predictions; it reports the weights of a stack fitted to every galaxy.
+How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` predicts :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate, :math:`\log_{10}` specific star formation rate and redshift for the galaxies that have them, from three kinds of features: AION's mean embeddings; the :term:`joint embedding`, each mode's first 256 stored gallery vectors, scaled to unit root-mean-square length about their mean and concatenated over the modes; and the first 1,408, 704 and 352 principal components of that concatenation over all galaxies. It fits ridge regression, with its penalty chosen by leave-one-out cross-validation, and the mean of the 10 nearest neighbors, and reports :math:`R^2` and the RMS error under 5-fold cross-validation, with every mode and without the two spectrum modes. Redshift is predicted without the redshift mode's vectors, but every feature comes from an encoding that read the galaxy's redshift where it has one, so it measures how much of that input the features keep. To show how few examples each needs, it also fits each set to 32, 128 and 512 galaxies and reports :math:`R^2` on a fixed fifth of the others, the mean and standard deviation over 20 draws, with the median ridge penalty and how often it sits at an end of the grid it is chosen from. The same draws fit each mode's vectors alone, and a stack of them: ridge on each mode, combined with non-negative weights fitted to the modes' cross-validated predictions; it reports the weights of a stack fitted to every galaxy.
 
 .. bokeh-plot::
    :source-position: none
@@ -205,10 +205,10 @@ How much of a galaxy's physics do the stored vectors hold? ``probe_quality`` pre
 
    show(probe_quality())
 
-Neighbourhoods
+Neighborhoods
 --------------
 
-Are a galaxy's nearest galaxies like it, and does one vector per galaxy show them? ``neighbour_quality`` asks three things of the stored :term:`token embeddings <token embedding>` and :term:`AION prediction embeddings <AION prediction embedding>`, cut to their first 256 components, of their :term:`joint embeddings <joint embedding>` over all modes, of the token one's first 1,408, 704 and 352 principal components, and of AION's :term:`mean embeddings <mean embedding>`:
+Are a galaxy's nearest galaxies like it, and does one vector per galaxy show them? ``neighbor_quality`` asks three things of the stored :term:`token embeddings <token embedding>` and :term:`AION prediction embeddings <AION prediction embedding>`, cut to their first 256 components, of their :term:`joint embeddings <joint embedding>` over all modes, of the token one's first 1,408, 704 and 352 principal components, and of AION's :term:`mean embeddings <mean embedding>`:
 
 * how far in :term:`PROVABGS` stellar mass, :math:`\log_{10}` star formation rate, :math:`\log_{10}` specific star formation rate and redshift a galaxy's 10 nearest are, against 10 at random: the galaxies with all four are both the queries and the gallery, ranked by full-object search at the same place, at any position and at the same place without the redshift mode, by Euclidean distance in each joint embedding and principal-component cut, and by the :term:`cosine similarity` of mean embeddings;
 * how much of each mode's search top 10 the Euclidean top 10 of its gallery vectors keeps, and of full-object search each joint embedding's and principal-component cut's, for 2,000 queries against every galaxy;
@@ -219,9 +219,9 @@ Are a galaxy's nearest galaxies like it, and does one vector per galaxy show the
 
    from bokeh.plotting import show
 
-   from benchmark_plots import neighbour_quality
+   from benchmark_plots import neighbor_quality
 
-   show(neighbour_quality())
+   show(neighbor_quality())
 
 Search speed
 ------------
@@ -240,7 +240,7 @@ In a container built like the server, ``search_performance`` times the checked-o
 Request speed
 -------------
 
-``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``GET /login``, a similarity search, a whole-mode search over all seven modes, a text search, a galaxy's image, its spectrum and its catalogue table, it times the first request of each kind to a freshly started server (cold, paying for what that request loads first) and then 30 more to the running server (warm).
+``backend_performance`` starts a temporary copy of the server and times requests to it from a separate container, including Modal's network but not the visitor's. For ``GET /login``, a similarity search, a whole-mode search over all seven modes, a text search, a galaxy's image, its spectrum and its catalog table, it times the first request of each kind to a freshly started server (cold, paying for what that request loads first) and then 30 more to the running server (warm).
 
 .. bokeh-plot::
    :source-position: none

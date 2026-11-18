@@ -3,7 +3,7 @@
   import { Button } from '$lib/components/ui/button'
   import * as Drawer from '$lib/components/ui/drawer'
   import { getView } from '$lib/state/app.svelte'
-  import ColourControl from './colour-control.svelte'
+  import ColorControl from './color-control.svelte'
   import PanelLeftIcon from '@lucide/svelte/icons/panel-left'
 
   const view = getView()
@@ -44,7 +44,7 @@
     </Drawer.Header>
     <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 pb-2">
       <Segmented field={view.pointSet} />
-      <ColourControl />
+      <ColorControl />
     </div>
   </Drawer.Content>
 </Drawer.Root>

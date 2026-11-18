@@ -79,7 +79,7 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
             table_values.reshape(galaxies, len(keys), -1).sum(-1), 1, atol=0.02
         )
     for survey in predictions_module.SPECTRA:
-        quantised = column(table, f"{survey}_coefficients").reshape(
+        quantized = column(table, f"{survey}_coefficients").reshape(
             galaxies, DESISpectrum.num_tokens - 1, -1
         )
         offsets = column(table, f"{survey}_offsets").reshape(
@@ -90,7 +90,7 @@ def test_every_galaxy_has_normalised_predictions_at_every_slot_in_galaxy_order(
         )
         spectrum_tokens = (
             basis[f"{survey}_mean"]
-            + (offsets + quantised * steps) @ basis[f"{survey}_directions"]
+            + (offsets + quantized * steps) @ basis[f"{survey}_directions"]
         )
         np.testing.assert_allclose(spectrum_tokens.sum(-1), 1, atol=0.02)
 
@@ -133,12 +133,12 @@ def test_spectrum_token_coefficients_round_to_within_half_a_step_of_the_projecti
     moments.add(distributions)
     mean, directions = moments.basis()
 
-    quantised, offsets, steps = predictions_module.coefficients(
+    quantized, offsets, steps = predictions_module.coefficients(
         distributions[:5], mean, directions
     )
 
     projected = (distributions[:5] - mean) @ directions.T
-    error = np.abs(offsets[:, None] + quantised * steps[:, None] - projected)
+    error = np.abs(offsets[:, None] + quantized * steps[:, None] - projected)
     assert np.all(error <= steps[:, None] * 0.5001)
 
 

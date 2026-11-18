@@ -35,8 +35,8 @@ app = modal.App("alphauniverse-probe-quality")
 image = build_image.add_local_python_source("modal_app")
 
 REPORT = Path("docs/benchmarks/probe_quality.json")
-NEIGHBOURS = 10
-PROBES = {"ridge": RidgeCV(alphas=ALPHAS), "knn": KNeighborsRegressor(NEIGHBOURS)}
+NEIGHBORS = 10
+PROBES = {"ridge": RidgeCV(alphas=ALPHAS), "knn": KNeighborsRegressor(NEIGHBORS)}
 SHOTS = (32, 128, 512)
 DRAWS = 20
 WIDTHS = (1408, 704, 352)
@@ -182,7 +182,7 @@ def measure() -> dict[str, Any]:
         "rank": SEARCH_RANK,
         "widths": WIDTHS,
         "folds": FOLDS.n_splits,
-        "neighbours": NEIGHBOURS,
+        "neighbors": NEIGHBORS,
         "draws": DRAWS,
         "probes": report,
         "memory": memory(),

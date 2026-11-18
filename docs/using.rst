@@ -20,7 +20,7 @@ Browse the UMAP
 On the **UMAP** tab, each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
 
 - **Any position** groups galaxies whose features match wherever they sit in the image or spectrum. **Same place** groups them only when the features are in the same place.
-- Colour the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r colour, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. **Measured first** uses the measured value where there is one and AION's prediction, faded, elsewhere. **Predicted** uses AION's prediction for every galaxy.
+- Color the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r color, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. **Measured first** uses the measured value where there is one and AION's prediction, faded, elsewhere. **Predicted** uses AION's prediction for every galaxy.
 - Drag the legend's slider to show only the galaxies in a range, for example 0.3 < z < 0.5.
 - Draw a box or a lasso to select galaxies, then open any of them or export the selection as CSV.
 - Hover over a point to preview the galaxy. Click it to open it.
@@ -33,19 +33,19 @@ Galaxies are named by their Legacy Survey DR10 object ID. A galaxy shows its pos
 See what AION predicts
 ----------------------
 
-The **AION predictions** switch shows the galaxy's :term:`AION predictions <AION prediction>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalogue values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalised. An AION prediction is AION's expectation, not a measurement.
+The **AION predictions** switch shows the galaxy's :term:`AION predictions <AION prediction>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalog values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalized. An AION prediction is AION's expectation, not a measurement.
 
 Find similar galaxies
 ---------------------
 
-Open a galaxy, start a search and pick what should match: image cells, spectrum windows, catalogue values, or any mix. Click a cell or window, drag across several, or use the keyboard (Tab, arrow keys, Enter).
+Open a galaxy, start a search and pick what should match: image cells, spectrum windows, catalog values, or any mix. Click a cell or window, drag across several, or use the keyboard (Tab, arrow keys, Enter).
 
 - **Any position** matches a feature wherever it sits, for example an emission line at another redshift. Without it, matches must have the feature in the same place.
 - Each match shows a similarity from 0 to 1 and a map of where it agrees with your galaxy. **Mask** fades the parts below a threshold.
 - A match that lacks an observation you selected is ranked on AION's prediction of it, and says so.
 - Click a match's ID to search from it.
 - **Export as ECSV** saves your galaxy and its matches as an :term:`ECSV` table: ID, position, similarity, and each map, empty where a galaxy lacks that observation. The header records what you selected.
-- **Whole modes** compares entire observations instead: click an image, a spectrum or a group of catalogue values. Each match then shows how much each observation contributed.
+- **Whole modes** compares entire observations instead: click an image, a spectrum or a group of catalog values. Each match then shows how much each observation contributed.
 - The **This galaxy** and **Population** maps shade your galaxy to show what a selection picks out (:doc:`methods/query-maps`).
 
 :doc:`methods/similarity-search` explains the ranking.
@@ -58,4 +58,4 @@ Describe a galaxy in a sentence. The site returns the 32 galaxies whose predicte
 Share a view
 ------------
 
-The address in the browser records what you see: the map's layout, colour, range and selection, the open galaxy, the last search and its display settings, and the text search. Copy it to return to the same view or to send it to someone.
+The address in the browser records what you see: the map's layout, color, range and selection, the open galaxy, the last search and its display settings, and the text search. Copy it to return to the same view or to send it to someone.

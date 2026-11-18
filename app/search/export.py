@@ -11,13 +11,13 @@ from app.config import (
     SPECTRUM_MODES,
     TABLE_VALUE_COLUMNS,
 )
-from app.dataset.dataset import catalogue
+from app.dataset.dataset import catalog
 from app.dataset.export import identities, written
 from app.encoding import store as encoding
 from app.search import pql
 
 TABLE_VALUES = {REDSHIFT: REDSHIFT} | {
-    column.partition("-")[0]: catalogue(column) for column in TABLE_VALUE_COLUMNS
+    column.partition("-")[0]: catalog(column) for column in TABLE_VALUE_COLUMNS
 }
 
 

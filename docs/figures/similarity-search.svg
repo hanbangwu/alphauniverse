@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 210" width="100%" role="img" aria-labelledby="similarity-title" font-family="sans-serif" font-size="12" fill="none" stroke="currentColor">
-  <title id="similarity-title">At each selected slot, AION's predicted distributions for the query and for another galaxy are multiplied code by code and summed into an overlap; the log overlaps are added within each mode, each mode's total is standardised over all galaxies, and the standardised totals are averaged into the score.</title>
+  <title id="similarity-title">At each selected slot, AION's predicted distributions for the query and for another galaxy are multiplied code by code and summed into an overlap; the log overlaps are added within each mode, each mode's total is standardized over all galaxies, and the standardized totals are averaged into the score.</title>
   <defs>
     <marker id="similarity-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0 0 L10 5 L0 10 z" fill="currentColor" stroke="none"/>
@@ -33,7 +33,7 @@
     <text x="465" y="70">image: Σ log O</text>
     <text x="465" y="100">spectrum: Σ log O</text>
     <text x="465" y="130">table: Σ log O</text>
-    <text x="465" y="165">standardise each</text>
+    <text x="465" y="165">standardize each</text>
     <text x="465" y="179">over all galaxies</text>
   </g>
   <line x1="530" y1="108" x2="575" y2="108" marker-end="url(#similarity-arrow)"/>

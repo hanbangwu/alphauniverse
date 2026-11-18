@@ -28,7 +28,7 @@ export interface Values {
   missing: number
 }
 
-export interface Coloured extends Values {
+export interface Colored extends Values {
   table: string
 }
 
@@ -131,7 +131,7 @@ export class MosaicState {
         least(${BINS - 1}, greatest(0, floor((value - ${low}) / ${span} * ${BINS})))
           + ${faded ? `CASE WHEN predicted THEN ${BINS} ELSE 0 END` : 0},
         ${2 * BINS}
-      )::UTINYINT AS colour
+      )::UTINYINT AS color
       FROM (${shown})`)
     return {
       name,
@@ -147,12 +147,12 @@ export class MosaicState {
     }
   }
 
-  async colour(points: string, property: Property, everywhere: boolean): Promise<Coloured> {
+  async color(points: string, property: Property, everywhere: boolean): Promise<Colored> {
     const values = await this.#values(property, everywhere)
     const table = `${points}_${values.name}`
     await this.connect().exec(`
       CREATE OR REPLACE VIEW ${table} AS
-      SELECT p.galaxy, p.x, p.y, c.value, c.width, c.predicted, c.colour
+      SELECT p.galaxy, p.x, p.y, c.value, c.width, c.predicted, c.color
       FROM ${points} p LEFT JOIN ${values.name} c USING (galaxy)`)
     return { ...values, table }
   }

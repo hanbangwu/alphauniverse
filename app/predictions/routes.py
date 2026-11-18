@@ -13,12 +13,12 @@ from app.config import (
     REDSHIFT_TABLE_VALUE,
     SPECTRUM_SURVEY,
     TABLE_VALUE_COLUMNS,
-    Catalogue,
+    Catalog,
     GalaxyIndex,
     ImageSurvey,
     SpectrumSurvey,
 )
-from app.dataset.dataset import catalogue, fitted, predicted_image, redshift, table
+from app.dataset.dataset import catalog, fitted, predicted_image, redshift, table
 from app.encoding.store import FIRST_LS_TABLE_VALUE, table_value_tokens
 from app.predictions.store import aion_predictions, table_value_aion_predictions
 from app.responses import ARROW_STREAM, PNG, RevalidatedRoute, arrow
@@ -27,7 +27,7 @@ router = APIRouter(tags=["predictions"], route_class=RevalidatedRoute)
 
 
 class TableRow(BaseModel):
-    section: Catalogue | Literal["redshift"]
+    section: Catalog | Literal["redshift"]
     column: str
     value: float | int | bool | None
     aion_prediction: float | None
@@ -70,7 +70,7 @@ def redshift_row(
     )
 
 
-def catalogue_row(
+def catalog_row(
     column: str, value: Any, token_ids: dict[str, int], predicted: dict[str, float]
 ) -> TableRow:
     table_value = (
@@ -79,7 +79,7 @@ def catalogue_row(
         else None
     )
     return TableRow(
-        section=catalogue(column),
+        section=catalog(column),
         column=column.partition("-")[0],
         value=value,
         aion_prediction=predicted.get(column),
@@ -107,7 +107,7 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
         redshift_row(column, survey, values, chosen, token_ids, predicted)
         for column, survey in shown
     ] + [
-        catalogue_row(column, value, token_ids, predicted)
+        catalog_row(column, value, token_ids, predicted)
         for column, value in values.items()
         if column not in redshifts
     ]

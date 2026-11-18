@@ -145,9 +145,9 @@
     {/if}
   </CollapsibleGroup>
 
-  <CollapsibleGroup title="Catalogue" bind:open={view.open.current.catalogue}>
+  <CollapsibleGroup title="Catalog" bind:open={view.open.current.catalog}>
     {#snippet actions()}
-      {@render controls('catalogue', Object.values(TABLE_MODES), [view.tableValues])}
+      {@render controls('catalog', Object.values(TABLE_MODES), [view.tableValues])}
     {/snippet}
     <TablePanel
       galaxy={similarity.galaxy}

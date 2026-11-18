@@ -45,12 +45,12 @@ class Pair(NamedTuple):
 
 
 PAIRS = {
-    "colour": Pair(
+    "color": Pair(
         "g_r",
         "images",
         (
             "a red galaxy",
-            "a galaxy with red colours",
+            "a galaxy with red colors",
             "a reddish galaxy",
             "an orange-red galaxy",
             "a galaxy that looks red",
@@ -58,7 +58,7 @@ PAIRS = {
         ),
         (
             "a blue galaxy",
-            "a galaxy with blue colours",
+            "a galaxy with blue colors",
             "a bluish galaxy",
             "a blue-white galaxy",
             "a galaxy that looks blue",
@@ -282,7 +282,7 @@ REPORT = Path("docs/benchmarks/text_search_quality.json")
 type Scorer = Callable[[np.ndarray, Any], dict[str, np.ndarray]]
 
 
-def centred(vectors: np.ndarray) -> np.ndarray:
+def centered(vectors: np.ndarray) -> np.ndarray:
     return normalize(vectors - vectors.mean(axis=0))
 
 
@@ -535,7 +535,7 @@ def benchmark_text_search_quality(half: str) -> dict[str, Any]:
     views = {}
     for modality in TEXT_SURVEYS:
         galaxy, _, wemm = pairs(modality)
-        views[modality] = galaxy, centred(wemm.cpu().numpy())
+        views[modality] = galaxy, centered(wemm.cpu().numpy())
     imaged = np.intersect1d(held, views["image"][0])
     reference = view_scorer(views, {"images": ("image",)})(queries["plain"], imaged)
     percentiles = {

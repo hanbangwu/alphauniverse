@@ -58,7 +58,7 @@ FRAMES = {
     "everything": "{}",
     "images": "an image of {}",
     "spectra": "the spectrum of {}",
-    "catalogues": "the photometry of {}",
+    "catalogs": "the photometry of {}",
 }
 ADJECTIVES = (
     "",
@@ -159,7 +159,7 @@ def fitted_bases(view_types: torch.Tensor, embeddings: torch.Tensor) -> Bases:
     )
     found = residuals(mean, view_types, embeddings).cpu().numpy()
     kinds = view_types.cpu().numpy()
-    components, centre, scale = [], [], []
+    components, center, scale = [], [], []
     for kind, (_, name) in enumerate(VIEW_TYPES):
         fitted = kinds == kind
         if fitted.sum() < SHARED_BASIS:
@@ -169,13 +169,13 @@ def fitted_bases(view_types: torch.Tensor, embeddings: torch.Tensor) -> Bases:
             fitted = np.isin(kinds, siblings)
         pca = PCA(TEXT_RANK, random_state=SEED).fit(found[fitted])
         components.append(pca.components_)
-        centre.append(pca.mean_)
+        center.append(pca.mean_)
         spread = pca.transform(found[fitted]).std(axis=0)
         scale.append(np.maximum(spread, SCALE_FLOOR * np.median(spread)))
     return {
         "mean": mean,
         "components": torch.from_numpy(np.stack(components)).to(device()),
-        "centre": torch.from_numpy(np.stack(centre)).to(device()),
+        "center": torch.from_numpy(np.stack(center)).to(device()),
         "scale": torch.from_numpy(np.stack(scale)).to(device()),
     }
 
@@ -195,8 +195,8 @@ def coefficients(
     found = torch.empty(len(directions), TEXT_RANK, device=directions.device)
     for kind in view_types.unique():
         chosen = view_types == kind
-        centred = directions[chosen] - bases["centre"][kind]
-        found[chosen] = centred @ bases["components"][kind].T / bases["scale"][kind]
+        centered = directions[chosen] - bases["center"][kind]
+        found[chosen] = centered @ bases["components"][kind].T / bases["scale"][kind]
     return found
 
 
@@ -232,7 +232,7 @@ def decayed(
 def stepped(
     network: Regression,
     average: AveragedModel,
-    optimiser: torch.optim.Optimizer,
+    optimizer: torch.optim.Optimizer,
     weights: torch.Tensor,
     inputs: Callable[[torch.Tensor], tuple[torch.Tensor, ...]],
 ) -> float:
@@ -242,9 +242,9 @@ def stepped(
             torch.multinomial(weights, BATCH, replacement=True)
         )
         loss = ((network(*conditions) - target) ** 2).mean()
-        optimiser.zero_grad()
+        optimizer.zero_grad()
         loss.backward()
-        optimiser.step()
+        optimizer.step()
         average.update_parameters(network)
         losses.append(loss.detach())
     return torch.stack(losses).mean().item()
@@ -261,7 +261,7 @@ def predicted(
     for kind in range(len(VIEW_TYPES)):
         kinds = torch.full((len(rows),), kind, device=rows.device)
         points = network(conditions, present, kinds) * bases["scale"][kind]
-        found[kind] = points @ bases["components"][kind] + bases["centre"][kind]
+        found[kind] = points @ bases["components"][kind] + bases["center"][kind]
     return found
 
 
@@ -370,7 +370,7 @@ def train_text_regression() -> None:
     weights = training_weights(kinds)
     torch.manual_seed(SEED)
     network = Regression().to(device())
-    optimiser = torch.optim.AdamW(
+    optimizer = torch.optim.AdamW(
         network.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
     )
     average = AveragedModel(network, multi_avg_fn=decayed)
@@ -403,7 +403,7 @@ def train_text_regression() -> None:
     ) as run:
         losses = []
         for index in range(TRAINING_STEPS // STEPS):
-            losses.append(stepped(network, average, optimiser, weights, inputs))
+            losses.append(stepped(network, average, optimizer, weights, inputs))
             if (index + 1) % LOGGED == 0:
                 overall = identification(average.module, held, bases, everything)
                 entry = {

@@ -40,7 +40,7 @@
 </div>
 {#if similarity.wholeResult}
   <p class="text-xs text-muted-foreground">
-    Each match's score is the mean over the chosen modes of its standardised score in each; the bars
+    Each match's score is the mean over the chosen modes of its standardized score in each; the bars
     show each mode's share. Maps compare each slot at the same place.
   </p>
 {/if}

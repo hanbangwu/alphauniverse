@@ -103,7 +103,7 @@ Run a benchmark
    uv run --group build modal run -m benchmarks.predictions.build.retrieval_quality
    uv run --group build modal run -m benchmarks.predictions.build.redshift_quality
    uv run --group build modal run -m benchmarks.predictions.build.probe_quality
-   uv run --group build modal run -m benchmarks.projection.build.neighbour_quality
+   uv run --group build modal run -m benchmarks.projection.build.neighbor_quality
 
 Each writes its report to ``docs/benchmarks/<script>.json``.
 

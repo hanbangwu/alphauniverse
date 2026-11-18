@@ -11,7 +11,7 @@ Glossary
       Enhanced CSV: a CSV table whose commented header records each column's type and unit and notes about the whole table. astropy and TOPCAT read it; spreadsheets show the header as extra rows.
 
    predictive width
-      How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalogue value. See :doc:`dev/reference`.
+      How uncertain AION's prediction of a galaxy is in one :term:`mode`: the spread of the predicted codec latent, or of a predicted catalog value. See :doc:`dev/reference`.
 
    saturation
       A galaxy's highest possible :term:`against-data score` in a :term:`mode`: the score of an AION prediction equal to its data.
@@ -29,13 +29,13 @@ Glossary
       The ratio of a galaxy's minor to major axis, :math:`(1 - e) / (1 + e)` for the Legacy Survey model's ellipticity :math:`e = \sqrt{e_1^2 + e_2^2}`: near 1 for a round or face-on galaxy, small for an edge-on disk. See :doc:`dev/reference`.
 
    classical MDS
-      Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centred symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
+      Classical multidimensional scaling: each galaxy's coordinates :math:`E_g` along the eigenvectors of a double-centered symmetric matrix, scaled by the square roots of their eigenvalues, so that :math:`E_q \cdot E_g` reproduces the matrix when none of its eigenvalues is negative.
 
    code
       One entry in a :term:`codec`'s fixed vocabulary. A :term:`token` is the code of one piece of an observation.
 
    codec
-      A small network that turns one kind of observation (an image, a spectrum, a catalogue value) into :term:`tokens <token>` and back. See :doc:`concepts`.
+      A small network that turns one kind of observation (an image, a spectrum, a catalog value) into :term:`tokens <token>` and back. See :doc:`concepts`.
 
    contribution
       A mode's Shapley value in a text search match's lead over the average galaxy: each view type's part, split equally among the modes it needs. See :doc:`methods/text-search`.
@@ -74,10 +74,10 @@ Glossary
       The average of a galaxy's encoded :term:`embeddings <embedding>`, one vector per galaxy.
 
    mode
-      One kind of observation from one survey: the Legacy Survey or HSC image, the DESI or SDSS spectrum, the Legacy Survey or HSC catalogue values, or the redshift. Similarity search scores each mode separately.
+      One kind of observation from one survey: the Legacy Survey or HSC image, the DESI or SDSS spectrum, the Legacy Survey or HSC catalog values, or the redshift. Similarity search scores each mode separately.
 
    parametric UMAP
-      A small network trained to place embeddings on a two-dimensional map so that embeddings that are neighbours in 768 dimensions stay neighbours :cite:p:`sainburg2021parametric`.
+      A small network trained to place embeddings on a two-dimensional map so that embeddings that are neighbors in 768 dimensions stay neighbors :cite:p:`sainburg2021parametric`.
 
    partial correlation
       The correlation between two quantities after removing, from each, the part a third quantity explains linearly. See :doc:`methods/query-maps`.
@@ -86,16 +86,16 @@ Glossary
       The probability AION assigns to each :term:`code` at a :term:`slot`, given the galaxy's tokens. See :doc:`concepts`.
 
    PROVABGS
-      A catalogue of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the probe benchmark, its masses and star formation rates for the text search benchmark, and in ``properties`` as the measured mass and star formation rate, to which the predicted ones are fitted.
+      A catalog of stellar masses, star formation rates and redshifts fitted to DESI spectra and photometry. alphaUniverse uses it as ground truth for the probe benchmark, its masses and star formation rates for the text search benchmark, and in ``properties`` as the measured mass and star formation rate, to which the predicted ones are fitted.
 
    slot
-      A position a :term:`token` can occupy: one image cell, one spectral window, one catalogue value or the redshift. A galaxy has 1,722.
+      A position a :term:`token` can occupy: one image cell, one spectral window, one catalog value or the redshift. A galaxy has 1,722.
 
    sSFR
       Specific star formation rate: star formation rate divided by stellar mass, in yr\ :sup:`-1`.
 
    AION prediction
-      A galaxy's :term:`prediction` in one :term:`mode` turned back into an observation by the mode's :term:`codec`: an image, a spectrum's shape, or a catalogue value or redshift. See :doc:`dev/reference`.
+      A galaxy's :term:`prediction` in one :term:`mode` turned back into an observation by the mode's :term:`codec`: an image, a spectrum's shape, or a catalog value or redshift. See :doc:`dev/reference`.
 
    token
       The integer a :term:`codec` assigns to one piece of an observation, such as a 4 × 4 px image cell or a 25.6 Å spectral window.
@@ -107,7 +107,7 @@ Glossary
       A network that reads a sequence of tokens and lets the output for each depend on every other token in the sequence.
 
    view
-      One input to :term:`WeMM-Embedding` describing a galaxy: an image, a spectrum plot or catalogue text, made from its observation, its :term:`AION prediction` or a sample of AION's predictions. See :doc:`dev/reference`.
+      One input to :term:`WeMM-Embedding` describing a galaxy: an image, a spectrum plot or catalog text, made from its observation, its :term:`AION prediction` or a sample of AION's predictions. See :doc:`dev/reference`.
 
    WeMM-Embedding
       Tencent's model that places images, plots and text in one space, so that a picture and a description of it lie close together; text search uses its 9-billion-parameter version, cut to 1,024 dimensions. See :doc:`methods/text-search`.

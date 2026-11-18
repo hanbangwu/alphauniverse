@@ -137,7 +137,7 @@ def plotted(
     return PIL.Image.fromarray(np.asarray(canvas.buffer_rgba())).convert("RGB")
 
 
-def catalogue_text(mode: str, values: np.ndarray, rng: np.random.Generator) -> str:
+def catalog_text(mode: str, values: np.ndarray, rng: np.random.Generator) -> str:
     columns = (
         (REDSHIFT,)
         if mode == REDSHIFT
@@ -154,7 +154,7 @@ def catalogue_text(mode: str, values: np.ndarray, rng: np.random.Generator) -> s
     return "\n".join(rng.permutation(lines))
 
 
-def realised(
+def realized(
     mode: str,
     kind: str,
     galaxies: np.ndarray,
@@ -186,7 +186,7 @@ def realised(
         surveys = [survey] * len(galaxies)
         return list(pool.map(plotted, wavelengths, fluxes, surveys, sigmas))
     values = table_values(mode, galaxies)[0] if kind == "observed" else predicted
-    return [catalogue_text(mode, row, rng) for row in values]
+    return [catalog_text(mode, row, rng) for row in values]
 
 
 def joined(documents: tuple[PIL.Image.Image | str, ...]) -> list[dict] | str:
@@ -214,7 +214,7 @@ def combined(
         member = [None] * len(galaxies)
         for kind in np.unique(kinds):
             chosen = np.flatnonzero(kinds == kind)
-            found = realised(mode, VIEW_KINDS[kind], galaxies[chosen], rng, pool)
+            found = realized(mode, VIEW_KINDS[kind], galaxies[chosen], rng, pool)
             for position, document in zip(chosen, found):
                 member[position] = document
         parts.append(member)
@@ -230,7 +230,7 @@ def documents(
     kind, name = view_type
     if kind == "combination":
         return combined(VIEW_COMBINATIONS[name], galaxies, rng, pool)
-    return realised(name, kind, galaxies, rng, pool)
+    return realized(name, kind, galaxies, rng, pool)
 
 
 def embedded(

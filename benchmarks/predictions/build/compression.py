@@ -38,7 +38,7 @@ class Current:
         else:
             parts = dict(
                 zip(
-                    ("quantised", "offsets", "steps"),
+                    ("quantized", "offsets", "steps"),
                     coefficients(
                         np.exp(flat),
                         self.mean.cpu().numpy(),
@@ -72,7 +72,7 @@ class Current:
     def projected(self, stored: Stored) -> torch.Tensor:
         return (
             stored["offsets"][..., None]
-            + stored["quantised"] * stored["steps"][..., None]
+            + stored["quantized"] * stored["steps"][..., None]
         )
 
     def decode(self, stored: Stored, side: str = "gallery") -> torch.Tensor:

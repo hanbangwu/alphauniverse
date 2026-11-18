@@ -1,26 +1,26 @@
 <script lang="ts">
   import Segmented from '$lib/components/common/segmented.svelte'
   import * as NativeSelect from '$lib/components/ui/native-select'
-  import { colouringQuery, pointsQuery } from '$lib/data/queries'
+  import { coloringQuery, pointsQuery } from '$lib/data/queries'
   import { getApp } from '$lib/state/app.svelte'
-  import ColourLegend from './colour-legend.svelte'
+  import ColorLegend from './color-legend.svelte'
   import { createQuery } from '@tanstack/svelte-query'
   import { mode } from 'mode-watcher'
 
   const { view, mosaic } = getApp()
 
   const shown = createQuery(() => pointsQuery(mosaic, view.pointSet.value))
-  const colouring = createQuery(() =>
-    colouringQuery(mosaic, shown.data ?? null, view.property.value, view.everywhere)
+  const coloring = createQuery(() =>
+    coloringQuery(mosaic, shown.data ?? null, view.property.value, view.everywhere)
   )
 </script>
 
 <div class="flex flex-col gap-2">
-  <div class="text-xs tracking-wider text-muted-foreground uppercase">Colour</div>
+  <div class="text-xs tracking-wider text-muted-foreground uppercase">Color</div>
   <NativeSelect.Root
     size="sm"
     class="w-full"
-    aria-label="Colour the map by"
+    aria-label="Color the map by"
     bind:value={view.property.value}
   >
     {#each view.property.choices as { value, label } (value)}
@@ -30,9 +30,9 @@
   {#if view.predictable}
     <Segmented field={view.source} />
   {/if}
-  {#if colouring.data && mode.current}
-    {#key colouring.data.name}
-      <ColourLegend coloured={colouring.data} scheme={mode.current} />
+  {#if coloring.data && mode.current}
+    {#key coloring.data.name}
+      <ColorLegend colored={coloring.data} scheme={mode.current} />
     {/key}
   {/if}
 </div>

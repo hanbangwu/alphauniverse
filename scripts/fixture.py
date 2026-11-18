@@ -90,7 +90,7 @@ def covered(survey: str, galaxy: int) -> bool:
 
 
 def _cells(
-    rng: np.random.Generator, centres: np.ndarray, galaxies: int
+    rng: np.random.Generator, centers: np.ndarray, galaxies: int
 ) -> tuple[dict[str, list[np.ndarray | None]], dict[str, list[np.ndarray | None]]]:
     embeddings: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
     token_cells: dict[str, list[np.ndarray | None]] = {survey: [] for survey in TOKENS}
@@ -101,8 +101,8 @@ def _cells(
                 embeddings[survey].append(None)
                 token_cells[survey].append(None)
                 continue
-            assigned = rng.integers(len(centres), size=count)
-            rows = centres[assigned] + NOISE * rng.standard_normal(
+            assigned = rng.integers(len(centers), size=count)
+            rows = centers[assigned] + NOISE * rng.standard_normal(
                 (count, AION_EMBEDDING_DIM)
             )
             embeddings[survey].append(rows.astype(np.float16))
@@ -233,14 +233,14 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
 
 
 def _aion_predictions(rng: np.random.Generator, galaxies: int) -> dict[str, np.ndarray]:
-    centre = (MODALITY_INFO["tok_image"]["input_size"] - 1) / 2
+    center = (MODALITY_INFO["tok_image"]["input_size"] - 1) / 2
     rows, columns = np.indices(
         (
             MODALITY_INFO["tok_image"]["input_size"],
             MODALITY_INFO["tok_image"]["input_size"],
         )
     )
-    radius = np.hypot(rows - centre, columns - centre)
+    radius = np.hypot(rows - center, columns - center)
     profile = np.exp(-0.5 * (radius / rng.uniform(2, 8, (galaxies, 1, 1, 1))) ** 2)
     made = {}
     for mode, survey in IMAGE_MODES.items():
@@ -250,12 +250,12 @@ def _aion_predictions(rng: np.random.Generator, galaxies: int) -> dict[str, np.n
         made[mode] = IMAGE_UNITS[survey] * (peaks * profile + noise)
     for mode in SPECTRUM_MODES:
         tilt = rng.uniform(-0.3, 0.3, (galaxies, 1))
-        centres = rng.uniform(4000, 9500, (galaxies, 1))
+        centers = rng.uniform(4000, 9500, (galaxies, 1))
         line = rng.uniform(0, 2, (galaxies, 1))
         made[mode] = (
             1
             + tilt * (AION_SPECTRUM_GRID / AION_SPECTRUM_GRID.mean() - 1)
-            + line * np.exp(-0.5 * ((AION_SPECTRUM_GRID - centres) / 4) ** 2)
+            + line * np.exp(-0.5 * ((AION_SPECTRUM_GRID - centers) / 4) ** 2)
             + 0.02 * rng.standard_normal((galaxies, len(AION_SPECTRUM_GRID)))
         )
     for mode, (_, count, _) in TABLE_MODES.items():
@@ -464,19 +464,19 @@ def build(galaxies: int) -> Path:
     target.mkdir(parents=True)
 
     rng = np.random.default_rng(SEED)
-    centres = rng.standard_normal((CLUSTERS, AION_EMBEDDING_DIM)).astype(np.float32)
-    centres /= np.linalg.norm(centres, axis=1, keepdims=True)
+    centers = rng.standard_normal((CLUSTERS, AION_EMBEDDING_DIM)).astype(np.float32)
+    centers /= np.linalg.norm(centers, axis=1, keepdims=True)
 
-    embeddings, token_cells = _cells(rng, centres, galaxies)
+    embeddings, token_cells = _cells(rng, centers, galaxies)
 
     rows = np.arange(galaxies)
-    labelled = rows % 10 != 0
-    flags = {"gz10": labelled, "provabgs": rows % 3 != 0}
+    labeled = rows % 10 != 0
+    flags = {"gz10": labeled, "provabgs": rows % 3 != 0}
 
     _store("encoded", embeddings, galaxies, flags)
     _store("tokens", token_cells, galaxies, flags)
 
-    category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labelled)
+    category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labeled)
 
     anchors = np.stack(
         [np.asarray(cell, dtype=np.float32) for cell in embeddings["ls"]]

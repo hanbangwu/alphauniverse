@@ -32,7 +32,7 @@
   import { propertyColors } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
   import {
-    colouringQuery,
+    coloringQuery,
     pointsQuery,
     regionQuery,
     similarityQuery,
@@ -58,10 +58,10 @@
   const search = createQuery(() => similarityQuery(view.searched.value))
 
   const loaded = $derived(shown.data ?? null)
-  const colouring = createQuery(() =>
-    colouringQuery(mosaic, loaded, view.property.value, view.everywhere)
+  const coloring = createQuery(() =>
+    coloringQuery(mosaic, loaded, view.property.value, view.everywhere)
   )
-  const coloured = $derived(colouring.data ?? null)
+  const colored = $derived(coloring.data ?? null)
 
   const region = new Field(DEFAULTS.region, stored('region'))
   let drawnOn = view.pointSet.value
@@ -71,7 +71,7 @@
     untrack(() => region.reset())
   })
   const selected = createQuery(() =>
-    regionQuery(mosaic, coloured?.table ?? null, region.value, filters.range.value)
+    regionQuery(mosaic, colored?.table ?? null, region.value, filters.range.value)
   )
   const settle = useDebounce((value: Rectangle | Point[] | null) => (region.value = value), 200)
 
@@ -82,7 +82,7 @@
   )
   const circled = $derived(view.galaxy.value === null ? null : (results ?? [view.galaxy.value]))
   const values = createQuery(() =>
-    valuesQuery(mosaic, filters.range.value ? (coloured?.name ?? null) : null, circled)
+    valuesQuery(mosaic, filters.range.value ? (colored?.name ?? null) : null, circled)
   )
 
   function inRange(galaxy: number): boolean {
@@ -96,14 +96,14 @@
 </script>
 
 <div class="relative size-full overflow-hidden" bind:clientWidth={width} bind:clientHeight={height}>
-  {#if coloured && shades && mode.current && width > 0 && height > 0}
-    {#key coloured.table}
+  {#if colored && shades && mode.current && width > 0 && height > 0}
+    {#key colored.table}
       <EmbeddingViewMosaic
         coordinator={mosaic.coordinator}
-        table={coloured.table}
+        table={colored.table}
         x="x"
         y="y"
-        category="colour"
+        category="color"
         categoryColors={shades}
         additionalFields={{ value: 'value', width: 'width', predicted: 'predicted' }}
         identifier="galaxy"
@@ -117,7 +117,7 @@
         config={{ colorScheme: mode.current, autoLabelEnabled: false }}
         customTooltip={{
           class: Tooltip,
-          props: { label: PROPERTIES[coloured.property] }
+          props: { label: PROPERTIES[colored.property] }
         }}
         onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
@@ -139,9 +139,9 @@
     {:else if region.value && selected.data?.length}
       <MapSelection galaxies={selected.data} loading={selected.isFetching} />
     {/if}
-  {:else if shown.isError || colouring.isError}
+  {:else if shown.isError || coloring.isError}
     <p role="alert" class="absolute inset-0 grid place-content-center text-sm text-destructive">
-      {(shown.error ?? colouring.error)?.message}
+      {(shown.error ?? coloring.error)?.message}
     </p>
   {:else}
     <div class="absolute inset-0 grid place-content-center">

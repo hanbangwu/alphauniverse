@@ -20,17 +20,17 @@ from app.config import (
 from app.predictions.build import aion_predictions, observations
 from app.projection.build import properties
 
-LABELLED = 30
+LABELED = 30
 CONTINUUM = 2.0
 HALPHA_EW = 30.0
 LINE_REDSHIFT = 0.5
 
 
-def test_a_labelled_galaxy_s_prediction_does_not_depend_on_its_own_label() -> None:
+def test_a_labeled_galaxy_s_prediction_does_not_depend_on_its_own_label() -> None:
     rng = np.random.default_rng(0)
     features = rng.normal(size=(40, 6))
     values = features @ rng.normal(size=6) + rng.normal(scale=0.1, size=40)
-    values[LABELLED:] = np.nan
+    values[LABELED:] = np.nan
     changed = values.copy()
     changed[3] += 10
 
@@ -38,7 +38,7 @@ def test_a_labelled_galaxy_s_prediction_does_not_depend_on_its_own_label() -> No
     moved, _ = properties.probed(features, changed)
 
     assert moved[3] == predicted[3]
-    residuals = predicted[:LABELLED] - values[:LABELLED]
+    residuals = predicted[:LABELED] - values[:LABELED]
     assert width == pytest.approx(np.sqrt(np.mean(residuals**2)))
 
 
@@ -66,7 +66,7 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     tree: Path, galaxies: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rng = np.random.default_rng(1)
-    labelled = np.arange(galaxies) % 4 != 0
+    labeled = np.arange(galaxies) % 4 != 0
     redshift = np.where(np.arange(galaxies) % 2 == 0, LINE_REDSHIFT, np.nan)
     green, red = rng.lognormal(size=galaxies), rng.lognormal(size=galaxies)
     red[2] = -1
@@ -100,11 +100,11 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
             ],
             f"LOG_MSTAR{DATASET_PROVABGS_SUFFIX}": [
                 float(mass) if kept else None
-                for mass, kept in zip(rng.normal(10, 1, galaxies), labelled)
+                for mass, kept in zip(rng.normal(10, 1, galaxies), labeled)
             ],
             f"AVG_SFR{DATASET_PROVABGS_SUFFIX}": [
                 float(sfr) if kept else None
-                for sfr, kept in zip(rng.lognormal(size=galaxies), labelled)
+                for sfr, kept in zip(rng.lognormal(size=galaxies), labeled)
             ],
         }
     )
@@ -126,7 +126,7 @@ def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
     np.testing.assert_array_equal(
         found[f"{REDSHIFT}_measured"], redshift.astype(np.float32)
     )
-    np.testing.assert_array_equal(np.isfinite(found["mass_measured"]), labelled)
+    np.testing.assert_array_equal(np.isfinite(found["mass_measured"]), labeled)
     predicted = found[f"{REDSHIFT}_predicted"]
     assert (
         (predicted >= bins[REDSHIFT][0, 0]) & (predicted <= bins[REDSHIFT][0, -1])

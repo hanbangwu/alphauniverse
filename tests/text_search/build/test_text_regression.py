@@ -27,7 +27,7 @@ from app.text_search.build import text_regression, text_views
 def identity_bases(width: int) -> dict[str, torch.Tensor]:
     return {
         "components": torch.eye(width).expand(len(VIEW_TYPES), -1, -1),
-        "centre": torch.zeros(len(VIEW_TYPES), width),
+        "center": torch.zeros(len(VIEW_TYPES), width),
         "scale": torch.ones(len(VIEW_TYPES), width),
         "offset": torch.zeros(len(GRAM_NAMES)),
         "projection": torch.eye(len(GRAM_NAMES))[:, :width],
@@ -70,7 +70,7 @@ def test_a_prediction_s_coefficients_are_what_the_network_returned(
     components = torch.linalg.qr(torch.randn(kinds, 12, 3, generator=generator)).Q
     bases = identity_bases(3) | {
         "components": components.transpose(1, 2),
-        "centre": torch.randn(kinds, 12, generator=generator),
+        "center": torch.randn(kinds, 12, generator=generator),
         "scale": torch.rand(kinds, 3, generator=generator) + 0.5,
     }
     rows = torch.randn(4, len(GRAM_NAMES), generator=generator)
@@ -257,7 +257,7 @@ def test_a_galaxy_s_text_vectors_do_not_depend_on_its_batch(
     np.savez(
         tmp_path / "text_bases.npz",
         components=rng.standard_normal((kinds, 3, WEMM_DIM)).astype(np.float32),
-        centre=rng.standard_normal((kinds, WEMM_DIM)).astype(np.float32),
+        center=rng.standard_normal((kinds, WEMM_DIM)).astype(np.float32),
         scale=rng.uniform(0.5, 1.5, (kinds, 3)).astype(np.float32),
         offset=rng.standard_normal(width).astype(np.float32),
         projection=rng.standard_normal((width, 4)).astype(np.float32),
