@@ -19,8 +19,7 @@ WIDTH = {"sizing_mode": "stretch_width"}
 
 
 def report(script):
-    path = REPORTS / f"{script}.json"
-    return json.loads(path.read_text()) if path.exists() else None
+    return json.loads((REPORTS / f"{script}.json").read_text())
 
 
 def heading(found, *details):
@@ -41,18 +40,12 @@ def table(rows, names, height=None):
     )
 
 
-def missing():
-    return Div(text="No report is committed yet.", **WIDTH)
-
-
 def cpus(found):
     return f"{found['environment']['cpu_count']} CPUs visible to the container"
 
 
 def projection_quality():
     found = report("projection_quality")
-    if found is None:
-        return missing()
     rows = [
         {"neighbors": neighbors, "metric": metric, "value": value}
         for neighbors, values in found["neighbors"].items()
@@ -91,8 +84,6 @@ def flattened(nested, names):
 
 def text_search_quality():
     found = report("text_search_quality")
-    if found is None:
-        return missing()
     pairs = flattened(found["pairs"], ("pair",))
     rows = flattened(found["phrasings"], ("pair", "method", "side", "phrasing"))
     crossed = flattened(
@@ -175,8 +166,6 @@ def text_search_quality():
 
 def search_quality():
     found = report("search_quality")
-    if found is None:
-        return missing()
     rows = [
         {"metric": metric, "selection": selection} | figures
         for selection, metrics in found["results"].items()
@@ -212,8 +201,6 @@ def search_quality():
 
 def compression_quality():
     found = report("compression_quality")
-    if found is None:
-        return missing()
     rows = [
         {
             "mode": mode,
@@ -263,8 +250,6 @@ def compression_quality():
 
 def token_embedding_quality():
     found = report("token_embedding_quality")
-    if found is None:
-        return missing()
     ranks = found["ranks"]
     curves = {name: matrix["stored"] for name, matrix in found["matrices"].items()} | {
         f"{name}, combined": combined for name, combined in found["combined"].items()
@@ -315,8 +300,6 @@ def token_embedding_quality():
 
 def aion_prediction_embedding_quality():
     found = report("aion_prediction_embedding_quality")
-    if found is None:
-        return missing()
     ranks = found["ranks"]
     exact = {"score": "S", "share": "S / S_sat", "fit": "S − S_sat"}
     truths = exact | {"aion_prediction": "the AION prediction Gram"}
@@ -396,8 +379,6 @@ def recalled(exact, reverse):
 
 def retrieval_quality():
     found = report("retrieval_quality")
-    if found is None:
-        return missing()
     ranks = [str(rank) for rank in found["ranks"]]
     rows, full = [], []
     for test, measured in found["tests"].items():
@@ -467,8 +448,6 @@ def drawn(probe, shots):
 
 def redshift_quality():
     found = report("redshift_quality")
-    if found is None:
-        return missing()
     rows = [
         {"input": name, "survey": survey} | figures
         for name, surveys in found["inputs"].items()
@@ -483,8 +462,6 @@ def redshift_quality():
 
 def probe_quality():
     found = report("probe_quality")
-    if found is None:
-        return missing()
     rows, curves, modes = [], [], []
     for target, measured in found["probes"].items():
         features = {"AION": measured["aion"]} | {
@@ -588,8 +565,6 @@ def probe_quality():
 
 def neighbor_quality():
     found = report("neighbor_quality")
-    if found is None:
-        return missing()
     rankings = [
         {"ranking": name}
         | {
@@ -668,8 +643,6 @@ def fitted(measured):
 
 def aion_prediction_quality():
     found = report("aion_prediction_quality")
-    if found is None:
-        return missing()
     modes = found["modes"]
     source = ColumnDataSource(
         {
@@ -743,8 +716,6 @@ def aion_prediction_quality():
 
 def backend_performance():
     found = report("backend_performance")
-    if found is None:
-        return missing()
     requests = found["requests"]
     rows = [
         {"request": name, "cold_ms": round(requests["cold_ms"][name], 1)}
@@ -783,8 +754,6 @@ def backend_performance():
 
 def search_performance():
     found = report("search_performance")
-    if found is None:
-        return missing()
     stages_by_round = [
         (name, str(position), measured["stages"])
         for name, rounds in found["stages"]["rounds"].items()

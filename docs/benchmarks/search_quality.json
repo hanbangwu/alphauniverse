@@ -1,7 +1,7 @@
 {
-  "commit": "fabde74",
+  "commit": "d1a2153",
   "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
-  "date": "2026-10-12T04:47:09+00:00",
+  "date": "2026-11-18T18:57:09+00:00",
   "environment": {
     "cpu": {
       "vendor_id": "GenuineIntel",
@@ -12,6 +12,14 @@
     "cpu_count": 32,
     "omp_num_threads": "16",
     "thread_pools": [
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 16,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+        "version": null
+      },
       {
         "user_api": "blas",
         "internal_api": "openblas",
@@ -31,14 +39,6 @@
         "version": "0.3.34.106.0",
         "threading_layer": "pthreads",
         "architecture": "SkylakeX"
-      },
-      {
-        "user_api": "openmp",
-        "internal_api": "openmp",
-        "num_threads": 16,
-        "prefix": "libgomp",
-        "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
-        "version": null
       }
     ]
   },
@@ -53,9 +53,9 @@
     "spectrum_tokens_16": {
       "redshift": {
         "queries": 1000,
-        "mean": 0.0546,
-        "low": 0.0489,
-        "high": 0.0605
+        "mean": 0.0551,
+        "low": 0.0495,
+        "high": 0.061
       },
       "identity": {
         "queries": 1000,
@@ -65,64 +65,64 @@
       },
       "availability": {
         "queries": 1000,
-        "mean": 0.0985,
-        "low": 0.0864,
-        "high": 0.1107
+        "mean": 0.1037,
+        "low": 0.0913,
+        "high": 0.116
       },
       "evidence": {
-        "queries": 927,
-        "mean": 0.2418,
-        "low": 0.2288,
-        "high": 0.2548
+        "queries": 925,
+        "mean": 0.2416,
+        "low": 0.2276,
+        "high": 0.2556
       }
     },
     "spectrum_tokens_all": {
       "redshift": {
         "queries": 1000,
-        "mean": 0.0105,
-        "low": 0.0074,
-        "high": 0.0142
+        "mean": 0.0103,
+        "low": 0.0073,
+        "high": 0.0139
       },
       "identity": {
         "queries": 1000,
-        "mean": 0.04,
-        "low": 0.028,
-        "high": 0.053
+        "mean": 0.056,
+        "low": 0.042,
+        "high": 0.071
       },
       "availability": {
         "queries": 1000,
-        "mean": -0.1567,
-        "low": -0.1701,
-        "high": -0.1435
+        "mean": -0.2625,
+        "low": -0.2737,
+        "high": -0.2514
       },
       "evidence": {
         "queries": 979,
-        "mean": 0.169,
-        "low": 0.1603,
-        "high": 0.1773
+        "mean": 0.1109,
+        "low": 0.102,
+        "high": 0.1196
       }
     },
     "ls_table": {
       "redshift": {
         "queries": 1000,
-        "mean": 0.0818,
-        "low": 0.0763,
-        "high": 0.0876
+        "mean": 0.0822,
+        "low": 0.0766,
+        "high": 0.0881
       }
     },
     "hsc_table": {
       "redshift": {
         "queries": 441,
-        "mean": 0.1296,
-        "low": 0.1207,
-        "high": 0.1391
+        "mean": 0.1313,
+        "low": 0.1223,
+        "high": 0.1408
       }
     }
   },
   "memory": {
-    "peak_rss_mib": 37267.4,
+    "peak_rss_mib": 40265.4,
     "arrow_peak_mib": 43.6,
-    "resident_files_mib": 34623.2,
-    "resident_anonymous_mib": 2491.6
+    "resident_files_mib": 36217.3,
+    "resident_anonymous_mib": 4048.0
   }
 }

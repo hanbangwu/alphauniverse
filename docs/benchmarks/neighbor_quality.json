@@ -1,0 +1,467 @@
+{
+  "commit": "d1a2153-dirty",
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-11-18T20:35:04+00:00",
+  "environment": {
+    "cpu": {
+      "vendor_id": "AuthenticAMD",
+      "cpu family": "25",
+      "model": "17",
+      "model name": "unknown"
+    },
+    "cpu_count": 24,
+    "omp_num_threads": "8",
+    "thread_pools": [
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 8,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/scikit_learn.libs/libgomp-e985bcbb.so.1.0.0",
+        "version": null
+      },
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 8,
+        "prefix": "libscipy_openblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+        "version": "0.3.34.106.0",
+        "threading_layer": "pthreads",
+        "architecture": "SkylakeX"
+      },
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 8,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+        "version": null
+      },
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 8,
+        "prefix": "libscipy_openblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+        "version": "0.3.31.dev",
+        "threading_layer": "pthreads",
+        "architecture": "SkylakeX"
+      }
+    ]
+  },
+  "rank": 256,
+  "widths": [
+    1408,
+    704,
+    352
+  ],
+  "neighbors": 10,
+  "preserved": [
+    15,
+    100
+  ],
+  "physics": {
+    "galaxies": 2665,
+    "rankings": {
+      "token_same_place": {
+        "mass": {
+          "median": 0.2088,
+          "beats_random": 0.9734
+        },
+        "sfr": {
+          "median": 0.7129,
+          "beats_random": 0.7944
+        },
+        "ssfr": {
+          "median": 0.5996,
+          "beats_random": 0.8094
+        },
+        "redshift": {
+          "median": 0.015,
+          "beats_random": 0.9955
+        }
+      },
+      "token_any_position": {
+        "mass": {
+          "median": 0.2412,
+          "beats_random": 0.9598
+        },
+        "sfr": {
+          "median": 0.8026,
+          "beats_random": 0.7482
+        },
+        "ssfr": {
+          "median": 0.7346,
+          "beats_random": 0.7351
+        },
+        "redshift": {
+          "median": 0.0197,
+          "beats_random": 0.9884
+        }
+      },
+      "token_same_place_without_redshift": {
+        "mass": {
+          "median": 0.2884,
+          "beats_random": 0.9388
+        },
+        "sfr": {
+          "median": 0.8197,
+          "beats_random": 0.7448
+        },
+        "ssfr": {
+          "median": 0.595,
+          "beats_random": 0.8023
+        },
+        "redshift": {
+          "median": 0.0445,
+          "beats_random": 0.9508
+        }
+      },
+      "aion_prediction_same_place": {
+        "mass": {
+          "median": 0.1752,
+          "beats_random": 0.9756
+        },
+        "sfr": {
+          "median": 0.6251,
+          "beats_random": 0.8266
+        },
+        "ssfr": {
+          "median": 0.5175,
+          "beats_random": 0.833
+        },
+        "redshift": {
+          "median": 0.0116,
+          "beats_random": 0.9974
+        }
+      },
+      "aion_prediction_any_position": {
+        "mass": {
+          "median": 0.2468,
+          "beats_random": 0.9614
+        },
+        "sfr": {
+          "median": 0.6984,
+          "beats_random": 0.806
+        },
+        "ssfr": {
+          "median": 0.5415,
+          "beats_random": 0.8349
+        },
+        "redshift": {
+          "median": 0.0245,
+          "beats_random": 0.9947
+        }
+      },
+      "aion_prediction_same_place_without_redshift": {
+        "mass": {
+          "median": 0.2251,
+          "beats_random": 0.9527
+        },
+        "sfr": {
+          "median": 0.7221,
+          "beats_random": 0.7932
+        },
+        "ssfr": {
+          "median": 0.5667,
+          "beats_random": 0.8225
+        },
+        "redshift": {
+          "median": 0.0222,
+          "beats_random": 0.9809
+        }
+      },
+      "token_joint": {
+        "mass": {
+          "median": 0.2287,
+          "beats_random": 0.9644
+        },
+        "sfr": {
+          "median": 0.6267,
+          "beats_random": 0.8225
+        },
+        "ssfr": {
+          "median": 0.4656,
+          "beats_random": 0.8582
+        },
+        "redshift": {
+          "median": 0.0114,
+          "beats_random": 0.9887
+        }
+      },
+      "token_pca_1408": {
+        "mass": {
+          "median": 0.2278,
+          "beats_random": 0.9666
+        },
+        "sfr": {
+          "median": 0.6316,
+          "beats_random": 0.8206
+        },
+        "ssfr": {
+          "median": 0.4686,
+          "beats_random": 0.854
+        },
+        "redshift": {
+          "median": 0.0113,
+          "beats_random": 0.9887
+        }
+      },
+      "token_pca_704": {
+        "mass": {
+          "median": 0.2241,
+          "beats_random": 0.967
+        },
+        "sfr": {
+          "median": 0.6291,
+          "beats_random": 0.8173
+        },
+        "ssfr": {
+          "median": 0.4707,
+          "beats_random": 0.851
+        },
+        "redshift": {
+          "median": 0.0107,
+          "beats_random": 0.9891
+        }
+      },
+      "token_pca_352": {
+        "mass": {
+          "median": 0.2224,
+          "beats_random": 0.9659
+        },
+        "sfr": {
+          "median": 0.6348,
+          "beats_random": 0.8158
+        },
+        "ssfr": {
+          "median": 0.4764,
+          "beats_random": 0.8458
+        },
+        "redshift": {
+          "median": 0.0112,
+          "beats_random": 0.988
+        }
+      },
+      "aion_prediction_joint": {
+        "mass": {
+          "median": 0.2213,
+          "beats_random": 0.9629
+        },
+        "sfr": {
+          "median": 0.6842,
+          "beats_random": 0.8004
+        },
+        "ssfr": {
+          "median": 0.5326,
+          "beats_random": 0.821
+        },
+        "redshift": {
+          "median": 0.0244,
+          "beats_random": 0.9831
+        }
+      },
+      "aion": {
+        "mass": {
+          "median": 0.2127,
+          "beats_random": 0.9734
+        },
+        "sfr": {
+          "median": 0.5231,
+          "beats_random": 0.872
+        },
+        "ssfr": {
+          "median": 0.4127,
+          "beats_random": 0.8807
+        },
+        "redshift": {
+          "median": 0.0207,
+          "beats_random": 0.9944
+        }
+      },
+      "random": {
+        "mass": {
+          "median": 0.655,
+          "beats_random": 0.0
+        },
+        "sfr": {
+          "median": 1.0441,
+          "beats_random": 0.0
+        },
+        "ssfr": {
+          "median": 0.9803,
+          "beats_random": 0.0
+        },
+        "redshift": {
+          "median": 0.1175,
+          "beats_random": 0.0
+        }
+      }
+    }
+  },
+  "geometry": {
+    "queries": 2000,
+    "random": 0.000576,
+    "token": {
+      "blocks": {
+        "ls_image": 0.1469,
+        "ls_image_anywhere": 0.0219,
+        "hsc_image": 0.1897,
+        "hsc_image_anywhere": 0.0294,
+        "desi_spectrum": 0.136,
+        "desi_spectrum_anywhere": 0.0204,
+        "sdss_spectrum": 0.0988,
+        "sdss_spectrum_anywhere": 0.0046,
+        "redshift": 0.0941,
+        "ls_table": 0.5837,
+        "hsc_table": 0.3636
+      },
+      "joint": {
+        "joint": {
+          "same_place": 0.2656,
+          "any_position": 0.156
+        },
+        "pca_1408": {
+          "same_place": 0.2653,
+          "any_position": 0.158
+        },
+        "pca_704": {
+          "same_place": 0.2611,
+          "any_position": 0.1595
+        },
+        "pca_352": {
+          "same_place": 0.2492,
+          "any_position": 0.1583
+        }
+      }
+    },
+    "aion_prediction": {
+      "blocks": {
+        "ls_image": 0.4888,
+        "ls_image_anywhere": 0.0505,
+        "hsc_image": 0.9139,
+        "hsc_image_anywhere": 0.2046,
+        "desi_spectrum": 0.9755,
+        "desi_spectrum_anywhere": 0.7497,
+        "sdss_spectrum": 0.9765,
+        "sdss_spectrum_anywhere": 0.7713,
+        "redshift": 0.1373,
+        "ls_table": 0.9999,
+        "hsc_table": 0.9995
+      },
+      "joint": {
+        "joint": {
+          "same_place": 0.4826,
+          "any_position": 0.072
+        }
+      }
+    }
+  },
+  "maps": {
+    "token_search": {
+      "token_same_place": {
+        "15": 0.1573,
+        "100": 0.2689
+      },
+      "aion_prediction_same_place": {
+        "15": 0.0804,
+        "100": 0.2096
+      },
+      "aion": {
+        "15": 0.0447,
+        "100": 0.1146
+      }
+    },
+    "token_joint": {
+      "token_same_place": {
+        "15": 0.0952,
+        "100": 0.2069
+      },
+      "aion_prediction_same_place": {
+        "15": 0.1096,
+        "100": 0.2461
+      },
+      "aion": {
+        "15": 0.0727,
+        "100": 0.1484
+      }
+    },
+    "token_pca_1408": {
+      "token_same_place": {
+        "15": 0.0964,
+        "100": 0.2075
+      },
+      "aion_prediction_same_place": {
+        "15": 0.1118,
+        "100": 0.2469
+      },
+      "aion": {
+        "15": 0.0738,
+        "100": 0.1495
+      }
+    },
+    "token_pca_704": {
+      "token_same_place": {
+        "15": 0.0971,
+        "100": 0.2057
+      },
+      "aion_prediction_same_place": {
+        "15": 0.1124,
+        "100": 0.2434
+      },
+      "aion": {
+        "15": 0.0757,
+        "100": 0.1515
+      }
+    },
+    "token_pca_352": {
+      "token_same_place": {
+        "15": 0.0956,
+        "100": 0.2028
+      },
+      "aion_prediction_same_place": {
+        "15": 0.1114,
+        "100": 0.2423
+      },
+      "aion": {
+        "15": 0.077,
+        "100": 0.154
+      }
+    },
+    "aion_prediction_joint": {
+      "token_same_place": {
+        "15": 0.0628,
+        "100": 0.1484
+      },
+      "aion_prediction_same_place": {
+        "15": 0.1973,
+        "100": 0.3336
+      },
+      "aion": {
+        "15": 0.0532,
+        "100": 0.1157
+      }
+    },
+    "site": {
+      "token_same_place": {
+        "15": 0.0052,
+        "100": 0.0209
+      },
+      "aion_prediction_same_place": {
+        "15": 0.0055,
+        "100": 0.0234
+      },
+      "aion": {
+        "15": 0.0145,
+        "100": 0.0465
+      }
+    }
+  },
+  "memory": {
+    "peak_rss_mib": 76200.8,
+    "arrow_peak_mib": 221.2,
+    "resident_files_mib": 26418.4,
+    "resident_anonymous_mib": 2834.6
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "commit": "d1a2153",
+  "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
+  "date": "2026-11-18T18:57:09+00:00",
+  "environment": {
+    "cpu": {
+      "vendor_id": "GenuineIntel",
+      "cpu family": "6",
+      "model": "85",
+      "model name": "unknown"
+    },
+    "cpu_count": 14,
+    "omp_num_threads": "4",
+    "thread_pools": [
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 4,
+        "prefix": "libscipy_openblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/scipy.libs/libscipy_openblas-5f890258.so",
+        "version": "0.3.31.dev",
+        "threading_layer": "pthreads",
+        "architecture": "SkylakeX"
+      },
+      {
+        "user_api": "blas",
+        "internal_api": "openblas",
+        "num_threads": 4,
+        "prefix": "libscipy_openblas",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-f48b354e.so",
+        "version": "0.3.34.106.0",
+        "threading_layer": "pthreads",
+        "architecture": "SkylakeX"
+      },
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 4,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+        "version": null
+      },
+      {
+        "user_api": "openmp",
+        "internal_api": "openmp",
+        "num_threads": 4,
+        "prefix": "libgomp",
+        "filepath": "/.uv/.venv/lib/python3.12/site-packages/scikit_learn.libs/libgomp-e985bcbb.so.1.0.0",
+        "version": null
+      }
+    ]
+  },
+  "device": "Tesla T4",
+  "kept": [
+    "ls",
+    "hsc"
+  ],
+  "outlier": 0.15,
+  "inputs": {
+    "stored": {
+      "all": {
+        "galaxies": 4022,
+        "bias": 0.0,
+        "nmad": 0.0013,
+        "outlier_rate": 0.0015
+      },
+      "desi": {
+        "galaxies": 3994,
+        "bias": 0.0,
+        "nmad": 0.0013,
+        "outlier_rate": 0.0015
+      },
+      "sdss": {
+        "galaxies": 28,
+        "bias": 0.0006,
+        "nmad": 0.0015,
+        "outlier_rate": 0.0
+      }
+    },
+    "hidden": {
+      "all": {
+        "galaxies": 4022,
+        "bias": 0.0009,
+        "nmad": 0.0164,
+        "outlier_rate": 0.005
+      },
+      "desi": {
+        "galaxies": 3994,
+        "bias": 0.0009,
+        "nmad": 0.0164,
+        "outlier_rate": 0.0048
+      },
+      "sdss": {
+        "galaxies": 28,
+        "bias": 0.0021,
+        "nmad": 0.0098,
+        "outlier_rate": 0.0357
+      }
+    }
+  },
+  "memory": {
+    "peak_rss_mib": 29561.9,
+    "arrow_peak_mib": 57.2,
+    "resident_files_mib": 26433.7,
+    "resident_anonymous_mib": 1461.1
+  }
+}

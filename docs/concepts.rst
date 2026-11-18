@@ -20,7 +20,7 @@ Image                24 × 24 grid over the 96 × 96 px cutout,   4375 per token
                      one per 4 × 4 px cell (576)
 Spectrum             one per 25.6 Å from 3500 Å (272), plus one 1024 per token
                      for the flux normalization
-Catalog value      one per value: 12 Legacy Survey, 13 HSC    1024
+Catalog value        one per value: 12 Legacy Survey, 13 HSC    1024
 Redshift             one                                        1025, up to 6
 ==================== ========================================== ==============
 

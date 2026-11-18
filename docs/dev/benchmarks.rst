@@ -34,7 +34,7 @@ Does a query find the galaxies it describes, rather than the galaxies any query 
 ============== ================================ =======
 Pair           Value                            Mode
 ============== ================================ =======
-color         g − r                            images
+color          g − r                            images
 size           :term:`half-light radius`        images
 brightness     r magnitude                      images
 shape          :term:`axis ratio`               images

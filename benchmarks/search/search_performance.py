@@ -54,16 +54,18 @@ MATCHES = (32, 64, 128)
 SAMPLES = 4
 SOURCES = ["app", "benchmarks", "scripts", "modal_app.py"]
 REPORT = Path("docs/benchmarks/search_performance.json")
+MODULES = (
+    "benchmarks.search.search_performance",
+    "scripts.benchmarks.search_performance",
+    "scripts.benchmark",
+)
 ENTRY = (
-    "import json, sys\n"
+    "import importlib, json, sys\n"
+    "from pathlib import Path\n"
     "from app.config import DATASET_REVISION\n"
-    "try:\n"
-    "    from benchmarks.search.search_performance import stages\n"
-    "except ModuleNotFoundError:\n"
-    "    try:\n"
-    "        from scripts.benchmarks.search_performance import stages\n"
-    "    except ModuleNotFoundError:\n"
-    "        from scripts.benchmark import stages\n"
+    f"module = next(name for name in {MODULES!r}"
+    " if Path(name.replace('.', '/') + '.py').exists())\n"
+    "stages = importlib.import_module(module).stages\n"
     "print(json.dumps(stages.local(int(sys.argv[1]))"
     " | {'revision': DATASET_REVISION}))"
 )
@@ -218,6 +220,7 @@ def benchmark_search_performance(
     for name, source_archive in sources.items():
         with tarfile.open(fileobj=io.BytesIO(source_archive)) as bundle:
             bundle.extractall(root / name, filter="data")
+        (root / name / ".cache").symlink_to(CACHE_PATH)
 
     rounds: dict[str, list[dict[str, Any]]] = {name: [] for name in sources}
     for position, name in enumerate(order):

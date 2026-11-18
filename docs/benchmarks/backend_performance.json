@@ -1,11 +1,11 @@
 {
-  "commit": "791445d",
+  "commit": "d1a2153",
   "revision": "e250e43c35e63523ee3940c9543302c29ca56437",
-  "date": "2026-10-12T05:28:17+00:00",
+  "date": "2026-11-18T18:57:10+00:00",
   "server": {
     "cpu": 8,
     "memory_mb": [
-      8192,
+      4096,
       32768
     ],
     "max_inputs": 16,
@@ -32,47 +32,61 @@
           "version": "0.3.34.106.0",
           "threading_layer": "pthreads",
           "architecture": "Haswell"
+        },
+        {
+          "user_api": "openmp",
+          "internal_api": "openmp",
+          "num_threads": 1,
+          "prefix": "libgomp",
+          "filepath": "/.uv/.venv/lib/python3.12/site-packages/torch/lib/libgomp.so.1",
+          "version": null
         }
       ]
     },
     "cold_ms": {
-      "meta": 52609.864,
-      "search": 2057.704,
-      "text search": 39906.17,
-      "image": 9035.276,
-      "spectrum": 371.514,
-      "table": 339.84
+      "login": 18727.199,
+      "search": 1779.717,
+      "whole-mode search": 860.212,
+      "text search": 96334.477,
+      "image": 8812.603,
+      "spectrum": 275.86,
+      "table": 219.484
     },
     "warm": {
-      "meta": {
+      "login": {
         "runs": 30,
-        "p50_ms": 334.862,
-        "p95_ms": 341.74
+        "p50_ms": 198.047,
+        "p95_ms": 208.82
       },
       "search": {
         "runs": 30,
-        "p50_ms": 451.078,
-        "p95_ms": 684.886
+        "p50_ms": 279.019,
+        "p95_ms": 428.401
+      },
+      "whole-mode search": {
+        "runs": 30,
+        "p50_ms": 243.254,
+        "p95_ms": 258.599
       },
       "text search": {
         "runs": 30,
-        "p50_ms": 481.759,
-        "p95_ms": 612.387
+        "p50_ms": 605.422,
+        "p95_ms": 625.416
       },
       "image": {
         "runs": 30,
-        "p50_ms": 347.745,
-        "p95_ms": 362.22
+        "p50_ms": 226.416,
+        "p95_ms": 278.076
       },
       "spectrum": {
         "runs": 30,
-        "p50_ms": 344.345,
-        "p95_ms": 363.229
+        "p50_ms": 208.18,
+        "p95_ms": 222.733
       },
       "table": {
         "runs": 30,
-        "p50_ms": 343.957,
-        "p95_ms": 358.334
+        "p50_ms": 209.969,
+        "p95_ms": 224.659
       }
     }
   }
