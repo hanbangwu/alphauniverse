@@ -130,7 +130,7 @@ export function spectrumQuery(galaxy: number | null, survey: SpectrumSurvey) {
 
 export function spectrumAionPredictionQuery(galaxy: number | null, survey: SpectrumSurvey) {
   return queryOptions({
-    queryKey: ['spectrum', galaxy, survey, 'aion_prediction'] as const,
+    queryKey: ['spectrum', galaxy, survey, 'prediction'] as const,
     queryFn:
       galaxy === null
         ? skipToken

@@ -19,7 +19,7 @@
   const matched = $derived(coverage.data?.[survey] ?? false)
 </script>
 
-{#if matched || (coverage.data && view.predictions.value)}
+{#if matched || (coverage.data && view.dataSource.value === 'prediction')}
   {@render children(matched)}
 {:else if coverage.data}
   <p class="text-xs text-muted-foreground">No {SURVEYS[survey]} {kind}</p>

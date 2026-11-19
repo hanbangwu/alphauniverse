@@ -787,7 +787,7 @@ def search_performance():
     timings = (
         {
             "agreement matrix build": current["matrices"]["agreements"],
-            "Population map": current["matrices"]["saliency"],
+            "All query map": current["matrices"]["saliency"],
         }
         | {
             f"whole search, {matches.replace('=', ' ')}": figures

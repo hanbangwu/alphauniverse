@@ -16,10 +16,10 @@
 </script>
 
 <div class="relative flex flex-1 flex-col">
-  <div class="flex flex-1 flex-col" inert={view.wholeModes.value}>
+  <div class="flex flex-1 flex-col" inert={view.searchBy.value === 'whole'}>
     {@render children()}
   </div>
-  {#if view.wholeModes.value}
+  {#if view.searchBy.value === 'whole'}
     {@const selected = view.modes.has(mode)}
     <button
       type="button"

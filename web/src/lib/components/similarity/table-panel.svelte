@@ -39,7 +39,7 @@
   }
 
   function chosen(row: TableRow): boolean {
-    if (!view.wholeModes.value)
+    if (view.searchBy.value === 'patch')
       return row.table_value !== null && selected.includes(row.table_value)
     const mode = TABLE_MODES[row.section]
     return mode !== undefined && view.modes.has(mode)
@@ -54,7 +54,7 @@
       heat && !Number.isNaN(score)
         ? paint(heat(score), mask?.[row.table_value] === 0 ? 0 : 1)
         : paint(palette(row.token), tokenAlpha(picked))
-    return picked && !view.wholeModes.value
+    return picked && view.searchBy.value === 'patch'
       ? `${style}; outline: 1px solid ${SELECTED}; outline-offset: -1px`
       : style
   }
@@ -79,7 +79,7 @@
             <span class="sr-only">Name</span>
           </Table.Head>
           <Table.Head class="h-7 px-0 text-right font-normal">Value</Table.Head>
-          {#if view.predictions.value}
+          {#if view.dataSource.value === 'prediction'}
             <Table.Head class="h-7 pr-0 pl-3 text-right font-normal">AION</Table.Head>
           {/if}
         </Table.Row>
@@ -102,7 +102,7 @@
                   type="checkbox"
                   class="accent-primary disabled:cursor-not-allowed"
                   checked={chosen(row)}
-                  disabled={row.token === null || view.wholeModes.value}
+                  disabled={row.token === null || view.searchBy.value === 'whole'}
                   onchange={() => ontoggle(tableValue)}
                   aria-label={`Query ${row.column}`}
                 />
@@ -124,7 +124,7 @@
             <Table.Cell class="px-0 py-1.5 text-right font-mono tabular-nums">
               {format(row.value)}
             </Table.Cell>
-            {#if view.predictions.value}
+            {#if view.dataSource.value === 'prediction'}
               <Table.Cell class="py-1.5 pr-0 pl-3 text-right font-mono tabular-nums">
                 {format(row.aion_prediction)}
               </Table.Cell>
@@ -143,7 +143,9 @@
     {table.error.message}
   </p>
 {:else}
-  <div class="grid w-full items-start gap-5 md:grid-cols-2">
+  <div
+    class="grid w-full grid-cols-[repeat(auto-fill,minmax(min(20rem,100%),1fr))] items-start gap-5"
+  >
     {#each groups as [section, rows] (section)}
       {@const mode = TABLE_MODES[section]}
       {#if mode}

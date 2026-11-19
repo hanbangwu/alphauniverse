@@ -33,7 +33,7 @@ Galaxies are named by their Legacy Survey DR10 object ID. A galaxy shows its pos
 See what AION predicts
 ----------------------
 
-The **AION predictions** switch shows the galaxy's :term:`AION predictions <AION prediction>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalog values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalized. An AION prediction is AION's expectation, not a measurement.
+**Data source**: **Prediction** shows the galaxy's :term:`AION predictions <AION prediction>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalog values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalized. An AION prediction is AION's expectation, not a measurement.
 
 Find similar galaxies
 ---------------------
@@ -45,8 +45,8 @@ Open a galaxy, start a search and pick what should match: image cells, spectrum 
 - A match that lacks an observation you selected is ranked on AION's prediction of it, and says so.
 - Click a match's ID to search from it.
 - **Export as ECSV** saves your galaxy and its matches as an :term:`ECSV` table: ID, position, similarity, and each map, empty where a galaxy lacks that observation. The header records what you selected.
-- **Whole modes** compares entire observations instead: click an image, a spectrum or a group of catalog values. Each match then shows how much each observation contributed.
-- The **This galaxy** and **Population** maps shade your galaxy to show what a selection picks out (:doc:`methods/query-maps`).
+- **Whole mode**, in place of **Patch**, compares entire observations instead: click an image, a spectrum or a group of catalog values. Each match then shows how much each observation contributed.
+- **Highlight by** (**Self** or **All**) shades your galaxy to show what a selection picks out (:doc:`methods/query-maps`).
 
 :doc:`methods/similarity-search` explains the ranking.
 

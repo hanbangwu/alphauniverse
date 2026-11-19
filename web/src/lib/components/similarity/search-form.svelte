@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button'
+  import * as NativeSelect from '$lib/components/ui/native-select'
   import { Switch } from '$lib/components/ui/switch'
-  import * as Tabs from '$lib/components/ui/tabs'
   import { TOKEN_MODES } from '$lib/data/modes'
   import { getMask, getView } from '$lib/state/app.svelte'
   import MatchCount from './match-count.svelte'
@@ -22,16 +22,20 @@
   }}
 >
   <label class="flex items-center gap-2 text-sm font-medium">
-    <Switch bind:checked={view.wholeModes.value} />
-    Whole modes
+    Search by
+    <NativeSelect.Root size="sm" bind:value={view.searchBy.value}>
+      <NativeSelect.Option value="patch">Patch</NativeSelect.Option>
+      <NativeSelect.Option value="whole">Whole mode</NativeSelect.Option>
+    </NativeSelect.Root>
   </label>
-  {#if !view.wholeModes.value}
-    <Tabs.Root bind:value={similarity.layer.value}>
-      <Tabs.List aria-label="Query map">
-        <Tabs.Trigger value="galaxy">This galaxy</Tabs.Trigger>
-        <Tabs.Trigger value="population">Population</Tabs.Trigger>
-      </Tabs.List>
-    </Tabs.Root>
+  {#if view.searchBy.value === 'patch'}
+    <label class="flex items-center gap-2 text-sm font-medium">
+      Highlight by
+      <NativeSelect.Root size="sm" bind:value={similarity.layer.value}>
+        <NativeSelect.Option value="self">Self</NativeSelect.Option>
+        <NativeSelect.Option value="all">All</NativeSelect.Option>
+      </NativeSelect.Root>
+    </label>
   {/if}
   <label class="flex items-center gap-2 text-sm font-medium">
     <Switch
@@ -40,10 +44,12 @@
     />
     Mask
   </label>
-  <label class="flex items-center gap-2 text-sm font-medium">
-    <Switch bind:checked={display.invert.value} disabled={!display.on.value} />
-    Invert
-  </label>
+  {#if display.on.value}
+    <label class="flex items-center gap-2 text-sm font-medium">
+      <Switch bind:checked={display.invert.value} />
+      Invert
+    </label>
+  {/if}
   <div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2">
     <MatchCount />
     <Button type="submit" size="sm" disabled={similarity.draft === null}>Search</Button>

@@ -15,5 +15,5 @@
 </script>
 
 <PanelFrame>
-  <GalaxyThumb {galaxy} {survey} predicted={view.predictions.value} />
+  <GalaxyThumb {galaxy} {survey} predicted={view.dataSource.value === 'prediction'} />
 </PanelFrame>

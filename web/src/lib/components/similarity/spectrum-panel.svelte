@@ -35,7 +35,7 @@
   const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, survey))
   const tokens = createQuery(() => spectrumTokensQuery(matched && !map ? galaxy : null, survey))
   const prediction = createQuery(() =>
-    spectrumAionPredictionQuery(view.predictions.value ? galaxy : null, survey)
+    spectrumAionPredictionQuery(view.dataSource.value === 'prediction' ? galaxy : null, survey)
   )
 
   const cells = $derived(map ?? tokens.data ?? null)
@@ -51,8 +51,6 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <span class="text-sm font-medium">{label}</span>
-
   <PanelFrame
     busy={spectrum.isFetching || tokens.isFetching || prediction.isFetching}
     class="aspect-2/1 bg-card md:aspect-5/1"

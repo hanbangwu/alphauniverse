@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PredictionsSwitch from '$lib/components/common/predictions-switch.svelte'
+  import DataSourceSelect from '$lib/components/common/data-source-select.svelte'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Separator } from '$lib/components/ui/separator/index.js'
@@ -33,7 +33,7 @@
   >
     <Dialog.Header class="flex-row items-center gap-6">
       <Dialog.Title>Search from <GalaxyName {galaxy} /></Dialog.Title>
-      <PredictionsSwitch />
+      <DataSourceSelect />
     </Dialog.Header>
 
     <SearchForm />

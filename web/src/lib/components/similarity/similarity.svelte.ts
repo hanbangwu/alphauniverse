@@ -47,30 +47,30 @@ function union(domains: (Extent | undefined)[]): Extent | null {
 
 class ModeLayer {
   readonly #cosines: CreateQueryResult<Float32Array>
-  readonly #own: () => boolean
+  readonly #self: () => boolean
   readonly current: Layered | null
 
   constructor(
     mode: CosineMode,
     galaxy: number,
     selected: () => number[],
-    own: () => boolean,
+    self: () => boolean,
     saliency: () => SaliencyResult | null
   ) {
-    this.#own = own
+    this.#self = self
     this.#cosines = createQuery(() =>
-      cosinesQuery(own() && selected().length ? galaxy : null, mode)
+      cosinesQuery(self() && selected().length ? galaxy : null, mode)
     )
     this.current = $derived.by(() => {
-      const population = saliency()
+      const all = saliency()
       const cosines = this.#cosines.data
-      const values = population ? population.maps[mode] : cosines ? best(cosines, selected()) : null
+      const values = all ? all.maps[mode] : cosines ? best(cosines, selected()) : null
       return values && { values, ...scale(extent(values)) }
     })
   }
 
   get error(): string | null {
-    if (!this.#own()) return null
+    if (!this.#self()) return null
     return this.#cosines.isError ? this.#cosines.error.message : null
   }
 }
@@ -105,7 +105,7 @@ export class Similarity {
     this.galaxy = galaxy
     this.layer = new Field(DEFAULTS.layer, stored('layer'))
 
-    const whole = $derived(view.wholeModes.value)
+    const whole = $derived(view.searchBy.value === 'whole')
     const selections = $derived(byMode((mode) => view.tokens[mode].value))
     const selection = $derived(
       whole
@@ -121,7 +121,7 @@ export class Similarity {
     this.#selected = $derived(selection !== null)
     this.modes = $derived(
       (Object.keys(MODES) as ModeName[]).filter(
-        (mode) => view.modes.has(mode) && (!isTokenMode(mode) || this.#shown(mode))
+        (mode) => view.modes.has(mode) && (!isTokenMode(mode) || this.shown(mode))
       )
     )
     this.draft = $derived(
@@ -138,16 +138,16 @@ export class Similarity {
     )
     this.#result = createQuery(() => similarityQuery(view.searched.value))
     this.#coverage = createQuery(() => coverageQuery(galaxy))
-    const own = $derived(this.layer.value === 'galaxy')
-    this.#saliency = createQuery(() => saliencyQuery(own ? null : selection))
-    const saliency = $derived(own || !selection ? null : (this.#saliency.data ?? null))
+    const self = $derived(this.layer.value === 'self')
+    this.#saliency = createQuery(() => saliencyQuery(self ? null : selection))
+    const saliency = $derived(self || !selection ? null : (this.#saliency.data ?? null))
     this.#layers = byMode(
       (mode) =>
         new ModeLayer(
           mode,
           galaxy,
           () => this.tokensOf(mode),
-          () => own,
+          () => self,
           () => saliency
         )
     )
@@ -188,12 +188,12 @@ export class Similarity {
 
   tokensOf(mode: CosineMode): number[] {
     const { view } = this.#app
-    return view.wholeModes.value ? [] : view.tokens[mode].value
+    return view.searchBy.value === 'whole' ? [] : view.tokens[mode].value
   }
 
   toggler(mode: CosineMode, matched: boolean): ((index: number) => void) | undefined {
     const { view } = this.#app
-    return matched && !view.wholeModes.value
+    return matched && view.searchBy.value === 'patch'
       ? (index) => view.tokens[mode].toggle(index)
       : undefined
   }
@@ -207,7 +207,7 @@ export class Similarity {
   }
 
   get saliencyError(): string | null {
-    if (this.layer.value === 'galaxy') return null
+    if (this.layer.value === 'self') return null
     return this.#saliency.isError ? this.#saliency.error.message : null
   }
 
@@ -223,15 +223,15 @@ export class Similarity {
     return this.#layerDomain(SPECTRUM_MODES)
   }
 
-  #shown(mode: CosineMode): boolean {
+  shown(mode: CosineMode): boolean {
     const survey = surveyOf(mode)
-    return this.#app.view.predictions.value || (this.#coverage.data?.[survey] ?? false)
+    return (
+      this.#app.view.dataSource.value === 'prediction' || (this.#coverage.data?.[survey] ?? false)
+    )
   }
 
   #layerDomain(modes: readonly CosineMode[]): Extent | null {
-    return union(
-      modes.filter((mode) => this.#shown(mode)).map((mode) => this.layerOf(mode)?.domain)
-    )
+    return union(modes.filter((mode) => this.shown(mode)).map((mode) => this.layerOf(mode)?.domain))
   }
 
   layerError(mode: CosineMode): string | null {
@@ -249,11 +249,11 @@ export class Similarity {
   }
 
   shows(survey: string, index: number): boolean {
-    return this.#app.view.predictions.value || this.observes(survey, index)
+    return this.#app.view.dataSource.value === 'prediction' || this.observes(survey, index)
   }
 
   get layerStale(): boolean {
-    return this.layer.value !== 'galaxy' && this.#selected && this.#saliency.isPlaceholderData
+    return this.layer.value === 'all' && this.#selected && this.#saliency.isPlaceholderData
   }
 
   get stale(): boolean {
@@ -290,7 +290,7 @@ export class Similarity {
   readonly correlation: Caption = (value) => `partial correlation ${value.toFixed(DECIMALS)}`
 
   get layerCaption(): Caption {
-    return this.layer.value === 'galaxy' ? this.cosine : this.correlation
+    return this.layer.value === 'self' ? this.cosine : this.correlation
   }
 
   readonly caption: Caption = (value) => `token ${value}`

@@ -1,7 +1,7 @@
 <script lang="ts">
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
+  import DataSourceSelect from '$lib/components/common/data-source-select.svelte'
   import Observed from '$lib/components/common/observed.svelte'
-  import PredictionsSwitch from '$lib/components/common/predictions-switch.svelte'
   import SimilarityDialog from '$lib/components/similarity/similarity-dialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Drawer from '$lib/components/ui/drawer'
@@ -61,7 +61,7 @@
           </div>
         {/if}
 
-        <PredictionsSwitch />
+        <DataSourceSelect />
 
         <Button variant="secondary" size="sm" onclick={() => (view.explorer.value = true)}>
           Search

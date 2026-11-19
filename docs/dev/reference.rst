@@ -61,8 +61,8 @@ Feature                     Code
 =========================== ========================================
 Similarity search           ``app.search.pql.search``
 Whole-mode search           ``app.search.pql.mode_search``
-This galaxy map             ``app.search.pql.cosines``
-Population map              ``app.search.pql.saliency``
+Self query map              ``app.search.pql.cosines``
+All query map               ``app.search.pql.saliency``
 Text search                 ``app.text_search.text_search.text_search``
 The map                     ``app.projection.build.maps``, run by ``generate_maps``
 =========================== ========================================
@@ -161,7 +161,7 @@ Every endpoint needs the password in the ``access-password`` Modal secret's ``AC
 
 Every other endpoint is ``GET``; ``/projections/{projection}`` and ``/galaxies/property`` also answer ``HEAD``. A request whose ``If-None-Match`` matches the response's ETag gets ``304 Not Modified``. Artifact files carry Starlette's ETag, from size and modification time; every other response's ETag is an MD5 of its body. Every response carries ``Cache-Control: no-cache``.
 
-The first Same place Population map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the 8 most recently used. An Any position map builds no matrix: it computes the rows of its sample of galaxies (:doc:`/methods/query-maps`), and the server keeps them for the 8 most recently used pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
+The first Same place All query map (``/saliency``) on a galaxy builds its agreement matrix, the log overlap of every galaxy at every slot, and the server keeps the 8 most recently used. An Any position map builds no matrix: it computes the rows of its sample of galaxies (:doc:`/methods/query-maps`), and the server keeps them for the 8 most recently used pairs of galaxy and Any position modes. These computations, the matrix builds and the sums of a new Any position search run one at a time.
 
 .. openapi:: ../../web/openapi.json
 

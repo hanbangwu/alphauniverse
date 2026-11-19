@@ -62,8 +62,6 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <span class="text-sm font-medium">{label}</span>
-
   <div
     role="presentation"
     onpointerenter={() => onhover?.(true)}
@@ -91,7 +89,7 @@
           class="pointer-events-none absolute inset-0 mix-blend-screen transition-opacity duration-150 ease-in-out"
           style:opacity={imageOpacity}
         >
-          <GalaxyThumb {galaxy} {survey} predicted={view.predictions.value} />
+          <GalaxyThumb {galaxy} {survey} predicted={view.dataSource.value === 'prediction'} />
         </div>
       {/if}
       <svg

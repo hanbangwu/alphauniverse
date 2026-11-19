@@ -1,7 +1,7 @@
 <script lang="ts">
+  import type { CosineMode } from '$lib/client'
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
   import Observed from '$lib/components/common/observed.svelte'
-  import GalaxyName from '$lib/components/galaxy-name.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Switch } from '$lib/components/ui/switch'
   import {
@@ -14,6 +14,7 @@
     spectrumMode
   } from '$lib/data/modes'
   import type { ModeName } from '$lib/data/similarity'
+  import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import type { Field } from '$lib/state/field.svelte'
   import type { IndexListField } from '$lib/state/fields.svelte'
@@ -27,7 +28,7 @@
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
 
-  const whole = $derived(view.wholeModes.value)
+  const whole = $derived(view.searchBy.value === 'whole')
 
   function count(modes: readonly ModeName[], fields: IndexListField[]): number {
     return whole
@@ -41,30 +42,28 @@
   }
 </script>
 
-{#snippet controls(
-  noun: string,
-  modes: readonly ModeName[],
-  fields: IndexListField[],
-  anywhere?: Field<boolean>
-)}
-  {@const selected = count(modes, fields)}
-  {#if selected}
-    <span class="text-xs text-muted-foreground">{selected} selected</span>
+{#snippet controls(noun: string, modes: readonly ModeName[], fields: IndexListField[])}
+  {#if count(modes, fields)}
     <Button
       variant="ghost"
-      size="xs"
+      size="sm"
       aria-label="Clear {noun} selection"
       onclick={() => clear(modes, fields)}
     >
       Clear
     </Button>
   {/if}
-  {#if anywhere}
-    <label class="ml-auto flex items-center gap-2 text-xs">
-      <Switch size="sm" aria-label="Any position for {noun} tokens" bind:checked={anywhere.value} />
-      Any position
-    </label>
-  {/if}
+{/snippet}
+
+{#snippet anyPosition(noun: string, modes: readonly CosineMode[], anywhere: Field<boolean>)}
+  <label class="flex items-center gap-2 text-sm font-medium">
+    <Switch
+      aria-label="Any position for {noun} tokens"
+      bind:checked={anywhere.value}
+      disabled={!modes.some((mode) => similarity.shown(mode))}
+    />
+    Any position
+  </label>
 {/snippet}
 
 <div class={['flex flex-col gap-6 transition-opacity', similarity.layerStale && 'opacity-50']}>
@@ -73,23 +72,25 @@
       {@render controls(
         'image',
         IMAGE_MODES,
-        IMAGE_MODES.map((mode) => view.tokens[mode]),
-        view.imageAnywhere
+        IMAGE_MODES.map((mode) => view.tokens[mode])
       )}
     {/snippet}
-    <div class="flex flex-col gap-2">
-      <span class="text-sm font-medium"><GalaxyName galaxy={similarity.galaxy} /></span>
-      <div class="flex max-w-2xl flex-col gap-5">
-        {#each IMAGE_SURVEYS as survey (survey)}
-          <Observed galaxy={similarity.galaxy} {survey} kind="image">
-            {#snippet children(matched)}
+    {@render anyPosition('image', IMAGE_MODES, view.imageAnywhere)}
+    <div class="flex max-w-2xl flex-col gap-5">
+      {#each IMAGE_SURVEYS as survey (survey)}
+        <Observed galaxy={similarity.galaxy} {survey} kind="image">
+          {#snippet children(matched)}
+            <section class="flex flex-col gap-2">
+              <h3 class="text-xs tracking-wider text-muted-foreground uppercase">
+                {SURVEYS[survey]}
+              </h3>
               <WholeMode mode={imageMode(survey)}>
                 <QueryImage {survey} {matched} />
               </WholeMode>
-            {/snippet}
-          </Observed>
-        {/each}
-      </div>
+            </section>
+          {/snippet}
+        </Observed>
+      {/each}
     </div>
     {#if display.on.value && similarity.imageLayerDomain}
       <MaskControls
@@ -105,34 +106,39 @@
       {@render controls(
         'spectrum',
         SPECTRUM_MODES,
-        SPECTRUM_MODES.map((mode) => view.tokens[mode]),
-        view.spectrumAnywhere
+        SPECTRUM_MODES.map((mode) => view.tokens[mode])
       )}
     {/snippet}
+    {@render anyPosition('spectrum', SPECTRUM_MODES, view.spectrumAnywhere)}
     {#each SPECTRUM_SURVEYS as survey (survey)}
       {@const mode = spectrumMode(survey)}
       {@const layer = similarity.layerOf(mode)}
       <Observed galaxy={similarity.galaxy} {survey} kind="spectrum">
         {#snippet children(matched)}
-          <WholeMode {mode}>
-            <SpectrumPanel
-              galaxy={similarity.galaxy}
-              {survey}
-              {matched}
-              map={layer?.values ?? null}
-              heat={layer?.heat ?? null}
-              mask={layer &&
-                similarity.maskOf(
-                  layer.values,
-                  similarity.spectrumLayerDomain,
-                  display.spectra.query
-                )}
-              caption={similarity.layerCaption}
-              selected={similarity.tokensOf(mode)}
-              ontoggle={similarity.toggler(mode, matched)}
-              error={similarity.layerError(mode)}
-            />
-          </WholeMode>
+          <section class="flex flex-col gap-2">
+            <h3 class="text-xs tracking-wider text-muted-foreground uppercase">
+              {SURVEYS[survey]}
+            </h3>
+            <WholeMode {mode}>
+              <SpectrumPanel
+                galaxy={similarity.galaxy}
+                {survey}
+                {matched}
+                map={layer?.values ?? null}
+                heat={layer?.heat ?? null}
+                mask={layer &&
+                  similarity.maskOf(
+                    layer.values,
+                    similarity.spectrumLayerDomain,
+                    display.spectra.query
+                  )}
+                caption={similarity.layerCaption}
+                selected={similarity.tokensOf(mode)}
+                ontoggle={similarity.toggler(mode, matched)}
+                error={similarity.layerError(mode)}
+              />
+            </WholeMode>
+          </section>
         {/snippet}
       </Observed>
     {/each}

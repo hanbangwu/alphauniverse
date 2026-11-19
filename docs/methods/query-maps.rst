@@ -1,17 +1,17 @@
 Query maps
 ==========
 
-Before or after a search, the query galaxy's image and spectrum can be shaded to show what a selection picks out. **Population** also colors the catalog values.
+Before or after a search, the query galaxy's image and spectrum can be shaded to show what a selection picks out. **Highlight by** chooses how: **Self** or **All**. **All** also colors the catalog values.
 
-This galaxy
------------
+Self
+----
 
-**This galaxy** shades each slot :math:`c` of an image or spectrum mode :math:`m` by how alike AION predicts it is to the selection in that mode: :math:`\max_{s \in S_m} \cos(p_{q,s}, p_{q,c})`. A selected slot scores 1, and other slots score high where AION expects the same kind of content. Catalog values are not shaded, since each has its own codes.
+**Self** shades each slot :math:`c` of an image or spectrum mode :math:`m` by how alike AION predicts it is to the selection in that mode: :math:`\max_{s \in S_m} \cos(p_{q,s}, p_{q,c})`. A selected slot scores 1, and other slots score high where AION expects the same kind of content. Catalog values are not shaded, since each has its own codes.
 
-Population
-----------
+All
+---
 
-**Population** asks: across the field, where does agreeing with :math:`q` go with matching the selection? For every other galaxy :math:`g` it takes
+**All** asks: across the field, where does agreeing with :math:`q` go with matching the selection? For every other galaxy :math:`g` it takes
 
 - :math:`T(g) = \sum_{s \in S} \log O_s(q, g)`, its score on the selection :math:`S` over every mode, unstandardized;
 - :math:`A_c(g) = \log O_c(q, g)`, its agreement with :math:`q` at slot :math:`c`;

@@ -24,15 +24,15 @@ export class ViewState {
   readonly tableValues = new IndexListField()
   readonly imageAnywhere = new Field(false)
   readonly spectrumAnywhere = new Field(false)
-  readonly wholeModes: Field<boolean>
+  readonly searchBy: Field<Values['search_by']>
   readonly modes = new ListField<ModeName>()
   readonly searched: Field<SearchQuery | null>
   readonly explorer: Field<boolean>
-  readonly predictions: Field<boolean>
-  readonly open = new PersistedState('open-groups', {
+  readonly dataSource: Field<Values['data_source']>
+  readonly open = new PersistedState('open-sections', {
     images: true,
-    spectra: true,
-    catalog: true
+    spectra: false,
+    catalog: false
   })
 
   constructor(private readonly mosaic: MosaicState) {
@@ -41,10 +41,10 @@ export class ViewState {
     this.property = new EnumField(PROPERTIES, stored('property'))
     this.source = new EnumField(SOURCES, stored('source'))
     this.galaxy = new Field(DEFAULTS.galaxy, stored('galaxy'))
-    this.wholeModes = new Field(DEFAULTS.whole, stored('whole'))
+    this.searchBy = new Field(DEFAULTS.search_by, stored('search_by'))
     this.searched = new Field<SearchQuery | null>(null, searched())
     this.explorer = new Field(DEFAULTS.explorer, stored('explorer'))
-    this.predictions = new Field(DEFAULTS.predictions, stored('predictions'))
+    this.dataSource = new Field(DEFAULTS.data_source, stored('data_source'))
   }
 
   get predictable(): boolean {

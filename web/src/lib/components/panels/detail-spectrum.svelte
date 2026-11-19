@@ -19,7 +19,7 @@
 
   const spectrum = createQuery(() => spectrumQuery(matched ? galaxy : null, survey))
   const prediction = createQuery(() =>
-    spectrumAionPredictionQuery(view.predictions.value ? galaxy : null, survey)
+    spectrumAionPredictionQuery(view.dataSource.value === 'prediction' ? galaxy : null, survey)
   )
   const label = $derived(SURVEYS[survey])
 </script>

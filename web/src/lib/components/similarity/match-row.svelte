@@ -40,17 +40,22 @@
           {#if similarity.shows(survey, index)}
             {@const mode = imageMode(survey)}
             {@const values = similarity.mapAt(mode, index)}
-            <div class="grid items-end gap-5 md:grid-cols-2">
-              <DetailImage {galaxy} {survey} />
-              <ImageTokenPanel
-                label={SURVEYS[survey]}
-                {values}
-                color={similarity.scales?.[mode]?.heat ?? null}
-                mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
-                title={similarity.score}
-                selected={similarity.outlinesAt(mode, index)}
-              />
-            </div>
+            <section class="flex flex-col gap-2">
+              <h3 class="text-xs tracking-wider text-muted-foreground uppercase">
+                {SURVEYS[survey]}
+              </h3>
+              <div class="grid items-end gap-5 md:grid-cols-2">
+                <DetailImage {galaxy} {survey} />
+                <ImageTokenPanel
+                  label={SURVEYS[survey]}
+                  {values}
+                  color={similarity.scales?.[mode]?.heat ?? null}
+                  mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
+                  title={similarity.score}
+                  selected={similarity.outlinesAt(mode, index)}
+                />
+              </div>
+            </section>
           {/if}
         {/each}
       </div>
@@ -69,16 +74,19 @@
       {#if similarity.shows(survey, index)}
         {@const mode = spectrumMode(survey)}
         {@const values = similarity.mapAt(mode, index)}
-        <SpectrumPanel
-          {galaxy}
-          {survey}
-          matched={similarity.observes(survey, index)}
-          map={values}
-          mask={similarity.maskOf(values, similarity.spectrumDomain, display.spectra.matches)}
-          heat={similarity.scales?.[mode]?.heat ?? null}
-          caption={similarity.score}
-          selected={similarity.outlinesAt(mode, index)}
-        />
+        <section class="flex flex-col gap-2">
+          <h3 class="text-xs tracking-wider text-muted-foreground uppercase">{SURVEYS[survey]}</h3>
+          <SpectrumPanel
+            {galaxy}
+            {survey}
+            matched={similarity.observes(survey, index)}
+            map={values}
+            mask={similarity.maskOf(values, similarity.spectrumDomain, display.spectra.matches)}
+            heat={similarity.scales?.[mode]?.heat ?? null}
+            caption={similarity.score}
+            selected={similarity.outlinesAt(mode, index)}
+          />
+        </section>
       {/if}
     {/each}
   {/if}
