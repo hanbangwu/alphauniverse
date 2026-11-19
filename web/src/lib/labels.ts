@@ -57,12 +57,5 @@ export const UNITS: Record<Property, string> = {
   r_magnitude: 'mag',
   axis_ratio: 'b/a',
   halpha_ew: 'Å',
-  dn4000: 'ratio'
+  dn4000: '1'
 }
-
-export const SOURCES = {
-  measured: 'Measured first',
-  predicted: 'Predicted'
-}
-
-export type Source = keyof typeof SOURCES

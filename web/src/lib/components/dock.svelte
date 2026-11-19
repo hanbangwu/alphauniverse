@@ -13,11 +13,11 @@
 
 <Tooltip.Provider>
   <header
-    class="glass absolute top-3 left-1/2 z-10 grid -translate-x-1/2 grid-cols-[1fr_auto_1fr] items-center gap-4 rounded-2xl p-1 pl-3"
+    class="glass absolute top-3 left-1/2 z-10 grid -translate-x-1/2 grid-cols-[1fr_auto_1fr] items-center gap-4 rounded-2xl p-1.5 pl-3.5"
   >
     <span>
-      <img src={markLight} alt="alphaUniverse" class="size-6 dark:hidden" />
-      <img src={markDark} alt="alphaUniverse" class="hidden size-6 dark:block" />
+      <img src={markLight} alt="alphaUniverse" class="size-7 dark:hidden" />
+      <img src={markDark} alt="alphaUniverse" class="hidden size-7 dark:block" />
     </span>
 
     <Tabs.List variant="bare">

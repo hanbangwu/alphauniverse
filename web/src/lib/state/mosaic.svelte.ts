@@ -4,7 +4,7 @@ import { BINS } from '$lib/color'
 import { extent } from '$lib/data/scores'
 import type { Property } from '$lib/labels'
 import { Coordinator, Selection, wasmConnector } from '@uwdata/mosaic-core'
-import { Query, column, count, isBetween, loadParquet } from '@uwdata/mosaic-sql'
+import { Query, column, isBetween, loadParquet } from '@uwdata/mosaic-sql'
 import { polygonContains } from 'd3-polygon'
 import type { Point, Rectangle } from 'embedding-atlas'
 import { SvelteSet } from 'svelte/reactivity'
@@ -18,14 +18,10 @@ function bounds(polygon: Point[]): Rectangle {
 export interface Values {
   name: string
   property: Property
-  faded: boolean
   low: number
   high: number
   least: number
   most: number
-  measured: number
-  predicted: number
-  missing: number
 }
 
 export interface Colored extends Values {
@@ -115,10 +111,7 @@ export class MosaicState {
     const summary = (
       await database.query(`
         SELECT quantile_cont(value, 0.01) AS low, quantile_cont(value, 0.99) AS high,
-          min(value) AS least, max(value) AS most,
-          count(value) FILTER (WHERE NOT predicted) AS measured,
-          count(value) FILTER (WHERE predicted) AS predicted,
-          count(*) - count(value) AS missing
+          min(value) AS least, max(value) AS most
         FROM (${shown})`)
     ).get(0)
     const low = Number(summary.low)
@@ -136,14 +129,10 @@ export class MosaicState {
     return {
       name,
       property,
-      faded,
       low,
       high,
       least: Number(summary.least),
-      most: Number(summary.most),
-      measured: Number(summary.measured),
-      predicted: Number(summary.predicted),
-      missing: Number(summary.missing)
+      most: Number(summary.most)
     }
   }
 
@@ -155,15 +144,6 @@ export class MosaicState {
       SELECT p.galaxy, p.x, p.y, c.value, c.width, c.predicted, c.color
       FROM ${points} p LEFT JOIN ${values.name} c USING (galaxy)`)
     return { ...values, table }
-  }
-
-  async within(name: string, [low, high]: readonly [number, number]): Promise<number> {
-    const counted = await this.connect().query(
-      Query.from(name)
-        .select({ count: count() })
-        .where(isBetween(column('value'), [low, high]))
-    )
-    return Number(counted.get(0).count)
   }
 
   async inRegion(

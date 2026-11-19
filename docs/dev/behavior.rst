@@ -29,10 +29,10 @@ Sky
 UMAP
 ----
 
-- **Any position**, the default, draws ``any_position_points``; **Same place** draws ``same_place_points``.
+- **Any position**, on by default, draws ``any_position_points``; off, the map draws ``same_place_points``.
 - A property is colored on 32 viridis bins from its 1st to its 99th percentile; values beyond either end take that end's color. Redshift is the default. g − r is only measured.
-- The legend gives the range, its unit and how many galaxies have a measured value, a prediction or none.
-- The slider moves in 200 steps across the legend's range and counts the galaxies in range. A thumb left at its end also keeps the values beyond that side, and the readout then shows only the other bound. The range resets when the property or source changes. The map circles only search matches in range.
+- The property select gives each property's unit in brackets.
+- The slider's track is the color scale. It moves in 200 steps from the 1st to the 99th percentile. A thumb left at its end also keeps the values beyond that side. Both bounds always show below it, a thumb at its end showing the property's minimum or maximum. The range resets when the property or **Data source** changes. The map circles only search matches in range.
 - Box and lasso selections keep only galaxies in range, list them by object ID, each clickable (an empty selection shows nothing), and export their ``object_id``, ``ra`` and ``dec`` as CSV once every one has loaded. A selection belongs to the map it was drawn on and drops when the layout changes or on a click elsewhere on the map.
 - Hover shows the galaxy's image and property, with the prediction's width when the value is AION's.
 
@@ -59,7 +59,7 @@ Similarity search
 Links
 -----
 
-- The address records the view: ``projection``, ``property``, ``source``, ``range``, ``region``, ``galaxy``, ``explorer``, ``data_source``, ``search_by``, ``layer``, ``mask``, ``invert``, the five mask thresholds, ``tab`` and ``text``. A value at its default or failing validation is ignored and left out. Lists, ``range`` and ``region`` are JSON. The address updates on each change, a slider's on release, and adds no history entry.
+- The address records the view: ``projection``, ``property``, ``range``, ``region``, ``galaxy``, ``explorer``, ``data_source``, ``search_by``, ``layer``, ``mask``, ``invert``, the five mask thresholds, ``tab`` and ``text``. A value at its default or failing validation is ignored and left out. Lists, ``range`` and ``region`` are JSON. The address updates on each change, a slider's on release, and adds no history entry.
 - The last similarity search is recorded in the ``/search`` or ``/search/modes`` parameters it sent. Opening the address restores its selection and runs it again. A selection changed but not searched is not recorded.
 - Collapsed groups, the theme and the disclaimer stay in the browser's storage, not the address.
 

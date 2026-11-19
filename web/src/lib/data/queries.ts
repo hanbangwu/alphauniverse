@@ -209,18 +209,6 @@ export function coloringQuery(
   })
 }
 
-export function withinQuery(
-  mosaic: MosaicState,
-  name: string,
-  range: readonly [number, number] | null
-) {
-  return queryOptions({
-    queryKey: ['within', name, range] as const,
-    queryFn: range === null ? skipToken : () => mosaic.within(name, range),
-    staleTime: Infinity
-  })
-}
-
 export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: number[] | null) {
   return queryOptions({
     queryKey: ['values', name, galaxies] as const,

@@ -1,17 +1,20 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button'
+  import { Input } from '$lib/components/ui/input'
   import * as NativeSelect from '$lib/components/ui/native-select'
   import { Switch } from '$lib/components/ui/switch'
   import { TOKEN_MODES } from '$lib/data/modes'
-  import { getMask, getView } from '$lib/state/app.svelte'
-  import MatchCount from './match-count.svelte'
+  import { getMask, getSearch, getView } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
 
   const similarity = getSimilarity()
   const display = getMask()
   const view = getView()
+  const search = getSearch()
+  const error = $props.id()
 
   const mapped = $derived(TOKEN_MODES.some((mode) => similarity.layerOf(mode)))
+  const invalid = $derived(search.count === null)
 </script>
 
 <form
@@ -51,7 +54,27 @@
     </label>
   {/if}
   <div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2">
-    <MatchCount />
+    <label
+      class="flex items-center gap-2 text-sm font-medium"
+      title="How many galaxies the search returns."
+    >
+      Show top
+      <Input
+        type="number"
+        min={search.range.minimum}
+        max={search.range.maximum}
+        value={search.matches.value}
+        oninput={(event) => (search.matches.value = event.currentTarget.value)}
+        aria-invalid={invalid}
+        aria-describedby={invalid ? error : undefined}
+        class="w-20"
+      />
+    </label>
+    {#if invalid}
+      <span id={error} role="alert" class="text-xs text-destructive">
+        Enter a whole number from {search.range.minimum} to {search.range.maximum}.
+      </span>
+    {/if}
     <Button type="submit" size="sm" disabled={similarity.draft === null}>Search</Button>
   </div>
 </form>

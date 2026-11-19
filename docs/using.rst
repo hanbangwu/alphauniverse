@@ -19,9 +19,9 @@ Browse the UMAP
 
 On the **UMAP** tab, each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
 
-- **Any position** groups galaxies whose features match wherever they sit in the image or spectrum. **Same place** groups them only when the features are in the same place.
-- Color the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r color, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. **Measured first** uses the measured value where there is one and AION's prediction, faded, elsewhere. **Predicted** uses AION's prediction for every galaxy.
-- Drag the legend's slider to show only the galaxies in a range, for example 0.3 < z < 0.5.
+- **Any position** groups galaxies whose features match wherever they sit in the image or spectrum. Turned off, the map groups them only when the features are in the same place.
+- Color the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r color, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. With **Data source** at **Dataset**, a point takes the measured value where there is one and AION's prediction, faded, elsewhere. At **Prediction**, every point takes AION's prediction.
+- Drag the color slider to show only the galaxies in a range, for example 0.3 < z < 0.5.
 - Draw a box or a lasso to select galaxies, then open any of them or export the selection as CSV.
 - Hover over a point to preview the galaxy. Click it to open it.
 
@@ -33,7 +33,7 @@ Galaxies are named by their Legacy Survey DR10 object ID. A galaxy shows its pos
 See what AION predicts
 ----------------------
 
-**Data source**: **Prediction** shows the galaxy's :term:`AION predictions <AION prediction>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalog values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalized. An AION prediction is AION's expectation, not a measurement.
+**Data source**, in the galaxy drawer and the search dialog, is one setting for the whole site. On the UMAP it sets the colors. For a galaxy, **Prediction** shows the galaxy's :term:`AION predictions <AION prediction>`: what AION expects it to look like in every survey, given the data it has. A galaxy without a DESI spectrum still gets a predicted one. Predicted images replace the observed ones, predicted spectra are drawn over the observed ones, and predicted catalog values appear beside the measured ones. AION does not predict a spectrum's overall brightness, so a predicted spectrum with no observed one beside it is normalized. An AION prediction is AION's expectation, not a measurement.
 
 Find similar galaxies
 ---------------------

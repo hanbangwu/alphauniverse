@@ -2,9 +2,9 @@
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
-  import { SURVEYS } from '$lib/labels'
+  import { MODES, SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
-  import ContributionBars from './contribution-bars.svelte'
+  import { DECIMALS } from '$lib/state/mask.svelte'
   import ImageTokenPanel from './image-token-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
@@ -21,6 +21,8 @@
 
   const score = $derived(similarity.scoreAt(index))
   const predicted = $derived(similarity.predictedAt(index))
+  const half = (value: number) =>
+    similarity.contributionLimit > 0 ? (50 * Math.abs(value)) / similarity.contributionLimit : 0
 </script>
 
 <div class="flex flex-col gap-5 pt-6">
@@ -62,7 +64,21 @@
     {/if}
   </div>
   {#if similarity.wholeResult}
-    <ContributionBars {index} />
+    <dl class="grid max-w-md grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1 text-xs">
+      {#each similarity.contributionModes as mode (mode)}
+        {@const value = similarity.contributionAt(mode, index)}
+        <dt class="text-muted-foreground">{MODES[mode]}</dt>
+        <dd class="relative h-2 rounded-sm bg-muted" aria-hidden="true">
+          <div class="absolute inset-y-0 left-1/2 w-px bg-foreground/40"></div>
+          <div
+            class={['absolute inset-y-0', value < 0 ? 'bg-destructive' : 'bg-primary']}
+            style:left="{value < 0 ? 50 - half(value) : 50}%"
+            style:width="{half(value)}%"
+          ></div>
+        </dd>
+        <dd class="text-right font-mono tabular-nums">{value.toFixed(DECIMALS)}</dd>
+      {/each}
+    </dl>
   {/if}
   {#if predicted.length}
     <p class="text-xs text-muted-foreground">

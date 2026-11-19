@@ -1,13 +1,6 @@
 import { IMAGE_MODES, SPECTRUM_MODES, TOKEN_MODES, byMode } from '$lib/data/modes'
 import { type ModeName, type SearchQuery, isModeQuery } from '$lib/data/similarity'
-import {
-  POINT_SETS,
-  PROPERTIES,
-  type PointSet,
-  type Property,
-  SOURCES,
-  type Source
-} from '$lib/labels'
+import { POINT_SETS, PROPERTIES, type PointSet, type Property, UNITS } from '$lib/labels'
 import { Field } from './field.svelte'
 import { EnumField, IndexListField, ListField } from './fields.svelte'
 import type { MosaicState } from './mosaic.svelte'
@@ -18,7 +11,6 @@ export class ViewState {
   readonly tab: Field<Values['tab']>
   readonly pointSet: EnumField<PointSet>
   readonly property: EnumField<Property>
-  readonly source: EnumField<Source>
   readonly galaxy: Field<number | null>
   readonly tokens = byMode(() => new IndexListField())
   readonly tableValues = new IndexListField()
@@ -38,8 +30,15 @@ export class ViewState {
   constructor(private readonly mosaic: MosaicState) {
     this.tab = new Field(DEFAULTS.tab, stored('tab'))
     this.pointSet = new EnumField(POINT_SETS, stored('projection'))
-    this.property = new EnumField(PROPERTIES, stored('property'))
-    this.source = new EnumField(SOURCES, stored('source'))
+    this.property = new EnumField(
+      Object.fromEntries(
+        Object.entries(PROPERTIES).map(([key, label]) => [
+          key,
+          `${label} (${UNITS[key as Property]})`
+        ])
+      ) as Record<Property, string>,
+      stored('property')
+    )
     this.galaxy = new Field(DEFAULTS.galaxy, stored('galaxy'))
     this.searchBy = new Field(DEFAULTS.search_by, stored('search_by'))
     this.searched = new Field<SearchQuery | null>(null, searched())
@@ -52,7 +51,7 @@ export class ViewState {
   }
 
   get everywhere(): boolean {
-    return this.predictable && this.source.value === 'predicted'
+    return this.predictable && this.dataSource.value === 'prediction'
   }
 
   edit(searched: SearchQuery): void {

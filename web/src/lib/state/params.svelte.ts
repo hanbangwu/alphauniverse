@@ -1,7 +1,7 @@
 import type { CosineMode } from '$lib/client'
 import { TOKEN_MODES, byMode } from '$lib/data/modes'
 import type { SearchQuery } from '$lib/data/similarity'
-import { MODES, POINT_SETS, PROPERTIES, SOURCES } from '$lib/labels'
+import { MODES, POINT_SETS, PROPERTIES } from '$lib/labels'
 import type { Source } from './field.svelte'
 import { rangeOf } from './schema'
 import { Context } from 'runed'
@@ -21,7 +21,6 @@ const matches = rangeOf('matches')
 export const schema = z.object({
   projection: choice(POINT_SETS),
   property: choice(PROPERTIES),
-  source: choice(SOURCES),
   range: z
     .tuple([z.number(), z.number()])
     .refine(([low, high]) => low <= high)
