@@ -12,7 +12,7 @@ from app.config import (
     SpectrumSurvey,
 )
 from app.dataset.dataset import identity
-from app.encoding.store import tokens
+from app.encoding.store import false_colors, image_lattice, spectrum_lattice, tokens
 from app.responses import BINARY_OCTET, RevalidatedRoute
 
 router = APIRouter(tags=["encoding"], route_class=RevalidatedRoute)
@@ -43,29 +43,32 @@ def get_galaxy(galaxy: GalaxyIndex) -> Galaxy:
 
 
 @router.get(
-    "/galaxy/{galaxy}/image/{survey}/tokens",
+    "/galaxy/{galaxy}/image/{survey}/false_color",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
 )
-def get_image_tokens(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
+def get_image_false_color(galaxy: GalaxyIndex, survey: ImageSurvey) -> Response:
     cell = tokens().column(survey)[galaxy]
     if not cell.is_valid:
         raise HTTPException(404, f"galaxy {galaxy} has no {survey} image")
+    codes = np.asarray(cell.values)[: LegacySurveyImage.num_tokens]
     return Response(
-        np.asarray(cell.values)[: LegacySurveyImage.num_tokens].tobytes(),
+        false_colors(image_lattice()[codes]).tobytes(),
         media_type="application/octet-stream",
     )
 
 
 @router.get(
-    "/galaxy/{galaxy}/spectrum/{survey}/tokens",
+    "/galaxy/{galaxy}/spectrum/{survey}/false_color",
     response_class=Response,
     responses={200: {"content": BINARY_OCTET}},
 )
-def get_spectrum_tokens(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
+def get_spectrum_false_color(galaxy: GalaxyIndex, survey: SpectrumSurvey) -> Response:
     cell = tokens().column(survey)[galaxy]
     if not cell.is_valid:
         raise HTTPException(404, f"galaxy {galaxy} has no {survey} spectrum")
+    codes = np.asarray(cell.values)[1:]
     return Response(
-        np.asarray(cell.values)[1:].tobytes(), media_type="application/octet-stream"
+        false_colors(spectrum_lattice()[codes]).tobytes(),
+        media_type="application/octet-stream",
     )

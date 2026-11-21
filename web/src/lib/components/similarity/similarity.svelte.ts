@@ -1,7 +1,7 @@
 import type { Galaxy } from '$lib/api'
 import type { CosineMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
-import { IMAGE_MODES, SPECTRUM_MODES, byMode, isTokenMode, surveyOf } from '$lib/data/modes'
+import { IMAGE_MODES, SPECTRUM_MODES, byMode, isPatchMode, surveyOf } from '$lib/data/modes'
 import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
 import { best, extent, mask, row } from '$lib/data/scores'
 import {
@@ -86,6 +86,8 @@ export class Similarity {
   readonly #selected: boolean
 
   readonly layer: Field<Layer>
+  readonly imageFalseColor: Field<boolean>
+  readonly spectrumFalseColor: Field<boolean>
 
   readonly draft: SearchQuery | null
 
@@ -104,9 +106,14 @@ export class Similarity {
     const { view, search } = this.#app
     this.galaxy = galaxy
     this.layer = new Field(DEFAULTS.layer, stored('layer'))
+    this.imageFalseColor = new Field(DEFAULTS.image_false_color, stored('image_false_color'))
+    this.spectrumFalseColor = new Field(
+      DEFAULTS.spectrum_false_color,
+      stored('spectrum_false_color')
+    )
 
     const whole = $derived(view.searchBy.value === 'whole')
-    const selections = $derived(byMode((mode) => view.tokens[mode].value))
+    const selections = $derived(byMode((mode) => view.patches[mode].value))
     const selection = $derived(
       whole
         ? null
@@ -121,7 +128,7 @@ export class Similarity {
     this.#selected = $derived(selection !== null)
     this.modes = $derived(
       (Object.keys(MODES) as ModeName[]).filter(
-        (mode) => view.modes.has(mode) && (!isTokenMode(mode) || this.shown(mode))
+        (mode) => view.modes.has(mode) && (!isPatchMode(mode) || this.shown(mode))
       )
     )
     this.draft = $derived(
@@ -146,7 +153,7 @@ export class Similarity {
         new ModeLayer(
           mode,
           galaxy,
-          () => this.tokensOf(mode),
+          () => this.patchesOf(mode),
           () => self,
           () => saliency
         )
@@ -186,15 +193,15 @@ export class Similarity {
     )
   }
 
-  tokensOf(mode: CosineMode): number[] {
+  patchesOf(mode: CosineMode): number[] {
     const { view } = this.#app
-    return view.searchBy.value === 'whole' ? [] : view.tokens[mode].value
+    return view.searchBy.value === 'whole' ? [] : view.patches[mode].value
   }
 
   toggler(mode: CosineMode, matched: boolean): ((index: number) => void) | undefined {
     const { view } = this.#app
     return matched && view.searchBy.value === 'patch'
-      ? (index) => view.tokens[mode].toggle(index)
+      ? (index) => view.patches[mode].toggle(index)
       : undefined
   }
 
@@ -292,8 +299,6 @@ export class Similarity {
   get layerCaption(): Caption {
     return this.layer.value === 'self' ? this.cosine : this.correlation
   }
-
-  readonly caption: Caption = (value) => `token ${value}`
 
   predictedAt(index: number): string[] {
     return this.#result.data?.predicted[index] ?? []

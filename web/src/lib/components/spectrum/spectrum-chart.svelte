@@ -22,17 +22,16 @@
 </script>
 
 <script lang="ts">
-  import { OUTLINE, PREDICTED, type RGB, chartInk } from '$lib/color'
+  import { OUTLINE, type RGB, chartInk } from '$lib/color'
   import { TAP_RADIUS, TOOLTIP, chart, pixel } from '$lib/components/common/chart.svelte'
-  import { type Spectrum, spectrumTokenAt, spectrumTokenOf } from '$lib/data/spectra'
-  import { must } from '$lib/invariant'
+  import { type Spectrum, spectrumPatchAt, spectrumPatchOf } from '$lib/data/spectra'
   import type { TooltipComponentFormatterCallbackParams } from 'echarts'
   import type { ECharts } from 'echarts/core'
   import { mode } from 'mode-watcher'
 
   interface Props {
-    spectrum: Spectrum | undefined
-    prediction?: Spectrum
+    spectrum: Spectrum
+    normalized?: boolean
     values?: ArrayLike<number> | null
     color?: ((value: number) => RGB) | null
     mask?: ArrayLike<number> | null
@@ -46,7 +45,7 @@
 
   let {
     spectrum,
-    prediction,
+    normalized = false,
     values,
     color,
     mask,
@@ -70,17 +69,10 @@
   let press: number[]
   let cursor: number | null = null
 
-  function line(drawn: Spectrum | undefined): number[][] {
-    return drawn
-      ? Array.from(drawn.wavelength, (wavelength, index) => [wavelength, drawn.flux[index]])
-      : []
-  }
-
-  const points = $derived(line(spectrum))
-  const predicted = $derived(line(prediction))
-  const wavelengths = $derived(
-    must(spectrum ?? prediction, 'a spectrum or a prediction').wavelength
+  const points = $derived(
+    Array.from(spectrum.wavelength, (wavelength, index) => [wavelength, spectrum.flux[index]])
   )
+  const wavelengths = $derived(spectrum.wavelength)
   const first = $derived(wavelengths[0])
   const last = $derived(wavelengths[wavelengths.length - 1])
 
@@ -89,7 +81,7 @@
   const areas = $derived.by((): Areas => {
     if (!values || !color) return []
     const cells = Array.from(values, (value, index): Areas[number] => {
-      const [low, high] = spectrumTokenOf(index)
+      const [low, high] = spectrumPatchOf(index)
       const [r, g, b] = color(value)
       return [
         {
@@ -110,11 +102,11 @@
     const outlines = runs.flatMap(([first, last]) =>
       OUTLINE.map(({ stroke, width }, layer): Areas[number] => [
         {
-          xAxis: spectrumTokenOf(first)[0],
+          xAxis: spectrumPatchOf(first)[0],
           itemStyle: { color: 'transparent', borderColor: stroke, borderWidth: width },
           z2: layer + 1
         },
-        { xAxis: spectrumTokenOf(last)[1] }
+        { xAxis: spectrumPatchOf(last)[1] }
       ])
     )
     return [...cells, ...outlines]
@@ -125,7 +117,7 @@
       number,
       number
     ]
-    const index = spectrumTokenAt(wavelength)
+    const index = spectrumPatchAt(wavelength)
     const value = values?.[index]
     return [
       `${wavelength.toFixed(1)} Å`,
@@ -139,8 +131,8 @@
     grid: { left: 8, right: 12, top: 8, bottom: 8 },
     xAxis: {
       type: 'value',
-      min: spectrum ? first : Math.floor(first),
-      max: spectrum ? last : Math.ceil(last),
+      min: normalized ? Math.floor(first) : first,
+      max: normalized ? Math.ceil(last) : last,
       name: 'Wavelength (Å)',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
@@ -151,7 +143,7 @@
     yAxis: {
       type: 'value',
       scale: true,
-      name: spectrum ? 'Flux (10^-17 erg/s/cm^2/Å)' : 'Normalized flux',
+      name: normalized ? 'Normalized flux' : 'Flux (10^-17 erg/s/cm^2/Å)',
       nameLocation: 'middle',
       nameTextStyle: { color: ink.muted },
       axisLabel: { color: ink.muted },
@@ -174,13 +166,6 @@
         lineStyle: { width: 1, color: ink.text },
         emphasis: { disabled: true },
         markArea: { silent: true, data: areas }
-      },
-      {
-        type: 'line',
-        data: predicted,
-        showSymbol: false,
-        lineStyle: { width: 1, color: PREDICTED },
-        emphasis: { disabled: true }
       }
     ]
   })
@@ -188,7 +173,7 @@
   function windowAt(event: PointerEvent): number {
     const [wavelength] = instance.convertFromPixel('grid', pixel(instance, event))
     const [low, high] = visible
-    return spectrumTokenAt(Math.min(Math.max(wavelength, low), high))
+    return spectrumPatchAt(Math.min(Math.max(wavelength, low), high))
   }
 
   function paint(index: number): void {
@@ -262,7 +247,7 @@
       instance.dispatchAction({ type: 'showTip', x: -1, y: -1 })
       return
     }
-    const [low, high] = spectrumTokenOf(index)
+    const [low, high] = spectrumPatchOf(index)
     const left = Math.max(low, first)
     const right = Math.min(high, last)
     const y = instance.getHeight() / 2
@@ -284,10 +269,10 @@
     event.preventDefault()
     if (cursor === null) {
       const [from, to] = shown()
-      point(spectrumTokenAt((from + to) / 2))
+      point(spectrumPatchAt((from + to) / 2))
       return
     }
-    point(Math.min(Math.max(cursor + step, spectrumTokenAt(first)), spectrumTokenAt(last)))
+    point(Math.min(Math.max(cursor + step, spectrumPatchAt(first)), spectrumPatchAt(last)))
   }
 
   function activate(event: MouseEvent): void {
@@ -313,12 +298,3 @@
   role={interactive ? undefined : 'img'}
   aria-label={label}
 ></svelte:element>
-
-{#if prediction}
-  <span
-    class="pointer-events-none absolute top-1.5 right-3 flex items-center gap-1 rounded-sm bg-card/80 px-1 text-[10px] text-muted-foreground"
-  >
-    <span class="h-0.5 w-3" style:background-color={PREDICTED}></span>
-    {spectrum ? 'AION' : 'AION prediction, normalized'}
-  </span>
-{/if}

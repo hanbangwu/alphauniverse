@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI
 from app.config import GRAM_NAMES, MODES, OBSERVATIONS, galaxy_count
 from app.dataset import routes as dataset_routes
 from app.encoding import routes as encoding_routes
-from app.encoding.store import observed
+from app.encoding.store import image_lattice, observed, spectrum_lattice
 from app.login import routes as login_routes
 from app.login.password import require_password
 from app.predictions import routes as predictions_routes
@@ -27,6 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     galaxy_count()
     predictions()
     basis()
+    image_lattice()
+    spectrum_lattice()
     for column in OBSERVATIONS:
         observed(column)
     for mode in MODES:

@@ -1,5 +1,5 @@
 import type { CosineMode } from '$lib/client'
-import { TOKEN_MODES, anywhereModes } from '$lib/data/modes'
+import { PATCH_MODES, anywhereModes } from '$lib/data/modes'
 import type { ModeName, ModeQuery, SaliencyQuery } from '$lib/data/similarity'
 import { Field } from './field.svelte'
 import { rangeOf } from './schema'
@@ -16,19 +16,19 @@ export class SearchState {
 
   selection(
     galaxy: number | null,
-    tokens: Record<CosineMode, number[]>,
+    patches: Record<CosineMode, number[]>,
     tableValues: number[],
     imageAnywhere: boolean,
     spectrumAnywhere: boolean
   ): SaliencyQuery | null {
     if (galaxy === null) return null
-    if (TOKEN_MODES.every((mode) => !tokens[mode].length) && !tableValues.length) return null
+    if (PATCH_MODES.every((mode) => !patches[mode].length) && !tableValues.length) return null
     return {
       galaxy,
-      ...tokens,
+      ...patches,
       table_values: tableValues,
       anywhere: anywhereModes(
-        TOKEN_MODES.filter((mode) => tokens[mode].length),
+        PATCH_MODES.filter((mode) => patches[mode].length),
         imageAnywhere,
         spectrumAnywhere
       )

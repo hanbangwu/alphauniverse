@@ -16,10 +16,10 @@ export const surveyOf = (mode: CosineMode) => mode.split('_')[0] as ImageSurvey 
 
 export const IMAGE_MODES = IMAGE_SURVEYS.map(imageMode)
 export const SPECTRUM_MODES = SPECTRUM_SURVEYS.map(spectrumMode)
-export const TOKEN_MODES: readonly CosineMode[] = [...IMAGE_MODES, ...SPECTRUM_MODES]
+export const PATCH_MODES: readonly CosineMode[] = [...IMAGE_MODES, ...SPECTRUM_MODES]
 
 export function byMode<T>(make: (mode: CosineMode) => T): Record<CosineMode, T> {
-  return Object.fromEntries(TOKEN_MODES.map((mode) => [mode, make(mode)])) as Record<CosineMode, T>
+  return Object.fromEntries(PATCH_MODES.map((mode) => [mode, make(mode)])) as Record<CosineMode, T>
 }
 
 export const TABLE_MODES: Partial<Record<TableRow['section'], ModeName>> = {
@@ -28,8 +28,8 @@ export const TABLE_MODES: Partial<Record<TableRow['section'], ModeName>> = {
   hsc: 'hsc_table'
 }
 
-export const isTokenMode = (mode: ModeName): mode is CosineMode =>
-  (TOKEN_MODES as readonly ModeName[]).includes(mode)
+export const isPatchMode = (mode: ModeName): mode is CosineMode =>
+  (PATCH_MODES as readonly ModeName[]).includes(mode)
 
 export function anywhereModes(
   modes: readonly ModeName[],

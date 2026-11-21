@@ -23,7 +23,6 @@ from app.config import (
 from app.predictions import store as predictions
 from app.predictions.build import aion_predictions
 from app.predictions.build import predictions as predictions_module
-from app.search import pql
 
 GALAXY = 7
 
@@ -36,7 +35,9 @@ def test_image_latents_average_the_codebook_over_each_cell_s_stored_distribution
         vectors = aion_predictions.codebook(
             aion_predictions.decoder(mode), MODALITY_INFO["tok_image"]["vocab_size"]
         )
-        dense = torch.from_numpy(pql.dense_image_tokens(rows, survey, slice(None)))
+        dense = torch.from_numpy(
+            predictions.dense_image_tokens(rows, survey, slice(None))
+        )
 
         found = aion_predictions.image_latents(rows, survey, vectors)
 

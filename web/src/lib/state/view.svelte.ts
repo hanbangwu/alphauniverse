@@ -1,4 +1,4 @@
-import { IMAGE_MODES, SPECTRUM_MODES, TOKEN_MODES, byMode } from '$lib/data/modes'
+import { IMAGE_MODES, SPECTRUM_MODES, PATCH_MODES, byMode } from '$lib/data/modes'
 import { type ModeName, type SearchQuery, isModeQuery } from '$lib/data/similarity'
 import { POINT_SETS, PROPERTIES, type PointSet, type Property, UNITS } from '$lib/labels'
 import { Field } from './field.svelte'
@@ -12,7 +12,7 @@ export class ViewState {
   readonly pointSet: EnumField<PointSet>
   readonly property: EnumField<Property>
   readonly galaxy: Field<number | null>
-  readonly tokens = byMode(() => new IndexListField())
+  readonly patches = byMode(() => new IndexListField())
   readonly tableValues = new IndexListField()
   readonly imageAnywhere = new Field(false)
   readonly spectrumAnywhere = new Field(false)
@@ -62,13 +62,13 @@ export class ViewState {
       this.modes.value = searched.modes
       return
     }
-    for (const mode of TOKEN_MODES) this.tokens[mode].value = searched[mode] ?? []
+    for (const mode of PATCH_MODES) this.patches[mode].value = searched[mode] ?? []
     this.tableValues.value = searched.table_values ?? []
   }
 
   select(galaxy: number | null): void {
     if (galaxy !== this.galaxy.value) {
-      for (const field of Object.values(this.tokens)) field.reset()
+      for (const field of Object.values(this.patches)) field.reset()
       this.tableValues.reset()
       this.modes.reset()
       this.searched.reset()

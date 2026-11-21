@@ -2,7 +2,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
-from aion.modalities import LegacySurveyImage
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset
 from fastapi.testclient import TestClient
 
@@ -16,23 +16,6 @@ from app.config import (
 
 def _stored(role: str) -> pa.Table:
     return pa.ipc.open_file(artifact(role)).read_all()
-
-
-@pytest.mark.parametrize("survey", ["ls", "hsc"])
-def test_image_tokens_are_that_galaxys_stored_image_token_ids(
-    client: TestClient, survey: str
-) -> None:
-    column = _stored("tokens").column(survey)
-    galaxy = int(np.flatnonzero(column.is_valid())[-1])
-    cell = column[galaxy]
-
-    response = client.get(f"/galaxy/{galaxy}/image/{survey}/tokens")
-
-    assert response.status_code == 200
-    served = np.frombuffer(response.content, dtype=np.uint32)
-    np.testing.assert_array_equal(
-        served, np.asarray(cell.values)[: LegacySurveyImage.num_tokens]
-    )
 
 
 @pytest.mark.parametrize("galaxy", [0, 1, 6])
@@ -59,41 +42,50 @@ def test_galaxy_is_named_by_its_legacy_survey_object_and_position(
 
 
 @pytest.mark.parametrize(
-    ("survey", "path"), [("hsc", "image/hsc"), ("desi", "spectrum/desi")]
+    ("survey", "path"),
+    [("hsc", "image/hsc/false_color"), ("desi", "spectrum/desi/false_color")],
 )
-def test_unmatched_tokens_are_not_found(
+def test_unmatched_observations_are_not_found(
     client: TestClient, survey: str, path: str
 ) -> None:
     tokens = _stored("tokens").column(survey)
     untokenised = tokens.is_valid().to_pylist().index(False)
 
-    assert client.get(f"/galaxy/{untokenised}/{path}/tokens").status_code == 404
+    assert client.get(f"/galaxy/{untokenised}/{path}").status_code == 404
 
 
-@pytest.mark.parametrize("survey", ["desi", "sdss"])
-def test_spectrum_tokens_drop_the_normalisation_token(
-    client: TestClient, survey: str
+@pytest.mark.parametrize(
+    ("survey", "kind", "slots"),
+    [
+        ("ls", "image", LegacySurveyImage.num_tokens),
+        ("hsc", "image", LegacySurveyImage.num_tokens),
+        ("desi", "spectrum", DESISpectrum.num_tokens - 1),
+        ("sdss", "spectrum", DESISpectrum.num_tokens - 1),
+    ],
+)
+def test_false_color_is_an_rgb_byte_per_channel_per_slot(
+    client: TestClient, survey: str, kind: str, slots: int
 ) -> None:
-    column = _stored("tokens").column(survey)
-    galaxy = int(np.flatnonzero(column.is_valid())[-1])
-    cell = column[galaxy]
+    galaxy = int(np.flatnonzero(_stored("tokens").column(survey).is_valid())[-1])
 
-    response = client.get(f"/galaxy/{galaxy}/spectrum/{survey}/tokens")
+    response = client.get(f"/galaxy/{galaxy}/{kind}/{survey}/false_color")
 
     assert response.status_code == 200
-    served = np.frombuffer(response.content, dtype=np.uint32)
-    np.testing.assert_array_equal(served, np.asarray(cell.values)[1:])
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert len(response.content) == slots * 3
 
 
 @pytest.mark.parametrize(
     "path",
     [
         "/galaxy/{galaxy}/image/ls",
-        "/galaxy/{galaxy}/image/hsc/tokens",
+        "/galaxy/{galaxy}/image/hsc/false_color",
+        "/galaxy/{galaxy}/image/hsc/aion_prediction/false_color",
         "/galaxy/{galaxy}/image/hsc/aion_prediction",
         "/galaxy/{galaxy}",
         "/galaxy/{galaxy}/spectrum/sdss",
-        "/galaxy/{galaxy}/spectrum/desi/tokens",
+        "/galaxy/{galaxy}/spectrum/desi/false_color",
+        "/galaxy/{galaxy}/spectrum/desi/aion_prediction/false_color",
         "/galaxy/{galaxy}/spectrum/sdss/aion_prediction",
         "/galaxy/{galaxy}/table",
         "/search?galaxy={galaxy}&ls_image=0",

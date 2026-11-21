@@ -248,7 +248,7 @@
       const picked = pick(created, event.pixel, event.coordinate)
       view.select(picked?.galaxy ?? null)
       if (!picked) return
-      if (picked.patch !== null) view.tokens.ls_image.toggle(picked.patch)
+      if (picked.patch !== null) view.patches.ls_image.toggle(picked.patch)
     })
     map = created
     return () => created.setTarget(undefined)
@@ -303,7 +303,7 @@
     const open = view.galaxy.value
     if (open === null) return
     marks.addFeatures(
-      view.tokens.ls_image.value.map(
+      view.patches.ls_image.value.map(
         (patch) =>
           new Feature({ geometry: fromExtent(patchArea(places[open], patch)), kind: 'chosen' })
       )

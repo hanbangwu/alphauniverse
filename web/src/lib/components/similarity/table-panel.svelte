@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { TableRow } from '$lib/api'
-  import { type RGB, SELECTED, tokenAlpha, tokenColors } from '$lib/color'
+  import { type RGB, SELECTED } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
   import { TABLE_MODES } from '$lib/data/modes'
@@ -30,9 +30,6 @@
     similarity.tableValueMap &&
       similarity.maskOf(similarity.tableValueMap, similarity.tableValueDomain, display.table)
   )
-  const palette = $derived(
-    tokenColors((table.data ?? []).flatMap((row) => (row.token === null ? [] : [row.token])))
-  )
 
   function paint(color: RGB, alpha: number): string {
     return `background-color: rgb(${color.join(' ')} / ${alpha})`
@@ -46,16 +43,16 @@
   }
 
   function fill(row: TableRow): string | undefined {
-    if (row.table_value === null || row.token === null) return undefined
+    if (row.table_value === null) return undefined
     const picked = chosen(row)
     const score = similarity.tableValueMap?.[row.table_value] ?? NaN
     const heat = similarity.tableValueHeat
     const style =
       heat && !Number.isNaN(score)
         ? paint(heat(score), mask?.[row.table_value] === 0 ? 0 : 1)
-        : paint(palette(row.token), tokenAlpha(picked))
+        : undefined
     return picked && view.searchBy.value === 'patch'
-      ? `${style}; outline: 1px solid ${SELECTED}; outline-offset: -1px`
+      ? [style, `outline: 1px solid ${SELECTED}; outline-offset: -1px`].filter(Boolean).join('; ')
       : style
   }
 
@@ -89,8 +86,7 @@
           <Table.Row
             class={[
               'transition-none last:border-0',
-              ((row.table_value !== null && row.token === null) || row.excluded !== null) &&
-                'cursor-not-allowed',
+              row.excluded !== null && 'cursor-not-allowed',
               row.excluded !== null && 'text-muted-foreground italic'
             ]}
             style={fill(row)}
@@ -102,7 +98,7 @@
                   type="checkbox"
                   class="accent-primary disabled:cursor-not-allowed"
                   checked={chosen(row)}
-                  disabled={row.token === null || view.searchBy.value === 'whole'}
+                  disabled={view.searchBy.value === 'whole'}
                   onchange={() => ontoggle(tableValue)}
                   aria-label={`Query ${row.column}`}
                 />

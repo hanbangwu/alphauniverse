@@ -3,7 +3,7 @@
   import { Input } from '$lib/components/ui/input'
   import * as NativeSelect from '$lib/components/ui/native-select'
   import { Switch } from '$lib/components/ui/switch'
-  import { TOKEN_MODES } from '$lib/data/modes'
+  import { PATCH_MODES } from '$lib/data/modes'
   import { getMask, getSearch, getView } from '$lib/state/app.svelte'
   import { getSimilarity } from './similarity.svelte'
 
@@ -13,7 +13,7 @@
   const search = getSearch()
   const error = $props.id()
 
-  const mapped = $derived(TOKEN_MODES.some((mode) => similarity.layerOf(mode)))
+  const mapped = $derived(PATCH_MODES.some((mode) => similarity.layerOf(mode)))
   const invalid = $derived(search.count === null)
 </script>
 

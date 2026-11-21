@@ -1,8 +1,7 @@
-import { must } from './invariant'
 import { rgb } from 'd3-color'
 import { interpolateRgb } from 'd3-interpolate'
 import { scaleSequential } from 'd3-scale'
-import { interpolateViridis, schemeObservable10 } from 'd3-scale-chromatic'
+import { interpolateViridis } from 'd3-scale-chromatic'
 
 export type RGB = [number, number, number]
 export type Scheme = 'light' | 'dark'
@@ -20,25 +19,8 @@ export function continuous(domain: readonly [number, number]): (value: number) =
   return (value) => toRGB(scale(value))
 }
 
-const TOKEN_PALETTE: RGB[] = schemeObservable10.map(toRGB)
-
-export function tokenColors(values: ArrayLike<number>): (value: number) => RGB {
-  const counts = new Map<number, number>()
-  const first = new Map<number, number>()
-  for (let i = 0; i < values.length; i++) {
-    const token = values[i]
-    counts.set(token, (counts.get(token) ?? 0) + 1)
-    if (!first.has(token)) first.set(token, i)
-  }
-
-  const ranks = new Map(
-    [...counts.keys()]
-      .sort((a, b) => counts.get(b)! - counts.get(a)! || first.get(a)! - first.get(b)!)
-      .map((token, rank): [number, number] => [token, rank])
-  )
-
-  return (value) =>
-    TOKEN_PALETTE[must(ranks.get(value), `rank for token ${value}`) % TOKEN_PALETTE.length]
+export function falseColors(rgb: Uint8Array): (index: number) => RGB {
+  return (index) => [rgb[3 * index], rgb[3 * index + 1], rgb[3 * index + 2]]
 }
 
 export const NO_VALUE = { light: '#52525b', dark: '#d4d4d8' }
@@ -69,12 +51,6 @@ export const OUTLINE = [
   { stroke: 'black', width: 4 },
   { stroke: SELECTED, width: 2 }
 ]
-
-export const PREDICTED = 'oklch(0.667 0.295 322.15)'
-
-export function tokenAlpha(picked: boolean): number {
-  return picked ? 0.8 : 0.3
-}
 
 export interface Ink {
   text: string

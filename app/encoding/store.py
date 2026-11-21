@@ -5,7 +5,9 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
-from aion.modalities import LegacySurveyImage
+import torch
+from aion.codecs.quantizers import FiniteScalarQuantizer, LucidrainsLFQ
+from aion.fourm.modality_info import MODALITY_INFO
 from pyarrow.fs import LocalFileSystem
 
 from app.config import (
@@ -13,7 +15,6 @@ from app.config import (
     ARTIFACTS,
     HSC_TABLE_COLUMNS,
     LS_TABLE_COLUMNS,
-    REDSHIFT,
     REDSHIFT_TABLE_VALUE,
     STORE_COLUMNS,
     artifact,
@@ -24,6 +25,8 @@ N_HSC_TABLE_VALUES = len(HSC_TABLE_COLUMNS)
 FIRST_LS_TABLE_VALUE = REDSHIFT_TABLE_VALUE + 1
 FIRST_HSC_TABLE_VALUE = FIRST_LS_TABLE_VALUE + N_LS_TABLE_VALUES
 CHUNK = 128
+IMAGE_CODE_LEVELS = [7, 5, 5, 5, 5]
+SPECTRUM_CODE_DIM = 10
 
 
 @cache
@@ -45,20 +48,31 @@ def observed(column: str) -> np.ndarray:
     return pc.is_valid(tokens().column(column)).to_numpy()
 
 
-def table_value_tokens(galaxy: int) -> dict[str, int]:
-    found = {
-        column: int(token)
-        for survey, columns in (("ls", LS_TABLE_COLUMNS), ("hsc", HSC_TABLE_COLUMNS))
-        if (cell := tokens().column(survey)[galaxy]).is_valid
-        for column, token in zip(
-            columns,
-            np.asarray(cell.values)[LegacySurveyImage.num_tokens :],
-            strict=True,
-        )
-    }
-    if (cell := tokens().column(REDSHIFT)[galaxy]).is_valid:
-        found[REDSHIFT] = int(cell.values[0].as_py())
-    return found
+@cache
+def image_lattice() -> np.ndarray:
+    codes = torch.arange(MODALITY_INFO["tok_image"]["vocab_size"])
+    return FiniteScalarQuantizer(levels=IMAGE_CODE_LEVELS).decode(codes).numpy()
+
+
+@cache
+def spectrum_lattice() -> np.ndarray:
+    codes = torch.arange(MODALITY_INFO["tok_spectrum_desi"]["vocab_size"])
+    quantizer = LucidrainsLFQ(dim=SPECTRUM_CODE_DIM, codebook_size=len(codes))
+    return quantizer.decode(codes).numpy()
+
+
+def false_colors(latents: np.ndarray) -> np.ndarray:
+    centered = latents - latents.mean(axis=0)
+    _, _, directions = np.linalg.svd(centered, full_matrices=False)
+    components = centered @ directions[:3].T
+    low, high = components.min(axis=0), components.max(axis=0)
+    scaled = np.divide(
+        components - low,
+        high - low,
+        out=np.zeros_like(components),
+        where=high > low,
+    )
+    return np.round(scaled * 255).astype(np.uint8)
 
 
 def stream(

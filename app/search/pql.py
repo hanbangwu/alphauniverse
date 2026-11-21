@@ -9,7 +9,6 @@ from typing import Annotated, NamedTuple, Self, get_args
 import numpy as np
 import pyarrow as pa
 import torch
-from aion.fourm.modality_info import MODALITY_INFO
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -34,9 +33,9 @@ from app.encoding.store import observed
 from app.predictions.store import (
     array,
     basis,
+    dense_image_tokens,
     distributions,
     predictions,
-    query_image_tokens,
     row,
     spectrum_token_coefficients,
     table_value_probabilities,
@@ -165,17 +164,6 @@ def selection(query: Selection) -> dict[str, np.ndarray]:
         mode, slot = TABLE_SLOTS[table_value]
         selected[mode] = (*selected.get(mode, ()), slot)
     return {mode: np.unique(slots) for mode, slots in selected.items() if len(slots)}
-
-
-def dense_image_tokens(
-    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
-) -> np.ndarray:
-    codes, probabilities, spread = query_image_tokens(rows, survey, slots)
-    dense = np.repeat(
-        spread[..., None], MODALITY_INFO["tok_image"]["vocab_size"], axis=-1
-    )
-    np.put_along_axis(dense, codes, probabilities, axis=-1)
-    return dense
 
 
 def image_token_overlaps(

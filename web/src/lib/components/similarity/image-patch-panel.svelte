@@ -3,7 +3,7 @@
   import { OUTLINE, type RGB } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
-  import ImageTokenGrid from '$lib/components/image-token/image-token-grid.svelte'
+  import ImagePatchGrid from '$lib/components/image-patch/image-patch-grid.svelte'
   import { IMAGE_GRID } from '$lib/data/modes'
   import { getView } from '$lib/state/app.svelte'
   import type { Snippet } from 'svelte'
@@ -20,7 +20,6 @@
     selected?: number[]
     ontoggle?: (index: number) => void
     busy?: boolean
-    onhover?: (hovered: boolean) => void
     imageOpacity?: number
     children?: Snippet
   }
@@ -37,7 +36,6 @@
     selected,
     ontoggle,
     busy = false,
-    onhover,
     imageOpacity,
     children
   }: Props = $props()
@@ -62,48 +60,40 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-2">
-  <div
-    role="presentation"
-    onpointerenter={() => onhover?.(true)}
-    onpointerleave={({ currentTarget }) => onhover?.(currentTarget.matches(':has(:focus-visible)'))}
-    onfocusout={({ currentTarget }) => onhover?.(currentTarget.matches(':hover'))}
-    onkeydown={() => onhover?.(true)}
-  >
-    <PanelFrame {busy}>
-      {#if values && color}
-        <ImageTokenGrid
-          {values}
-          {color}
-          {mask}
-          {opacity}
-          {title}
-          {selected}
-          bind:painted
-          {ontoggle}
-          label={ontoggle ? `Click or drag across ${label} image tokens to query them` : label}
-          class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
-        />
-      {/if}
-      {#if galaxy !== undefined}
-        <div
-          class="pointer-events-none absolute inset-0 mix-blend-screen transition-opacity duration-150 ease-in-out"
-          style:opacity={imageOpacity}
-        >
-          <GalaxyThumb {galaxy} {survey} predicted={view.dataSource.value === 'prediction'} />
-        </div>
-      {/if}
-      <svg
-        viewBox="0 0 {IMAGE_GRID} {IMAGE_GRID}"
-        class="pointer-events-none absolute inset-0 size-full"
-        stroke-linecap="square"
-        aria-hidden="true"
+  <PanelFrame {busy}>
+    {#if values && color}
+      <ImagePatchGrid
+        {values}
+        {color}
+        {mask}
+        {opacity}
+        {title}
+        {selected}
+        bind:painted
+        {ontoggle}
+        label={ontoggle ? `Click or drag across ${label} image patches to query them` : label}
+        class={ontoggle ? 'absolute inset-0 cursor-pointer' : 'absolute inset-0'}
+      />
+    {/if}
+    {#if galaxy !== undefined}
+      <div
+        class="pointer-events-none absolute inset-0 mix-blend-screen"
+        style:opacity={imageOpacity}
       >
-        {#each OUTLINE as { stroke, width } (stroke)}
-          <path d={outline} {stroke} stroke-width={width} vector-effect="non-scaling-stroke" />
-        {/each}
-      </svg>
-    </PanelFrame>
-  </div>
+        <GalaxyThumb {galaxy} {survey} predicted={view.dataSource.value === 'prediction'} />
+      </div>
+    {/if}
+    <svg
+      viewBox="0 0 {IMAGE_GRID} {IMAGE_GRID}"
+      class="pointer-events-none absolute inset-0 size-full"
+      stroke-linecap="square"
+      aria-hidden="true"
+    >
+      {#each OUTLINE as { stroke, width } (stroke)}
+        <path d={outline} {stroke} stroke-width={width} vector-effect="non-scaling-stroke" />
+      {/each}
+    </svg>
+  </PanelFrame>
 
   {@render children?.()}
 </div>

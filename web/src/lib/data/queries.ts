@@ -1,7 +1,8 @@
 import {
   getCosines,
   getGalaxy,
-  getImageTokens,
+  getImageAionPredictionFalseColor,
+  getImageFalseColor,
   checkLogin,
   getModeSearch,
   getPositions,
@@ -9,7 +10,8 @@ import {
   getSearch,
   getSpectrum,
   getSpectrumAionPrediction,
-  getSpectrumTokens,
+  getSpectrumAionPredictionFalseColor,
+  getSpectrumFalseColor,
   getTable,
   getTextSearch
 } from '$lib/api'
@@ -62,15 +64,22 @@ export const positionsQuery = queryOptions({
   ...FOREVER
 })
 
-export function tokensQuery(galaxy: number | null, survey: ImageSurvey) {
+export function imageFalseColorQuery(
+  galaxy: number | null,
+  survey: ImageSurvey,
+  predicted: boolean
+) {
   return queryOptions({
-    queryKey: ['tokens', galaxy, survey] as const,
+    queryKey: ['falseColor', galaxy, survey, predicted] as const,
     queryFn:
       galaxy === null
         ? skipToken
         : async () => {
-            const { data } = await getImageTokens({ path: { galaxy, survey }, throwOnError: true })
-            return new Uint32Array(await data.arrayBuffer())
+            const options = { path: { galaxy, survey }, throwOnError: true } as const
+            const { data } = await (predicted
+              ? getImageAionPredictionFalseColor(options)
+              : getImageFalseColor(options))
+            return new Uint8Array(await data.arrayBuffer())
           },
     ...FOREVER
   })
@@ -145,18 +154,22 @@ export function spectrumAionPredictionQuery(galaxy: number | null, survey: Spect
   })
 }
 
-export function spectrumTokensQuery(galaxy: number | null, survey: SpectrumSurvey) {
+export function spectrumFalseColorQuery(
+  galaxy: number | null,
+  survey: SpectrumSurvey,
+  predicted: boolean
+) {
   return queryOptions({
-    queryKey: ['spectrum', galaxy, survey, 'tokens'] as const,
+    queryKey: ['spectrum', galaxy, survey, 'falseColor', predicted] as const,
     queryFn:
       galaxy === null
         ? skipToken
         : async () => {
-            const { data } = await getSpectrumTokens({
-              path: { galaxy, survey },
-              throwOnError: true
-            })
-            return new Uint32Array(await data.arrayBuffer())
+            const options = { path: { galaxy, survey }, throwOnError: true } as const
+            const { data } = await (predicted
+              ? getSpectrumAionPredictionFalseColor(options)
+              : getSpectrumFalseColor(options))
+            return new Uint8Array(await data.arrayBuffer())
           },
     ...FOREVER
   })

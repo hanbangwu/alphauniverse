@@ -55,10 +55,17 @@
   {/if}
 {/snippet}
 
+{#snippet falseColor(field: Field<boolean>)}
+  <label class="flex items-center gap-2 text-sm font-medium">
+    <Switch bind:checked={field.value} />
+    False color
+  </label>
+{/snippet}
+
 {#snippet anyPosition(noun: string, modes: readonly CosineMode[], anywhere: Field<boolean>)}
   <label class="flex items-center gap-2 text-sm font-medium">
     <Switch
-      aria-label="Any position for {noun} tokens"
+      aria-label="Any position for {noun} patches"
       bind:checked={anywhere.value}
       disabled={!modes.some((mode) => similarity.shown(mode))}
     />
@@ -72,11 +79,14 @@
       {@render controls(
         'image',
         IMAGE_MODES,
-        IMAGE_MODES.map((mode) => view.tokens[mode])
+        IMAGE_MODES.map((mode) => view.patches[mode])
       )}
     {/snippet}
-    {@render anyPosition('image', IMAGE_MODES, view.imageAnywhere)}
-    <div class="flex max-w-2xl flex-col gap-5">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+      {@render anyPosition('image', IMAGE_MODES, view.imageAnywhere)}
+      {@render falseColor(similarity.imageFalseColor)}
+    </div>
+    <div class="grid max-w-2xl gap-5 md:grid-cols-2">
       {#each IMAGE_SURVEYS as survey (survey)}
         <Observed galaxy={similarity.galaxy} {survey} kind="image">
           {#snippet children(matched)}
@@ -106,10 +116,13 @@
       {@render controls(
         'spectrum',
         SPECTRUM_MODES,
-        SPECTRUM_MODES.map((mode) => view.tokens[mode])
+        SPECTRUM_MODES.map((mode) => view.patches[mode])
       )}
     {/snippet}
-    {@render anyPosition('spectrum', SPECTRUM_MODES, view.spectrumAnywhere)}
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+      {@render anyPosition('spectrum', SPECTRUM_MODES, view.spectrumAnywhere)}
+      {@render falseColor(similarity.spectrumFalseColor)}
+    </div>
     {#each SPECTRUM_SURVEYS as survey (survey)}
       {@const mode = spectrumMode(survey)}
       {@const layer = similarity.layerOf(mode)}
@@ -133,7 +146,7 @@
                     display.spectra.query
                   )}
                 caption={similarity.layerCaption}
-                selected={similarity.tokensOf(mode)}
+                selected={similarity.patchesOf(mode)}
                 ontoggle={similarity.toggler(mode, matched)}
                 error={similarity.layerError(mode)}
               />

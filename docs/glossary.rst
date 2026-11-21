@@ -52,6 +52,9 @@ Glossary
    equivalent width
       A spectral line's flux divided by the continuum's flux density beside it, :math:`\int (F_\lambda / F_c - 1)\, d\lambda` over the line, in Å. See :doc:`dev/reference`.
 
+   false color
+      Three numbers per point shown as its red, green and blue, in place of the colors the eye would see.
+
    foundation model
       A large network trained once on broad data and then used unchanged for many tasks.
 

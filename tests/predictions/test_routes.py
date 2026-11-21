@@ -4,7 +4,7 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from aion.fourm.modality_info import MODALITY_INFO
-from aion.modalities import LegacySurveyImage
+from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -49,6 +49,27 @@ def test_image_aion_prediction_is_a_png_of_the_crop(
         )
 
 
+@pytest.mark.parametrize(
+    ("survey", "kind", "slots"),
+    [
+        ("hsc", "image", LegacySurveyImage.num_tokens),
+        ("sdss", "spectrum", DESISpectrum.num_tokens - 1),
+    ],
+)
+def test_aion_prediction_false_color_covers_a_galaxy_without_that_observation(
+    client: TestClient, survey: str, kind: str, slots: int
+) -> None:
+    unobserved = _stored("tokens").column(survey).is_valid().to_pylist().index(False)
+
+    response = client.get(
+        f"/galaxy/{unobserved}/{kind}/{survey}/aion_prediction/false_color"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert len(response.content) == slots * 3
+
+
 @pytest.mark.parametrize("survey", ["desi", "sdss"])
 def test_spectrum_aion_prediction_without_that_spectrum_is_the_shape_on_the_codec_grid(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, survey: str
@@ -89,12 +110,9 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalog_and_table_va
     response = client.get("/galaxy/0/table")
     table_columns.cache_clear()
 
-    stored = _stored("tokens")
-    hsc, redshift = (stored.column(name)[0] for name in ("hsc", REDSHIFT))
     plain = {
         "aion_prediction": None,
         "table_value": None,
-        "token": None,
         "excluded": None,
     }
     assert response.status_code == 200
@@ -105,7 +123,6 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalog_and_table_va
             "value": 0.25,
             "aion_prediction": float(_aion_prediction(REDSHIFT)[0, 0]),
             "table_value": REDSHIFT_TABLE_VALUE,
-            "token": redshift.values[0].as_py(),
             "excluded": None,
         },
         {"section": REDSHIFT, "column": "DESI ZERR", "value": 1e-4, **plain},
@@ -116,7 +133,6 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalog_and_table_va
             "value": 0.26,
             "aion_prediction": None,
             "table_value": None,
-            "token": None,
             "excluded": "AION takes one redshift: DESI's",
         },
         {"section": REDSHIFT, "column": "SDSS Z_ERR", "value": 2e-4, **plain},
@@ -127,10 +143,19 @@ def test_table_rows_lead_with_the_redshifts_then_name_their_catalog_and_table_va
             "value": 1.5,
             "aion_prediction": float(_aion_prediction("hsc_table")[0, 0]),
             "table_value": pql.TABLE_SLOTS.index(("hsc_table", 0)),
-            "token": hsc.values[LegacySurveyImage.num_tokens].as_py(),
             "excluded": None,
         },
     ]
+
+
+def test_catalog_values_of_an_unmatched_survey_have_no_table_value(
+    client: TestClient,
+) -> None:
+    unmatched = _stored("tokens").column("hsc").is_valid().to_pylist().index(False)
+
+    rows = client.get(f"/galaxy/{unmatched}/table").json()
+
+    assert all(row["table_value"] is None for row in rows if row["section"] == "hsc")
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,5 @@
 import type { CosineMode } from '$lib/client'
-import { TOKEN_MODES, byMode } from '$lib/data/modes'
+import { PATCH_MODES, byMode } from '$lib/data/modes'
 import type { SearchQuery } from '$lib/data/similarity'
 import { MODES, POINT_SETS, PROPERTIES } from '$lib/labels'
 import type { Source } from './field.svelte'
@@ -40,6 +40,8 @@ export const schema = z.object({
   layer: z.enum(['self', 'all']).catch('self'),
   mask: flag,
   invert: flag,
+  image_false_color: flag,
+  spectrum_false_color: flag,
   image_threshold: threshold,
   image_match_threshold: threshold,
   spectrum_threshold: threshold,
@@ -49,7 +51,7 @@ export const schema = z.object({
   text: z.string().nullable().catch(null),
   ...byMode(() => indices),
   table_values: indices,
-  anywhere: z.array(z.enum(TOKEN_MODES as [CosineMode, ...CosineMode[]])).catch([]),
+  anywhere: z.array(z.enum(PATCH_MODES as [CosineMode, ...CosineMode[]])).catch([]),
   modes: z.array(z.enum(Object.keys(MODES) as [keyof typeof MODES])).catch([]),
   matches: z.int().min(matches.minimum).max(matches.maximum).catch(matches.default)
 })
@@ -83,7 +85,7 @@ export function searched(): Source<SearchQuery | null> {
     const common = { galaxy, anywhere: params.anywhere, matches: params.matches }
     if (params.modes.length) return { ...common, modes: params.modes }
     const lists = byMode((mode) => params[mode])
-    if (!params.table_values.length && TOKEN_MODES.every((mode) => !lists[mode].length)) return null
+    if (!params.table_values.length && PATCH_MODES.every((mode) => !lists[mode].length)) return null
     return { ...common, ...lists, table_values: params.table_values }
   })
   return {

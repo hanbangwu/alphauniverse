@@ -71,7 +71,7 @@ def search_ecsv(
         table[mode] = masked(values, observed[survey])
     for slot, (name, survey) in enumerate(TABLE_VALUES.items()):
         table[name] = masked(maps["table_values"][:, slot], observed[survey])
-    table.meta = {"search": "whole modes" if whole else "tokens"}
+    table.meta = {"search": "whole modes" if whole else "patches"}
     if not whole:
         table.meta["selection"] = selection(query)
     return written(table)

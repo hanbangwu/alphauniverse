@@ -83,6 +83,17 @@ def query_image_tokens(
     )
 
 
+def dense_image_tokens(
+    rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
+) -> np.ndarray:
+    codes, probabilities, spread = query_image_tokens(rows, survey, slots)
+    dense = np.repeat(
+        spread[..., None], MODALITY_INFO["tok_image"]["vocab_size"], axis=-1
+    )
+    np.put_along_axis(dense, codes, probabilities, axis=-1)
+    return dense
+
+
 def spectrum_token_coefficients(
     rows: pa.RecordBatch, survey: str, slots: slice | np.ndarray
 ) -> np.ndarray:

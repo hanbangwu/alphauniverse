@@ -1,11 +1,10 @@
 <script lang="ts">
   import GalaxyName from '$lib/components/galaxy-name.svelte'
-  import DetailImage from '$lib/components/panels/detail-image.svelte'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
   import { MODES, SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
   import { DECIMALS } from '$lib/state/mask.svelte'
-  import ImageTokenPanel from './image-token-panel.svelte'
+  import ImagePatchPanel from './image-patch-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import SpectrumPanel from './spectrum-panel.svelte'
 
@@ -37,7 +36,7 @@
       >
     </button>
     {#if view.open.current.images}
-      <div class="flex max-w-2xl flex-col gap-5">
+      <div class="grid max-w-2xl gap-5 md:grid-cols-2">
         {#each IMAGE_SURVEYS as survey (survey)}
           {#if similarity.shows(survey, index)}
             {@const mode = imageMode(survey)}
@@ -46,17 +45,16 @@
               <h3 class="text-xs tracking-wider text-muted-foreground uppercase">
                 {SURVEYS[survey]}
               </h3>
-              <div class="grid items-end gap-5 md:grid-cols-2">
-                <DetailImage {galaxy} {survey} />
-                <ImageTokenPanel
-                  label={SURVEYS[survey]}
-                  {values}
-                  color={similarity.scales?.[mode]?.heat ?? null}
-                  mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
-                  title={similarity.score}
-                  selected={similarity.outlinesAt(mode, index)}
-                />
-              </div>
+              <ImagePatchPanel
+                label={SURVEYS[survey]}
+                {values}
+                color={similarity.scales?.[mode]?.heat ?? null}
+                mask={similarity.maskOf(values, similarity.imageDomain, display.images.matches)}
+                title={similarity.score}
+                {galaxy}
+                {survey}
+                selected={similarity.outlinesAt(mode, index)}
+              />
             </section>
           {/if}
         {/each}

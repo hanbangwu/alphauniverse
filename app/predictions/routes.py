@@ -19,9 +19,22 @@ from app.config import (
     SpectrumSurvey,
 )
 from app.dataset.dataset import catalog, fitted, predicted_image, redshift, table
-from app.encoding.store import FIRST_LS_TABLE_VALUE, table_value_tokens
-from app.predictions.store import aion_predictions, table_value_aion_predictions
-from app.responses import ARROW_STREAM, PNG, RevalidatedRoute, arrow
+from app.encoding.store import (
+    FIRST_LS_TABLE_VALUE,
+    false_colors,
+    image_lattice,
+    observed,
+    spectrum_lattice,
+)
+from app.predictions.store import (
+    aion_predictions,
+    dense_image_tokens,
+    distributions,
+    row,
+    spectrum_token_coefficients,
+    table_value_aion_predictions,
+)
+from app.responses import ARROW_STREAM, BINARY_OCTET, PNG, RevalidatedRoute, arrow
 
 router = APIRouter(tags=["predictions"], route_class=RevalidatedRoute)
 
@@ -32,7 +45,6 @@ class TableRow(BaseModel):
     value: float | int | bool | None
     aion_prediction: float | None
     table_value: int | None
-    token: int | None
     excluded: str | None
 
 
@@ -52,7 +64,6 @@ def redshift_row(
     survey: SpectrumSurvey,
     values: dict,
     chosen: str | None,
-    token_ids: dict[str, int],
     predicted: dict[str, float],
 ) -> TableRow:
     first = column == REDSHIFT_COLUMNS[survey][0]
@@ -65,26 +76,25 @@ def redshift_row(
         if first and survey == (chosen or SPECTRUM_SURVEY)
         else None,
         table_value=REDSHIFT_TABLE_VALUE if selectable else None,
-        token=token_ids.get(REDSHIFT) if selectable else None,
         excluded=excluded(values, survey, chosen) if first else None,
     )
 
 
 def catalog_row(
-    column: str, value: Any, token_ids: dict[str, int], predicted: dict[str, float]
+    galaxy: int, column: str, value: Any, predicted: dict[str, float]
 ) -> TableRow:
+    section = catalog(column)
     table_value = (
         FIRST_LS_TABLE_VALUE + TABLE_VALUE_COLUMNS.index(column)
-        if column in TABLE_VALUE_COLUMNS
+        if column in TABLE_VALUE_COLUMNS and observed(section)[galaxy]
         else None
     )
     return TableRow(
-        section=catalog(column),
+        section=section,
         column=column.partition("-")[0],
         value=value,
         aion_prediction=predicted.get(column),
         table_value=table_value,
-        token=None if table_value is None else token_ids.get(column),
         excluded=None,
     )
 
@@ -93,7 +103,6 @@ def catalog_row(
     "/galaxy/{galaxy}/table",
 )
 def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
-    token_ids = table_value_tokens(galaxy)
     predicted = table_value_aion_predictions(galaxy)
     values = table(galaxy)
     chosen = redshift(values)
@@ -104,10 +113,10 @@ def get_table(galaxy: GalaxyIndex) -> list[TableRow]:
     ]
     redshifts = {column for column, _ in shown}
     return [
-        redshift_row(column, survey, values, chosen, token_ids, predicted)
+        redshift_row(column, survey, values, chosen, predicted)
         for column, survey in shown
     ] + [
-        catalog_row(column, value, token_ids, predicted)
+        catalog_row(galaxy, column, value, predicted)
         for column, value in values.items()
         if column not in redshifts
     ]
@@ -122,6 +131,21 @@ def get_image_aion_prediction(galaxy: GalaxyIndex, survey: ImageSurvey) -> Respo
     return Response(
         predicted_image(aion_predictions(f"{survey}_image")[galaxy], survey),
         media_type="image/png",
+    )
+
+
+@router.get(
+    "/galaxy/{galaxy}/image/{survey}/aion_prediction/false_color",
+    response_class=Response,
+    responses={200: {"content": BINARY_OCTET}},
+)
+def get_image_aion_prediction_false_color(
+    galaxy: GalaxyIndex, survey: ImageSurvey
+) -> Response:
+    dense = dense_image_tokens(row(galaxy), survey, slice(None))[0]
+    return Response(
+        false_colors(dense @ image_lattice()).tobytes(),
+        media_type="application/octet-stream",
     )
 
 
@@ -141,4 +165,20 @@ def get_spectrum_aion_prediction(
                 "flux": pa.array(flux, pa.float32()),
             }
         )
+    )
+
+
+@router.get(
+    "/galaxy/{galaxy}/spectrum/{survey}/aion_prediction/false_color",
+    response_class=Response,
+    responses={200: {"content": BINARY_OCTET}},
+)
+def get_spectrum_aion_prediction_false_color(
+    galaxy: GalaxyIndex, survey: SpectrumSurvey
+) -> Response:
+    coefficients = spectrum_token_coefficients(row(galaxy), survey, slice(None))[0]
+    dense = distributions(f"{survey}_spectrum", coefficients)
+    return Response(
+        false_colors(dense @ spectrum_lattice()).tobytes(),
+        media_type="application/octet-stream",
     )

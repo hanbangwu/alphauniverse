@@ -1,12 +1,20 @@
+<script module lang="ts">
+  import type { RGB } from '$lib/color'
+  import { IMAGE_GRID } from '$lib/data/modes'
+
+  const PATCHES = Array.from({ length: IMAGE_GRID ** 2 }, (_, index) => index)
+  const BLACK = (): RGB => [0, 0, 0]
+  const CLEAR = (): number => 0
+</script>
+
 <script lang="ts">
   import type { ImageSurvey } from '$lib/client'
-  import { tokenAlpha, tokenColors } from '$lib/color'
-  import DetailImage from '$lib/components/panels/detail-image.svelte'
+  import { falseColors } from '$lib/color'
   import { imageMode } from '$lib/data/modes'
-  import { tokensQuery } from '$lib/data/queries'
+  import { imageFalseColorQuery } from '$lib/data/queries'
   import { SURVEYS } from '$lib/labels'
   import { getApp } from '$lib/state/app.svelte'
-  import ImageTokenPanel from './image-token-panel.svelte'
+  import ImagePatchPanel from './image-patch-panel.svelte'
   import { getSimilarity } from './similarity.svelte'
   import { createQuery } from '@tanstack/svelte-query'
 
@@ -18,37 +26,37 @@
   let { survey, matched }: Props = $props()
 
   const similarity = getSimilarity()
-  const { mask: display } = getApp()
+  const { view, mask: display } = getApp()
 
   const mode = $derived(imageMode(survey))
-  const tokens = createQuery(() => tokensQuery(matched ? similarity.galaxy : null, survey))
-  const palette = $derived(tokens.data ? tokenColors(tokens.data) : null)
+  const falseColor = $derived(similarity.imageFalseColor.value)
+  const colors = createQuery(() =>
+    imageFalseColorQuery(
+      falseColor ? similarity.galaxy : null,
+      survey,
+      view.dataSource.value === 'prediction'
+    )
+  )
+  const palette = $derived(colors.data ? falseColors(colors.data) : null)
   const layer = $derived(similarity.layerOf(mode))
-  const error = $derived(tokens.isError ? tokens.error.message : similarity.layerError(mode))
-
-  let hovered = $state(false)
+  const error = $derived(colors.isError ? colors.error.message : similarity.layerError(mode))
 </script>
 
-<div class="grid items-end gap-5 md:grid-cols-2">
-  <DetailImage galaxy={similarity.galaxy} {survey} />
-  <ImageTokenPanel
-    label={SURVEYS[survey]}
-    values={layer?.values ?? tokens.data ?? null}
-    color={layer?.heat ?? palette}
-    mask={layer &&
-      similarity.maskOf(layer.values, similarity.imageLayerDomain, display.images.query)}
-    opacity={layer ? undefined : (picked) => (hovered ? tokenAlpha(picked) : 1)}
-    galaxy={similarity.galaxy}
-    {survey}
-    title={layer ? similarity.layerCaption : similarity.caption}
-    selected={similarity.tokensOf(mode)}
-    ontoggle={similarity.toggler(mode, matched)}
-    busy={matched && !tokens.data && !tokens.isError}
-    onhover={(value) => (hovered = value)}
-    imageOpacity={layer || hovered || !matched ? undefined : tokenAlpha(false)}
-  >
-    {#if error}
-      <p role="alert" class="text-xs leading-relaxed text-destructive">{error}</p>
-    {/if}
-  </ImageTokenPanel>
-</div>
+<ImagePatchPanel
+  label={SURVEYS[survey]}
+  values={layer?.values ?? PATCHES}
+  color={layer?.heat ?? palette ?? BLACK}
+  mask={layer && similarity.maskOf(layer.values, similarity.imageLayerDomain, display.images.query)}
+  opacity={layer || palette ? undefined : CLEAR}
+  galaxy={similarity.galaxy}
+  {survey}
+  title={layer ? similarity.layerCaption : undefined}
+  selected={similarity.patchesOf(mode)}
+  ontoggle={similarity.toggler(mode, matched)}
+  busy={falseColor && !colors.data && !colors.isError}
+  imageOpacity={!layer && palette ? 0 : undefined}
+>
+  {#if error}
+    <p role="alert" class="text-xs leading-relaxed text-destructive">{error}</p>
+  {/if}
+</ImagePatchPanel>

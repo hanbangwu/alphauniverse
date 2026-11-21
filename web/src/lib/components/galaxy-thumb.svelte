@@ -41,14 +41,6 @@
   />
 {/if}
 
-{#if predicted}
-  <span
-    class="pointer-events-none absolute top-1.5 left-1.5 rounded-sm bg-black/60 px-1 text-[10px] font-medium text-white"
-  >
-    AION
-  </span>
-{/if}
-
 {#if failed !== src && loaded !== src}
   <div class="absolute inset-0 grid place-content-center">
     <Spinner class="size-6" />
