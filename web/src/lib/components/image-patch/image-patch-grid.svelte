@@ -88,8 +88,7 @@
         lineWidth: HOVER.lineWidth
       },
       z2: pointed ? 1 : 0,
-      transition: 'style',
-      emphasis: { style: HOVER }
+      emphasis: interactive ? { style: HOVER } : undefined
     }
   }
 
@@ -101,13 +100,14 @@
     tooltip: title
       ? {
           ...TOOLTIP,
+          show: true,
           trigger: 'item',
           formatter: (params) => {
             const { dataIndex } = Array.isArray(params) ? params[0] : params
             return title(values[dataIndex], dataIndex)
           }
         }
-      : undefined,
+      : { show: false },
     series: [{ type: 'custom', data: cells, renderItem: cell }]
   })
 
