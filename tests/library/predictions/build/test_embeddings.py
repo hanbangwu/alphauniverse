@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -12,9 +13,11 @@ RANK = 5
 
 
 def test_each_stored_embedding_is_the_best_rank_approximation_of_its_centered_gram(
-    tree: Path, monkeypatch: pytest.MonkeyPatch
+    tree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fp32_precision: Callable[[object, str], None],
 ) -> None:
-    monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
+    fp32_precision(torch.backends.cuda.matmul, "tf32")
     monkeypatch.setattr(embeddings, "TOKEN_EMBEDDING_RANK", RANK)
 
     grams.generate_token_grams()

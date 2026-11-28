@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -133,9 +134,11 @@ def test_a_spectrum_aion_prediction_decodes_the_codebook_averaged_over_each_wind
 
 
 def test_each_stored_aion_prediction_is_its_galaxy_s_in_every_mode(
-    tree: Path, random_weights: None, monkeypatch: pytest.MonkeyPatch
+    tree: Path,
+    random_weights: None,
+    fp32_precision: Callable[[object, str], None],
 ) -> None:
-    monkeypatch.setattr(torch.backends.cudnn.conv, "fp32_precision", "ieee")
+    fp32_precision(torch.backends.cudnn.conv, "ieee")
 
     aion_predictions.generate_aion_predictions()
 

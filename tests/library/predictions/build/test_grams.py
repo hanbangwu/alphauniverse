@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 from typing import get_args
 
@@ -37,10 +38,12 @@ def test_a_row_with_search_s_representation_equals_search_with_every_slot_select
 
 
 def test_each_stored_gram_holds_every_galaxy_s_row_across_tiles(
-    tree: Path, monkeypatch: pytest.MonkeyPatch
+    tree: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fp32_precision: Callable[[object, str], None],
 ) -> None:
     monkeypatch.setattr(grams, "ROWS", 5 * LegacySurveyImage.num_tokens)
-    monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
+    fp32_precision(torch.backends.cuda.matmul, "tf32")
 
     grams.generate_token_grams()
 

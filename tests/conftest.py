@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -49,3 +49,16 @@ def random_weights() -> Iterator[None]:
         patch.setattr(encode_module, "model", lambda: network)
         yield
     encode_module.CodecManager._load_codec_from_hf.cache_clear()
+
+
+@pytest.fixture
+def fp32_precision() -> Iterator[Callable[[object, str], None]]:
+    saved: list[tuple[object, str]] = []
+
+    def set_precision(backend: object, precision: str) -> None:
+        saved.append((backend, backend.fp32_precision))
+        backend.fp32_precision = precision
+
+    yield set_precision
+    for backend, precision in reversed(saved):
+        backend.fp32_precision = precision
