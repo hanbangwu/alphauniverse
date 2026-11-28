@@ -29,6 +29,7 @@
 </script>
 
 <script lang="ts">
+  import type { GalaxyId } from '$lib/client'
   import { propertyColors } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
   import {
@@ -75,17 +76,15 @@
   )
   const settle = useDebounce((value: Rectangle | Point[] | null) => (region.value = value), 200)
 
-  let tooltip: DataPoint | number | null = $derived(view.galaxy.value)
+  let tooltip: DataPoint | GalaxyId | null = $derived(view.galaxy.value)
 
-  const results = $derived(
-    search.data && !search.isPlaceholderData ? Array.from(search.data.galaxies) : null
-  )
+  const results = $derived(search.data && !search.isPlaceholderData ? search.data.galaxies : null)
   const circled = $derived(view.galaxy.value === null ? null : (results ?? [view.galaxy.value]))
   const values = createQuery(() =>
     valuesQuery(mosaic, filters.range.value ? (colored?.name ?? null) : null, circled)
   )
 
-  function inRange(galaxy: number): boolean {
+  function inRange(galaxy: GalaxyId): boolean {
     const range = filters.range.value
     if (!range) return true
     const value = values.data?.get(galaxy)
@@ -106,7 +105,7 @@
         category="color"
         categoryColors={shades}
         additionalFields={{ value: 'value', width: 'width', predicted: 'predicted' }}
-        identifier="galaxy"
+        identifier="object_id"
         filter={mosaic.filter}
         rangeSelectionValue={region.value}
         onRangeSelection={settle}
@@ -121,7 +120,7 @@
         }}
         onTooltip={(point: DataPoint | null) => (tooltip = point)}
         onSelection={(picked: DataPoint[] | null) => {
-          const galaxies = picked?.map((point) => Number(point.identifier)) ?? []
+          const galaxies = picked?.map((point) => String(point.identifier)) ?? []
           const galaxy = galaxies.at(-1) ?? null
           const toggled = galaxies.length > 1 && highlighted?.some((circled) => circled === galaxy)
           if (picked && !toggled) view.select(galaxy)

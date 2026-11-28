@@ -21,6 +21,7 @@ app = modal.App("alphauniverse")
 cache_volume = modal.Volume.from_name("alphauniverse-cache", create_if_missing=True)
 
 environment = {
+    "ALPHAUNIVERSE_DATA_DIR": CACHE_PATH,
     "HF_HOME": CACHE_PATH,
     "WANDB_DIR": CACHE_PATH,
 }
@@ -30,82 +31,8 @@ build_image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_sync(groups=["build"], extra_options="--no-dev")
     .env(environment)
-    .add_local_python_source("app")
+    .add_local_python_source("alphauniverse", "server")
 )
-
-
-@app.function(
-    image=build_image,
-    gpu="T4",
-    cpu=(2, 4),
-    memory=(8 * 1024, 32 * 1024),
-    timeout=2 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_embeddings() -> None:
-    from app.encoding.build.encode import generate_embeddings
-
-    generate_embeddings()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="T4",
-    cpu=(8, 16),
-    memory=(4 * 1024, 16 * 1024),
-    timeout=4 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_predictions() -> None:
-    from app.predictions.build.predictions import generate_predictions
-
-    generate_predictions()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="H100!",
-    cpu=4,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=4 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_token_grams() -> None:
-    from app.predictions.build.grams import generate_token_grams
-
-    generate_token_grams()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="H100!",
-    cpu=4,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=5 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_token_embeddings() -> None:
-    from app.predictions.build.embeddings import generate_token_embeddings
-
-    generate_token_embeddings()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    cpu=2,
-    memory=(2 * 1024, 8 * 1024),
-    timeout=1 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_joint_embedding() -> None:
-    from app.predictions.build.embeddings import generate_joint_embedding
-
-    generate_joint_embedding()
-    cache_volume.commit()
 
 
 @app.function(
@@ -116,7 +43,7 @@ def generate_joint_embedding() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_properties() -> None:
-    from app.projection.build.properties import generate_properties
+    from server.projection.build.properties import generate_properties
 
     generate_properties()
     cache_volume.commit()
@@ -130,54 +57,9 @@ def generate_properties() -> None:
     volumes={CACHE_PATH: cache_volume},
 )
 def generate_maps() -> None:
-    from app.projection.build.maps import generate_maps
+    from server.projection.build.maps import generate_maps
 
     generate_maps()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L4",
-    cpu=4,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=20 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_aion_predictions() -> None:
-    from app.predictions.build.aion_predictions import generate_aion_predictions
-
-    generate_aion_predictions()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="H100!",
-    cpu=4,
-    memory=(16 * 1024, 64 * 1024),
-    timeout=80 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_observed_grams() -> None:
-    from app.predictions.build.observed_grams import generate_observed_grams
-
-    generate_observed_grams()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="H100!",
-    cpu=4,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=10 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_aion_prediction_embeddings() -> None:
-    from app.predictions.build.observed_grams import generate_aion_prediction_embeddings
-
-    generate_aion_prediction_embeddings()
     cache_volume.commit()
 
 
@@ -191,70 +73,9 @@ def generate_aion_prediction_embeddings() -> None:
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
 def generate_projections() -> None:
-    from app.projection.build.parametric_umap import generate_projections
+    from server.projection.build.parametric_umap import generate_projections
 
     generate_projections()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L40S",
-    cpu=4,
-    memory=(8 * 1024, 32 * 1024),
-    timeout=6 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_pairs() -> None:
-    from app.text_search.build.alignment import generate_pairs
-
-    generate_pairs()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L40S",
-    cpu=16,
-    memory=(16 * 1024, 64 * 1024),
-    timeout=24 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_text_views(parts: int) -> None:
-    from app.text_search.build.text_views import generate_text_views
-
-    generate_text_views(parts)
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L40S",
-    cpu=16,
-    memory=(16 * 1024, 64 * 1024),
-    timeout=24 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-    secrets=[modal.Secret.from_name("wandb-secret")],
-)
-def train_text_regression() -> None:
-    from app.text_search.build.text_regression import train_text_regression
-
-    train_text_regression()
-    cache_volume.commit()
-
-
-@app.function(
-    image=build_image,
-    gpu="L40S",
-    cpu=4,
-    memory=(16 * 1024, 32 * 1024),
-    timeout=1 * 60 * 60,
-    volumes={CACHE_PATH: cache_volume},
-)
-def generate_text_vectors() -> None:
-    from app.text_search.build.text_regression import generate_text_vectors
-
-    generate_text_vectors()
     cache_volume.commit()
 
 
@@ -272,22 +93,22 @@ def generate_text_vectors() -> None:
 class QueryEmbedder:
     @modal.enter(snap=True)
     def load(self) -> None:
-        from app.text_search.text_search import embed_queries
+        from alphauniverse.text_search.text_search import embed_queries
 
         embed_queries(["a galaxy"])
 
     @modal.method()
     def embed(self, texts: list[str]) -> np.ndarray:
-        from app.text_search.text_search import embed_queries
+        from alphauniverse.text_search.text_search import embed_queries
 
         return embed_queries(texts)
 
 
 serving_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .uv_sync(extra_options="--no-dev")
+    .uv_sync(groups=["server"], extra_options="--no-dev")
     .env(environment | {"HF_HUB_OFFLINE": "1"})
-    .add_local_python_source("app")
+    .add_local_python_source("alphauniverse", "server")
 )
 
 
@@ -305,8 +126,8 @@ serving_image = (
 @modal.concurrent(max_inputs=SERVING_MAX_INPUTS)
 @modal.asgi_app()
 def fastapi_app() -> FastAPI:
-    from app.main import app
-    from app.text_search.routes import query_embedder
+    from server.main import app
+    from server.text_search.routes import query_embedder
 
     embed = QueryEmbedder().embed.remote
     app.dependency_overrides[query_embedder] = lambda: embed

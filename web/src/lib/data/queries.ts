@@ -1,5 +1,4 @@
 import {
-  getCosines,
   getGalaxy,
   getImageAionPredictionFalseColor,
   getImageFalseColor,
@@ -15,7 +14,7 @@ import {
   getTable,
   getTextSearch
 } from '$lib/api'
-import type { CosineMode, ImageSurvey, Projection, SpectrumSurvey } from '$lib/client'
+import type { GalaxyId, ImageSurvey, Projection, SpectrumSurvey } from '$lib/client'
 import type { Property } from '$lib/labels'
 import type { MosaicState } from '$lib/state/mosaic.svelte'
 import { byMode } from './modes'
@@ -56,16 +55,22 @@ export const positionsQuery = queryOptions({
   queryKey: ['positions'] as const,
   queryFn: async () => {
     const { data } = await getPositions({ throwOnError: true })
-    const table = tableFromIPC<{ ra: Float64; dec: Float64 }>(
+    const table = tableFromIPC<{ object_id: Utf8; ra: Float64; dec: Float64 }>(
       new Uint8Array(await data.arrayBuffer())
     )
-    return { ra: table.getChild('ra')!.toArray(), dec: table.getChild('dec')!.toArray() }
+    const ids = Array.from(table.getChild('object_id')!) as GalaxyId[]
+    return {
+      ids,
+      rows: new Map(ids.map((id, row) => [id, row])),
+      ra: table.getChild('ra')!.toArray(),
+      dec: table.getChild('dec')!.toArray()
+    }
   },
   ...FOREVER
 })
 
 export function imageFalseColorQuery(
-  galaxy: number | null,
+  galaxy: GalaxyId | null,
   survey: ImageSurvey,
   predicted: boolean
 ) {
@@ -85,7 +90,7 @@ export function imageFalseColorQuery(
   })
 }
 
-export function coverageQuery(galaxy: number | null) {
+export function coverageQuery(galaxy: GalaxyId | null) {
   return queryOptions({
     queryKey: ['coverage', galaxy] as const,
     queryFn:
@@ -99,7 +104,7 @@ export function coverageQuery(galaxy: number | null) {
   })
 }
 
-export function tableQuery(galaxy: number | null) {
+export function tableQuery(galaxy: GalaxyId | null) {
   return queryOptions({
     queryKey: ['table', galaxy] as const,
     queryFn:
@@ -123,7 +128,7 @@ async function spectrumOf(data: Blob): Promise<Spectrum> {
   }
 }
 
-export function spectrumQuery(galaxy: number | null, survey: SpectrumSurvey) {
+export function spectrumQuery(galaxy: GalaxyId | null, survey: SpectrumSurvey) {
   return queryOptions({
     queryKey: ['spectrum', galaxy, survey] as const,
     queryFn:
@@ -137,7 +142,7 @@ export function spectrumQuery(galaxy: number | null, survey: SpectrumSurvey) {
   })
 }
 
-export function spectrumAionPredictionQuery(galaxy: number | null, survey: SpectrumSurvey) {
+export function spectrumAionPredictionQuery(galaxy: GalaxyId | null, survey: SpectrumSurvey) {
   return queryOptions({
     queryKey: ['spectrum', galaxy, survey, 'prediction'] as const,
     queryFn:
@@ -155,7 +160,7 @@ export function spectrumAionPredictionQuery(galaxy: number | null, survey: Spect
 }
 
 export function spectrumFalseColorQuery(
-  galaxy: number | null,
+  galaxy: GalaxyId | null,
   survey: SpectrumSurvey,
   predicted: boolean
 ) {
@@ -172,24 +177,6 @@ export function spectrumFalseColorQuery(
             return new Uint8Array(await data.arrayBuffer())
           },
     ...FOREVER
-  })
-}
-
-export function cosinesQuery(galaxy: number | null, mode: CosineMode) {
-  return queryOptions({
-    queryKey: ['cosines', galaxy, mode] as const,
-    queryFn:
-      galaxy === null
-        ? skipToken
-        : async ({ signal }) => {
-            const { data } = await getCosines({
-              path: { galaxy, mode },
-              signal,
-              throwOnError: true
-            })
-            return new Float32Array(await data.arrayBuffer())
-          },
-    staleTime: Infinity
   })
 }
 
@@ -222,7 +209,7 @@ export function coloringQuery(
   })
 }
 
-export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: number[] | null) {
+export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: GalaxyId[] | null) {
   return queryOptions({
     queryKey: ['values', name, galaxies] as const,
     queryFn:
@@ -231,11 +218,14 @@ export function valuesQuery(mosaic: MosaicState, name: string | null, galaxies: 
         : async () => {
             const rows = await mosaic.coordinator.query(
               Query.from(name)
-                .select('galaxy', 'value')
-                .where(isIn(column('galaxy'), galaxies))
+                .select('object_id', 'value')
+                .where(isIn(column('object_id'), galaxies))
             )
             return new Map(
-              Array.from(rows, ({ galaxy, value }): [number, number | null] => [galaxy, value])
+              Array.from(rows, ({ object_id, value }): [GalaxyId, number | null] => [
+                object_id,
+                value
+              ])
             )
           },
     staleTime: Infinity
@@ -282,7 +272,7 @@ export function similarityQuery(request: SearchQuery | null) {
             const tableValues = maps(table, 'table_values')
             return {
               request,
-              galaxies: table.getChild('galaxy')!.toArray(),
+              galaxies: Array.from(table.getChild('galaxy')!) as GalaxyId[],
               scores: table.getChild(whole ? 'score' : 'similarity')!.toArray(),
               contributions: whole
                 ? Object.fromEntries(

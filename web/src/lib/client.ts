@@ -1,4 +1,4 @@
-import type { GetCosinesData, GetImageData, GetProjectionsData, GetSpectrumData } from './api'
+import type { GetImageData, GetProjectionsData, GetSaliencyData, GetSpectrumData } from './api'
 import type { HttpValidationError } from './api'
 import { login } from './api'
 import { client } from './api/client.gen'
@@ -15,7 +15,9 @@ client.interceptors.error.use((error, response) => {
 
 export type Projection = GetProjectionsData['path']['projection']
 
-export type CosineMode = GetCosinesData['path']['mode']
+export type TokenMode = NonNullable<GetSaliencyData['query']['anywhere']>[number]
+
+export type GalaxyId = string
 
 export type ImageSurvey = GetImageData['path']['survey']
 

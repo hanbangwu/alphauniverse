@@ -11,7 +11,7 @@
 
   let { tooltip, label }: Props = $props()
 
-  const galaxy = $derived(Number(tooltip.identifier))
+  const galaxy = $derived(String(tooltip.identifier))
 </script>
 
 <div class="glass text-popover-foreground flex w-40 flex-col gap-1.5 rounded-xl p-2">

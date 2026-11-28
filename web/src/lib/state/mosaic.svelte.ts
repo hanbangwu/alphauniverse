@@ -1,4 +1,5 @@
 import type { GetProjectionsData, GetPropertiesData } from '$lib/api'
+import type { GalaxyId } from '$lib/client'
 import { type Projection, client } from '$lib/client'
 import { BINS } from '$lib/color'
 import { extent } from '$lib/data/scores'
@@ -106,7 +107,7 @@ export class MosaicState {
     const width = predictable ? `${property}_width` : 'NULL'
     const predicted = everywhere ? 'true' : `${measured} IS NULL`
     const value = everywhere ? prediction : `coalesce(${measured}, ${prediction})`
-    const shown = `SELECT galaxy, ${value} AS value, ${predicted} AS predicted,
+    const shown = `SELECT object_id, ${value} AS value, ${predicted} AS predicted,
       CASE WHEN ${predicted} THEN ${width} END AS width FROM properties`
     const summary = (
       await database.query(`
@@ -141,8 +142,8 @@ export class MosaicState {
     const table = `${points}_${values.name}`
     await this.connect().exec(`
       CREATE OR REPLACE VIEW ${table} AS
-      SELECT p.galaxy, p.x, p.y, c.value, c.width, c.predicted, c.color
-      FROM ${points} p LEFT JOIN ${values.name} c USING (galaxy)`)
+      SELECT p.object_id, p.x, p.y, c.value, c.width, c.predicted, c.color
+      FROM ${points} p LEFT JOIN ${values.name} c USING (object_id)`)
     return { ...values, table }
   }
 
@@ -150,7 +151,7 @@ export class MosaicState {
     table: string,
     region: Rectangle | Point[],
     range: readonly [number, number] | null
-  ): Promise<number[]> {
+  ): Promise<GalaxyId[]> {
     const box = 'xMin' in region ? region : bounds(region)
     const where = [
       isBetween(column('x'), [box.xMin, box.xMax]),
@@ -158,12 +159,12 @@ export class MosaicState {
       ...(range ? [isBetween(column('value'), [...range])] : [])
     ]
     const rows = await this.connect().query(
-      Query.from(table).select('galaxy', 'x', 'y').where(where).orderby('galaxy')
+      Query.from(table).select('object_id', 'x', 'y').where(where).orderby('object_id')
     )
     const corners = 'xMin' in region ? null : region.map(({ x, y }): [number, number] => [x, y])
     return Array.from(rows)
       .filter(({ x, y }) => !corners || polygonContains(corners, [x, y]))
-      .map(({ galaxy }) => Number(galaxy))
+      .map(({ object_id }) => String(object_id))
   }
 
   destroy(): void {

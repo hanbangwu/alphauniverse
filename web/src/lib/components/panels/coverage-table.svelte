@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GalaxyId } from '$lib/client'
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
   import { coverageQuery } from '$lib/data/queries'
@@ -8,7 +9,7 @@
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
   }
 
   let { galaxy }: Props = $props()

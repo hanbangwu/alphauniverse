@@ -1,0 +1,168 @@
+from pathlib import Path
+
+import numpy as np
+import pyarrow.compute as pc
+import pytest
+import torch
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import DESISpectrum, LegacySurveyImage
+
+from alphauniverse import config
+from alphauniverse.config import (
+    HSC_BANDS,
+    LS_BANDS,
+    OBJECT_ID,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    SPECTRUM_MODES,
+    TOKEN_SURVEYS,
+)
+from alphauniverse.encoding.build import encode as encode_module
+from alphauniverse.encoding.store import N_HSC_TABLE_VALUES, N_LS_TABLE_VALUES, source
+from scripts.fixture import forget
+
+pytestmark = pytest.mark.usefixtures("random_weights")
+
+
+def image(rng: np.random.Generator, bands: list[str]) -> dict[str, list]:
+    size = MODALITY_INFO["tok_image"]["input_size"] + 8
+    return {
+        "band": bands,
+        "flux": [rng.random((size, size), dtype=np.float32) for _ in bands],
+    }
+
+
+def spectrum(rng: np.random.Generator, samples: int, padding: int) -> dict:
+    wavelength = np.concatenate(
+        [np.linspace(3800, 9200, samples), np.full(padding, -1.0)]
+    )
+    return {
+        "lambda": wavelength,
+        "flux": rng.random(samples + padding),
+        "ivar": np.ones(samples + padding),
+        "mask": np.zeros(samples + padding, dtype=bool),
+    }
+
+
+def galaxy(seed: int, *, hsc: bool, desi: bool, sdss: bool) -> dict:
+    rng = np.random.default_rng(seed)
+    table_values = encode_module.LS_TABLE_VALUES + encode_module.HSC_TABLE_VALUES
+    present = {"desi": desi, "sdss": sdss}
+    redshifts = {
+        column: value if present[survey] else None
+        for (survey, (redshift, error, warning)), measured in zip(
+            REDSHIFT_COLUMNS.items(), (0.5, 0.3), strict=True
+        )
+        for column, value in ((redshift, measured), (error, 1e-4), (warning, False))
+    }
+    return {
+        **redshifts,
+        TOKEN_SURVEYS["ls"]: image(rng, [band.lower() for band in LS_BANDS]),
+        TOKEN_SURVEYS["hsc"]: (
+            image(rng, [band.lower() for band in HSC_BANDS]) if hsc else None
+        ),
+        TOKEN_SURVEYS["desi"]: spectrum(rng, 7781, 0) if desi else None,
+        TOKEN_SURVEYS["sdss"]: spectrum(rng, 3800, 200) if sdss else None,
+        **{column: float(rng.random()) + 0.5 for _, column in table_values},
+        OBJECT_ID: f"row-{rng.integers(1 << 30)}",
+    }
+
+
+@pytest.mark.parametrize(
+    ("modality", "samples", "dataset_pads", "length"),
+    [("DESISpectrum", 7781, 0, 7808), ("SDSSSpectrum", 3800, 200, 4800)],
+)
+def test_spectra_tokenize_as_aion_main_pads_them(
+    modality: str, samples: int, dataset_pads: int, length: int
+) -> None:
+    survey = getattr(encode_module, modality)
+    row = spectrum(np.random.default_rng(2), samples, dataset_pads)
+    padded = {
+        argument: torch.nn.functional.pad(
+            torch.as_tensor(row[field][:samples], dtype=dtype)[None],
+            (0, length - samples),
+            value=value,
+        )
+        for argument, field, dtype, value in (
+            ("flux", "flux", torch.float32, 0.0),
+            ("ivar", "ivar", torch.float32, 0.0),
+            ("wavelength", "lambda", torch.float32, 99999.0),
+            ("mask", "mask", torch.bool, True),
+        )
+    }
+
+    with torch.inference_mode():
+        found = encode_module.spectrum(survey, row)
+        expected = encode_module.codec().encode(survey(**padded))[survey.token_key]
+
+    assert torch.equal(found, expected)
+
+
+def test_each_survey_lands_in_its_own_cell_images_first() -> None:
+    groups = encode_module.tokenize(galaxy(0, hsc=True, desi=True, sdss=True))
+    _, modality_mask = encode_module.encode(groups)
+    positions = encode_module.by_survey(
+        np.arange(len(modality_mask)), groups, modality_mask
+    )
+    identifiers = {
+        key: info["id"] for key, info in encode_module.model().modality_info.items()
+    }
+
+    for survey, group in groups.items():
+        owned = {identifiers[key] for key in group}
+        assert set(modality_mask[positions[survey]]) == owned
+    for survey, image_key in (
+        ("ls", encode_module.LegacySurveyImage.token_key),
+        ("hsc", encode_module.HSCImage.token_key),
+    ):
+        first = modality_mask[positions[survey][: LegacySurveyImage.num_tokens]]
+        assert np.all(first == identifiers[image_key])
+    assert sorted(np.concatenate(list(positions.values()))) == list(
+        range(len(modality_mask))
+    )
+
+
+def test_generated_stores_have_their_schemas_and_a_vector_per_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = [
+        galaxy(0, hsc=True, desi=True, sdss=False),
+        galaxy(1, hsc=False, desi=False, sdss=False),
+        galaxy(2, hsc=False, desi=False, sdss=True),
+    ]
+    monkeypatch.setattr(config, "BUILD_DIR", tmp_path)
+    monkeypatch.setattr(encode_module, "dataset", lambda *_: rows)
+    forget()
+
+    try:
+        encode_module.generate_embeddings()
+
+        table = source("encoded").to_table(
+            columns=["ls", "hsc", *SPECTRUM_MODES.values(), REDSHIFT]
+        )
+        vectors = {
+            column: pc.list_value_length(table.column(column)).to_pylist()
+            for column in table.column_names
+        }
+        assert vectors["ls"] == [
+            LegacySurveyImage.num_tokens + N_LS_TABLE_VALUES
+        ] * len(rows)
+        assert vectors["hsc"] == [
+            LegacySurveyImage.num_tokens + N_HSC_TABLE_VALUES
+            if row[TOKEN_SURVEYS["hsc"]]
+            else None
+            for row in rows
+        ]
+        for survey in SPECTRUM_MODES.values():
+            assert vectors[survey] == [
+                DESISpectrum.num_tokens if row[TOKEN_SURVEYS[survey]] else None
+                for row in rows
+            ]
+        assert vectors[REDSHIFT] == [
+            1
+            if any(row[TOKEN_SURVEYS[survey]] for survey in SPECTRUM_MODES.values())
+            else None
+            for row in rows
+        ]
+    finally:
+        forget()

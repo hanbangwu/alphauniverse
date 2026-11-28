@@ -10,8 +10,8 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from modal.volume import FileEntryType
 
-from app.config import ARTIFACTS, BUILD_DIR, MODES, SEED, artifact
-from app.dataset.dataset import dataset
+from alphauniverse.config import ARTIFACTS, BUILD_DIR, MODES, OBJECT_ID, SEED, artifact
+from alphauniverse.dataset.dataset import dataset
 from modal_app import CACHE_PATH, build_image, cache_volume
 
 FOLDER = ".dev_subset"
@@ -29,15 +29,9 @@ app = modal.App("alphauniverse-dev-subset")
 image = build_image.add_local_python_source("modal_app")
 
 
-def table(role: str, rows: np.ndarray, target: Path) -> None:
+def table(role: str, kept_ids: pa.Array, target: Path) -> None:
     found = ds.dataset(artifact(role), format=ARTIFACTS[role])
-    kept = found.to_table(filter=pc.field("galaxy").isin(rows))
-    position = kept.schema.get_field_index("galaxy")
-    kept = kept.set_column(
-        position,
-        kept.schema.field(position),
-        pa.array(np.searchsorted(rows, kept["galaxy"].to_numpy()), pa.int32()),
-    )
+    kept = found.to_table(filter=pc.field("object_id").isin(kept_ids))
     if ARTIFACTS[role] == "arrow":
         with pa.ipc.new_file(target, found.schema) as writer:
             writer.write_table(kept)
@@ -84,13 +78,14 @@ def cut(galaxies: int) -> None:
         np.random.default_rng(SEED).choice(everyone.num_rows, galaxies, replace=False)
     )
     everyone.select(rows).save_to_disk(target / "dataset")
+    kept_ids = everyone.data.column(OBJECT_ID).combine_chunks().take(rows)
     columns = references(rows, target / artifact("observed_reference").name)
     for role, kind in ARTIFACTS.items():
         source, written = artifact(role), target / artifact(role).name
         if role in COPIED:
             shutil.copy(source, written)
         elif kind in ("arrow", "parquet"):
-            table(role, rows, written)
+            table(role, kept_ids, written)
         elif kind == "npy":
             np.save(written, matrix(role, rows, columns))
         elif role != "observed_reference":

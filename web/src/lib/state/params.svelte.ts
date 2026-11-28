@@ -1,4 +1,4 @@
-import type { CosineMode } from '$lib/client'
+import type { TokenMode } from '$lib/client'
 import { PATCH_MODES, byMode } from '$lib/data/modes'
 import type { SearchQuery } from '$lib/data/similarity'
 import { MODES, POINT_SETS, PROPERTIES } from '$lib/labels'
@@ -33,11 +33,10 @@ export const schema = z.object({
     ])
     .nullable()
     .catch(null),
-  galaxy: z.coerce.number().pipe(z.int().nonnegative()).nullable().catch(null),
+  galaxy: z.string().min(1).nullable().catch(null),
   explorer: flag,
   data_source: z.enum(['dataset', 'prediction']).catch('dataset'),
   search_by: z.enum(['patch', 'whole']).catch('patch'),
-  layer: z.enum(['self', 'all']).catch('self'),
   mask: flag,
   invert: flag,
   image_false_color: flag,
@@ -51,7 +50,7 @@ export const schema = z.object({
   text: z.string().nullable().catch(null),
   ...byMode(() => indices),
   table_values: indices,
-  anywhere: z.array(z.enum(PATCH_MODES as [CosineMode, ...CosineMode[]])).catch([]),
+  anywhere: z.array(z.enum(PATCH_MODES as [TokenMode, ...TokenMode[]])).catch([]),
   modes: z.array(z.enum(Object.keys(MODES) as [keyof typeof MODES])).catch([]),
   matches: z.int().min(matches.minimum).max(matches.maximum).catch(matches.default)
 })

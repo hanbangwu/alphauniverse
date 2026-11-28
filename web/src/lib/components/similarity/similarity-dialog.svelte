@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GalaxyId } from '$lib/client'
   import DataSourceSelect from '$lib/components/common/data-source-select.svelte'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import * as Dialog from '$lib/components/ui/dialog'
@@ -11,7 +12,7 @@
   import { untrack } from 'svelte'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
   }
 
   let { galaxy }: Props = $props()

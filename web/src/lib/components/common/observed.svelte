@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GalaxyId } from '$lib/client'
   import { coverageQuery } from '$lib/data/queries'
   import { SURVEYS, type Survey } from '$lib/labels'
   import { getView } from '$lib/state/app.svelte'
@@ -6,7 +7,7 @@
   import type { Snippet } from 'svelte'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
     survey: Survey
     kind: 'image' | 'spectrum'
     children: Snippet<[boolean]>

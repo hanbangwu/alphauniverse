@@ -20,10 +20,9 @@
 
   interface Props {
     survey: ImageSurvey
-    matched: boolean
   }
 
-  let { survey, matched }: Props = $props()
+  let { survey }: Props = $props()
 
   const similarity = getSimilarity()
   const { view, mask: display } = getApp()
@@ -39,7 +38,7 @@
   )
   const palette = $derived(colors.data ? falseColors(colors.data) : null)
   const layer = $derived(similarity.layerOf(mode))
-  const error = $derived(colors.isError ? colors.error.message : similarity.layerError(mode))
+  const error = $derived(colors.isError ? colors.error.message : similarity.saliencyError)
 </script>
 
 <ImagePatchPanel
@@ -50,9 +49,9 @@
   opacity={layer || palette ? undefined : CLEAR}
   galaxy={similarity.galaxy}
   {survey}
-  title={layer ? similarity.layerCaption : undefined}
+  title={layer ? similarity.correlation : undefined}
   selected={similarity.patchesOf(mode)}
-  ontoggle={similarity.toggler(mode, matched)}
+  ontoggle={similarity.toggler(mode)}
   busy={falseColor && !colors.data && !colors.isError}
   imageOpacity={!layer && palette ? 0 : undefined}
 >

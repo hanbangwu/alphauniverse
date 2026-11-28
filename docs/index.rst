@@ -1,10 +1,12 @@
 alphaUniverse
 =============
 
-alphaUniverse is a website for exploring the galaxies of the COSMOS field through AION :cite:p:`parker2025aion`, Polymathic AI's foundation model for astronomy. On it you can:
+alphaUniverse is a Python library for searching the galaxies of the COSMOS field through AION :cite:p:`parker2025aion`, Polymathic AI's foundation model for astronomy: by parts of a galaxy's image, spectrum or catalog values, by whole surveys, or in plain English, and reading what AION expects each galaxy to look like (:doc:`library/index`).
+
+The alphaUniverse website is built on the library. On it you can:
 
 - **browse the sky** with every galaxy marked on the Legacy Survey image;
-- **browse a UMAP** of every galaxy, where galaxies AION finds alike sit together, colored by redshift, stellar mass or star formation;
+- **browse a UMAP** of every galaxy, where galaxies AION finds alike sit together, colored by redshift, color, size or spectral features;
 - **see what AION expects** a galaxy to look like in every survey, including surveys that never observed it;
 - **find similar galaxies** from the parts of one galaxy's image, spectrum or catalog values you pick;
 - **search in plain English**, for example "a quiescent galaxy with no ongoing star formation".
@@ -14,7 +16,7 @@ alphaUniverse is a website for exploring the galaxies of the COSMOS field throug
 The data
 --------
 
-``hanbangwu/alphauniverse-cosmos`` is Legacy Survey DR10 south over a √2° × √2° box on COSMOS, crossmatched against HSC PDR3, DESI EDR SV3, SDSS, Galaxy Zoo 10 and PROVABGS. AION reads four of these surveys:
+``hanbangwu/alphauniverse-cosmos`` is Legacy Survey DR10 south over a √2° × √2° box on COSMOS, crossmatched against HSC PDR3, DESI EDR SV3 and SDSS. AION reads all four:
 
 ================== ======== =====================================================
 Survey             Modality What AION reads
@@ -25,10 +27,16 @@ DESI EDR SV3       spectrum 3500–10463 Å, resampled to 0.8 Å
 SDSS               spectrum 3500–10463 Å, resampled to 0.8 Å
 ================== ======== =====================================================
 
-It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test. Galaxy Zoo 10 labels are shown with each galaxy's catalog values. :term:`PROVABGS` stellar masses and star formation rates are the measured values the predicted ones are fitted to.
+It also reads one spectroscopic redshift per galaxy: DESI's if unflagged and at most 6, else SDSS's under the same test.
 
 .. toctree::
-   :caption: Guide
+   :caption: Library
+
+   library/index
+   library/reference
+
+.. toctree::
+   :caption: Website
 
    using
    concepts

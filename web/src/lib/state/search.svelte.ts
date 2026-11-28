@@ -1,4 +1,4 @@
-import type { CosineMode } from '$lib/client'
+import type { GalaxyId, TokenMode } from '$lib/client'
 import { PATCH_MODES, anywhereModes } from '$lib/data/modes'
 import type { ModeName, ModeQuery, SaliencyQuery } from '$lib/data/similarity'
 import { Field } from './field.svelte'
@@ -15,8 +15,8 @@ export class SearchState {
   }
 
   selection(
-    galaxy: number | null,
-    patches: Record<CosineMode, number[]>,
+    galaxy: GalaxyId | null,
+    patches: Record<TokenMode, number[]>,
     tableValues: number[],
     imageAnywhere: boolean,
     spectrumAnywhere: boolean
@@ -36,7 +36,7 @@ export class SearchState {
   }
 
   modeSelection(
-    galaxy: number | null,
+    galaxy: GalaxyId | null,
     modes: ModeName[],
     imageAnywhere: boolean,
     spectrumAnywhere: boolean

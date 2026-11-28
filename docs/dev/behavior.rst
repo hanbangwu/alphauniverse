@@ -41,8 +41,8 @@ Galaxy
 
 - Images are the central 96 × 96 px, colored from their *g r i z* flux by the Legacy Survey's mapping.
 - Spectra are smoothed for display with a Gaussian of σ = 2 pixels. Search uses AION's predictions, never the smoothed flux.
-- Groups collapse, and stay open or collapsed for every galaxy in both views. Only Images starts open. The search view adds the catalog group: Galaxy Zoo 10, PROVABGS and the redshift, with the 26 values AION reads selectable.
-- **Data source**: **Prediction** shows the :term:`AION predictions <AION prediction>` of every survey, observed or not: images in place of the observed ones, colored the same way; spectra in place of the observed ones, in the same color, scaled to the observed flux or normalized without one; in search, the median of the predicted distribution beside each of the 25 catalog values and the redshift AION reads, or beside DESI's when the galaxy has no redshift AION reads. In the search, an AION prediction of a survey the galaxy lacks cannot be selected.
+- Groups collapse, and stay open or collapsed for every galaxy in both views. Only Images starts open. The search view adds the catalog group: the redshift, with the 26 values AION reads selectable.
+- **Data source**: **Prediction** shows the :term:`AION predictions <AION prediction>` of every survey, observed or not: images in place of the observed ones, colored the same way; spectra in place of the observed ones, in the same color, scaled to the observed flux or normalized without one; in search, the median of the predicted distribution beside each of the 25 catalog values and the redshift AION reads, or beside DESI's when the galaxy has no redshift AION reads. In the search, cells, windows and values of a survey the galaxy lacks can be selected from AION's prediction.
 
 Similarity search
 -----------------
@@ -60,7 +60,7 @@ Similarity search
 Links
 -----
 
-- The address records the view: ``projection``, ``property``, ``range``, ``region``, ``galaxy``, ``explorer``, ``data_source``, ``search_by``, ``layer``, ``mask``, ``invert``, ``image_false_color``, ``spectrum_false_color``, the five mask thresholds, ``tab`` and ``text``. A value at its default or failing validation is ignored and left out. Lists, ``range`` and ``region`` are JSON. The address updates on each change, a slider's on release, and adds no history entry.
+- The address records the view: ``projection``, ``property``, ``range``, ``region``, ``galaxy`` (its Legacy Survey ``object_id``), ``explorer``, ``data_source``, ``search_by``, ``mask``, ``invert``, ``image_false_color``, ``spectrum_false_color``, the five mask thresholds, ``tab`` and ``text``. A value at its default or failing validation is ignored and left out. Lists, ``range`` and ``region`` are JSON. The address updates on each change, a slider's on release, and adds no history entry.
 - The last similarity search is recorded in the ``/search`` or ``/search/modes`` parameters it sent. Opening the address restores its selection and runs it again. A selection changed but not searched is not recorded.
 - Collapsed groups, the theme and the disclaimer stay in the browser's storage, not the address.
 

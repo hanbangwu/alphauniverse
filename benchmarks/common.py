@@ -13,7 +13,7 @@ import torch
 from aion.modalities import DESISpectrum, LegacySurveyImage
 from threadpoolctl import threadpool_info
 
-from app.config import (
+from alphauniverse.config import (
     AION_SPECTRUM_ORIGIN,
     AION_SPECTRUM_TOKEN_WIDTH,
     DATASET_DESI_SUFFIX,
@@ -22,9 +22,9 @@ from app.config import (
     TOKEN_GRAMS,
     galaxy_count,
 )
-from app.dataset.dataset import dataset, spectrum
-from app.encoding import store as encoding
-from app.search import pql
+from alphauniverse.dataset.dataset import dataset, spectrum
+from alphauniverse.encoding import store as encoding
+from alphauniverse.search import pql
 from modal_app import (
     SERVING_CPU,
     SERVING_MAX_CONTAINERS,

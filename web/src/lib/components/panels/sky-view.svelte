@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GalaxyId } from '$lib/client'
   import { SELECTED } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
   import { IMAGE_GRID } from '$lib/data/modes'
@@ -31,7 +32,7 @@
   import { prefersReducedMotion } from 'svelte/motion'
 
   interface Target {
-    galaxy: number
+    galaxy: GalaxyId
     patch: number | null
   }
 
@@ -95,6 +96,10 @@
         fromLonLat([180 - ra, positions.data.dec[galaxy]])
       )
   )
+
+  function rowOf(galaxy: GalaxyId | null | undefined): number {
+    return galaxy == null ? -1 : (positions.data?.rows.get(galaxy) ?? -1)
+  }
 
   function focus(name: string) {
     return ['==', ['get', 'galaxy'], ['var', name]]
@@ -172,7 +177,7 @@
     if (!feature) return null
     const point = feature.getGeometry()!
     return containsCoordinate(buffer(point.getExtent(), HALF_STAMP), coordinate)
-      ? { galaxy: feature.getId() as number, patch: patchAt(point.getCoordinates(), coordinate) }
+      ? { galaxy: feature.getId() as GalaxyId, patch: patchAt(point.getCoordinates(), coordinate) }
       : null
   }
 
@@ -189,7 +194,7 @@
     if ((map.getView().getZoom() ?? 0) <= DOT_ZOOM) return null
     const [x, y] = map.getPixelFromCoordinate(closest.getGeometry()!.getCoordinates())
     return Math.hypot(pixel[0] - x, pixel[1] - y) <= REACH
-      ? { galaxy: closest.getId() as number, patch: null }
+      ? { galaxy: closest.getId() as GalaxyId, patch: null }
       : null
   }
 
@@ -274,7 +279,7 @@
     galaxies.addFeatures(
       places.map((place, galaxy) => {
         const feature = new Feature({ geometry: new Point(place), galaxy })
-        feature.setId(galaxy)
+        feature.setId(positions.data?.ids[galaxy])
         return feature
       })
     )
@@ -282,8 +287,8 @@
 
   $effect(() => {
     rings.updateStyleVariables({
-      hovered: hovered?.galaxy ?? -1,
-      selected: view.galaxy.value ?? -1,
+      hovered: rowOf(hovered?.galaxy),
+      selected: rowOf(view.galaxy.value),
       pulsing: prefersReducedMotion.current ? 0 : 1
     })
     squares.changed()
@@ -295,7 +300,7 @@
     if (hovered?.patch != null) {
       marks.addFeature(
         new Feature({
-          geometry: fromExtent(patchArea(places[hovered.galaxy], hovered.patch)),
+          geometry: fromExtent(patchArea(places[rowOf(hovered.galaxy)], hovered.patch)),
           kind: 'hovered'
         })
       )
@@ -305,7 +310,10 @@
     marks.addFeatures(
       view.patches.ls_image.value.map(
         (patch) =>
-          new Feature({ geometry: fromExtent(patchArea(places[open], patch)), kind: 'chosen' })
+          new Feature({
+            geometry: fromExtent(patchArea(places[rowOf(open)], patch)),
+            kind: 'chosen'
+          })
       )
     )
   })

@@ -5,22 +5,28 @@
   <img src="docs/_static/alphauniverse-header-light.svg" alt="alphaUniverse: the embedding-based virtual astronomical observatory" />
 </picture>
 
-[**alphaUniverse**](https://alphauniverse.aiforscientists.org) wraps [AION](https://arxiv.org/abs/2510.17960), [Polymathic](https://polymathic-ai.org/)'s foundation model for astronomy, in a web interface over [COSMOS](https://en.wikipedia.org/wiki/COSMOS_field).
+`alphauniverse` is a Python library for searching galaxies of the [COSMOS](https://en.wikipedia.org/wiki/COSMOS_field) field through [AION](https://arxiv.org/abs/2510.17960), [Polymathic](https://polymathic-ai.org/)'s foundation model for astronomy.
 
-## Features
+- **Similarity search**: pick image regions, wavelengths and catalog values of a galaxy in any of its surveys, or whole surveys, and rank every galaxy by predictive query likelihood over AION's predictions.
+- **Text search**: search galaxies in natural language.
+- **Predictions**: read what AION expects a galaxy's image, spectrum and catalog values to be, including in surveys that never observed it.
 
-- **Sky**: find galaxies through a [Legacy Survey](https://www.legacysurvey.org/viewer)-style interface.
-- **Parametric UMAP**: select galaxies with similar features through AION embeddings projected using a parametric UMAP.
-- **Text search**: search galaxies using natural language.
-- **Similarity search**: pick image regions, wavelengths, and catalog values of a galaxy in any of its surveys and search with predictive query likelihood over AION predictions.
-- **Export**: export map selections as CSV and search results as [ECSV](https://docs.astropy.org/en/stable/io/ascii/ecsv.html).
+```python
+import alphauniverse
 
-## Running
+found = alphauniverse.search_by_text("a spiral galaxy with a bright bar")
+```
 
-Requires [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh).
+See the [library docs](docs/library/index.rst) for installing it and the data it reads.
+
+## Web
+
+The [**website**](https://alphauniverse.aiforscientists.org) is a GUI for alphaUniverse with a [Legacy Survey](https://www.legacysurvey.org/viewer)-style sky view, parametric UMAP of AION embeddings, and data exports.
+
+Run the website locally with [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh):
 
 ```sh
-uv run python -m scripts.dev_subset       # generate a small subset for dev
-ACCESS_PASSWORD=local uv run fastapi dev  # start the server with password "local"
-cd web && bun install && bun run dev      # start the web app
+uv run python -m scripts.dev_subset                      # generate a small subset for dev
+ACCESS_PASSWORD=local uv run fastapi dev server/main.py  # start the server with password "local"
+cd web && bun install && bun run dev                     # start the web app
 ```

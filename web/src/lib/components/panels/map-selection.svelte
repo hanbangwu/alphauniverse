@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GalaxyId } from '$lib/client'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Table from '$lib/components/ui/table'
@@ -8,7 +9,7 @@
   import { csvFormat } from 'd3-dsv'
 
   interface Props {
-    galaxies: number[]
+    galaxies: GalaxyId[]
     loading: boolean
   }
 

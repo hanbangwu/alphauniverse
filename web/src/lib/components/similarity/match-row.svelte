@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GalaxyId } from '$lib/client'
   import GalaxyName from '$lib/components/galaxy-name.svelte'
   import { IMAGE_SURVEYS, SPECTRUM_SURVEYS, imageMode, spectrumMode } from '$lib/data/modes'
   import { MODES, SURVEYS } from '$lib/labels'
@@ -9,7 +10,7 @@
   import SpectrumPanel from './spectrum-panel.svelte'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
     index: number
   }
 

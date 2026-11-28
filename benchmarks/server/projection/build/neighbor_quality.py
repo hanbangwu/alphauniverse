@@ -1,0 +1,242 @@
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import modal
+import numpy as np
+import pyarrow.parquet as pq
+import torch
+from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
+from tqdm import tqdm
+from umap import UMAP
+
+from alphauniverse.config import (
+    DATASET_REVISION,
+    GRAM_NAMES,
+    REDSHIFT,
+    SEARCH_RANK,
+    SEED,
+    artifact,
+    galaxy_count,
+)
+from alphauniverse.predictions import whole_mode
+from alphauniverse.predictions.build import embeddings
+from benchmarks.common import COMBINED, environment, git, memory, standardized
+from benchmarks.server.projection.build import projection_quality
+from modal_app import CACHE_PATH, build_image, cache_volume
+from server.projection.build.maps import placed
+from server.projection.build.parametric_umap import scan
+
+app = modal.App("alphauniverse-neighbor-quality")
+image = build_image.add_local_python_source("modal_app")
+
+REPORT = Path("docs/benchmarks/neighbor_quality.json")
+ROLES = ("token", "aion_prediction")
+NEIGHBORS = 10
+QUERIES = 2000
+BATCH = 1024
+SAME_PLACE = COMBINED["same_place"]
+WIDTHS = (1408, 704, 352)
+COMBINATIONS = COMBINED | {
+    "same_place_without_redshift": tuple(
+        name for name in SAME_PLACE if name != REDSHIFT
+    )
+}
+
+
+def principal(matrix: np.ndarray) -> np.ndarray:
+    return PCA(max(WIDTHS), svd_solver="full").fit_transform(matrix)
+
+
+def vectors(role: str) -> dict[str, dict[str, torch.Tensor]]:
+    found = {}
+    for name in GRAM_NAMES:
+        with np.load(artifact(f"{role}_embedding_{name}")) as stored:
+            found[name] = {
+                part: torch.from_numpy(
+                    np.ascontiguousarray(stored[part][:, :SEARCH_RANK])
+                )
+                for part in ("queries", "galleries")
+            } | {"offsets": torch.from_numpy(stored["offsets"])}
+    return found
+
+
+def joint(blocks: dict[str, dict[str, torch.Tensor]]) -> torch.Tensor:
+    scaled = [
+        embeddings.scaled(block["galleries"].numpy()) for block in blocks.values()
+    ]
+    return torch.from_numpy(np.concatenate(scaled, axis=1))
+
+
+def searched(
+    blocks: dict[str, dict[str, torch.Tensor]],
+    names: tuple[str, ...],
+    queries: np.ndarray,
+) -> torch.Tensor:
+    return sum(
+        standardized(
+            whole_mode.scores(
+                blocks[name]["queries"][queries], blocks[name], SEARCH_RANK
+            ).double()
+        )
+        for name in names
+    )
+
+
+def top(
+    scores: torch.Tensor, sources: np.ndarray, count: int
+) -> torch.return_types.topk:
+    scores = scores.clone()
+    scores[torch.arange(len(sources)), torch.from_numpy(sources)] = -torch.inf
+    return scores.topk(count, dim=1)
+
+
+def overlap(first: torch.Tensor, second: torch.Tensor) -> float:
+    shared = (first[:, :, None] == second[:, None, :]).any(dim=2).sum(dim=1)
+    return round(float(shared.double().mean() / first.shape[1]), 4)
+
+
+def geometry(
+    families: dict[str, dict], joints: dict[str, dict[str, torch.Tensor]]
+) -> dict[str, Any]:
+    count = galaxy_count()
+    chosen = np.sort(
+        np.random.default_rng(SEED).choice(count, min(QUERIES, count), replace=False)
+    )
+    found = {}
+    for role, blocks in families.items():
+        searches, overlaps = {}, {}
+        for name in GRAM_NAMES:
+            galleries = blocks[name]["galleries"]
+            searches[name] = searched(blocks, (name,), chosen)
+            overlaps[name] = overlap(
+                top(searches[name], chosen, NEIGHBORS).indices,
+                top(
+                    -torch.cdist(galleries[chosen], galleries), chosen, NEIGHBORS
+                ).indices,
+            )
+        combined = {
+            combination: top(
+                sum(searches[name] for name in names), chosen, NEIGHBORS
+            ).indices
+            for combination, names in COMBINED.items()
+        }
+        nearest = {
+            variant: top(
+                -torch.cdist(embedded[chosen], embedded), chosen, NEIGHBORS
+            ).indices
+            for variant, embedded in joints[role].items()
+        }
+        found[role] = {
+            "blocks": overlaps,
+            "joint": {
+                variant: {
+                    combination: overlap(indices, kept)
+                    for combination, indices in combined.items()
+                }
+                for variant, kept in nearest.items()
+            },
+        }
+    return {
+        "queries": len(chosen),
+        "random": round(NEIGHBORS / (count - 1), 6),
+    } | found
+
+
+def nearest_by_search(
+    blocks: dict[str, dict], count: int
+) -> tuple[torch.Tensor, torch.Tensor]:
+    everyone = np.arange(galaxy_count())
+    parts = [
+        top(searched(blocks, SAME_PLACE, rows), rows, count)
+        for rows in tqdm(
+            np.array_split(everyone, -(-len(everyone) // BATCH)), desc="search"
+        )
+    ]
+    return (
+        torch.cat([part.values for part in parts]),
+        torch.cat([part.indices for part in parts]),
+    )
+
+
+def maps(
+    families: dict[str, dict],
+    joints: dict[str, dict[str, torch.Tensor]],
+    aion: np.ndarray,
+) -> dict[str, Any]:
+    largest = max(projection_quality.NEIGHBORS)
+    searches = {
+        role: nearest_by_search(blocks, largest) for role, blocks in families.items()
+    }
+    nearest = {f"{role}_same_place": found[1] for role, found in searches.items()}
+    nearest["aion"] = torch.from_numpy(
+        NearestNeighbors(n_neighbors=largest, metric="cosine")
+        .fit(aion)
+        .kneighbors(return_distance=False)
+    )
+    stored = pq.read_table(artifact("mean_points"), columns=["x", "y"])
+    projected = {
+        "token_search": placed(searches["token"], joints["token"]["joint"].numpy()),
+        **{
+            f"{role}_{variant}": UMAP(random_state=SEED).fit_transform(embedded.numpy())
+            for role, variants in joints.items()
+            for variant, embedded in variants.items()
+        },
+        "site": np.column_stack([stored["x"].to_numpy(), stored["y"].to_numpy()]),
+    }
+    found = {}
+    for name, flat in projected.items():
+        near = NearestNeighbors(n_neighbors=largest).fit(flat)
+        kept = torch.from_numpy(near.kneighbors(return_distance=False))
+        found[name] = {
+            search: {
+                str(count): overlap(indices[:, :count], kept[:, :count])
+                for count in projection_quality.NEIGHBORS
+            }
+            for search, indices in nearest.items()
+        }
+    return found
+
+
+@app.function(
+    image=image,
+    cpu=8,
+    memory=(16 * 1024, 32 * 1024),
+    timeout=30 * 60,
+    volumes={CACHE_PATH: cache_volume},
+)
+def measure() -> dict[str, Any]:
+    families = {role: vectors(role) for role in ROLES}
+    token = np.load(artifact("joint_embedding"))
+    reduced = principal(token)
+    joints = {
+        "token": {"joint": torch.from_numpy(token)}
+        | {f"pca_{width}": torch.from_numpy(reduced[:, :width]) for width in WIDTHS},
+        "aion_prediction": {"joint": joint(families["aion_prediction"])},
+    }
+    aion = scan(galaxy_count(), np.empty(0, dtype=np.intp))[0]
+    return {
+        "environment": environment(),
+        "rank": SEARCH_RANK,
+        "widths": WIDTHS,
+        "neighbors": NEIGHBORS,
+        "preserved": projection_quality.NEIGHBORS,
+        "geometry": geometry(families, joints),
+        "maps": maps(families, joints, aion),
+        "memory": memory(),
+    }
+
+
+@app.local_entrypoint()
+def main() -> None:
+    report = {
+        "commit": git("describe", "--always", "--dirty"),
+        "revision": DATASET_REVISION,
+        "date": datetime.now(UTC).isoformat(timespec="seconds"),
+        **measure.remote(),
+    }
+    REPORT.parent.mkdir(exist_ok=True)
+    REPORT.write_text(json.dumps(report, indent=2) + "\n")
+    print(f"wrote {REPORT}")

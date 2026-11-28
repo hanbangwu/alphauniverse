@@ -20,7 +20,7 @@ Browse the UMAP
 On the **UMAP** tab, each point is a galaxy, placed near the galaxies AION finds most alike (:doc:`methods/map`).
 
 - **Any position** groups galaxies whose features match wherever they sit in the image or spectrum. Turned off, the map groups them only when the features are in the same place.
-- Color the points by redshift, stellar mass, star formation rate, specific star formation rate, g − r color, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. With **Data source** at **Dataset**, a point takes the measured value where there is one and AION's prediction, faded, elsewhere. At **Prediction**, every point takes AION's prediction.
+- Color the points by redshift, g − r color, half-light radius, r magnitude, axis ratio, Hα equivalent width or Dn4000. With **Data source** at **Dataset**, a point takes the measured value where there is one and AION's prediction, faded, elsewhere. At **Prediction**, every point takes AION's prediction.
 - Drag the color slider to show only the galaxies in a range, for example 0.3 < z < 0.5.
 - Draw a box or a lasso to select galaxies, then open any of them or export the selection as CSV.
 - Hover over a point to preview the galaxy. Click it to open it.
@@ -46,7 +46,7 @@ Open a galaxy, start a search and pick what should match: image cells, spectrum 
 - Click a match's ID to search from it.
 - **Export as ECSV** saves your galaxy and its matches as an :term:`ECSV` table: ID, position, similarity, and each map, empty where a galaxy lacks that observation. The header records what you selected.
 - **Whole mode**, in place of **Patch**, compares entire observations instead: click an image, a spectrum or a group of catalog values. Each match then shows how much each observation contributed.
-- **Highlight by** (**Self** or **All**) shades your galaxy to show what a selection picks out (:doc:`methods/query-maps`).
+- Your galaxy is shaded to show what a selection picks out (:doc:`methods/query-maps`).
 - **False color**, for images and for spectra, shows your galaxy's observations in :term:`false color`: cells or windows of similar color look alike to the :term:`codec`. At **Prediction** the colors come from AION's prediction. Colors are comparable only within one image or spectrum.
 
 :doc:`methods/similarity-search` explains the ranking.

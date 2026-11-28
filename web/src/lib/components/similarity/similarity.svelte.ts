@@ -1,9 +1,9 @@
 import type { Galaxy } from '$lib/api'
-import type { CosineMode } from '$lib/client'
+import type { GalaxyId, TokenMode } from '$lib/client'
 import { type RGB, continuous } from '$lib/color'
 import { IMAGE_MODES, SPECTRUM_MODES, byMode, isPatchMode, surveyOf } from '$lib/data/modes'
-import { cosinesQuery, coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
-import { best, extent, mask, row } from '$lib/data/scores'
+import { coverageQuery, saliencyQuery, similarityQuery } from '$lib/data/queries'
+import { extent, mask, row } from '$lib/data/scores'
 import {
   type Extent,
   type ModeName,
@@ -17,7 +17,7 @@ import { MODES } from '$lib/labels'
 import { type AppState, getApp } from '$lib/state/app.svelte'
 import { Field } from '$lib/state/field.svelte'
 import { DECIMALS, type Threshold } from '$lib/state/mask.svelte'
-import { DEFAULTS, type Values, stored } from '$lib/state/params.svelte'
+import { DEFAULTS, stored } from '$lib/state/params.svelte'
 import { type CreateQueryResult, createQuery } from '@tanstack/svelte-query'
 import { Context } from 'runed'
 
@@ -34,8 +34,6 @@ interface Layered extends Scale {
   values: Float32Array
 }
 
-export type Layer = Values['layer']
-
 function scale(domain: Extent): Scale {
   return { domain, heat: continuous(domain) }
 }
@@ -45,54 +43,23 @@ function union(domains: (Extent | undefined)[]): Extent | null {
   return ends.length ? extent(ends) : null
 }
 
-class ModeLayer {
-  readonly #cosines: CreateQueryResult<Float32Array>
-  readonly #self: () => boolean
-  readonly current: Layered | null
-
-  constructor(
-    mode: CosineMode,
-    galaxy: number,
-    selected: () => number[],
-    self: () => boolean,
-    saliency: () => SaliencyResult | null
-  ) {
-    this.#self = self
-    this.#cosines = createQuery(() =>
-      cosinesQuery(self() && selected().length ? galaxy : null, mode)
-    )
-    this.current = $derived.by(() => {
-      const all = saliency()
-      const cosines = this.#cosines.data
-      const values = all ? all.maps[mode] : cosines ? best(cosines, selected()) : null
-      return values && { values, ...scale(extent(values)) }
-    })
-  }
-
-  get error(): string | null {
-    if (!this.#self()) return null
-    return this.#cosines.isError ? this.#cosines.error.message : null
-  }
-}
-
 export class Similarity {
-  readonly galaxy: number
+  readonly galaxy: GalaxyId
 
   readonly #app: AppState = getApp()
   readonly #result: CreateQueryResult<SimilarityResult>
   readonly #coverage: CreateQueryResult<Galaxy>
-  readonly #layers: Record<CosineMode, ModeLayer>
+  readonly #layers: Record<TokenMode, Layered | null>
   readonly #saliency: CreateQueryResult<SaliencyResult>
   readonly #selected: boolean
 
-  readonly layer: Field<Layer>
   readonly imageFalseColor: Field<boolean>
   readonly spectrumFalseColor: Field<boolean>
 
   readonly draft: SearchQuery | null
 
-  readonly galaxies: Int32Array
-  readonly scales: Record<CosineMode, Scale | null> | null
+  readonly galaxies: GalaxyId[]
+  readonly scales: Record<TokenMode, Scale | null> | null
   readonly imageDomain: Extent | null
   readonly spectrumDomain: Extent | null
   readonly tableValueMap: Float32Array | null
@@ -102,10 +69,9 @@ export class Similarity {
   readonly contributionLimit: number
   readonly modes: ModeName[]
 
-  constructor(galaxy: number) {
+  constructor(galaxy: GalaxyId) {
     const { view, search } = this.#app
     this.galaxy = galaxy
-    this.layer = new Field(DEFAULTS.layer, stored('layer'))
     this.imageFalseColor = new Field(DEFAULTS.image_false_color, stored('image_false_color'))
     this.spectrumFalseColor = new Field(
       DEFAULTS.spectrum_false_color,
@@ -145,22 +111,17 @@ export class Similarity {
     )
     this.#result = createQuery(() => similarityQuery(view.searched.value))
     this.#coverage = createQuery(() => coverageQuery(galaxy))
-    const self = $derived(this.layer.value === 'self')
-    this.#saliency = createQuery(() => saliencyQuery(self ? null : selection))
-    const saliency = $derived(self || !selection ? null : (this.#saliency.data ?? null))
-    this.#layers = byMode(
-      (mode) =>
-        new ModeLayer(
-          mode,
-          galaxy,
-          () => this.patchesOf(mode),
-          () => self,
-          () => saliency
-        )
+    this.#saliency = createQuery(() => saliencyQuery(selection))
+    const saliency = $derived(selection ? (this.#saliency.data ?? null) : null)
+    this.#layers = $derived(
+      byMode((mode) => {
+        const values = saliency?.maps[mode]
+        return values ? { values, ...scale(extent(values)) } : null
+      })
     )
     const result = $derived(this.#result.data)
 
-    this.galaxies = $derived(result?.galaxies ?? new Int32Array())
+    this.galaxies = $derived(result?.galaxies ?? [])
     this.scales = $derived(
       result
         ? byMode((mode) => {
@@ -193,16 +154,14 @@ export class Similarity {
     )
   }
 
-  patchesOf(mode: CosineMode): number[] {
+  patchesOf(mode: TokenMode): number[] {
     const { view } = this.#app
     return view.searchBy.value === 'whole' ? [] : view.patches[mode].value
   }
 
-  toggler(mode: CosineMode, matched: boolean): ((index: number) => void) | undefined {
+  toggler(mode: TokenMode): ((index: number) => void) | undefined {
     const { view } = this.#app
-    return matched && view.searchBy.value === 'patch'
-      ? (index) => view.patches[mode].toggle(index)
-      : undefined
+    return view.searchBy.value === 'patch' ? (index) => view.patches[mode].toggle(index) : undefined
   }
 
   get result(): SimilarityResult | undefined {
@@ -214,12 +173,11 @@ export class Similarity {
   }
 
   get saliencyError(): string | null {
-    if (this.layer.value === 'self') return null
     return this.#saliency.isError ? this.#saliency.error.message : null
   }
 
-  layerOf(mode: CosineMode): Layered | null {
-    return this.#layers[mode].current
+  layerOf(mode: TokenMode): Layered | null {
+    return this.#layers[mode]
   }
 
   get imageLayerDomain(): Extent | null {
@@ -230,22 +188,18 @@ export class Similarity {
     return this.#layerDomain(SPECTRUM_MODES)
   }
 
-  shown(mode: CosineMode): boolean {
+  shown(mode: TokenMode): boolean {
     const survey = surveyOf(mode)
     return (
       this.#app.view.dataSource.value === 'prediction' || (this.#coverage.data?.[survey] ?? false)
     )
   }
 
-  #layerDomain(modes: readonly CosineMode[]): Extent | null {
+  #layerDomain(modes: readonly TokenMode[]): Extent | null {
     return union(modes.filter((mode) => this.shown(mode)).map((mode) => this.layerOf(mode)?.domain))
   }
 
-  layerError(mode: CosineMode): string | null {
-    return this.#layers[mode].error
-  }
-
-  outlinesAt(mode: CosineMode, index: number): number[] {
+  outlinesAt(mode: TokenMode, index: number): number[] {
     const data = this.#result.data
     if (!data || isModeQuery(data.request)) return []
     return data.positions[mode]?.[index] ?? data.request[mode] ?? []
@@ -260,7 +214,7 @@ export class Similarity {
   }
 
   get layerStale(): boolean {
-    return this.layer.value === 'all' && this.#selected && this.#saliency.isPlaceholderData
+    return this.#selected && this.#saliency.isPlaceholderData
   }
 
   get stale(): boolean {
@@ -275,8 +229,8 @@ export class Similarity {
     this.#app.view.searched.value = this.draft
   }
 
-  get matches(): { galaxy: number; index: number }[] {
-    return Array.from(this.galaxies.subarray(1), (galaxy, at) => ({
+  get matches(): { galaxy: GalaxyId; index: number }[] {
+    return this.galaxies.slice(1).map((galaxy, at) => ({
       galaxy,
       index: at + 1
     }))
@@ -292,13 +246,7 @@ export class Similarity {
   readonly total = (value: number): string =>
     this.wholeResult ? `score ${value.toFixed(DECIMALS)}` : this.score(value)
 
-  readonly cosine: Caption = (value) => `cosine ${value.toFixed(DECIMALS)}`
-
   readonly correlation: Caption = (value) => `partial correlation ${value.toFixed(DECIMALS)}`
-
-  get layerCaption(): Caption {
-    return this.layer.value === 'self' ? this.cosine : this.correlation
-  }
 
   predictedAt(index: number): string[] {
     return this.#result.data?.predicted[index] ?? []
@@ -312,7 +260,7 @@ export class Similarity {
     return must(this.#result.data?.contributions[mode], `${mode}'s contributions`)[index]
   }
 
-  mapAt(mode: CosineMode, index: number): Float32Array {
+  mapAt(mode: TokenMode, index: number): Float32Array {
     const maps = must(this.#result.data, 'the search result').maps[mode]
     return row(maps, index, maps.length / this.galaxies.length)
   }

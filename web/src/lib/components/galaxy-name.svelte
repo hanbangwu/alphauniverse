@@ -1,14 +1,11 @@
 <script lang="ts">
-  import { coverageQuery } from '$lib/data/queries'
-  import { createQuery } from '@tanstack/svelte-query'
+  import type { GalaxyId } from '$lib/client'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
   }
 
   let { galaxy }: Props = $props()
-
-  const coverage = createQuery(() => coverageQuery(galaxy))
 </script>
 
-{coverage.data?.object_id ?? '…'}
+{galaxy}

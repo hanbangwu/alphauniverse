@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CosineMode } from '$lib/client'
+  import type { TokenMode } from '$lib/client'
   import CollapsibleGroup from '$lib/components/common/collapsible-group.svelte'
   import Observed from '$lib/components/common/observed.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -62,7 +62,7 @@
   </label>
 {/snippet}
 
-{#snippet anyPosition(noun: string, modes: readonly CosineMode[], anywhere: Field<boolean>)}
+{#snippet anyPosition(noun: string, modes: readonly TokenMode[], anywhere: Field<boolean>)}
   <label class="flex items-center gap-2 text-sm font-medium">
     <Switch
       aria-label="Any position for {noun} patches"
@@ -89,16 +89,14 @@
     <div class="grid max-w-2xl gap-5 md:grid-cols-2">
       {#each IMAGE_SURVEYS as survey (survey)}
         <Observed galaxy={similarity.galaxy} {survey} kind="image">
-          {#snippet children(matched)}
-            <section class="flex flex-col gap-2">
-              <h3 class="text-xs tracking-wider text-muted-foreground uppercase">
-                {SURVEYS[survey]}
-              </h3>
-              <WholeMode mode={imageMode(survey)}>
-                <QueryImage {survey} {matched} />
-              </WholeMode>
-            </section>
-          {/snippet}
+          <section class="flex flex-col gap-2">
+            <h3 class="text-xs tracking-wider text-muted-foreground uppercase">
+              {SURVEYS[survey]}
+            </h3>
+            <WholeMode mode={imageMode(survey)}>
+              <QueryImage {survey} />
+            </WholeMode>
+          </section>
         </Observed>
       {/each}
     </div>
@@ -145,10 +143,10 @@
                     similarity.spectrumLayerDomain,
                     display.spectra.query
                   )}
-                caption={similarity.layerCaption}
+                caption={similarity.correlation}
                 selected={similarity.patchesOf(mode)}
-                ontoggle={similarity.toggler(mode, matched)}
-                error={similarity.layerError(mode)}
+                ontoggle={similarity.toggler(mode)}
+                error={similarity.saliencyError}
               />
             </WholeMode>
           </section>

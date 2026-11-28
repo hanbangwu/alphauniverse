@@ -460,123 +460,8 @@ def redshift_quality():
     )
 
 
-def probe_quality():
-    found = report("probe_quality")
-    rows, curves, modes = [], [], []
-    for target, measured in found["probes"].items():
-        features = {"AION": measured["aion"]} | {
-            f"{role} {kind}": probes
-            for role in ("token", "aion_prediction")
-            for kind, probes in measured[role].items()
-        }
-        curve = figure(
-            x_axis_type="log",
-            x_axis_label="galaxies fitted",
-            y_axis_label="R²",
-            height=340,
-            title=f"{target}: ridge R² on a held-out fifth, mean and standard deviation of {found['draws']} draws",
-            **WIDTH,
-        )
-        for (name, probes), color in zip(
-            features.items(), Category20_20[::2] + Category20_20[1::2]
-        ):
-            row = {"target": target, "features": name, "galaxies": measured["galaxies"]}
-            for probe, metrics in probes.items():
-                row |= {
-                    f"{probe} r2": metrics["r2"],
-                    f"{probe} rms": metrics["rms"],
-                } | drawn(probe, metrics["shots"])
-            rows.append(row)
-            shots = probes["ridge"]["shots"]
-            spread = ColumnDataSource(
-                {
-                    "count": [int(count) for count in shots],
-                    "r2": [shot["r2"] for shot in shots.values()],
-                    "lower": [shot["r2"] - shot["sd"] for shot in shots.values()],
-                    "upper": [shot["r2"] + shot["sd"] for shot in shots.values()],
-                }
-            )
-            curve.line(
-                "count",
-                "r2",
-                source=spread,
-                legend_label=name,
-                color=color,
-                line_width=2,
-            )
-            curve.add_layout(
-                Whisker(
-                    base="count",
-                    lower="lower",
-                    upper="upper",
-                    source=spread,
-                    line_color=color,
-                )
-            )
-        curve.add_layout(curve.legend[0], "right")
-        curves.append(curve)
-        modes.extend(
-            {
-                "target": target,
-                "features": role,
-                "mode": name,
-                "stacked weight, all galaxies": entry["weight"],
-            }
-            | drawn("ridge", entry["shots"])
-            for role, fits in measured["modes"].items()
-            for name, entry in fits.items()
-        )
-    source = ColumnDataSource(
-        {
-            "factor": [(row["target"], row["features"]) for row in rows],
-            "ridge": [row["ridge r2"] for row in rows],
-            "knn": [row.get("knn r2") for row in rows],
-        }
-    )
-    chart = figure(
-        x_range=FactorRange(*source.data["factor"]),
-        height=420,
-        title=f"R² of ridge regression (bars) and of the {found['neighbors']} nearest neighbors (dots)",
-        tooltips=[("ridge", "@ridge"), ("neighbors", "@knn")],
-        **WIDTH,
-    )
-    chart.vbar(x="factor", top="ridge", width=0.8, source=source)
-    chart.scatter(x="factor", y="knn", size=8, color="black", source=source)
-    chart.xaxis.major_label_orientation = 0.8
-    return column(
-        heading(
-            found,
-            f"{found['rank']} components per mode",
-            f"all: every mode's components side by side, as the joint embedding holds them; pca_n: their first n principal components, n = {', '.join(map(str, found['widths']))}",
-            "stacked: ridge on each mode, weighted by a non-negative fit to their cross-validated predictions",
-            f"{found['folds']}-fold cross-validation",
-            cpus(found),
-        ),
-        chart,
-        *curves,
-        table(
-            [{name: row.get(name, "") for name in rows[0]} for row in rows],
-            list(rows[0]),
-        ),
-        table(modes, list(modes[0]), height=600),
-        **WIDTH,
-    )
-
-
 def neighbor_quality():
     found = report("neighbor_quality")
-    rankings = [
-        {"ranking": name}
-        | {
-            f"{target} |Δ|, median": values["median"]
-            for target, values in entry.items()
-        }
-        | {
-            f"{target}, beats random": values["beats_random"]
-            for target, values in entry.items()
-        }
-        for name, entry in found["physics"]["rankings"].items()
-    ]
     geometry = found["geometry"]
     share = f"share of its top {found['neighbors']}"
     agreement = [
@@ -618,13 +503,11 @@ def neighbor_quality():
             found,
             f"{found['rank']} components per mode",
             f"joint: all modes' components side by side; pca_n: the token joint embedding's first n principal components, n = {', '.join(map(str, found['widths']))}",
-            f"{found['physics']['galaxies']:,} PROVABGS galaxies for the physics",
             f"{geometry['queries']:,} queries for the geometry, where chance shares {geometry['random']}",
             cpus(found),
         ),
         chart,
         table(kept, list(kept[0])),
-        table(rankings, list(rankings[0])),
         table(agreement, list(agreement[0]), height=600),
         **WIDTH,
     )

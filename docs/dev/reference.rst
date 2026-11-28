@@ -4,7 +4,7 @@ Reference
 How it fits together
 --------------------
 
-The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to the root of a volume mounted at ``/cache``, so changing ``DATASET_REVISION`` overwrites them. ``app.config.BUILD_DIR`` is ``/cache`` on Modal and ``.cache`` elsewhere, a copy of all or part of the volume. The FastAPI app in ``app/main.py`` reads them in one Modal container; the SvelteKit web app, deployed on Vercel, calls it through a rewrite of ``/api``. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
+The build pipeline and the app share nothing but files. Fifteen Modal jobs write artifacts to the root of a volume mounted at ``/cache``, so changing ``DATASET_REVISION`` overwrites them. ``alphauniverse.config.BUILD_DIR`` is ``/cache`` on Modal and ``.cache`` elsewhere, a copy of all or part of the volume. The FastAPI app in ``src/alphauniverse/main.py`` reads them in one Modal container; the SvelteKit web app, deployed on Vercel, calls it through a rewrite of ``/api``. ``main`` deploys to Modal through ``.github/workflows/ci-cd.yml``.
 
 =================================== =========================================== =========================================
 Job                                 Reads                                       Writes
@@ -49,41 +49,40 @@ generate_text_vectors               text_regression, text_bases,                
 
 Every artifact with one row per galaxy holds them in dataset row order, and the app relies on it without checking, so a build directory must come from one complete run. Each job commits the volume before it returns. The model and codecs load from the latest commit of ``polymathic-ai/aion-base``. Each spectrum reaches the codec followed by one masked sample at wavelength 99,999 with zero flux and inverse variance, which gives the tokens of the codec on AION's ``main`` branch: it pads every spectrum with such samples, to 7,808 for DESI and 4,800 for SDSS, and only the first affects the tokens. AION 0.0.2 does not pad. The serving app reads images, spectra and the catalog from the dataset cached on the volume, with ``HF_HUB_OFFLINE=1``, which loads the most recently cached revision whatever ``DATASET_REVISION`` says, so the volume must hold only the revision the artifacts were built from.
 
-``scripts/dev_subset.py`` builds the dev subset: a Modal function draws ``--galaxies`` dataset rows at random with ``SEED``, clears ``.dev_subset`` on the volume and writes there the dataset's rows and every artifact cut to them, renumbered from 0 in dataset order; the script then replaces the local ``.cache`` with it. Grams keep the chosen rows and columns, data Grams the columns of the chosen galleries, and ``observed_reference`` the chosen galleries. Production's values stay: offsets, singular values, maps, ``probability_basis``, ``text_bases``, ``text_query_mean`` and the model weights come from every galaxy, and ``PROTOTYPE_HELD_OUT`` names production rows.
+``scripts/dev_subset.py`` builds the dev subset: a Modal function draws ``--galaxies`` dataset rows at random with ``SEED``, clears ``.dev_subset`` on the volume and writes there the dataset's rows and every artifact cut to them, tables by ``object_id`` and arrays by row in dataset order; the script then replaces the local ``.cache`` with it. Grams keep the chosen rows and columns, data Grams the columns of the chosen galleries, and ``observed_reference`` the chosen galleries. Production's values stay: offsets, singular values, maps, ``probability_basis``, ``text_bases``, ``text_query_mean`` and the model weights come from every galaxy, and ``PROTOTYPE_HELD_OUT`` names production rows.
 
 Features in code
 ----------------
 
-``app/`` has a package per module, in this order: ``login``, ``dataset``, ``encoding``, ``predictions``, ``search``, ``text_search`` and ``projection``. A module imports only from modules before it, ``app/config.py`` and ``app/responses.py``. Each serves its routes from its ``routes.py``, which ``app/main.py`` includes; ``login`` also holds the password check every route depends on. Each Modal job's code sits in its module's ``build`` package. An import-linter contract in ``pyproject.toml`` fails CI if ``app.main`` reaches a ``build`` package or a library of the ``build`` dependency group, which the serving image lacks.
+``src/alphauniverse/`` is the library, and the rest of the repository is built on it: ``dataset``, ``encoding``, ``predictions``, ``search`` and ``text_search``, each with a ``build`` package for the artifacts search reads, ``config.py``, ``library.py`` with the public API and ``build.py``, which runs every build step in order. ``server/`` is the website's backend: ``login``, ``dataset``, ``encoding``, ``predictions``, ``search``, ``text_search`` and ``projection``, each serving its routes from its ``routes.py``, which ``server/main.py`` includes; ``login`` also holds the password check every route depends on, and ``projection/build`` holds the map jobs that ``modal_app.py`` runs. The server searches and predicts through the library's public API and reads display data through its internals. An import-linter contract in ``pyproject.toml`` fails CI if ``server.main`` reaches a ``build`` package or a library of the ``build`` dependency group, which the serving image lacks.
 
 =========================== ========================================
 Feature                     Code
 =========================== ========================================
-Similarity search           ``app.search.pql.search``
-Whole-mode search           ``app.search.pql.mode_search``
-Self query map              ``app.search.pql.cosines``
-All query map               ``app.search.pql.saliency``
-Text search                 ``app.text_search.text_search.text_search``
-The map                     ``app.projection.build.maps``, run by ``generate_maps``
+Similarity search           ``alphauniverse.search_by_patch``
+Whole-mode search           ``alphauniverse.search_by_mode``
+Query map                   ``alphauniverse.saliency``
+Text search                 ``alphauniverse.search_by_text``
+The map                     ``server.projection.build.maps``, run by ``generate_maps``
 =========================== ========================================
 
 A :term:`whole-mode search` ranks from the mode's :term:`token embedding`: :math:`q`'s query vector times every galaxy's gallery vector, both from ``token_search_<mode>`` at 256 components, plus the offsets, gives the mode's :term:`Gram matrix` row up to a constant and the components left out. Each chosen mode's scores, at any position for an image or spectrum mode set to it, are standardized over all galaxies, one mode's too, and averaged.
 
-``/galaxy/{galaxy}/image/{survey}/false_color`` maps each observed image code to its point on the image codec's lattice, the :math:`7 \times 5^4` points of ``app.encoding.store.IMAGE_CODE_LEVELS`` in :math:`[-1, 1]^5`; ``/galaxy/{galaxy}/image/{survey}/aion_prediction/false_color`` averages the lattice under each cell's stored distribution, read as search reads the query galaxy, which is the latent the image :term:`AION prediction` decodes. ``/galaxy/{galaxy}/spectrum/{survey}/false_color`` and ``/galaxy/{galaxy}/spectrum/{survey}/aion_prediction/false_color`` do the same with the spectrum codec's lookup-free quantizer, whose 1,024 codes are the corners of :math:`\{-1, 1\}^{10}` (``SPECTRUM_CODE_DIM``), over the 272 windows after the normalization token; the prediction's distribution is ``mean + coefficients @ directions`` on ``probability_basis``. Each projects its slots onto their first three principal components and scales each from its minimum to its maximum to a byte.
+``/galaxy/{galaxy}/image/{survey}/false_color`` maps each observed image code to its point on the image codec's lattice, the :math:`7 \times 5^4` points of ``server.encoding.false_color.IMAGE_CODE_LEVELS`` in :math:`[-1, 1]^5`; ``/galaxy/{galaxy}/image/{survey}/aion_prediction/false_color`` averages the lattice under each cell's stored distribution, read as search reads the query galaxy, which is the latent the image :term:`AION prediction` decodes. ``/galaxy/{galaxy}/spectrum/{survey}/false_color`` and ``/galaxy/{galaxy}/spectrum/{survey}/aion_prediction/false_color`` do the same with the spectrum codec's lookup-free quantizer, whose 1,024 codes are the corners of :math:`\{-1, 1\}^{10}` (``SPECTRUM_CODE_DIM``), over the 272 windows after the normalization token; the prediction's distribution is ``mean + coefficients @ directions`` on ``probability_basis``. Each projects its slots onto their first three principal components and scales each from its minimum to its maximum to a byte.
 
-``generate_maps`` scores every galaxy against every other with ``app.predictions.whole_mode.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbor graph (:doc:`/methods/map`).
+``generate_maps`` scores every galaxy against every other with ``alphauniverse.predictions.whole_mode.whole_mode_totals``, the scoring ``/search/modes`` uses, and writes ``same_place_points`` and ``any_position_points``. The joint embeddings only give UMAP one row per galaxy; the layout comes from the neighbor graph (:doc:`/methods/map`).
 
 Artifacts
 ---------
 
-``encoded`` and ``tokens`` share one layout: a ``galaxy`` column, one cell per token survey and the redshift (a list of 768-dimensional ``float16`` embeddings, or of ``uint32`` token ids for ``tokens``, null where unmatched), and a ``bool`` per flag survey. Within an image cell the image tokens come first, then the survey's catalog values; a spectrum cell leads with its normalization token. Both are uncompressed Arrow IPC files that readers memory-map.
+``encoded`` and ``tokens`` share one layout: an ``object_id`` column, the galaxy's Legacy Survey ``object_id``, and one cell per token survey and the redshift (a list of 768-dimensional ``float16`` embeddings, or of ``uint32`` token ids for ``tokens``, null where unmatched). Every Arrow and Parquet artifact keys its rows by ``object_id``; NumPy artifacts hold one row per galaxy in the order of ``tokens``. Within an image cell the image tokens come first, then the survey's catalog values; a spectrum cell leads with its normalization token. Both are uncompressed Arrow IPC files that readers memory-map.
 
-.. autofunction:: app.config.store_schema
+.. autofunction:: alphauniverse.config.store_schema
    :no-index:
 
 ``probabilities`` is an uncompressed Arrow IPC file of AION's predictions at every slot. Image tokens keep their 64 most probable codes with their probabilities, the mass beyond the first 16 and the mass beyond all 64; search reads each galaxy's 16 most probable and spreads the rest evenly over the other codes, but the query galaxy's full 64; catalog values and the redshift keep every probability; spectrum tokens keep 256 coefficients on a per-survey PCA basis, quantized to 8 bits as ``offset + code × step``.
 
-.. autodata:: app.config.PREDICTIONS
+.. autodata:: alphauniverse.config.PREDICTIONS
    :no-index:
    :no-value:
 
@@ -97,15 +96,15 @@ Artifacts
 
 ``aion_prediction_<mode>`` is an ``np.save`` file of every galaxy's :term:`AION prediction` in the mode, ``float32``, one row per galaxy, observed in the mode or not. An image AION prediction is AION's codec decoding of the expected latent at every cell, :math:`\sum_t p_{g,s}(t)\, z(t)` with the mass beyond the stored codes spread evenly over the rest of the vocabulary, 4 Legacy Survey or 5 HSC bands × 96 × 96 px in the survey's flux units: the job decodes every band in Legacy Survey units and multiplies HSC's by :math:`10^{1.8}`, the inverse of the codec's scaling from HSC's zero point of 27. A spectrum AION prediction is the decoding of the expected latent at every spectral window without the normalization token, 8,704 values on the codec's grid from 3,500 Å in 0.8 Å steps: a shape, since the normalization token is not predicted. A catalog value's or the redshift's AION prediction is the median of its predicted distribution over the codec's bins, each at the value AION decodes it to, its upper edge. The open top bin takes its lower edge instead: AION decodes it to the largest value in the codec's sample of its training data (1.9 × 10⁹ nmgy for ``FLUX_Z``) or to no value. Bins past it decode to no value and are skipped. Decoding runs in IEEE float32.
 
-``text_views`` is a directory of Parquet parts, ``part-<n>.parquet``, of 4,000 :term:`views <view>` each, drawn from the galaxies outside text search's held-out set: the 30% held out of the text maps and the prototype's 143, which leaves 12,058. A view has one of 26 types: the observation, the :term:`AION prediction` or a sample in each :term:`mode`, or one of 5 combinations of modes in a single input. Each part draws its (galaxy, view type) pairs from its own seed, weighted 1 per AION prediction, observation and combination, 4 per image or spectrum sample and 8 per catalog sample. A sample draws every slot's token from AION's stored distribution, the mass beyond an image cell's stored codes spread evenly over the rest, and decodes it with the mode's codec. An image is turned by one of its 8 rotations and reflections; a spectrum is smoothed by a Gaussian of σ = 1, 2 or 3 px and plotted at 1,680 × 384 px over the survey's observed range, its flux axis from the 0.5th to the 99.9th percentile with 10% padding; catalog values are written one ``COLUMN: value`` line each, shuffled, at 3, 4 or 5 significant figures. A combination draws each member as observation, aion_prediction or sample, the observation only where one exists. ``round`` numbers each ten parts. A rerun keeps the parts already written, so a stopped job resumes. ``view_type`` is the type's position in ``app.config.VIEW_TYPES``:
+``text_views`` is a directory of Parquet parts, ``part-<n>.parquet``, of 4,000 :term:`views <view>` each, drawn from the galaxies outside text search's held-out set: the 30% held out of the text maps and the prototype's 143, which leaves 12,058. A view has one of 26 types: the observation, the :term:`AION prediction` or a sample in each :term:`mode`, or one of 5 combinations of modes in a single input. Each part draws its (galaxy, view type) pairs from its own seed, weighted 1 per AION prediction, observation and combination, 4 per image or spectrum sample and 8 per catalog sample. A sample draws every slot's token from AION's stored distribution, the mass beyond an image cell's stored codes spread evenly over the rest, and decodes it with the mode's codec. An image is turned by one of its 8 rotations and reflections; a spectrum is smoothed by a Gaussian of σ = 1, 2 or 3 px and plotted at 1,680 × 384 px over the survey's observed range, its flux axis from the 0.5th to the 99.9th percentile with 10% padding; catalog values are written one ``COLUMN: value`` line each, shuffled, at 3, 4 or 5 significant figures. A combination draws each member as observation, aion_prediction or sample, the observation only where one exists. ``round`` numbers each ten parts. A rerun keeps the parts already written, so a stopped job resumes. ``view_type`` is the type's position in ``alphauniverse.config.VIEW_TYPES``:
 
-.. autodata:: app.config.TEXT_VIEWS
+.. autodata:: alphauniverse.config.TEXT_VIEWS
    :no-index:
    :no-value:
 
 ``text_views_held_out`` holds the views ``train_text_regression`` checks the regression against: one of every type available to each of 500 :term:`held out` galaxies, the prototype's 143 among them, drawn from a random stream of their own:
 
-.. autodata:: app.config.TEXT_VIEWS_HELD_OUT
+.. autodata:: alphauniverse.config.TEXT_VIEWS_HELD_OUT
    :no-index:
    :no-value:
 
@@ -129,28 +128,27 @@ with :math:`\chi^2(x_g; \mu) = \langle (x_g - \mu)^2,\; w_g \rangle` and :math:`
 
 ``joint_embedding`` is an ``np.save`` file of every galaxy's :term:`joint embedding` from its token embeddings, galaxies × 2,816 ``float32``: the 11 blocks' 256 columns each, in ``GRAM_NAMES`` order, so any block can be taken alone.
 
-``properties`` is a Parquet file of every galaxy's redshift, stellar mass (``mass``, :math:`\log_{10} M_\odot`), star formation rate (``sfr``, :math:`\log_{10} M_\odot\,\text{yr}^{-1}`), specific star formation rate (``ssfr``, :math:`\log_{10} \text{yr}^{-1}`), :term:`half-light radius` (``radius``, arcseconds), r magnitude (``r_magnitude``), :term:`axis ratio` (``axis_ratio``), Hα :term:`equivalent width` (``halpha_ew``, Å) and :term:`Dn4000` (``dn4000``), each measured where it has a value and predicted for every galaxy, with the prediction's width. The measured values are:
+``properties`` is a Parquet file of every galaxy's redshift, :term:`half-light radius` (``radius``, arcseconds), r magnitude (``r_magnitude``), :term:`axis ratio` (``axis_ratio``), Hα :term:`equivalent width` (``halpha_ew``, Å) and :term:`Dn4000` (``dn4000``), each measured where it has a value and predicted for every galaxy, with the prediction's width. The measured values are:
 
 - the spectroscopic redshift where usable, DESI's before SDSS's;
-- :term:`PROVABGS`'s mass and star formation rate;
 - from the Legacy Survey's model of the galaxy: ``SHAPE_R``; :math:`22.5 - 2.5 \log_{10}` of the r flux in nanomaggies, null where the flux is not positive; and the axis ratio, null where both ellipticity components are 0, as in models round by construction;
 - from the spectrum of the survey whose redshift is used, moved to the rest frame: Hα's equivalent width over 6,554.6 to 6,574.6 Å, against the mean of the median fluxes over 6,490 to 6,530 Å and 6,600 to 6,640 Å, positive for emission; and the Dn4000, the mean of :math:`f_\lambda \lambda^2` over 4,000 to 4,100 Å divided by its mean over 3,850 to 3,950 Å. Each band must lie inside the spectrum's unmasked pixels with at least 5 of them, and the continuum and both of the Dn4000's means must exceed three times their errors. So Hα is measured up to redshift 9,824 / 6,640 − 1 = 0.48 in DESI and 9,221.5 / 6,640 − 1 = 0.39 in SDSS.
 
-The redshift's prediction is the median of AION's predicted distribution, and its width half the range from the distribution's 16th to its 84th percentile. Both spread each bin's probability evenly over the redshifts its token covers, from the bin below up to its own value: a distribution in one bin, 0.0059 wide, predicts the bin's center with a width of 0.0020, where the redshift :term:`AION prediction` takes the bin's top. A galaxy with a measured redshift read it, so its prediction is close to it; ``redshift_quality`` measures predictions without it. Likewise the joint embedding reads the Legacy Survey catalog values, so the radius, r magnitude and axis ratio predictions are close to the measured ones. The others come from ridge regression on the joint embedding, its penalty chosen by leave-one-out, fitted to the galaxies with a measured value. Those galaxies' own predictions come from 5-fold cross-validation, so none is fitted to its own value, and the RMS error of those predictions is the width, the same for every galaxy. PROVABGS fits DESI spectra, so its widths are measured only on galaxies DESI observed, and the spectral ones only on galaxies with a spectrum. ``g_r`` is the observed Legacy Survey color, :math:`-2.5 \log_{10}` of the g to r flux ratio, null where either flux is not positive. ``/galaxies/property`` serves it.
+The redshift's prediction is the median of AION's predicted distribution, and its width half the range from the distribution's 16th to its 84th percentile. Both spread each bin's probability evenly over the redshifts its token covers, from the bin below up to its own value: a distribution in one bin, 0.0059 wide, predicts the bin's center with a width of 0.0020, where the redshift :term:`AION prediction` takes the bin's top. A galaxy with a measured redshift read it, so its prediction is close to it; ``redshift_quality`` measures predictions without it. Likewise the joint embedding reads the Legacy Survey catalog values, so the radius, r magnitude and axis ratio predictions are close to the measured ones. The others come from ridge regression on the joint embedding, its penalty chosen by leave-one-out, fitted to the galaxies with a measured value. Those galaxies' own predictions come from 5-fold cross-validation, so none is fitted to its own value, and the RMS error of those predictions is the width, the same for every galaxy. The spectral ones' widths are measured only on galaxies with a spectrum. ``g_r`` is the observed Legacy Survey color, :math:`-2.5 \log_{10}` of the g to r flux ratio, null where either flux is not positive. ``/galaxies/property`` serves it.
 
-.. autodata:: app.config.PROPERTIES
+.. autodata:: alphauniverse.config.PROPERTIES
    :no-index:
    :no-value:
 
 ``mean_points`` (one row per galaxy) and ``full_points`` (one row per embedding, written survey by survey) are Parquet, and so are ``same_place_points`` and ``any_position_points``, one row per galaxy placed by :term:`whole-mode search` over every mode (:doc:`/methods/map`):
 
-.. autodata:: app.config.POINTS
+.. autodata:: alphauniverse.config.POINTS
    :no-index:
    :no-value:
 
 ``pairs_image`` and ``pairs_spectrum`` are Parquet, in galaxy order. ``pairs_image`` holds, for every galaxy, the mean of AION's Legacy Survey image embeddings and WeMM-Embedding's embedding of the color image; ``pairs_spectrum`` holds, for every galaxy with a DESI spectrum, the mean of AION's DESI spectrum embeddings and WeMM-Embedding's embedding of the spectrum plot:
 
-.. autodata:: app.config.PAIRS
+.. autodata:: alphauniverse.config.PAIRS
    :no-index:
    :no-value:
 
@@ -170,6 +168,6 @@ The first Same place All query map (``/saliency``) on a galaxy builds its agreem
 Tests and CI
 ------------
 
-``tests/`` repeats the folders of the code each file tests, so ``tests/search/test_pql.py`` tests ``app/search/pql.py``. Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds into ``.fixtures`` in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, WeMM-Embedding, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbors but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbors, and the web app has no tests.
+``tests/`` repeats the folders of the code each file tests, so ``tests/search/test_pql.py`` tests ``src/alphauniverse/search/pql.py``. Tests run on a synthetic artifact tree and dataset that ``scripts/fixture.py`` builds into ``.fixtures`` in the production schemas, with AION and its codecs at random weights; no test downloads weights. ``/galaxy/{galaxy}/image/{survey}``, ``/galaxy/{galaxy}/spectrum/{survey}``, WeMM-Embedding, ``generate_pairs`` and the observed views of ``generate_text_views`` are untested, ``generate_token_grams`` is tested on the CPU in float32 rather than TF32, ``generate_maps`` is tested for its neighbors but not its UMAP layout, which needs more galaxies than UMAP's 15 neighbors, and the web app has no tests.
 
 Continuous integration lints and tests every pull request, checks that ``web/openapi.json`` is current and builds these docs with warnings as errors. On ``main``, once lint, tests and the ``openapi.json`` check pass, it deploys to Modal's ``main`` environment. Running the workflow by hand on any branch deploys that branch to the ``dev`` environment, which has its own app, volume and secrets. Vercel builds every branch: production builds from ``main`` and calls the ``main`` app, and preview builds from every other branch call the ``dev`` app, whose URL ``PUBLIC_API_URL`` holds in each Vercel environment. ``web/vercel.ts`` reads it at build time to rewrite ``/api`` to that app, so the browser keeps one origin and sends the cookie with every request, including DuckDB's. Each Modal environment needs its own ``access-password`` secret. The ``dev`` app runs whichever branch last ran the workflow, so previews share it.

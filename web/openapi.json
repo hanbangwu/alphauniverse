@@ -190,8 +190,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -255,8 +254,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -320,8 +318,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           }
@@ -371,8 +368,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -436,8 +432,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -501,8 +496,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           }
@@ -556,8 +550,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -617,16 +610,6 @@
         ],
         "parameters": [
           {
-            "name": "galaxy",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          },
-          {
             "name": "survey",
             "in": "path",
             "required": true,
@@ -637,6 +620,15 @@
               ],
               "type": "string",
               "title": "Survey"
+            }
+          },
+          {
+            "name": "galaxy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Galaxy"
             }
           }
         ],
@@ -686,8 +678,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -747,16 +738,6 @@
         ],
         "parameters": [
           {
-            "name": "galaxy",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          },
-          {
             "name": "survey",
             "in": "path",
             "required": true,
@@ -768,72 +749,14 @@
               "type": "string",
               "title": "Survey"
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/galaxy/{galaxy}/cosines/{mode}": {
-      "get": {
-        "tags": [
-          "search"
-        ],
-        "summary": "Get Cosines",
-        "operationId": "get_cosines",
-        "security": [
-          {
-            "APIKeyCookie": []
-          },
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
           {
             "name": "galaxy",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "title": "Galaxy"
-            }
-          },
-          {
-            "name": "mode",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "ls_image",
-                "hsc_image",
-                "desi_spectrum",
-                "sdss_spectrum"
-              ],
               "type": "string",
-              "title": "Mode"
+              "title": "Galaxy"
             }
           }
         ],
@@ -883,8 +806,7 @@
             "in": "query",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -983,7 +905,6 @@
                 ],
                 "type": "string"
               },
-              "maxItems": 4,
               "default": [],
               "title": "Anywhere"
             }
@@ -1035,8 +956,7 @@
             "in": "query",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -1135,9 +1055,18 @@
                 ],
                 "type": "string"
               },
-              "maxItems": 4,
               "default": [],
               "title": "Anywhere"
+            }
+          },
+          {
+            "name": "observed_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Observed Only"
             }
           },
           {
@@ -1199,8 +1128,7 @@
             "in": "query",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -1245,6 +1173,16 @@
               },
               "default": [],
               "title": "Anywhere"
+            }
+          },
+          {
+            "name": "observed_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Observed Only"
             }
           },
           {
@@ -1306,8 +1244,7 @@
             "in": "query",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -1406,9 +1343,18 @@
                 ],
                 "type": "string"
               },
-              "maxItems": 4,
               "default": [],
               "title": "Anywhere"
+            }
+          },
+          {
+            "name": "observed_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Observed Only"
             }
           },
           {
@@ -1469,8 +1415,7 @@
             "in": "query",
             "required": true,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
+              "type": "string",
               "title": "Galaxy"
             }
           },
@@ -1515,6 +1460,16 @@
               },
               "default": [],
               "title": "Anywhere"
+            }
+          },
+          {
+            "name": "observed_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Observed Only"
             }
           },
           {
@@ -1714,14 +1669,6 @@
           "sdss": {
             "type": "boolean",
             "title": "Sdss"
-          },
-          "gz10": {
-            "type": "boolean",
-            "title": "Gz10"
-          },
-          "provabgs": {
-            "type": "boolean",
-            "title": "Provabgs"
           }
         },
         "type": "object",
@@ -1732,9 +1679,7 @@
           "ls",
           "hsc",
           "desi",
-          "sdss",
-          "gz10",
-          "provabgs"
+          "sdss"
         ],
         "title": "Galaxy"
       },
@@ -1761,9 +1706,7 @@
                   "ls",
                   "hsc",
                   "desi",
-                  "sdss",
-                  "gz10",
-                  "provabgs"
+                  "sdss"
                 ]
               },
               {
@@ -1843,7 +1786,7 @@
         "properties": {
           "galaxies": {
             "items": {
-              "type": "integer"
+              "type": "string"
             },
             "type": "array",
             "title": "Galaxies"

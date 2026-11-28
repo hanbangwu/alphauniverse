@@ -31,15 +31,6 @@
       <NativeSelect.Option value="whole">Whole mode</NativeSelect.Option>
     </NativeSelect.Root>
   </label>
-  {#if view.searchBy.value === 'patch'}
-    <label class="flex items-center gap-2 text-sm font-medium">
-      Highlight by
-      <NativeSelect.Root size="sm" bind:value={similarity.layer.value}>
-        <NativeSelect.Option value="self">Self</NativeSelect.Option>
-        <NativeSelect.Option value="all">All</NativeSelect.Option>
-      </NativeSelect.Root>
-    </label>
-  {/if}
   <label class="flex items-center gap-2 text-sm font-medium">
     <Switch
       bind:checked={display.on.value}

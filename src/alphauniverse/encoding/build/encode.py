@@ -1,0 +1,292 @@
+from functools import cache
+
+import numpy as np
+import pyarrow as pa
+import torch
+import torchvision.transforms.functional as F
+from aion import AION
+from aion.codecs import CodecManager
+from aion.fourm.modality_info import MODALITY_INFO
+from aion.modalities import (
+    HSCAG,
+    HSCAI,
+    HSCAR,
+    HSCAY,
+    HSCAZ,
+    DESISpectrum,
+    HSCImage,
+    HSCMagG,
+    HSCMagI,
+    HSCMagR,
+    HSCMagY,
+    HSCMagZ,
+    HSCShape11,
+    HSCShape12,
+    HSCShape22,
+    Image,
+    LegacySurveyEBV,
+    LegacySurveyFluxG,
+    LegacySurveyFluxI,
+    LegacySurveyFluxR,
+    LegacySurveyFluxW1,
+    LegacySurveyFluxW2,
+    LegacySurveyFluxW3,
+    LegacySurveyFluxW4,
+    LegacySurveyFluxZ,
+    LegacySurveyImage,
+    LegacySurveyShapeE1,
+    LegacySurveyShapeE2,
+    LegacySurveyShapeR,
+    Scalar,
+    SDSSSpectrum,
+    Spectrum,
+    Z,
+)
+from tqdm import tqdm
+
+from alphauniverse.config import (
+    HSC_BANDS,
+    HSC_TABLE_COLUMNS,
+    LS_BANDS,
+    LS_TABLE_COLUMNS,
+    OBJECT_ID,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    STORES,
+    TOKEN_SURVEYS,
+    device,
+    store_schema,
+    store_writer,
+)
+from alphauniverse.dataset.dataset import dataset, redshift
+
+BATCH = 128
+
+LS_TABLE_VALUES = tuple(
+    zip(
+        (
+            LegacySurveyEBV,
+            LegacySurveyFluxG,
+            LegacySurveyFluxR,
+            LegacySurveyFluxI,
+            LegacySurveyFluxZ,
+            LegacySurveyFluxW1,
+            LegacySurveyFluxW2,
+            LegacySurveyFluxW3,
+            LegacySurveyFluxW4,
+            LegacySurveyShapeR,
+            LegacySurveyShapeE1,
+            LegacySurveyShapeE2,
+        ),
+        LS_TABLE_COLUMNS,
+        strict=True,
+    )
+)
+
+HSC_TABLE_VALUES = tuple(
+    zip(
+        (
+            HSCAG,
+            HSCAR,
+            HSCAI,
+            HSCAZ,
+            HSCAY,
+            HSCMagG,
+            HSCMagR,
+            HSCMagI,
+            HSCMagZ,
+            HSCMagY,
+            HSCShape11,
+            HSCShape22,
+            HSCShape12,
+        ),
+        HSC_TABLE_COLUMNS,
+        strict=True,
+    )
+)
+
+
+def codec() -> CodecManager:
+    return CodecManager(device=device())
+
+
+@cache
+def model() -> AION:
+    return AION.from_pretrained("polymathic-ai/aion-base").to(device()).eval()
+
+
+def image(
+    modality: type[Image], row: dict[str, list], bands: tuple[str, ...]
+) -> torch.Tensor:
+    by_band = {
+        band.upper(): flux for band, flux in zip(row["band"], row["flux"], strict=True)
+    }
+    flux = np.asarray([[by_band[band] for band in bands]], dtype=np.float32)
+    crop = F.center_crop(
+        torch.from_numpy(flux),
+        output_size=[
+            MODALITY_INFO["tok_image"]["input_size"],
+            MODALITY_INFO["tok_image"]["input_size"],
+        ],
+    )
+    return (
+        codec()
+        .encode(modality(flux=crop.to(device()), bands=bands))[modality.token_key]
+        .reshape(1, -1)
+    )
+
+
+def spectrum(modality: type[Spectrum], row: dict[str, list]) -> torch.Tensor:
+    fields = {
+        "flux": ("flux", torch.float32, 0.0),
+        "ivar": ("ivar", torch.float32, 0.0),
+        "wavelength": ("lambda", torch.float32, 99999.0),
+        "mask": ("mask", torch.bool, True),
+    }
+    kept = np.asarray(row["lambda"]) > 0
+    samples = {
+        argument: torch.as_tensor(
+            np.append(np.asarray(row[field])[kept], value)[None],
+            dtype=dtype,
+            device=device(),
+        )
+        for argument, (field, dtype, value) in fields.items()
+    }
+    return codec().encode(modality(**samples))[modality.token_key].reshape(1, -1)
+
+
+def scalar(modality: type[Scalar], value: float) -> torch.Tensor:
+    return (
+        codec()
+        .encode(
+            modality(
+                value=torch.as_tensor([value], dtype=torch.float32, device=device())
+            )
+        )[modality.token_key]
+        .reshape(1, -1)
+    )
+
+
+@torch.inference_mode()
+def tokenize(row: dict) -> dict[str, dict[str, torch.Tensor]]:
+    groups = {
+        "ls": {
+            LegacySurveyImage.token_key: image(
+                LegacySurveyImage,
+                row[TOKEN_SURVEYS["ls"]],
+                LS_BANDS,
+            ),
+            **{
+                modality.token_key: scalar(modality, row[column])
+                for modality, column in LS_TABLE_VALUES
+            },
+        }
+    }
+    if row[TOKEN_SURVEYS["hsc"]] is not None:
+        groups["hsc"] = {
+            HSCImage.token_key: image(
+                HSCImage,
+                row[TOKEN_SURVEYS["hsc"]],
+                HSC_BANDS,
+            ),
+            **{
+                modality.token_key: scalar(modality, row[column])
+                for modality, column in HSC_TABLE_VALUES
+            },
+        }
+    if row[TOKEN_SURVEYS["desi"]] is not None:
+        groups["desi"] = {
+            DESISpectrum.token_key: spectrum(DESISpectrum, row[TOKEN_SURVEYS["desi"]])
+        }
+    if row[TOKEN_SURVEYS["sdss"]] is not None:
+        groups["sdss"] = {
+            SDSSSpectrum.token_key: spectrum(SDSSSpectrum, row[TOKEN_SURVEYS["sdss"]])
+        }
+    if (survey := redshift(row)) is not None:
+        groups[REDSHIFT] = {Z.token_key: scalar(Z, row[REDSHIFT_COLUMNS[survey][0]])}
+    return groups
+
+
+@torch.inference_mode()
+def context(
+    tokens: dict[str, torch.Tensor],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    encoder_tokens, encoder_embeddings, encoder_mask, modality_mask = (
+        model().embed_inputs(
+            tokens,
+            num_encoder_tokens=sum(slot.shape[1] for slot in tokens.values()),
+        )
+    )
+    with torch.autocast(device_type=device().type, dtype=torch.float16):
+        encoded = model()._encode(encoder_tokens, encoder_embeddings, encoder_mask)
+    return encoded, encoder_tokens, encoder_mask, modality_mask
+
+
+def encode(
+    groups: dict[str, dict[str, torch.Tensor]],
+) -> tuple[np.ndarray, np.ndarray]:
+    encoded, _, _, modality_mask = context(
+        {key: slot for group in groups.values() for key, slot in group.items()}
+    )
+    return (
+        encoded[0].cpu().numpy(),
+        modality_mask[0].cpu().numpy(),
+    )
+
+
+def by_survey(
+    values: np.ndarray,
+    groups: dict[str, dict[str, torch.Tensor]],
+    modality_mask: np.ndarray,
+) -> dict[str, np.ndarray]:
+    return {
+        survey: values[
+            np.flatnonzero(
+                np.isin(
+                    modality_mask, [model().modality_info[key]["id"] for key in group]
+                )
+            )
+        ]
+        for survey, group in groups.items()
+    }
+
+
+def generate_embeddings() -> None:
+    data = dataset()
+    schemas = {role: store_schema(role) for role in STORES}
+    writers = {role: store_writer(role) for role in STORES}
+    batches: dict[str, list[pa.RecordBatch]] = {role: [] for role in STORES}
+
+    for galaxy in tqdm(range(len(data)), desc="encode"):
+        row = data[galaxy]
+        groups = tokenize(row)
+        context, modality_mask = encode(groups)
+        cells = {
+            "encoded": {
+                survey: list(vectors.astype(np.float16))
+                for survey, vectors in by_survey(context, groups, modality_mask).items()
+            },
+            "tokens": {
+                survey: np.concatenate(
+                    [
+                        slot.reshape(-1).cpu().numpy().astype(dtype=np.uint32)
+                        for slot in group.values()
+                    ]
+                )
+                for survey, group in groups.items()
+            },
+        }
+        for role in STORES:
+            batches[role].append(
+                pa.RecordBatch.from_pylist(
+                    [{"object_id": row[OBJECT_ID], **cells[role]}], schema=schemas[role]
+                )
+            )
+            if len(batches[role]) == BATCH:
+                writers[role].write_batch(pa.concat_batches(batches[role]))
+                batches[role].clear()
+
+    for role in STORES:
+        if batches[role]:
+            writers[role].write_batch(pa.concat_batches(batches[role]))
+        writers[role].close()

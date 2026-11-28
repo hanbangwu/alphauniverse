@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { GetImageData, GetImageAionPredictionData } from '$lib/api'
+  import type { GalaxyId } from '$lib/client'
   import { type ImageSurvey, client } from '$lib/client'
   import { Spinner } from '$lib/components/ui/spinner'
   import { coverageQuery } from '$lib/data/queries'
@@ -7,7 +8,7 @@
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
     survey?: ImageSurvey
     predicted?: boolean
   }

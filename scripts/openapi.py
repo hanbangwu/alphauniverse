@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from app.main import app
+from server.main import app
 
 TARGET = Path(__file__).resolve().parent.parent / "web" / "openapi.json"
 

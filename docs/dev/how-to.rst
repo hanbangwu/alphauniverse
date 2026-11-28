@@ -11,7 +11,7 @@ Build the dev subset on Modal and download it into ``.cache``, then serve the AP
 .. code-block:: sh
 
    uv run python -m scripts.dev_subset   # --galaxies, default 128
-   ACCESS_PASSWORD=local uv run fastapi dev app/main.py
+   ACCESS_PASSWORD=local uv run fastapi dev server/main.py
    cd web && bun install && bun run dev
 
 Enter the same password at ``/login``. ``MODAL_ENVIRONMENT=dev`` before the first command builds the dev subset from the ``dev`` volume. Develop against the dev subset, never measure with it. Without ``.cache/dataset`` the API reads the Hugging Face dataset (24.33 GB at the pinned revision). The first text search downloads WeMM-Embedding.
@@ -25,29 +25,39 @@ The dataset is built outside the deployed pipeline:
 
    uv run --group dataset python -m scripts.alphauniverse_cosmos
 
-The artifacts are built on Modal, in this order; see :doc:`reference` for what each writes:
+The library builds the artifacts search reads, in order, on the machine it runs on, into ``ALPHAUNIVERSE_DATA_DIR`` (``.cache`` by default); the AION steps need a GPU:
 
 .. code-block:: sh
 
-   uv run modal run modal_app.py::generate_embeddings
-   uv run modal run modal_app.py::generate_predictions
-   uv run modal run modal_app.py::generate_token_grams
-   uv run modal run modal_app.py::generate_token_embeddings
-   uv run modal run modal_app.py::generate_aion_predictions
-   uv run modal run modal_app.py::generate_observed_grams
-   uv run modal run modal_app.py::generate_aion_prediction_embeddings
-   uv run modal run modal_app.py::generate_joint_embedding
+   uv run --extra build python -c "from alphauniverse.build import build; build()"
+
+The server's map artifacts are then built on Modal, from the library's artifacts on the volume; see :doc:`reference` for what each writes:
+
+.. code-block:: sh
+
    uv run modal run modal_app.py::generate_properties
    uv run modal run modal_app.py::generate_maps
    uv run modal run modal_app.py::generate_projections
-   uv run modal run modal_app.py::generate_pairs
-   uv run modal run modal_app.py::generate_text_views --parts 200
-   uv run modal run modal_app.py::train_text_regression
-   uv run modal run modal_app.py::generate_text_vectors
+
+``benchmarks.library.predictions.build.observed_grams`` builds the observed Grams and AION prediction embeddings that two library benchmarks read:
+
+.. code-block:: sh
+
+   uv run modal run -m benchmarks.library.predictions.build.observed_grams
 
 A failed job leaves its artifacts incomplete; rerun it. Text artifacts are not keyed by text model: after changing ``WEMM``, move ``text_views``, ``text_views_held_out``, ``text_regression``, ``text_bases``, ``text_vectors`` and ``text_query_mean`` aside before rerunning ``generate_text_views``, ``train_text_regression`` and ``generate_text_vectors``, or new views are mixed with old ones, and rerun ``generate_pairs``, whose ``pairs_image`` and ``pairs_spectrum`` hold the text model's embeddings that ``text_search_quality`` scores queries against.
 
 These commands write to the volume production serves from. To build into the ``dev`` Modal environment instead, which has its own app, volume and secrets, add ``--env dev`` after ``modal run``.
+
+Migrate artifacts to ``object_id`` keys
+----------------------------------------
+
+Artifacts built before the library split key rows by an integer ``galaxy`` and carry the Galaxy Zoo 10 and PROVABGS columns. ``scripts/migrate_object_ids.py`` rewrites them on a volume in place, without recomputing anything, and skips files already migrated. The served app cannot read the other format, so deploy right after migrating:
+
+.. code-block:: sh
+
+   uv run modal run --env dev scripts/migrate_object_ids.py
+   uv run modal run scripts/migrate_object_ids.py
 
 Preview a branch
 ----------------
@@ -63,7 +73,7 @@ The branch's Vercel preview then calls that app.
 Update the API schema
 ---------------------
 
-After changing a route or response model in ``app/main.py`` or a module's ``routes.py``:
+After changing a route or response model in ``server/main.py`` or a module's ``routes.py``:
 
 .. code-block:: sh
 
@@ -78,8 +88,8 @@ Run the tests and linters
 .. code-block:: sh
 
    uv run --group build pytest
-   uv run ruff check app benchmarks scripts tests modal_app.py
-   uv run ruff format app benchmarks scripts tests modal_app.py
+   uv run ruff check src server benchmarks scripts tests modal_app.py
+   uv run ruff format src server benchmarks scripts tests modal_app.py
    uv run lint-imports
    cd web && bun run lint && bun run check
 
@@ -90,20 +100,19 @@ Run a benchmark
 
 .. code-block:: sh
 
-   uv run modal run -m benchmarks.search.search_performance                            # --runs, default 30
-   uv run modal run -m benchmarks.search.search_quality                                # --sample, default 1000
-   uv run modal run -m benchmarks.backend_performance                                  # --runs, default 30
-   uv run modal run -m benchmarks.projection.build.projection_quality
-   uv run modal run -m benchmarks.text_search.text_search_quality                      # --half, default development, or sealed
-   uv run modal run -m benchmarks.text_search.text_search_sheet                        # --out, default text_search_sheet.html; --earlier, an earlier sheet's .json
-   uv run --group build modal run -m benchmarks.predictions.build.compression_quality  # --sample 1024, --queries 200, --modes every mode
-   uv run modal run -m benchmarks.predictions.build.token_embedding_quality
-   uv run --group build modal run -m benchmarks.predictions.build.aion_prediction_quality
-   uv run modal run -m benchmarks.predictions.build.aion_prediction_embedding_quality
-   uv run --group build modal run -m benchmarks.predictions.build.retrieval_quality
-   uv run --group build modal run -m benchmarks.predictions.build.redshift_quality
-   uv run --group build modal run -m benchmarks.predictions.build.probe_quality
-   uv run --group build modal run -m benchmarks.projection.build.neighbor_quality
+   uv run modal run -m benchmarks.library.search.search_performance                            # --runs, default 30
+   uv run modal run -m benchmarks.library.search.search_quality                                # --sample, default 1000
+   uv run modal run -m benchmarks.server.backend_performance                                  # --runs, default 30
+   uv run modal run -m benchmarks.server.projection.build.projection_quality
+   uv run modal run -m benchmarks.library.text_search.text_search_quality                      # --half, default development, or sealed
+   uv run modal run -m benchmarks.library.text_search.text_search_sheet                        # --out, default text_search_sheet.html; --earlier, an earlier sheet's .json
+   uv run --group build modal run -m benchmarks.library.predictions.build.compression_quality  # --sample 1024, --queries 200, --modes every mode
+   uv run modal run -m benchmarks.library.predictions.build.token_embedding_quality
+   uv run --group build modal run -m benchmarks.library.predictions.build.aion_prediction_quality
+   uv run modal run -m benchmarks.library.predictions.build.aion_prediction_embedding_quality
+   uv run --group build modal run -m benchmarks.library.predictions.build.retrieval_quality
+   uv run --group build modal run -m benchmarks.library.predictions.build.redshift_quality
+   uv run --group build modal run -m benchmarks.server.projection.build.neighbor_quality
 
 Each writes its report to ``docs/benchmarks/<script>.json``.
 

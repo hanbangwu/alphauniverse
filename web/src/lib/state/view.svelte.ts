@@ -1,3 +1,4 @@
+import type { GalaxyId } from '$lib/client'
 import { IMAGE_MODES, SPECTRUM_MODES, PATCH_MODES, byMode } from '$lib/data/modes'
 import { type ModeName, type SearchQuery, isModeQuery } from '$lib/data/similarity'
 import { POINT_SETS, PROPERTIES, type PointSet, type Property, UNITS } from '$lib/labels'
@@ -11,7 +12,7 @@ export class ViewState {
   readonly tab: Field<Values['tab']>
   readonly pointSet: EnumField<PointSet>
   readonly property: EnumField<Property>
-  readonly galaxy: Field<number | null>
+  readonly galaxy: Field<GalaxyId | null>
   readonly patches = byMode(() => new IndexListField())
   readonly tableValues = new IndexListField()
   readonly imageAnywhere = new Field(false)
@@ -66,7 +67,7 @@ export class ViewState {
     this.tableValues.value = searched.table_values ?? []
   }
 
-  select(galaxy: number | null): void {
+  select(galaxy: GalaxyId | null): void {
     if (galaxy !== this.galaxy.value) {
       for (const field of Object.values(this.patches)) field.reset()
       this.tableValues.reset()

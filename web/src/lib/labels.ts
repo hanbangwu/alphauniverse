@@ -8,9 +8,7 @@ export const SURVEYS: Record<Survey, string> = {
   ls: 'Legacy Survey DR10',
   hsc: 'HSC PDR3',
   desi: 'DESI EDR SV3',
-  sdss: 'SDSS',
-  gz10: 'Galaxy Zoo 10',
-  provabgs: 'PROVABGS'
+  sdss: 'SDSS'
 }
 
 export const MODES: Record<ModeName, string> = {
@@ -34,9 +32,6 @@ export type PointSet = keyof typeof POINT_SETS
 
 export const PROPERTIES = {
   redshift: 'Redshift',
-  mass: 'Stellar mass',
-  sfr: 'SFR',
-  ssfr: 'sSFR',
   g_r: 'g − r',
   radius: 'Half-light radius',
   r_magnitude: 'r magnitude',
@@ -49,9 +44,6 @@ export type Property = keyof typeof PROPERTIES
 
 export const UNITS: Record<Property, string> = {
   redshift: 'z',
-  mass: 'log M☉',
-  sfr: 'log M☉ yr⁻¹',
-  ssfr: 'log yr⁻¹',
   g_r: 'mag',
   radius: 'arcsec',
   r_magnitude: 'mag',

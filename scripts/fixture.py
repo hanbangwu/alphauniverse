@@ -11,12 +11,11 @@ from aion.modalities import DESISpectrum, LegacySurveyImage
 from datasets import Dataset, Features, Sequence, Value
 from scipy.special import softmax
 
-from app import config
-from app.config import (
+from alphauniverse import config
+from alphauniverse.config import (
     AION_EMBEDDING_DIM,
     AION_SPECTRUM_GRID,
     DATASET_LS_SUFFIX,
-    FLAG_SURVEYS,
     GRAM_NAMES,
     HSC_BANDS,
     HSC_TABLE_COLUMNS,
@@ -50,16 +49,23 @@ from app.config import (
     store_schema,
     store_writer,
 )
-from app.dataset.dataset import dataset, table_columns
-from app.encoding.store import observed, source, tokens
-from app.predictions.build.embeddings import generate_token_search
-from app.predictions.build.predictions import prediction_batch, save_prediction_basis
-from app.predictions.store import aion_predictions, basis, prediction_basis, predictions
-from app.predictions.whole_mode import stored
-from app.search.pql import agreements, basket_sum, sampled
-from app.text_search.text_search import text_vectors
+from alphauniverse.dataset.dataset import dataset
+from alphauniverse.encoding.store import object_ids, observed, source, tokens
+from alphauniverse.predictions.build.embeddings import generate_token_search
+from alphauniverse.predictions.build.predictions import (
+    prediction_batch,
+    save_prediction_basis,
+)
+from alphauniverse.predictions.store import (
+    aion_predictions,
+    basis,
+    prediction_basis,
+    predictions,
+)
+from alphauniverse.predictions.whole_mode import stored
+from alphauniverse.search.pql import agreements, basket_sum, sampled
+from alphauniverse.text_search.text_search import text_vectors
 
-N_MORPHOLOGIES = 10
 TOKENS: dict[str, int] = {
     "ls": LegacySurveyImage.num_tokens + 12,
     "hsc": LegacySurveyImage.num_tokens + 13,
@@ -111,17 +117,20 @@ def _cells(
     return embeddings, token_cells
 
 
+def identifiers(galaxies: int) -> list[str]:
+    return [f"fixture-{galaxy}" for galaxy in range(galaxies)]
+
+
 def _store(
     role: str,
     cells: dict[str, list[np.ndarray | None]],
     galaxies: int,
-    flags: dict[str, np.ndarray],
 ) -> None:
     with store_writer(role) as writer:
         writer.write_table(
             pa.table(
                 {
-                    "galaxy": np.arange(galaxies),
+                    "object_id": identifiers(galaxies),
                     **{
                         survey: [
                             None if cell is None else list(cell)
@@ -129,7 +138,6 @@ def _store(
                         ]
                         for survey in STORE_COLUMNS
                     },
-                    **flags,
                 },
                 schema=store_schema(role),
             )
@@ -166,7 +174,7 @@ def _predictions(rng: np.random.Generator, galaxies: int) -> None:
     records = []
     for galaxy in range(galaxies):
         values = {
-            "galaxy": np.asarray([galaxy], dtype=np.int32),
+            "object_id": np.asarray([f"fixture-{galaxy}"]),
             REDSHIFT: softmax(
                 3 * rng.standard_normal(MODALITY_INFO["tok_z"]["vocab_size"])
             ).astype(np.float32),
@@ -277,8 +285,6 @@ def _dataset(
     rng: np.random.Generator,
     galaxies: int,
     made: dict[str, np.ndarray],
-    category: pa.Array,
-    provabgs: np.ndarray,
 ) -> None:
     spectrum_feature = {
         "lambda": Sequence(Value("float32")),
@@ -289,9 +295,7 @@ def _dataset(
     ls_bands = [band.lower() for band in LS_BANDS]
     hsc_bands = [band.lower() for band in HSC_BANDS]
     columns = {
-        f"object_id{DATASET_LS_SUFFIX}": [
-            f"fixture-{galaxy}" for galaxy in range(galaxies)
-        ],
+        f"object_id{DATASET_LS_SUFFIX}": identifiers(galaxies),
         f"ra{DATASET_LS_SUFFIX}": rng.uniform(149.5, 150.5, galaxies),
         f"dec{DATASET_LS_SUFFIX}": rng.uniform(1.5, 2.5, galaxies),
         TOKEN_SURVEYS["ls"]: [
@@ -323,11 +327,6 @@ def _dataset(
             ]
             for column in HSC_TABLE_COLUMNS
         },
-        FLAG_SURVEYS["gz10"]: category.to_pylist(),
-        FLAG_SURVEYS["provabgs"]: [
-            value if measured else None
-            for value, measured in zip(rng.uniform(8, 12, galaxies), provabgs)
-        ],
     }
     for survey, (value, error, warning) in REDSHIFT_COLUMNS.items():
         held = [covered(survey, galaxy) for galaxy in range(galaxies)]
@@ -358,8 +357,6 @@ def _dataset(
                     for survey in SPECTRUM_MODES.values()
                 },
                 **{column: Value("float32") for column in TABLE_VALUE_COLUMNS},
-                FLAG_SURVEYS["gz10"]: Value("int64"),
-                FLAG_SURVEYS["provabgs"]: Value("float32"),
                 **{
                     column: Value("int64" if column == warning else "float32")
                     for value, error, warning in REDSHIFT_COLUMNS.values()
@@ -377,7 +374,7 @@ def _text_views(rng: np.random.Generator, galaxies: int) -> None:
     pq.write_table(
         pa.table(
             {
-                "galaxy": np.arange(galaxies),
+                "object_id": identifiers(galaxies),
                 "view_type": rng.integers(len(VIEW_TYPES), size=galaxies),
                 "round": np.zeros(galaxies, int),
                 "embedding": pa.FixedSizeListArray.from_arrays(
@@ -404,16 +401,16 @@ def _project(basis: np.ndarray, rows: np.ndarray) -> np.ndarray:
     return rows / np.linalg.norm(rows, axis=-1, keepdims=True) @ basis
 
 
-def _properties(
-    rng: np.random.Generator, galaxies: int, provabgs: np.ndarray
-) -> pa.Table:
-    measured = {f"{label}_measured": provabgs for label in PROBED} | {
+def _properties(rng: np.random.Generator, galaxies: int) -> pa.Table:
+    measured = {
+        f"{label}_measured": np.arange(galaxies) % 3 != 0 for label in PROBED
+    } | {
         f"{REDSHIFT}_measured": np.array(
             [covered(REDSHIFT, galaxy) for galaxy in range(galaxies)]
         )
     }
     return pa.table(
-        {"galaxy": np.arange(galaxies, dtype=np.int32)}
+        {"object_id": identifiers(galaxies)}
         | {
             name: pa.array(
                 rng.random(galaxies, np.float32),
@@ -453,7 +450,7 @@ def forget() -> None:
         sampled,
         basket_sum,
         dataset,
-        table_columns,
+        object_ids,
     ):
         cached.cache_clear()
 
@@ -469,14 +466,10 @@ def build(galaxies: int) -> Path:
 
     embeddings, token_cells = _cells(rng, centers, galaxies)
 
-    rows = np.arange(galaxies)
-    labeled = rows % 10 != 0
-    flags = {"gz10": labeled, "provabgs": rows % 3 != 0}
+    rows = pa.array(identifiers(galaxies))
 
-    _store("encoded", embeddings, galaxies, flags)
-    _store("tokens", token_cells, galaxies, flags)
-
-    category = pa.array(rng.integers(N_MORPHOLOGIES, size=galaxies), mask=~labeled)
+    _store("encoded", embeddings, galaxies)
+    _store("tokens", token_cells, galaxies)
 
     anchors = np.stack(
         [np.asarray(cell, dtype=np.float32) for cell in embeddings["ls"]]
@@ -484,26 +477,23 @@ def build(galaxies: int) -> Path:
     basis = rng.standard_normal((AION_EMBEDDING_DIM, 2)).astype(np.float32)
 
     pq.write_table(
-        points(rows, _project(basis, anchors.mean(axis=1)), category),
+        points(rows, _project(basis, anchors.mean(axis=1))),
         artifact("mean_points"),
         compression="zstd",
     )
 
     for name in MAPS:
         pq.write_table(
-            points(
-                rows, rng.standard_normal((galaxies, 2)).astype(np.float32), category
-            ),
+            points(rows, rng.standard_normal((galaxies, 2)).astype(np.float32)),
             artifact(f"{name}_points"),
             compression="zstd",
         )
 
-    owner = np.repeat(rows, anchors.shape[1])
+    owner = np.repeat(np.arange(galaxies), anchors.shape[1])
     pq.write_table(
         points(
-            owner,
+            rows.take(owner),
             _project(basis, anchors.reshape(-1, AION_EMBEDDING_DIM)),
-            category.take(owner),
         ),
         artifact("full_points"),
         compression="zstd",
@@ -511,10 +501,8 @@ def build(galaxies: int) -> Path:
 
     _predictions(rng, galaxies)
     made = _aion_predictions(rng, galaxies)
-    _dataset(rng, galaxies, made, category, flags["provabgs"])
-    pq.write_table(
-        _properties(rng, galaxies, flags["provabgs"]), artifact("properties")
-    )
+    _dataset(rng, galaxies, made)
+    pq.write_table(_properties(rng, galaxies), artifact("properties"))
     _token_embeddings(rng, galaxies)
     generate_token_search()
     _text_views(rng, galaxies)

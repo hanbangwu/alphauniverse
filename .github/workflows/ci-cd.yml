@@ -15,8 +15,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
       - run: |
-          uv run ruff check app benchmarks scripts tests modal_app.py
-          uv run ruff format --check app benchmarks scripts tests modal_app.py
+          uv run ruff check src server benchmarks scripts tests modal_app.py
+          uv run ruff format --check src server benchmarks scripts tests modal_app.py
           uv run lint-imports
       - run: uv run --group build pytest
   openapi:

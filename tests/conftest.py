@@ -1,11 +1,8 @@
 import json
-import os
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from datasets import Dataset
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture(scope="session")
@@ -17,7 +14,7 @@ def galaxies() -> int:
 
 @pytest.fixture(scope="session")
 def tree() -> Iterator[Path]:
-    from app import config
+    from alphauniverse import config
     from scripts.fixture import GALAXIES, build
 
     with pytest.MonkeyPatch.context() as patch:
@@ -25,28 +22,13 @@ def tree() -> Iterator[Path]:
         yield build(GALAXIES)
 
 
-@pytest.fixture(scope="session")
-def password() -> str:
-    os.environ["ACCESS_PASSWORD"] = "test-password"
-    return os.environ["ACCESS_PASSWORD"]
-
-
-@pytest.fixture(scope="session")
-def client(tree: Path, password: str) -> Iterator[TestClient]:
-    from app.main import app
-
-    headers = {"Authorization": f"Bearer {password}"}
-    with TestClient(app, headers=headers) as opened:
-        yield opened
-
-
 @pytest.fixture(scope="module")
 def random_weights() -> Iterator[None]:
     import torch
     from aion.codecs import config as codec_config
 
-    from app.config import device
-    from app.encoding.build import encode as encode_module
+    from alphauniverse.config import device
+    from alphauniverse.encoding.build import encode as encode_module
 
     configs = Path(__file__).parent / "aion"
 
@@ -67,25 +49,3 @@ def random_weights() -> Iterator[None]:
         patch.setattr(encode_module, "model", lambda: network)
         yield
     encode_module.CodecManager._load_codec_from_hf.cache_clear()
-
-
-@pytest.fixture
-def identified(monkeypatch: pytest.MonkeyPatch, galaxies: int) -> Dataset:
-    from app.config import DATASET_LS_SUFFIX
-    from app.dataset import dataset as dataset_module
-
-    rows = Dataset.from_dict(
-        {
-            f"object_id{DATASET_LS_SUFFIX}": [
-                f"1501p020-{galaxy}" for galaxy in range(galaxies)
-            ],
-            f"ra{DATASET_LS_SUFFIX}": [
-                150.0 + galaxy / 100 for galaxy in range(galaxies)
-            ],
-            f"dec{DATASET_LS_SUFFIX}": [
-                2.0 - galaxy / 100 for galaxy in range(galaxies)
-            ],
-        }
-    )
-    monkeypatch.setattr(dataset_module, "dataset", lambda: rows)
-    return rows

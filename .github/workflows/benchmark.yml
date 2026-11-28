@@ -6,19 +6,18 @@ on:
       script:
         type: choice
         options:
-          - search.search_performance
-          - search.search_quality
-          - backend_performance
-          - projection.build.projection_quality
-          - text_search.text_search_quality
-          - predictions.build.compression_quality
-          - predictions.build.token_embedding_quality
-          - predictions.build.aion_prediction_quality
-          - predictions.build.aion_prediction_embedding_quality
-          - predictions.build.retrieval_quality
-          - predictions.build.redshift_quality
-          - predictions.build.probe_quality
-          - projection.build.neighbor_quality
+          - library.search.search_performance
+          - library.search.search_quality
+          - server.backend_performance
+          - server.projection.build.projection_quality
+          - library.text_search.text_search_quality
+          - library.predictions.build.compression_quality
+          - library.predictions.build.token_embedding_quality
+          - library.predictions.build.aion_prediction_quality
+          - library.predictions.build.aion_prediction_embedding_quality
+          - library.predictions.build.retrieval_quality
+          - library.predictions.build.redshift_quality
+          - server.projection.build.neighbor_quality
       args: {}
 env:
   UV_LOCKED: "1"

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ImageSurvey } from '$lib/client'
+  import type { GalaxyId, ImageSurvey } from '$lib/client'
   import { OUTLINE, type RGB } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import GalaxyThumb from '$lib/components/galaxy-thumb.svelte'
@@ -14,7 +14,7 @@
     color: ((value: number) => RGB) | null
     mask?: ArrayLike<number> | null
     opacity?: (picked: boolean) => number
-    galaxy?: number
+    galaxy?: GalaxyId
     survey?: ImageSurvey
     title?: (value: number, index: number) => string
     selected?: number[]

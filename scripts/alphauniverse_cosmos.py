@@ -27,8 +27,6 @@ if __name__ == "__main__":
 
     for repository in (
         "UniverseTBD/mmu_sdss_sdss",
-        "UniverseTBD/mmu_gz10",
-        "UniverseTBD/mmu_desi_provabgs",
         "UniverseTBD/mmu_desi_edr_sv3",
         "UniverseTBD/mmu_hsc_pdr3_dud_22.5",
     ):

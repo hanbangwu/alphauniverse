@@ -1,0 +1,149 @@
+from pathlib import Path
+
+import numpy as np
+import pyarrow.parquet as pq
+import pytest
+from aion.fourm.modality_info import MODALITY_INFO
+from datasets import Dataset
+
+from alphauniverse.config import (
+    DATASET_LS_SUFFIX,
+    LS_ZERO_POINT,
+    PROBED,
+    PROPERTIES,
+    REDSHIFT,
+    REDSHIFT_COLUMNS,
+    TOKEN_SURVEYS,
+    artifact,
+)
+from alphauniverse.predictions.build import aion_predictions, observations
+from server.projection.build import properties
+
+LABELED = 30
+CONTINUUM = 2.0
+HALPHA_EW = 30.0
+LINE_REDSHIFT = 0.5
+
+
+def test_a_labeled_galaxy_s_prediction_does_not_depend_on_its_own_label() -> None:
+    rng = np.random.default_rng(0)
+    features = rng.normal(size=(40, 6))
+    values = features @ rng.normal(size=6) + rng.normal(scale=0.1, size=40)
+    values[LABELED:] = np.nan
+    changed = values.copy()
+    changed[3] += 10
+
+    predicted, width = properties.probed(features, values)
+    moved, _ = properties.probed(features, changed)
+
+    assert moved[3] == predicted[3]
+    residuals = predicted[:LABELED] - values[:LABELED]
+    assert width == pytest.approx(np.sqrt(np.mean(residuals**2)))
+
+
+def test_a_redshift_bin_s_probability_spreads_from_the_bin_below_to_its_value() -> None:
+    values = np.array([0.0, 0.1, 0.2, 0.3, np.nan], np.float32)
+    probabilities = np.array(
+        [[0, 0, 1, 0, 0], [0, 0, 0.5, 0.5, 0], [0, 0, 1, 0, 5]], np.float32
+    )
+
+    lower, upper = (
+        properties.spread_quantiles(probabilities, values, share)
+        for share in aion_predictions.CENTRAL
+    )
+
+    np.testing.assert_allclose(lower, [0.116, 0.132, 0.116], rtol=1e-6)
+    np.testing.assert_allclose(upper, [0.184, 0.268, 0.184], rtol=1e-6)
+    np.testing.assert_allclose(
+        properties.spread_quantiles(probabilities, values, 0.5),
+        [0.15, 0.2, 0.15],
+        rtol=1e-6,
+    )
+
+
+def test_properties_hold_each_measured_value_and_a_prediction_for_every_galaxy(
+    tree: Path, galaxies: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rng = np.random.default_rng(1)
+    redshift = np.where(np.arange(galaxies) % 2 == 0, LINE_REDSHIFT, np.nan)
+    green, red = rng.lognormal(size=galaxies), rng.lognormal(size=galaxies)
+    red[2] = -1
+    radius = rng.lognormal(size=galaxies)
+    first, second = rng.normal(scale=0.2, size=(2, galaxies))
+    first[4] = second[4] = 0
+    wavelength = np.arange(3500.0, 10500.0)
+    rest = wavelength / (1 + LINE_REDSHIFT)
+    peak = HALPHA_EW / (2 * np.sqrt(2 * np.pi))
+    line = peak * np.exp(-(((rest - properties.HALPHA) / 2) ** 2) / 2)
+    spectrum = {
+        "lambda": wavelength.tolist(),
+        "flux": (CONTINUUM * (1 + line)).tolist(),
+        "ivar": [1.0] * len(wavelength),
+        "mask": [False] * len(wavelength),
+    }
+    value, error, warning = REDSHIFT_COLUMNS["desi"]
+    rows = Dataset.from_dict(
+        {
+            value: [None if np.isnan(found) else found for found in redshift],
+            error: [1e-4] * galaxies,
+            warning: [False] * galaxies,
+            **{column: [None] * galaxies for column in REDSHIFT_COLUMNS["sdss"]},
+            f"FLUX_G{DATASET_LS_SUFFIX}": green.tolist(),
+            f"FLUX_R{DATASET_LS_SUFFIX}": red.tolist(),
+            f"SHAPE_R{DATASET_LS_SUFFIX}": radius.tolist(),
+            f"SHAPE_E1{DATASET_LS_SUFFIX}": first.tolist(),
+            f"SHAPE_E2{DATASET_LS_SUFFIX}": second.tolist(),
+            TOKEN_SURVEYS["desi"]: [
+                None if np.isnan(found) else spectrum for found in redshift
+            ],
+        }
+    )
+    monkeypatch.setattr(observations, "dataset", lambda: rows)
+    bins = {
+        REDSHIFT: np.linspace(
+            0.01, 6, MODALITY_INFO["tok_z"]["vocab_size"], dtype=np.float32
+        )[None]
+    }
+    monkeypatch.setattr(aion_predictions, "bin_values", bins.get)
+    np.save(
+        artifact("joint_embedding"), rng.normal(size=(galaxies, 4)).astype(np.float32)
+    )
+
+    properties.generate_properties()
+
+    table = pq.read_table(artifact("properties"))
+    found = {name: table.column(name).to_numpy() for name in PROPERTIES.names}
+    np.testing.assert_array_equal(
+        found[f"{REDSHIFT}_measured"], redshift.astype(np.float32)
+    )
+    predicted = found[f"{REDSHIFT}_predicted"]
+    assert (
+        (predicted >= bins[REDSHIFT][0, 0]) & (predicted <= bins[REDSHIFT][0, -1])
+    ).all()
+    for label in PROBED:
+        assert np.isfinite(found[f"{label}_predicted"]).all(), label
+    expected = -2.5 * np.log10(green / np.abs(red))
+    expected[2] = np.nan
+    np.testing.assert_allclose(found["g_r"], expected.astype(np.float32), rtol=1e-6)
+    np.testing.assert_allclose(found["radius_measured"], radius, rtol=1e-6)
+    magnitude = LS_ZERO_POINT - 2.5 * np.log10(np.abs(red))
+    magnitude[2] = np.nan
+    np.testing.assert_allclose(found["r_magnitude_measured"], magnitude, rtol=1e-6)
+    ellipticity = np.hypot(first, second)
+    axis_ratio = (1 - ellipticity) / (1 + ellipticity)
+    axis_ratio[4] = np.nan
+    np.testing.assert_allclose(found["axis_ratio_measured"], axis_ratio, rtol=1e-6)
+    observed = np.isfinite(redshift)
+    np.testing.assert_allclose(
+        found["halpha_ew_measured"], np.where(observed, HALPHA_EW, np.nan), rtol=1e-3
+    )
+    np.testing.assert_allclose(
+        found["dn4000_measured"],
+        np.where(
+            observed,
+            (np.mean(properties.BREAK_BANDS[1]) / np.mean(properties.BREAK_BANDS[0]))
+            ** 2,
+            np.nan,
+        ),
+        rtol=1e-5,
+    )

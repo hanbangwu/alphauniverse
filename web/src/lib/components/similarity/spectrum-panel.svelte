@@ -9,7 +9,7 @@
 </script>
 
 <script lang="ts">
-  import type { SpectrumSurvey } from '$lib/client'
+  import type { GalaxyId, SpectrumSurvey } from '$lib/client'
   import { falseColors } from '$lib/color'
   import PanelFrame from '$lib/components/common/panel-frame.svelte'
   import SpectrumChart from '$lib/components/spectrum/spectrum-chart.svelte'
@@ -24,7 +24,7 @@
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
     survey: SpectrumSurvey
     matched: boolean
     map: Float32Array | null

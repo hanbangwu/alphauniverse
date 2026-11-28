@@ -2,26 +2,29 @@
 
 ## Layout
 
-| Path          | Description                                       |
-| ------------- | ------------------------------------------------- |
-| `app/`        | Build pipeline and the FastAPI app                |
-| `scripts/`    | Dataset build, OpenAPI, dev subset, test fixture  |
-| `benchmarks/` | Benchmarks on Modal                               |
-| `tests/`      | pytest suite, in the folders of the code it tests |
-| `web/`        | Web app                                           |
-| `docs/`       | Sphinx documentation and benchmark reports        |
+This repository is the `alphauniverse` library. The website (`server/`, `web/`), benchmarks and tests are built on it.
+
+| Path                 | Description                                              |
+| -------------------- | -------------------------------------------------------- |
+| `src/alphauniverse/` | Library: search, predictions and the build of its data   |
+| `server/`            | FastAPI app, display code and the map builds             |
+| `scripts/`           | Dataset build, OpenAPI, dev subset, test fixture         |
+| `benchmarks/`        | Benchmarks on Modal, split into `library/` and `server/` |
+| `tests/`             | pytest suite, split into `library/` and `server/`        |
+| `web/`               | Web app                                                  |
+| `docs/`              | Sphinx documentation and benchmark reports               |
 
 ## Commands
 
 ### Backend
 
 ```sh
-uv run --group build pytest                                   # tests
-uv run ruff check app benchmarks scripts tests modal_app.py   # lint
-uv run ruff format app benchmarks scripts tests modal_app.py  # format
-uv run lint-imports                                           # check import contracts
-uv run python -m scripts.dev_subset                           # build the dev subset on Modal and download it
-uv run python -m scripts.openapi                              # regenerate web/openapi.json
+uv run --group build pytest                                          # tests
+uv run ruff check src server benchmarks scripts tests modal_app.py   # lint
+uv run ruff format src server benchmarks scripts tests modal_app.py  # format
+uv run lint-imports                                                  # check import contracts
+uv run python -m scripts.dev_subset                                  # build the dev subset on Modal and download it
+uv run python -m scripts.openapi                                     # regenerate web/openapi.json
 ```
 
 ### Web
@@ -36,20 +39,19 @@ bun run lint
 ### Benchmarks
 
 ```sh
-uv run modal run -m benchmarks.search.search_performance                                # time similarity search on Modal
-uv run modal run -m benchmarks.search.search_quality                                    # measure similarity search on Modal
-uv run modal run -m benchmarks.backend_performance                                      # time the HTTP endpoints on Modal
-uv run modal run -m benchmarks.projection.build.projection_quality                      # measure projection quality on Modal
-uv run modal run -m benchmarks.text_search.text_search_quality                          # measure text search on Modal
-uv run modal run -m benchmarks.text_search.text_search_sheet                            # draw text search's contact sheet on Modal
-uv run --group build modal run -m benchmarks.predictions.build.compression_quality      # measure prediction storage on Modal
-uv run modal run -m benchmarks.predictions.build.token_embedding_quality                # measure token embeddings on Modal
-uv run --group build modal run -m benchmarks.predictions.build.aion_prediction_quality  # measure AION predictions against data on Modal
-uv run modal run -m benchmarks.predictions.build.aion_prediction_embedding_quality      # measure AION prediction embeddings against data on Modal
-uv run --group build modal run -m benchmarks.predictions.build.retrieval_quality        # measure retrieval from partial data on Modal
-uv run --group build modal run -m benchmarks.predictions.build.probe_quality            # measure PROVABGS probes on the stored vectors on Modal
-uv run --group build modal run -m benchmarks.predictions.build.redshift_quality         # measure AION's redshift without spectra on Modal
-uv run --group build modal run -m benchmarks.projection.build.neighbor_quality         # measure the stored vectors' neighborhoods and maps on Modal
+uv run modal run -m benchmarks.library.search.search_performance                                # time similarity search on Modal
+uv run modal run -m benchmarks.library.search.search_quality                                    # measure similarity search on Modal
+uv run modal run -m benchmarks.server.backend_performance                                       # time the HTTP endpoints on Modal
+uv run modal run -m benchmarks.server.projection.build.projection_quality                       # measure projection quality on Modal
+uv run modal run -m benchmarks.library.text_search.text_search_quality                          # measure text search on Modal
+uv run modal run -m benchmarks.library.text_search.text_search_sheet                            # draw text search's contact sheet on Modal
+uv run --group build modal run -m benchmarks.library.predictions.build.compression_quality      # measure prediction storage on Modal
+uv run modal run -m benchmarks.library.predictions.build.token_embedding_quality                # measure token embeddings on Modal
+uv run --group build modal run -m benchmarks.library.predictions.build.aion_prediction_quality  # measure AION predictions against data on Modal
+uv run modal run -m benchmarks.library.predictions.build.aion_prediction_embedding_quality      # measure AION prediction embeddings against data on Modal
+uv run --group build modal run -m benchmarks.library.predictions.build.retrieval_quality        # measure retrieval from partial data on Modal
+uv run --group build modal run -m benchmarks.library.predictions.build.redshift_quality         # measure AION's redshift without spectra on Modal
+uv run --group build modal run -m benchmarks.server.projection.build.neighbor_quality           # measure the stored vectors' neighborhoods and maps on Modal
 ```
 
 ### Docs
@@ -74,7 +76,7 @@ uv run --group docs make -C docs html
 - No no-ops: passing a parameter its default, redeclaring a type a value already has, or guarding a case that cannot happen. Typing constants is fine.
 - No hand-rolling: if appropriate, use library rather than writing our own code.
 - No linter-ignore rules, except excluding generated or vendored paths and settings a tool's documentation recommends.
-- Do not add comments or docstrings (leave ones from generated, vendored, or scaffold files alone).
+- Do not add comments (leave ones from generated, vendored, or scaffold files alone). Only library functions and classes get docstrings.
 - Maximize usage of OpenAPI. If it exists on both the backend and the web, it goes in OpenAPI.
 
 ### Modal

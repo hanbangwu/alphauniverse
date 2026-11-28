@@ -1,16 +1,16 @@
 ---
 paths:
-  - "app/main.py"
-  - "app/responses.py"
-  - "app/*/routes.py"
-  - "app/login/password.py"
-  - "app/dataset/dataset.py"
-  - "app/encoding/store.py"
-  - "app/predictions/store.py"
-  - "app/predictions/whole_mode.py"
-  - "app/search/pql.py"
-  - "app/text_search/text_search.py"
-  - "app/config.py"
+  - "server/main.py"
+  - "server/responses.py"
+  - "server/*/routes.py"
+  - "server/login/password.py"
+  - "src/alphauniverse/dataset/dataset.py"
+  - "src/alphauniverse/encoding/store.py"
+  - "src/alphauniverse/predictions/store.py"
+  - "src/alphauniverse/predictions/whole_mode.py"
+  - "src/alphauniverse/search/pql.py"
+  - "src/alphauniverse/text_search/text_search.py"
+  - "src/alphauniverse/config.py"
   - "modal_app.py"
 ---
 
@@ -21,4 +21,4 @@ paths:
 - Every endpoint has a typed response: a pydantic model for JSON, or a `responses=` entry naming the content type for binary bodies, so the generated client can type it.
 - A deliberate error is an `HTTPException` with a message.
 - A change to a route or response model regenerates `web/openapi.json`, makes the smallest web app change that keeps `bun run check` passing, all in the same pull request.
-- Constants used by more than one module live in `app/config.py`.
+- Constants used by more than one module live in `src/alphauniverse/config.py`.

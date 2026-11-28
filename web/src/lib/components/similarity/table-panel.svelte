@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TableRow } from '$lib/api'
+  import type { GalaxyId } from '$lib/client'
   import { type RGB, SELECTED } from '$lib/color'
   import { Spinner } from '$lib/components/ui/spinner'
   import * as Table from '$lib/components/ui/table'
@@ -12,7 +13,7 @@
   import { createQuery } from '@tanstack/svelte-query'
 
   interface Props {
-    galaxy: number
+    galaxy: GalaxyId
     selected: number[]
     ontoggle: (index: number) => void
   }
